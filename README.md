@@ -12,6 +12,22 @@ RPC library (.NET Standard 2.0) with classic .NET Remoting flavour
 - To create SOAP Webservices
 - To be create server applications that needs to run on several cluster nodes
 
+## Facts & deatures
+- Creates proxy objects for remote services at runtime (uses Castle.DynamicProxy under the hood)
+- Services can have `SingleCall` or `Singeton` lifetime
+- Uses websockets for TCP duplex network communication by default (based on webshocket-sharp)
+- Custom transport channels can be plugged in (Just implement `IServerChannel` and `IClientChannel`)
+- Uses classic BinaryFormatter for serialization by default
+- BinaryFormatter is hardened against known deserialization attack patterns
+- DataContractSerializer can alternatively used (especially to support Blazor Server Apps, because BinayFormatter is blocked in Blazor Apps)
+- Custom serializers can be plugged in (Just implement `ISerializerAdapter`)
+- Support for custom authentication (Just implement `IAuthenticationProvider`)
+- Pluggable authentication provider to authenticate Linux user on server with PAM is available
+- Message encryption with RSA key exchange and AES (No SSL, no X509 certificates needed, works also on Linux)
+- Supports .NET Remoting style `CallContext` (also on .NET Core / .NET 5) to implicitly transfer objects on RPC calls / threads
+- Supports Microsoft Dependency Injection (Just call `AddCoreRemotingServer` or `AddCoreRemotingClient` on your `IServiceCollection`)
+- Supports also Castle Windsor Container to provide Dependecy Injection
+
 ## Hello world example
 ### Shared contracts
 ```csharp
