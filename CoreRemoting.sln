@@ -1,0 +1,30 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting", "CoreRemoting\CoreRemoting.csproj", "{2E256F93-746B-4417-97E5-5565C684B233}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.Authentication.LinuxPamAuthProvider", "CoreRemoting.Authentication.LinuxPamAuthProvider\CoreRemoting.Authentication.LinuxPamAuthProvider.csproj", "{1579A6FD-DEEF-4E34-A6DD-32AAB9CA629B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.Tests", "CoreRemoting.Tests\CoreRemoting.Tests.csproj", "{BDDC0B08-A4F0-423D-927D-823EDCB192C5}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2E256F93-746B-4417-97E5-5565C684B233}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2E256F93-746B-4417-97E5-5565C684B233}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2E256F93-746B-4417-97E5-5565C684B233}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2E256F93-746B-4417-97E5-5565C684B233}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1579A6FD-DEEF-4E34-A6DD-32AAB9CA629B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1579A6FD-DEEF-4E34-A6DD-32AAB9CA629B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1579A6FD-DEEF-4E34-A6DD-32AAB9CA629B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1579A6FD-DEEF-4E34-A6DD-32AAB9CA629B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BDDC0B08-A4F0-423D-927D-823EDCB192C5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BDDC0B08-A4F0-423D-927D-823EDCB192C5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BDDC0B08-A4F0-423D-927D-823EDCB192C5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BDDC0B08-A4F0-423D-927D-823EDCB192C5}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+	EndGlobalSection
+EndGlobal

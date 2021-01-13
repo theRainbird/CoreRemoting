@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <LangVersion>8</LangVersion>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Title>CoreRemoting</Title>
+        <Authors>Hagen Siegel</Authors>
+        <Description>Easy to use Remoting library for .NET Core and .NET Framework</Description>
+        <Copyright>2020 Hagen Siegel</Copyright>
+        <PackageTags>Remoting RPC Network</PackageTags>
+        <Company>Hagen Siegel</Company>
+        <AssemblyVersion>1.0</AssemblyVersion>
+        <TargetFramework>netstandard2.0</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Castle.Core" Version="4.4.1" />
+      <PackageReference Include="Castle.Windsor" Version="5.1.1" />
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="5.0.1" />
+      <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+      <PackageReference Include="System.Configuration.ConfigurationManager" Version="5.0.0" />
+      <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
+      <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.7.0" />
+      <PackageReference Include="System.Runtime.Serialization.Formatters" Version="4.3.0" />
+      <PackageReference Include="System.Security.Cryptography.Algorithms" Version="4.3.1" />
+      <PackageReference Include="System.Security.Cryptography.Cng" Version="5.0.0" />
+      <PackageReference Include="System.Security.Cryptography.OpenSsl" Version="5.0.0" />
+      <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
+      <PackageReference Include="websocketsharp.core" Version="1.0.0" />
+    </ItemGroup>
+    
+    <ItemGroup>
+      <Protobuf Include="**/*.proto" />
+    </ItemGroup>
+
+</Project>
