@@ -10,6 +10,7 @@ RPC library (.NET Standard 2.0) with classic .NET Remoting flavour
 ### What is it NOT for?
 - To create REST-APIs for Javascript clients
 - To create SOAP Webservices
+- To use with other platforms than .NET
 - To be create server applications that needs to run on several cluster nodes
 
 ## Facts & features
@@ -28,7 +29,8 @@ RPC library (.NET Standard 2.0) with classic .NET Remoting flavour
 - Supports Microsoft Dependency Injection (Just call `AddCoreRemotingServer` or `AddCoreRemotingClient` on your `IServiceCollection`)
 - Supports also Castle Windsor Container to provide Dependecy Injection
 
-## Hello world example
+## Hello world example 
+https://github.com/theRainbird/CoreRemoting/tree/master/Examples
 ### Shared contract
 To be able to call a remote service, the client needs to know an interface implemented by the service.
 This interfaces should be placed in a shared assembly (Just like it is common with .NET remoting)
