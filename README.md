@@ -29,7 +29,10 @@ RPC library (.NET Standard 2.0) with classic .NET Remoting flavour
 - Supports also Castle Windsor Container to provide Dependecy Injection
 
 ## Hello world example
-### Shared contracts
+### Shared contract
+To be able to call a remote service, the client needs to know an interface implemented by the service.
+This interfaces should be placed in a shared assembly (Just like it is common with .NET remoting)
+
 ```csharp
 namespace HelloWorld.Shared
 {
@@ -40,6 +43,8 @@ namespace HelloWorld.Shared
 }
 ```
 ### Server
+The server side application provides services to clients.
+
 ```csharp
 using System;
 using CoreRemoting;
@@ -80,6 +85,8 @@ namespace HelloWorld.Server
 ```
 
 ### Client
+The client consumes remote services hosted on the server.
+
 ```csharp
 using System;
 using CoreRemoting;
