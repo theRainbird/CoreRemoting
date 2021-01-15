@@ -16,34 +16,36 @@ namespace CoreRemoting
     {
         private readonly IDependencyInjectionContainer _container;
         private readonly ServerConfig _config;
+        private readonly string _uniqueServerInstanceName;
 
-        public RemotingServer() : this(DefaultRemotingInfrastructure.Singleton.DefaultServerConfig)
+        public RemotingServer(ServerConfig config = null)
         {
-        }
-        
-        public RemotingServer(ServerConfig config)
-        {
-            _config = config ?? throw new ArgumentNullException(nameof(config));
+            _config = config ?? new ServerConfig();
+
+            _uniqueServerInstanceName = 
+                string.IsNullOrWhiteSpace(_config.UniqueServerInstanceName) 
+                    ? Guid.NewGuid().ToString() 
+                    : _config.UniqueServerInstanceName;
                 
-            SessionRepository = _config.SessionRepository ?? new SessionRepository(config.KeySize);
+            RemotingConfiguration.RegisterServer(this);
+            
+            SessionRepository = _config.SessionRepository ?? new SessionRepository(_config.KeySize);
             _container = _config.DependencyInjectionContainer ?? new CastleWindsorDependencyInjectionContainer();
             Serializer = _config.Serializer ?? new BinarySerializerAdapter();
             MethodCallMethodCallMessageBuilder = new MethodCallMethodCallMessageBuilder();
             MessageEncryptionManager = new MessageEncryptionManager();
-            KnownTypeProvider = config.KnownTypeProvider ?? new KnownTypeProvider();
+            KnownTypeProvider = _config.KnownTypeProvider ?? new KnownTypeProvider();
             
             _container.RegisterService<IDelegateProxyFactory, DelegateProxyFactory>(
                 lifetime: ServiceLifetime.Singleton);
             
             _config.RegisterServicesAction?.Invoke(_container);
 
-            Channel = config.Channel ?? new WebsocketServerChannel();
+            Channel = _config.Channel ?? new WebsocketServerChannel();
             
             Channel.Init(this);
             
-            var defaultInfrastructure = DefaultRemotingInfrastructure.Singleton;
-            
-            if (config == defaultInfrastructure.DefaultServerConfig)
+            if (string.IsNullOrWhiteSpace(_config.UniqueServerInstanceName))
                 DefaultRemotingInfrastructure.Singleton.DefaultRemotingServer ??= this;
         }
         
@@ -54,6 +56,8 @@ namespace CoreRemoting
         public event EventHandler<Exception> Error;
         
         public IDependencyInjectionContainer ServiceRegistry => _container;
+
+        public string UniqueServerInstanceName => _uniqueServerInstanceName;
 
         public ServerConfig Config => _config;
         
@@ -107,6 +111,8 @@ namespace CoreRemoting
 
         public void Dispose()
         {
+            RemotingConfiguration.UnregisterServer(this);
+            
             if (Channel != null)
             {
                 Channel.Dispose();

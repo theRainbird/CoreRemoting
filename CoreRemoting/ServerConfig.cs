@@ -39,5 +39,7 @@ namespace CoreRemoting
         public bool AuthenticationRequired { get; set; } = false;
         
         public IAuthenticationProvider AuthenticationProvider { get; set; }
+        
+        public string UniqueServerInstanceName { get; set; }
     }
 }

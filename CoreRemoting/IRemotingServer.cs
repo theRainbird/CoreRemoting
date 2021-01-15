@@ -8,6 +8,8 @@ namespace CoreRemoting
 {
     public interface IRemotingServer : IDisposable
     {
+        string UniqueServerInstanceName { get; }
+        
         IDependencyInjectionContainer ServiceRegistry { get; }
         
         ISerializerAdapter Serializer { get; }

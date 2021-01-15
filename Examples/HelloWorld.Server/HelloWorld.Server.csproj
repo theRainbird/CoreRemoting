@@ -10,4 +10,20 @@
       <ProjectReference Include="..\HelloWorld.Shared\HelloWorld.Shared.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Content Include="obj\Debug\net5.0\HelloWorld.Server.AssemblyInfoInputs.cache" />
+      <Content Include="obj\Debug\net5.0\HelloWorld.Server.assets.cache" />
+      <Content Include="obj\Debug\net5.0\HelloWorld.Server.csprojAssemblyReference.cache" />
+      <Content Include="obj\HelloWorld.Server.csproj.nuget.dgspec.json" />
+      <Content Include="obj\HelloWorld.Server.csproj.nuget.g.props" />
+      <Content Include="obj\HelloWorld.Server.csproj.nuget.g.targets" />
+      <Content Include="obj\project.assets.json" />
+      <Content Include="obj\project.nuget.cache" />
+      <Content Include="obj\project.packagespec.json" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Include="obj\Debug\net5.0\.NETCoreApp,Version=v5.0.AssemblyAttributes.cs" />
+    </ItemGroup>
+
 </Project>
