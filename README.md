@@ -74,6 +74,7 @@ namespace HelloWorld.Server
                 NetworkPort = 9090,
                 RegisterServicesAction = container =>
                 {
+                    // Make SayHelloSevice class available for RPC calls from clients
                     container.RegisterService<ISayHelloService, SayHelloService>(ServiceLifetime.Singleton);
                 }
             });
