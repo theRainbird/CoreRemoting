@@ -28,6 +28,7 @@ RPC library (.NET Standard 2.0) with classic .NET Remoting flavour
 - Supports .NET Remoting style `CallContext` (also on .NET Core / .NET 5) to implicitly transfer objects on RPC calls / threads
 - Supports Microsoft Dependency Injection (Just call `AddCoreRemotingServer` or `AddCoreRemotingClient` on your `IServiceCollection`)
 - Supports also Castle Windsor Container to provide Dependecy Injection
+- Built-in session management
 
 ## Hello world example 
 https://github.com/theRainbird/CoreRemoting/tree/master/Examples
