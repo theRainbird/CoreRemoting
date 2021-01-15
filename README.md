@@ -11,7 +11,7 @@ RPC library (.NET Standard 2.0) with classic .NET Remoting flavour
 - To create REST-APIs for Javascript clients
 - To create SOAP Webservices
 - To use with other platforms than .NET
-- To be create server applications that needs to run on several cluster nodes
+- To create server applications that needs to run on several cluster nodes
 
 ## Facts & features
 - Creates proxy objects for remote services at runtime (uses Castle.DynamicProxy under the hood)
