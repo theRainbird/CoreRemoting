@@ -11,7 +11,7 @@ RPC library (.NET Standard 2.0) with classic .NET Remoting flavour
 - To create REST-APIs for Javascript clients
 - To create SOAP Webservices
 - To use with other platforms than .NET
-- To be create server applications that needs to run on several cluster nodes
+- To create server applications that needs to run on several cluster nodes
 
 ## Facts & features
 - Creates proxy objects for remote services at runtime (uses Castle.DynamicProxy under the hood)
@@ -28,6 +28,7 @@ RPC library (.NET Standard 2.0) with classic .NET Remoting flavour
 - Supports .NET Remoting style `CallContext` (also on .NET Core / .NET 5) to implicitly transfer objects on RPC calls / threads
 - Supports Microsoft Dependency Injection (Just call `AddCoreRemotingServer` or `AddCoreRemotingClient` on your `IServiceCollection`)
 - Supports also Castle Windsor Container to provide Dependecy Injection
+- Built-in session management
 
 ## Hello world example 
 https://github.com/theRainbird/CoreRemoting/tree/master/Examples
@@ -73,6 +74,7 @@ namespace HelloWorld.Server
                 NetworkPort = 9090,
                 RegisterServicesAction = container =>
                 {
+                    // Make SayHelloSevice class available for RPC calls from clients
                     container.RegisterService<ISayHelloService, SayHelloService>(ServiceLifetime.Singleton);
                 }
             });
