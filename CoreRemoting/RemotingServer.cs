@@ -46,7 +46,7 @@ namespace CoreRemoting
             Channel.Init(this);
             
             if (string.IsNullOrWhiteSpace(_config.UniqueServerInstanceName))
-                DefaultRemotingInfrastructure.Singleton.DefaultRemotingServer ??= this;
+                DefaultRemotingInfrastructure.DefaultRemotingServer ??= this;
         }
         
         public event EventHandler<ServerRpcContext> BeforeCall;

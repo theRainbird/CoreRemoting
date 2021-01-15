@@ -1,43 +1,84 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
+using System.Configuration;
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Reflection;
+using CoreRemoting.ClassicRemotingApi.ConfigSection;
 using CoreRemoting.DependencyInjection;
 
 namespace CoreRemoting.ClassicRemotingApi
 {
     public static class RemotingConfiguration
     {
-        private static readonly ConcurrentDictionary<string, IRemotingServer> RemotingServers = 
+        private static ConcurrentDictionary<string, IRemotingServer> _remotingServers = 
             new ConcurrentDictionary<string, IRemotingServer>();
+
+        private static bool _classicRemotingApiDisabled = false;
+
+        public static void DisableClassicRemotingApi()
+        {
+            if (_classicRemotingApiDisabled)
+                return;
+
+            if (_remotingServers.Count > 0)
+                throw new InvalidOperationException(
+                    "Classic Remoting API can not be disabled, because there is at least one server running.");
+            
+            _classicRemotingApiDisabled = true;
+
+            _remotingServers = null;
+        }
+
+        public static void EnableClassicRemotingApi()
+        {
+            if (!_classicRemotingApiDisabled)
+                return;
+            
+            _remotingServers = 
+                new ConcurrentDictionary<string, IRemotingServer>();
+            
+            _classicRemotingApiDisabled = false;
+        }
 
         public static void RegisterServer(IRemotingServer server)
         {
-            if (!RemotingServers.TryAdd(server.UniqueServerInstanceName, server))
+            if (_classicRemotingApiDisabled)
+                return;
+            
+            if (!_remotingServers.TryAdd(server.UniqueServerInstanceName, server))
                 throw new DuplicateNameException(
                     $"A server with unique instance name '{server.UniqueServerInstanceName}' is already registerd.");
         }
 
         public static void UnregisterServer(IRemotingServer server)
         {
-            RemotingServers.TryRemove(server.UniqueServerInstanceName, out IRemotingServer removedServer);
+            if (_classicRemotingApiDisabled)
+                return;
+            
+            _remotingServers.TryRemove(server.UniqueServerInstanceName, out IRemotingServer removedServer);
         }
 
         public static IRemotingServer GetRegisteredServer(string uniqueServiceInstanceName)
         {
+            if (_classicRemotingApiDisabled)
+                return null;
+            
             if (string.IsNullOrWhiteSpace(uniqueServiceInstanceName))
-                return DefaultRemotingInfrastructure.Singleton.DefaultRemotingServer;
+                return DefaultRemotingInfrastructure.DefaultRemotingServer;
 
-            RemotingServers.TryGetValue(uniqueServiceInstanceName, out IRemotingServer server);
+            _remotingServers.TryGetValue(uniqueServiceInstanceName, out IRemotingServer server);
 
             return server;
         }
 
+        [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
         public static void RegisterWellKnownServiceType(WellKnownServiceTypeEntry entry)
         {
+            if (_classicRemotingApiDisabled)
+                throw new InvalidOperationException("Classic Remoting API is disabled.");
+            
             if (entry == null)
                 throw new ArgumentNullException(nameof(entry));
 
@@ -62,9 +103,12 @@ namespace CoreRemoting.ClassicRemotingApi
             string serviceName = "",
             string uniqueServerInstanceName = "")
         {
+            if (_classicRemotingApiDisabled)
+                throw new InvalidOperationException("Classic Remoting API is disabled.");
+            
             var server = 
                 string.IsNullOrWhiteSpace(uniqueServerInstanceName) 
-                    ? DefaultRemotingInfrastructure.Singleton.DefaultRemotingServer
+                    ? DefaultRemotingInfrastructure.DefaultRemotingServer
                     : GetRegisteredServer(uniqueServerInstanceName);
             
             var container = server.ServiceRegistry;
@@ -90,6 +134,49 @@ namespace CoreRemoting.ClassicRemotingApi
                     .MakeGenericMethod(interfaceType, implementationType);
 
             registerServiceMethod.Invoke(container, new object[]{ lifetime, serviceName });
+        }
+
+        /// <summary>
+        /// Applies CoreRemoting configuration from config file. 
+        /// </summary>
+        /// <param name="fileName">Path to XML configuration file (Default EXE configuration file will be used, if empty)</param>
+        public static void Configure(string fileName = "")
+        {
+            if (_classicRemotingApiDisabled)
+                throw new InvalidOperationException("Classic Remoting API is disabled.");
+            
+            Configuration configuration =
+                string.IsNullOrWhiteSpace(fileName)
+                    ? ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None)
+                    : ConfigurationManager.OpenMappedExeConfiguration(
+                        fileMap: new ExeConfigurationFileMap() {ExeConfigFilename = fileName},
+                        userLevel: ConfigurationUserLevel.None);
+
+            var configSection = (CoreRemotingConfigSection) 
+                configuration.Sections["coreRemoting"];
+
+            foreach (ServerInstanceConfigElement serverInstanceConfig in configSection.ServerInstances)
+            {
+                var serverConfig = serverInstanceConfig.ToServerConfig();
+                var server = new RemotingServer(serverConfig);
+            }
+            
+            foreach (WellKnownServiceConfigElement serviceConfigElement in configSection.Services)
+            {
+                var entry = serviceConfigElement.ToWellKnownServiceTypeEntry();
+                RegisterWellKnownServiceType(entry);
+            }
+        }
+
+        public static void ShutdownAll()
+        {
+            if (_classicRemotingApiDisabled)
+                throw new InvalidOperationException("Classic Remoting API is disabled.");
+            
+            foreach (var registeredServer in _remotingServers.ToArray())
+            {
+                registeredServer.Value.Dispose();
+            }
         }
     }
 }

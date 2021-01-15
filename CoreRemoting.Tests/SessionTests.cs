@@ -4,6 +4,7 @@ using System.Linq;
 using System.Security;
 using System.Threading;
 using CoreRemoting.Authentication;
+using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
 using NUnit.Framework;
@@ -14,7 +15,14 @@ namespace CoreRemoting.Tests
     [SuppressMessage("ReSharper", "CoVariantArrayConversion")]
     public class SessionTests
     {
+        [SetUp]
+        public void Init()
+        {
+            RemotingConfiguration.DisableClassicRemotingApi();
+        }
+        
         [Test]
+        [NonParallelizable]
         public void Client_Connect_should_create_new_session_AND_Disconnect_should_close_session()
         {
             var testService =
@@ -86,6 +94,7 @@ namespace CoreRemoting.Tests
         }
 
         [Test]
+        [NonParallelizable]
         public void Client_Connect_should_throw_exception_on_invalid_auth_credentials()
         {
             var testService = new TestService();

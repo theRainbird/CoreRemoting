@@ -1,4 +1,5 @@
 using System.Threading;
+using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
 using NUnit.Framework;
@@ -7,7 +8,14 @@ namespace CoreRemoting.Tests
 {
     public class CallContextTests
     {
+        [SetUp]
+        public void Init()
+        {
+            RemotingConfiguration.DisableClassicRemotingApi();
+        }
+
         [Test]
+        [NonParallelizable]
         public void CallContext_should_flow_from_client_to_server_and_back()
         {
             var testService = 

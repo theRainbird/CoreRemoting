@@ -2,6 +2,7 @@ using System;
 using System.Security;
 using System.Threading;
 using CoreRemoting.Authentication;
+using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
 using NUnit.Framework;
@@ -10,7 +11,14 @@ namespace CoreRemoting.Tests
 {
     public class RpcTests
     {
+        [SetUp]
+        public void Init()
+        {
+            RemotingConfiguration.DisableClassicRemotingApi();
+        }
+        
         [Test]
+        [NonParallelizable]
         public void Call_on_Proxy_should_be_invoked_on_remote_service()
         {
             bool remoteServiceCalled = false;
@@ -62,6 +70,7 @@ namespace CoreRemoting.Tests
         }
 
         [Test]
+        [NonParallelizable]
         public void Delegate_invoked_on_server_should_callback_client()
         {
             string argumentFromServer = null;
@@ -108,6 +117,7 @@ namespace CoreRemoting.Tests
         }
         
         [Test]
+        [NonParallelizable]
         public void Events_should_work_remotly()
         {
             var testService = new TestService();

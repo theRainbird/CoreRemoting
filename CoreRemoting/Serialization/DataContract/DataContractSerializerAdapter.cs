@@ -60,8 +60,7 @@ namespace CoreRemoting.Serialization.DataContract
                 var knownTypeList = knownTypes.ToList();
                 if (knownTypeList.Any())
                     _config.KnownTypes = 
-                        _config.KnownTypes.Union(
-                            knownTypeList.Except(_config.KnownTypes));
+                        _config.KnownTypes.Union(knownTypeList.Except(_config.KnownTypes));
             }
         }
 

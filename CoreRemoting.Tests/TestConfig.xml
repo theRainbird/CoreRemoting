@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+    <configSections>
+        <section name="coreRemoting"
+                 type="CoreRemoting.ClassicRemotingApi.ConfigSection.CoreRemotingConfigSection, CoreRemoting"/>
+    </configSections>
+    <coreRemoting>
+        <serverInstances>
+            <add uniqueInstanceName = "TestServer"
+                 hostName = "test"
+                 networkPort = "8080"
+                 keySize = "2048"
+                 serializer = "binary"
+                 channel = "ws"
+                 authenticationProvider = "CoreRemoting.Tests.Tools.FakeAuthProvider, CoreRemoting.Tests"
+                 authenticationRequired = "true" />
+        </serverInstances>
+        <services>
+            <add serviceName = "TestService"
+                 interfaceAssemblyName = "CoreRemoting.Tests"
+                 interfaceTypeName = "CoreRemoting.Tests.Tools.ITestService"
+                 implementationAssemblyName = "CoreRemoting.Tests"
+                 implementationTypeName = "CoreRemoting.Tests.Tools.TestService"
+                 lifetime = "Singleton"
+                 uniqueInstanceName = "TestServer" />
+        </services>
+    </coreRemoting>
+</configuration>

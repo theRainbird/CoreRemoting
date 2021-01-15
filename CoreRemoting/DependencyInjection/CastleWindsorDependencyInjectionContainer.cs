@@ -86,7 +86,7 @@ namespace CoreRemoting.DependencyInjection
             if (string.IsNullOrWhiteSpace(serviceName))
                 serviceName = serviceInterfaceType.FullName;
             
-            if (_serviceNameRegistry.ContainsKey(serviceName))
+            if (_serviceNameRegistry.ContainsKey(serviceName!))
                 return;
 
             _serviceNameRegistry.TryAdd(serviceName, serviceInterfaceType);
@@ -98,7 +98,7 @@ namespace CoreRemoting.DependencyInjection
                         Component
                             .For<TServiceInterface>()
                             .UsingFactoryMethod(factoryDelegate)
-                            .Named(string.IsNullOrEmpty(serviceName) ? typeof(TServiceInterface).Name : serviceName)
+                            .Named(string.IsNullOrEmpty(serviceName) ? typeof(TServiceInterface).FullName : serviceName)
                             .LifestyleSingleton());        
                     break;
                 case ServiceLifetime.SingleCall:
@@ -106,7 +106,7 @@ namespace CoreRemoting.DependencyInjection
                         Component
                             .For<TServiceInterface>()
                             .UsingFactoryMethod(factoryDelegate)
-                            .Named(string.IsNullOrEmpty(serviceName) ? typeof(TServiceInterface).Name : serviceName)
+                            .Named(string.IsNullOrEmpty(serviceName) ? typeof(TServiceInterface).FullName : serviceName)
                             .LifestyleTransient());
                     break;
             }

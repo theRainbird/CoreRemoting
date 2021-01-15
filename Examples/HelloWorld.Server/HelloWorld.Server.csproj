@@ -14,12 +14,14 @@
       <Content Include="obj\Debug\net5.0\HelloWorld.Server.AssemblyInfoInputs.cache" />
       <Content Include="obj\Debug\net5.0\HelloWorld.Server.assets.cache" />
       <Content Include="obj\Debug\net5.0\HelloWorld.Server.csprojAssemblyReference.cache" />
+      <Content Include="obj\Debug\net5.0\HelloWorld.Server.GeneratedMSBuildEditorConfig.editorconfig" />
       <Content Include="obj\HelloWorld.Server.csproj.nuget.dgspec.json" />
       <Content Include="obj\HelloWorld.Server.csproj.nuget.g.props" />
       <Content Include="obj\HelloWorld.Server.csproj.nuget.g.targets" />
       <Content Include="obj\project.assets.json" />
       <Content Include="obj\project.nuget.cache" />
       <Content Include="obj\project.packagespec.json" />
+      <Content Include="obj\rider.project.restore.info" />
     </ItemGroup>
 
     <ItemGroup>

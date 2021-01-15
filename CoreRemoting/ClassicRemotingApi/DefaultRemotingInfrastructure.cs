@@ -3,13 +3,13 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace CoreRemoting.ClassicRemotingApi
 {
-    public class DefaultRemotingInfrastructure
+    public static class DefaultRemotingInfrastructure
     {
-        private WeakReference<IRemotingClient> _defaultRemotingClientRef;
-        private WeakReference<IRemotingServer> _defaultRemotingServerRef;
+        private static WeakReference<IRemotingClient> _defaultRemotingClientRef;
+        private static WeakReference<IRemotingServer> _defaultRemotingServerRef;
 
         [SuppressMessage("ReSharper", "ArrangeAccessorOwnerBody")]
-        public IRemotingClient DefaultRemotingClient
+        public static IRemotingClient DefaultRemotingClient
         {
             get
             {
@@ -20,7 +20,7 @@ namespace CoreRemoting.ClassicRemotingApi
 
                 return defaultClient;
             }
-            set
+            internal set
             {
                 _defaultRemotingClientRef = 
                     value == null 
@@ -30,7 +30,7 @@ namespace CoreRemoting.ClassicRemotingApi
         }
         
         [SuppressMessage("ReSharper", "ArrangeAccessorOwnerBody")]
-        public IRemotingServer DefaultRemotingServer
+        public static IRemotingServer DefaultRemotingServer
         {
             get
             {
@@ -41,7 +41,7 @@ namespace CoreRemoting.ClassicRemotingApi
 
                 return defaultServer;
             }
-            set
+            internal set
             {
                 _defaultRemotingServerRef = 
                     value == null 
@@ -50,39 +50,8 @@ namespace CoreRemoting.ClassicRemotingApi
             }
         }
        
-        public ClientConfig DefaultClientConfig { get; set; }
+        public static ClientConfig DefaultClientConfig { get; set; }
         
-        public ServerConfig DefaultServerConfig { get; set; }
-        
-        #region Singleton implementation
-        
-        private static DefaultRemotingInfrastructure _singleton;
-        
-        [SuppressMessage("ReSharper", "InconsistentNaming")] 
-        private static readonly object _singletonLock = new object();
-
-        public static DefaultRemotingInfrastructure Singleton
-        {
-            get
-            {
-                if (_singleton == null)
-                {
-                    lock (_singletonLock)
-                    {
-                        if (_singleton == null)
-                            _singleton = new DefaultRemotingInfrastructure();
-                    }
-                }
-
-                return _singleton;
-            }
-        }
-
-        /// <summary>
-        /// Disallow public construction.
-        /// </summary>
-        private DefaultRemotingInfrastructure() { }
-        
-        #endregion
+        public static ServerConfig DefaultServerConfig { get; set; }
     }
 }

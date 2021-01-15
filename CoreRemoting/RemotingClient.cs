@@ -63,9 +63,7 @@ namespace CoreRemoting
         /// <param name="config">Configuration settings</param>
         public RemotingClient(ClientConfig config = null) : this()
         {
-            var defaultInfrastructure = DefaultRemotingInfrastructure.Singleton;
-
-            config ??= defaultInfrastructure.DefaultClientConfig;
+            config ??= DefaultRemotingInfrastructure.DefaultClientConfig;
 
             if (config == null)
                 throw new ArgumentException("No config provided and no default configuration found.");
@@ -92,8 +90,8 @@ namespace CoreRemoting
                 throw new NetworkException(s);
             };
 
-            if (config == defaultInfrastructure.DefaultClientConfig)
-                DefaultRemotingInfrastructure.Singleton.DefaultRemotingClient ??= this;
+            if (config == DefaultRemotingInfrastructure.DefaultClientConfig)
+                DefaultRemotingInfrastructure.DefaultRemotingClient ??= this;
         }
 
         #endregion
