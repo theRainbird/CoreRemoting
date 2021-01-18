@@ -10,6 +10,9 @@ using CoreRemoting.DependencyInjection;
 
 namespace CoreRemoting.ClassicRemotingApi
 {
+    /// <summary>
+    /// Provides CoreRemoting configuration in classic .NET Remoting style.
+    /// </summary>
     public static class RemotingConfiguration
     {
         private static ConcurrentDictionary<string, IRemotingServer> _remotingServers = 
@@ -17,6 +20,10 @@ namespace CoreRemoting.ClassicRemotingApi
 
         private static bool _classicRemotingApiDisabled = false;
 
+        /// <summary>
+        /// Disables the Classic Remoting API.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown if there is already a server running</exception>
         public static void DisableClassicRemotingApi()
         {
             if (_classicRemotingApiDisabled)
@@ -31,6 +38,9 @@ namespace CoreRemoting.ClassicRemotingApi
             _remotingServers = null;
         }
 
+        /// <summary>
+        /// Enables the Classic Remoting API.
+        /// </summary>
         public static void EnableClassicRemotingApi()
         {
             if (!_classicRemotingApiDisabled)
@@ -42,6 +52,11 @@ namespace CoreRemoting.ClassicRemotingApi
             _classicRemotingApiDisabled = false;
         }
 
+        /// <summary>
+        /// Registers a CoreRemoting server in the centralized server collection.
+        /// </summary>
+        /// <param name="server">CoreRemoting server</param>
+        /// <exception cref="DuplicateNameException">Thrown if a server with the same unique instance name is already registered</exception>
         public static void RegisterServer(IRemotingServer server)
         {
             if (_classicRemotingApiDisabled)
@@ -52,6 +67,10 @@ namespace CoreRemoting.ClassicRemotingApi
                     $"A server with unique instance name '{server.UniqueServerInstanceName}' is already registerd.");
         }
 
+        /// <summary>
+        /// Removes a registered server from the centralized server collection.
+        /// </summary>
+        /// <param name="server"></param>
         public static void UnregisterServer(IRemotingServer server)
         {
             if (_classicRemotingApiDisabled)
@@ -60,19 +79,30 @@ namespace CoreRemoting.ClassicRemotingApi
             _remotingServers.TryRemove(server.UniqueServerInstanceName, out IRemotingServer removedServer);
         }
 
-        public static IRemotingServer GetRegisteredServer(string uniqueServiceInstanceName)
+        /// <summary>
+        /// Gets a registered server instance by its unique name.
+        /// </summary>
+        /// <param name="uniqueServerInstanceName">Unique server instance name</param>
+        /// <returns>CoreRemoting server</returns>
+        public static IRemotingServer GetRegisteredServer(string uniqueServerInstanceName)
         {
             if (_classicRemotingApiDisabled)
                 return null;
             
-            if (string.IsNullOrWhiteSpace(uniqueServiceInstanceName))
+            if (string.IsNullOrWhiteSpace(uniqueServerInstanceName))
                 return DefaultRemotingInfrastructure.DefaultRemotingServer;
 
-            _remotingServers.TryGetValue(uniqueServiceInstanceName, out IRemotingServer server);
+            _remotingServers.TryGetValue(uniqueServerInstanceName, out IRemotingServer server);
 
             return server;
         }
 
+        /// <summary>
+        /// Registeres a service.
+        /// </summary>
+        /// <param name="entry">Service configuration data</param>
+        /// <exception cref="InvalidOperationException">Thrown if the Classic Remoting API is disabled</exception>
+        /// <exception cref="ArgumentNullException">Thrown if parameter 'entry' is null</exception>
         [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
         public static void RegisterWellKnownServiceType(WellKnownServiceTypeEntry entry)
         {
@@ -96,6 +126,15 @@ namespace CoreRemoting.ClassicRemotingApi
                 entry.UniqueServerInstanceName);
         }
 
+        /// <summary>
+        /// Registers a service.
+        /// </summary>
+        /// <param name="interfaceType">Service interface type</param>
+        /// <param name="implementationType">Service implementation type</param>
+        /// <param name="lifetime">LIfetime (SingleCall / Singleton)</param>
+        /// <param name="serviceName">Unique name of the service (Full name of interface type is used, if left blank)</param>
+        /// <param name="uniqueServerInstanceName">Unique instance name of the CoreRemoting server that should used for hosting this service</param>
+        /// <exception cref="InvalidOperationException">Thrown if the Classic Remoting API is disabled</exception>
         public static void RegisterWellKnownServiceType(
             Type interfaceType,
             Type implementationType,
@@ -168,6 +207,10 @@ namespace CoreRemoting.ClassicRemotingApi
             }
         }
 
+        /// <summary>
+        /// Shutdown all registered servers.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown if the Classic Remoting API is disabled</exception>
         public static void ShutdownAll()
         {
             if (_classicRemotingApiDisabled)

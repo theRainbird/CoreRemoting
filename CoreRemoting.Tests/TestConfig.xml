@@ -22,7 +22,7 @@
                  implementationAssemblyName = "CoreRemoting.Tests"
                  implementationTypeName = "CoreRemoting.Tests.Tools.TestService"
                  lifetime = "Singleton"
-                 uniqueInstanceName = "TestServer" />
+                 uniqueServerInstanceName = "TestServer" />
         </services>
     </coreRemoting>
 </configuration>

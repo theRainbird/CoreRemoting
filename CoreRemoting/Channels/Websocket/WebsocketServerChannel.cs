@@ -5,13 +5,17 @@ using WebSocketSharp.Server;
 namespace CoreRemoting.Channels.Websocket
 {
     /// <summary>
-    /// Executes RPC calls from clients.
+    /// Server side websocket channel implementation.
     /// </summary>
     public class WebsocketServerChannel : IServerChannel
     {
         private WebSocketServer _webSocketServer;
         private IRemotingServer _server;
 
+        /// <summary>
+        /// Initializes the channel.
+        /// </summary>
+        /// <param name="server">CoreRemoting sever</param>
         public void Init(IRemotingServer server)
         {
             _server = server ?? throw new ArgumentNullException(nameof(server));
@@ -23,6 +27,9 @@ namespace CoreRemoting.Channels.Websocket
                 initializer: () => new RpcWebsocketSharpBehavior(_server));
         }
 
+        /// <summary>
+        /// Start listening for client requests.
+        /// </summary>
         public void StartListening()
         {
             if (_webSocketServer == null)
@@ -31,6 +38,9 @@ namespace CoreRemoting.Channels.Websocket
             _webSocketServer.Start();
         }
 
+        /// <summary>
+        /// Stop listening for client requests.
+        /// </summary>
         public void StopListening()
         {
             if (_webSocketServer == null)
@@ -40,10 +50,13 @@ namespace CoreRemoting.Channels.Websocket
                 _webSocketServer.Stop();
         }
 
+        /// <summary>
+        /// Gets whether the channel is listening or not.
+        /// </summary>
         public bool IsListening => _webSocketServer != null && _webSocketServer.IsListening;
 
         /// <summary>
-        /// Frees managed ressources.
+        /// Stops listening and frees managed ressources.
         /// </summary>
         public void Dispose()
         {

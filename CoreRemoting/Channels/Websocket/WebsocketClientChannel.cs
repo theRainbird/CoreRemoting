@@ -5,14 +5,27 @@ using WebSocketSharp.Net;
 
 namespace CoreRemoting.Channels.Websocket
 {
+    /// <summary>
+    /// Client side websocket channel implementation.
+    /// </summary>
     public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
     {
         private WebSocket _webSocket;
         
+        /// <summary>
+        /// Event: Fires when a message is received from server.
+        /// </summary>
         public event Action<byte[]> ReceiveMessage;
         
+        /// <summary>
+        /// Event: Fires when an error is occured.
+        /// </summary>
         public event Action<string, Exception> ErrorOccured;
         
+        /// <summary>
+        /// Initializes the channel.
+        /// </summary>
+        /// <param name="client">CoreRemoting client</param>
         public void Init(IRemotingClient client)
         {
             string url = 
@@ -38,6 +51,9 @@ namespace CoreRemoting.Channels.Websocket
             _webSocket.Log.Level = LogLevel.Debug;
         }
 
+        /// <summary>
+        /// Establish a websocket connection with the server.
+        /// </summary>
         public void Connect()
         {
             if (_webSocket == null)
@@ -55,6 +71,11 @@ namespace CoreRemoting.Channels.Websocket
             _webSocket.Send(string.Empty);
         }
 
+        /// <summary>
+        /// Event procedure: Called when a error occures on the websocket layer.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void OnError(object sender, ErrorEventArgs e)
         {
             LastException = new NetworkException(e.Message, e.Exception);
@@ -62,6 +83,9 @@ namespace CoreRemoting.Channels.Websocket
             ErrorOccured?.Invoke(e.Message, e.Exception);
         }
 
+        /// <summary>
+        /// Closes the websocket connection.
+        /// </summary>
         public void Disconnect()
         {
             if (_webSocket == null)
@@ -73,6 +97,9 @@ namespace CoreRemoting.Channels.Websocket
             _webSocket.Close(CloseStatusCode.Normal);
         }
 
+        /// <summary>
+        /// Gets whether the websocket connection is esablished or not.
+        /// </summary>
         public bool IsConnected
         {
             get
@@ -84,24 +111,42 @@ namespace CoreRemoting.Channels.Websocket
             }
         }
 
+        /// <summary>
+        /// Gets the raw message transport component for this connection.
+        /// </summary>
         public IRawMessageTransport RawMessageTransport => this;
         
+        /// <summary>
+        /// Diconnect and free manages ressources.
+        /// </summary>
         public void Dispose()
         {
             Disconnect();
             _webSocket = null;
         }
 
+        /// <summary>
+        /// Event procedure: Called when a message from server is received.
+        /// </summary>
+        /// <param name="sender">Sender of the event</param>
+        /// <param name="e">Event arguments containing the message content</param>
         private void OnMessage(object sender, MessageEventArgs e)
         {
             ReceiveMessage?.Invoke(e.RawData);
         }
         
+        /// <summary>
+        /// Sends a message to the server.
+        /// </summary>
+        /// <param name="rawMessage">Raw message data</param>
         public void SendMessage(byte[] rawMessage)
         {
             _webSocket.Send(rawMessage);
         }
 
+        /// <summary>
+        /// Gets or sets the last exception.
+        /// </summary>
         public NetworkException LastException { get; set; }
     }
 }

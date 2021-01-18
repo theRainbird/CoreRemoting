@@ -4,8 +4,14 @@ using CoreRemoting.DependencyInjection;
 
 namespace CoreRemoting.ClassicRemotingApi.ConfigSection
 {
+    /// <summary>
+    /// Configuration element for a wellknown CoreRemoting service.
+    /// </summary>
     public class WellKnownServiceConfigElement : ConfigurationElement
     {
+        /// <summary>
+        /// Get or sets the assembly name of the service’s interface assembly.
+        /// </summary>
         [ConfigurationProperty("interfaceAssemblyName", IsRequired = true)]
         public string InterfaceAssemblyName
         {
@@ -13,6 +19,9 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             set => base["interfaceAssemblyName"] = value;
         }
         
+        /// <summary>
+        /// Get or sets the type name of the service interface.
+        /// </summary>
         [ConfigurationProperty("interfaceTypeName", IsRequired = true)]
         public string InterfaceTypeName
         {
@@ -20,6 +29,9 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             set => base["interfaceTypeName"] = value;
         }
         
+        /// <summary>
+        /// Get or sets the assembly of the service's implementation assembly. 
+        /// </summary>
         [ConfigurationProperty("implementationAssemblyName", IsRequired = true)]
         public string ImplementationAssemblyName
         {
@@ -27,6 +39,9 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             set => base["implementationAssemblyName"] = value;
         }
         
+        /// <summary>
+        /// Gets or sets the implementation type of the service.
+        /// </summary>
         [ConfigurationProperty("implementationTypeName", IsRequired = true)]
         public string ImplementationTypeName
         {
@@ -34,6 +49,9 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             set => base["implementationTypeName"] = value;
         }
         
+        /// <summary>
+        /// Gets or sets the service's lifetime.
+        /// </summary>
         [ConfigurationProperty("lifetime", IsRequired = true)]
         public ServiceLifetime Lifetime
         {
@@ -41,6 +59,9 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             set => base["lifetime"] = value;
         }
         
+        /// <summary>
+        /// Gets or sets the unique service name.
+        /// </summary>
         [ConfigurationProperty("serviceName", IsRequired = true, IsKey = true)]
         public string ServiceName
         {
@@ -48,11 +69,14 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             set => base["serviceName"] = value;
         }
         
-        [ConfigurationProperty("uniqueInstanceName", IsRequired = false, DefaultValue = "")]
-        public string UniqueInstanceName
+        /// <summary>
+        /// Gets or sets the unique name of the server hosting this service.
+        /// </summary>
+        [ConfigurationProperty("uniqueServerInstanceName", IsRequired = false, DefaultValue = "")]
+        public string UniqueServerInstanceName
         {
-            get => (string)base["uniqueInstanceName"];
-            set => base["uniqueInstanceName"] = value;
+            get => (string)base["uniqueServerInstanceName"];
+            set => base["uniqueServerInstanceName"] = value;
         }
     }
 }

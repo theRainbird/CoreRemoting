@@ -3,11 +3,17 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace CoreRemoting.ClassicRemotingApi
 {
+    /// <summary>
+    /// Provides default server and client, needed to support classic .NET Remoting API. 
+    /// </summary>
     public static class DefaultRemotingInfrastructure
     {
         private static WeakReference<IRemotingClient> _defaultRemotingClientRef;
         private static WeakReference<IRemotingServer> _defaultRemotingServerRef;
 
+        /// <summary>
+        /// Gets or sets the default CoreRemoting client.
+        /// </summary>
         [SuppressMessage("ReSharper", "ArrangeAccessorOwnerBody")]
         public static IRemotingClient DefaultRemotingClient
         {
@@ -29,6 +35,9 @@ namespace CoreRemoting.ClassicRemotingApi
             }
         }
         
+        /// <summary>
+        /// Gets or sets the default CoreRemoting server.
+        /// </summary>
         [SuppressMessage("ReSharper", "ArrangeAccessorOwnerBody")]
         public static IRemotingServer DefaultRemotingServer
         {
@@ -50,8 +59,14 @@ namespace CoreRemoting.ClassicRemotingApi
             }
         }
        
+        /// <summary>
+        /// Gets or sets the default client configuration. 
+        /// </summary>
         public static ClientConfig DefaultClientConfig { get; set; }
         
+        /// <summary>
+        /// Gets or sets the default server configuration.
+        /// </summary>
         public static ServerConfig DefaultServerConfig { get; set; }
     }
 }

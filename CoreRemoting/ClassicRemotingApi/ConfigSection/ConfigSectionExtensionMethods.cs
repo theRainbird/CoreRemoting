@@ -10,8 +10,16 @@ using CoreRemoting.Serialization.DataContract;
 
 namespace CoreRemoting.ClassicRemotingApi.ConfigSection
 {
+    /// <summary>
+    /// Extension methods for XML configuration classes.
+    /// </summary>
     public static class ConfigSectionExtensionMethods
     {
+        /// <summary>
+        /// Converts a wellknown service XML config object into a WellknownServiceTypeEntry object.
+        /// </summary>
+        /// <param name="configElement">Service definition from XML config</param>
+        /// <returns>WellknownServiceTypeEntry object</returns>
         public static WellKnownServiceTypeEntry ToWellKnownServiceTypeEntry(
             this WellKnownServiceConfigElement configElement)
         {
@@ -25,11 +33,16 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
                 implementationTypeName: configElement.ImplementationTypeName,
                 lifetime: configElement.Lifetime,
                 serviceName: configElement.ServiceName,
-                uniqueServerInstanceName: configElement.UniqueInstanceName);
+                uniqueServerInstanceName: configElement.UniqueServerInstanceName);
 
             return entry;
         }
 
+        /// <summary>
+        /// Converts a server XML config object into a ServerConfig object.
+        /// </summary>
+        /// <param name="configElement"></param>
+        /// <returns>ServerConfig object</returns>
         public static ServerConfig ToServerConfig(
             this ServerInstanceConfigElement configElement)
         {
@@ -55,6 +68,12 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             return serverConfig;
         }
 
+        /// <summary>
+        /// Gets a type from a string that contains type name and assembly name.
+        /// </summary>
+        /// <param name="assemblyAndTypeConfigString">String containing type name and assembly name, seperated by a comma</param>
+        /// <returns>Type obejct</returns>
+        /// <exception cref="FormatException">Thrown, if string format is invalid</exception>
         private static Type GetTypeFromConfigString(string assemblyAndTypeConfigString)
         {
             var parts = assemblyAndTypeConfigString.Split(',');
@@ -69,6 +88,11 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             return type;
         }
 
+        /// <summary>
+        /// Creates a server channel from a type string.
+        /// </summary>
+        /// <param name="channelTypeName">String containing a channel type shortcut (e.G. "ws" for websockets) or a type name and assembly name, seperated by a comma</param>
+        /// <returns>Server channel</returns>
         private static IServerChannel CreateServerChannelFromConfigName(string channelTypeName)
         {
             var websocketServerChannelShortcuts = 
@@ -82,6 +106,11 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             return (IServerChannel) Activator.CreateInstance(channelType);
         }
         
+        /// <summary>
+        /// Creates a serializer adaüter from a type string.
+        /// </summary>
+        /// <param name="serializerName">String containing a serializer (e.G. "binary" for a binary serializer) type shortcut or a type name and assembly name, seperated by a comma</param>
+        /// <returns></returns>
         private static ISerializerAdapter CreateSerializerAdapterFromConfigName(string serializerName)
         {
             var binarySerializerShortcuts = 
