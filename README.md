@@ -64,7 +64,7 @@ namespace HelloWorld.Server
         // Event to notify clients when users post new chat messages
         public event Action<string, string> MessageReceived;
         
-        // Called via RPC to say something in the chat 
+        // Call via RPC to say something in the chat 
         public void Say(string name, string message)
         {
             MessageReceived?.Invoke(name, message);
