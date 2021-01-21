@@ -31,7 +31,8 @@ RPC library (.NET Standard 2.0) with classic .NET Remoting flavour
 - Built-in session management
 
 ## Hello world example 
-Let's create a simple multi user chat server as hello world application (source code is also available in the repository https://github.com/theRainbird/CoreRemoting/tree/master/Examples)
+Let's create a simple multi user chat server as hello world application.
+
 ### Shared contract
 To be able to call a remote service, the client needs to know an interface implemented by the service.
 This interfaces should be placed in a shared assembly (Just like it is common with .NET remoting)
@@ -146,3 +147,7 @@ namespace HelloWorld.Client
     }
 }
 ```
+Source code of this example is also available in the repository at https://github.com/theRainbird/CoreRemoting/tree/master/Examples.
+
+To test the hello world solution, start the server (HelloWorld.Server) and then multiple clients (HelloWorld.Client).
+Have fun.
