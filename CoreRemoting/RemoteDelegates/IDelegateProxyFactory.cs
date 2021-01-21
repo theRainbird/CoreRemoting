@@ -2,6 +2,9 @@ using System;
 
 namespace CoreRemoting.RemoteDelegates
 {
+    /// <summary>
+    /// Interface to be implemented by delegate proxy factory components.
+    /// </summary>
     public interface IDelegateProxyFactory
     {
         /// <summary>

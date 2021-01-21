@@ -147,6 +147,9 @@ namespace CoreRemoting.RemoteDelegates
 		    return result;
 	    }
 
+	    /// <summary>
+	    /// Frees managed ressources.
+	    /// </summary>
 	    public void Dispose()
 	    {
 		    ProxiedDelegate = null;

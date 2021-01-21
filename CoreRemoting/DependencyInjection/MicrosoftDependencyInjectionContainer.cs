@@ -7,6 +7,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CoreRemoting.DependencyInjection
 {
+    /// <summary>
+    /// Microsoft Dependecy Injection DI-Container-Wrapper.
+    /// </summary>
     public class MicrosoftDependencyInjectionContainer : IDependencyInjectionContainer
     {
         private readonly IServiceCollection _container;
@@ -14,6 +17,10 @@ namespace CoreRemoting.DependencyInjection
         private readonly ConcurrentDictionary<string, Type> _serviceNameRegistry;
         private readonly bool _containerCreatedExternally;
         
+        /// <summary>
+        /// Creates a new instance of the MicrosoftDependencyInjectionContainer class.
+        /// </summary>
+        /// <param name="serviceCollection">Service collection</param>
         public MicrosoftDependencyInjectionContainer(IServiceCollection serviceCollection = null)
         {
             _containerCreatedExternally = serviceCollection != null;
@@ -24,12 +31,23 @@ namespace CoreRemoting.DependencyInjection
             _serviceProvider = _container.BuildServiceProvider();
         }
 
+        /// <summary>
+        /// Gets a service instance by service name.
+        /// </summary>
+        /// <param name="serviceName">Unique service name</param>
+        /// <returns>Service instance</returns>
         public object GetService(string serviceName)
         {
             var serviceInterfaceType = _serviceNameRegistry[serviceName];
             return _serviceProvider.GetRequiredService(serviceInterfaceType);
         }
 
+        /// <summary>
+        /// Gets a service instance of a specified interface type.
+        /// </summary>
+        /// <param name="serviceName">Optional unique service name (Full name of interface type is used, if left blank)</param>
+        /// <typeparam name="TServiceInterface">Service interface type</typeparam>
+        /// <returns>Service instance</returns>
         public TServiceInterface GetService<TServiceInterface>(string serviceName = "")
             where TServiceInterface : class
         {
@@ -47,6 +65,13 @@ namespace CoreRemoting.DependencyInjection
                 throw new NotSupportedException("Microsoft Dependency Injection does not support named services.");
         }
 
+        /// <summary>
+        /// Registers a service.
+        /// </summary>
+        /// <param name="lifetime">Service lifetime (Singleton / SingleCall)</param>
+        /// <param name="serviceName">Optional unique service name</param>
+        /// <typeparam name="TServiceInterface">Service interface type</typeparam>
+        /// <typeparam name="TServiceImpl">Service implementation type</typeparam>
         [SuppressMessage("ReSharper", "AssignNullToNotNullAttribute")]
         public void RegisterService<TServiceInterface, TServiceImpl>(
             ServiceLifetime lifetime, 
@@ -77,6 +102,13 @@ namespace CoreRemoting.DependencyInjection
             _serviceProvider = _container.BuildServiceProvider();
         }
         
+        /// <summary>
+        /// Registers a service.
+        /// </summary>
+        /// <param name="factoryDelegate">Factory delegate, which is called to create service instances</param>
+        /// <param name="lifetime">Service lifetime (Singleton / SingleCall)</param>
+        /// <param name="serviceName">Optional unique service name</param>
+        /// <typeparam name="TServiceInterface">Service interface type</typeparam>
         public void RegisterService<TServiceInterface>(Func<TServiceInterface> factoryDelegate, ServiceLifetime lifetime, string serviceName = "")
             where TServiceInterface: class
         {
@@ -103,11 +135,22 @@ namespace CoreRemoting.DependencyInjection
             _serviceProvider = _container.BuildServiceProvider();
         }
 
+        /// <summary>
+        /// Gets the service interface type of a specified service.
+        /// </summary>
+        /// <param name="serviceName">Unique service name</param>
+        /// <returns>Service interface type</returns>
         public Type GetServiceInterfaceType(string serviceName)
         {
             return _serviceNameRegistry[serviceName];
         }
 
+        /// <summary>
+        /// Gets whether the specified service is registered or not.
+        /// </summary>
+        /// <param name="serviceName">Unique service name (Full service interface type name is used, if left blank)</param>
+        /// <typeparam name="TServiceInterface">Service interface type</typeparam>
+        /// <returns>True, if the service is registered, otherwise false</returns>
         public bool IsRegistered<TServiceInterface>(string serviceName = "") where TServiceInterface: class
         {
             var serviceInterfaceType = typeof(TServiceInterface);
@@ -115,9 +158,14 @@ namespace CoreRemoting.DependencyInjection
             if (!string.IsNullOrEmpty(serviceName))
                 ThrowExceptionIfCustomServiceName(serviceName, serviceInterfaceType);
 
+            
             return _container.Any(descriptor => descriptor.ServiceType == serviceInterfaceType);
         }
 
+        /// <summary>
+        /// Gets all registered types.
+        /// </summary>
+        /// <returns>Enumerable list of registered types</returns>
         public IEnumerable<Type> GetAllRegisteredTypes()
         {
             var typeList = new List<Type>();
@@ -131,6 +179,9 @@ namespace CoreRemoting.DependencyInjection
             return typeList;
         }
 
+        /// <summary>
+        /// Frees managed ressources.
+        /// </summary>
         public void Dispose()
         {
             _serviceNameRegistry.Clear();

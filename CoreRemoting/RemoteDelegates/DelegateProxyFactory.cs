@@ -2,6 +2,9 @@ using System;
 
 namespace CoreRemoting.RemoteDelegates
 {
+    /// <summary>
+    /// Factory component to create delegate proxy instances.
+    /// </summary>
     public class DelegateProxyFactory : IDelegateProxyFactory
     {
         /// <summary>

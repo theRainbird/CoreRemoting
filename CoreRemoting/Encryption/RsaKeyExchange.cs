@@ -3,8 +3,18 @@ using System.IO;
 
 namespace CoreRemoting.Encryption
 {
+    /// <summary>
+    /// Provides methods to perform a RSA key exchange.
+    /// </summary>
     public static class RsaKeyExchange
     {
+        /// <summary>
+        /// Encrypts a secret with assymetric RSA algorithm.
+        /// </summary>
+        /// <param name="keySize">Key size (1024, 2048, 4096, ...)</param>
+        /// <param name="receiversPublicKeyBlob">Public key of the receiver</param>
+        /// <param name="secretToEncrypt">Secret to encrypt</param>
+        /// <returns>Encrypted secret</returns>
         public static EncryptedSecret EncryptSecret(int keySize, byte[] receiversPublicKeyBlob, byte[] secretToEncrypt)
         {
             using var receiversPublicKey = new RSACryptoServiceProvider(dwKeySize: keySize);
@@ -28,6 +38,13 @@ namespace CoreRemoting.Encryption
                 encryptedMessage: ciphertext.ToArray());
         }
 
+        /// <summary>
+        /// Decrypts a secret with assymetric RSA alogrithm.
+        /// </summary>
+        /// <param name="keySize">Key size (1024, 2048, 4096, ...)</param>
+        /// <param name="receiversPrivateKeyBlob">Private key of the receiver</param>
+        /// <param name="encryptedSecret">Encrypted secret</param>
+        /// <returns>Decrypted secret</returns>
         public static byte[] DecrpytSecret(int keySize, byte[] receiversPrivateKeyBlob, EncryptedSecret encryptedSecret)
         {
             using var receiversPrivateKey = new RSACryptoServiceProvider(dwKeySize: keySize);
