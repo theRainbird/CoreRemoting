@@ -7,9 +7,11 @@ namespace HelloWorld.Server
 {
     public class SayHelloService : ISayHelloService
     {
-        public string SayHello(string name)
+        public event Action<string, string> MessageReceived;
+        
+        public void Say(string name, string message)
         {
-            return $"Hello {name}";
+            MessageReceived?.Invoke(name, message);
         }
     }
 

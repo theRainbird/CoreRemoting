@@ -18,11 +18,25 @@ namespace HelloWorld.Client
 
             var proxy = client.CreateProxy<ISayHelloService>();
             
+            proxy.MessageReceived += (senderName, message) => 
+                Console.WriteLine($"\n  {senderName} says: {message}\n");
+            
             Console.WriteLine("What's your name?");
             var name = Console.ReadLine();
 
-            var result = proxy.SayHello(name);
-            Console.WriteLine(result);
+            Console.WriteLine("\nEntered chat. Type 'quit' to leave.");
+
+            bool quit = false;
+
+            while (!quit)
+            {
+                var text = Console.ReadLine();
+
+                if (text != null && text.Equals("quit", StringComparison.InvariantCultureIgnoreCase))
+                    quit = true;
+                else
+                    proxy.Say(name, text);
+            }
         }
     }
 }

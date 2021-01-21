@@ -1,7 +1,11 @@
-﻿namespace HelloWorld.Shared
+﻿using System;
+
+namespace HelloWorld.Shared
 {
     public interface ISayHelloService
     {
-        string SayHello(string name);
+        event Action<string, string> MessageReceived;
+        
+        void Say(string name, string message);
     }
 }
