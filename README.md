@@ -147,7 +147,7 @@ namespace HelloWorld.Client
     }
 }
 ```
-Source code of this example is also available in the repository at https://github.com/theRainbird/CoreRemoting/tree/master/Examples.
+Source code of this example is also available in the repository at https://github.com/theRainbird/CoreRemoting/tree/master/Examples/HelloWorld.
 
 To test the hello world solution, start the server (HelloWorld.Server) and then multiple clients (HelloWorld.Client).
 Have fun.
