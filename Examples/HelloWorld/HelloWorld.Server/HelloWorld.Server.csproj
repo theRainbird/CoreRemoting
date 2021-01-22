@@ -6,7 +6,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\CoreRemoting\CoreRemoting.csproj" />
+      <ProjectReference Include="..\..\..\CoreRemoting\CoreRemoting.csproj" />
       <ProjectReference Include="..\HelloWorld.Shared\HelloWorld.Shared.csproj" />
     </ItemGroup>
 
@@ -26,6 +26,15 @@
 
     <ItemGroup>
       <Compile Include="obj\Debug\net5.0\.NETCoreApp,Version=v5.0.AssemblyAttributes.cs" />
+      <Compile Remove="obj\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Remove="obj\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="obj\**" />
     </ItemGroup>
 
 </Project>

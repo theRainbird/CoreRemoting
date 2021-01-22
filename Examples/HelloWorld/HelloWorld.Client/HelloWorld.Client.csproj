@@ -6,7 +6,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\CoreRemoting\CoreRemoting.csproj" />
+      <ProjectReference Include="..\..\..\CoreRemoting\CoreRemoting.csproj" />
       <ProjectReference Include="..\HelloWorld.Shared\HelloWorld.Shared.csproj" />
     </ItemGroup>
 

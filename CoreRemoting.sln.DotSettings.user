@@ -1,0 +1,26 @@
+﻿<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+	<s:Boolean x:Key="/Default/AddReferences/RecentPaths/=_002Fhome_002Frainbird_002FRiderProjects_002FCoreRemoting_002FCoreRemoting_002Fbin_002FDebug_002Fnetstandard1_002E5_002FCoreRemoting_002Edll/@EntryIndexedValue">True</s:Boolean>
+	<s:String x:Key="/Default/Environment/AssemblyExplorer/XmlDocument/@EntryValue">&lt;AssemblyExplorer&gt;
+  &lt;Assembly Path="/home/rainbird/.nuget/packages/microsoft.extensions.dependencyinjection.abstractions/3.1.7/lib/netstandard2.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll" /&gt;
+  &lt;Assembly Path="/home/rainbird/.nuget/packages/microsoft.extensions.dependencyinjection/3.1.7/lib/netstandard2.0/Microsoft.Extensions.DependencyInjection.dll" /&gt;
+  &lt;Assembly Path="/home/rainbird/.nuget/packages/newtonsoft.json.bson/1.0.2/lib/netstandard2.0/Newtonsoft.Json.Bson.dll" /&gt;
+  &lt;Assembly Path="/home/rainbird/.nuget/packages/grpc.core.api/2.31.0/lib/netstandard2.0/Grpc.Core.Api.dll" /&gt;
+  &lt;Assembly Path="/home/rainbird/.nuget/packages/grpc.core/2.31.0/lib/netstandard2.0/Grpc.Core.dll" /&gt;
+  &lt;Assembly Path="/home/rainbird/.nuget/packages/system.security.cryptography.cng/4.7.0/ref/netstandard2.0/System.Security.Cryptography.Cng.dll" /&gt;
+  &lt;Assembly Path="/home/rainbird/.nuget/packages/npam/1.0.1/lib/netstandard1.2/Npam.dll" /&gt;
+&lt;/AssemblyExplorer&gt;</s:String>
+	<s:String x:Key="/Default/Environment/Hierarchy/Build/BuildTool/CustomBuildToolPath/@EntryValue">/usr/share/dotnet/sdk/5.0.101/MSBuild.dll</s:String>
+	<s:Int64 x:Key="/Default/Environment/Hierarchy/Build/BuildTool/MsbuildVersion/@EntryValue">1048576</s:Int64>
+	<s:String x:Key="/Default/Environment/Hierarchy/Build/SolBuilderDuo/UseMsbuildSolutionBuilder/@EntryValue">NewVersion</s:String>
+	<s:String x:Key="/Default/Environment/Highlighting/HighlightingSourceSnapshotLocation/@EntryValue">/home/rainbird/.cache/JetBrains/Rider2020.3/resharper-host/temp/Rider/vAny/CoverageData/_CoreRemoting.-1217830067/Snapshot/snapshot.utdcvr</s:String>
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=daad670d_002D0f65_002D48d4_002D8308_002D9db51667240b/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="All tests from Solution" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+  &lt;Solution /&gt;
+&lt;/SessionState&gt;</s:String>
+	
+	
+	
+	
+	
+	
+	
+	</wpf:ResourceDictionary>

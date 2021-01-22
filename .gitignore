@@ -1,0 +1,12 @@
+/Examples/HelloWorld/HelloWorld.Client/bin/
+/Examples/HelloWorld/HelloWorld.Client/obj/
+/Examples/HelloWorld/HelloWorld.Server/bin/
+/Examples/HelloWorld/HelloWorld.Server/obj/
+/Examples/HelloWorld/HelloWorld.Shared/bin/
+/Examples/HelloWorld/HelloWorld.Shared/obj/
+/CoreRemoting/bin/
+/CoreRemoting/obj/
+/CoreRemoting.Authentication.LinuxPamAuthProvider/bin/
+/CoreRemoting.Authentication.LinuxPamAuthProvider/obj/
+/CoreRemoting.Tests/bin/
+/CoreRemoting.Tests/obj/
