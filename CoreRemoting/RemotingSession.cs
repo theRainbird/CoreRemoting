@@ -322,7 +322,7 @@ namespace CoreRemoting
                 {
                     serverRpcContext.MethodCallResultMessage =
                         _server
-                            .MethodCallMethodCallMessageBuilder
+                            .MethodCallMessageBuilder
                             .BuildMethodCallResultMessage(serverRpcContext.UniqueCallKey, method, parameterValues,
                                 result);
                 }

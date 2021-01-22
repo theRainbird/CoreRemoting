@@ -14,7 +14,7 @@ namespace CoreRemoting
         
         ISerializerAdapter Serializer { get; }
         
-        MethodCallMethodCallMessageBuilder MethodCallMethodCallMessageBuilder { get; }
+        MethodCallMessageBuilder MethodCallMessageBuilder { get; }
         
         IMessageEncryptionManager MessageEncryptionManager { get; }
         

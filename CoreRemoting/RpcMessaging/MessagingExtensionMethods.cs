@@ -3,8 +3,18 @@ using System.Collections.Generic;
 
 namespace CoreRemoting.RpcMessaging
 {
+    /// <summary>
+    /// Extension methods for messaging.
+    /// </summary>
     public static class MessagingExtensionMethods
     {
+        /// <summary>
+        /// Parses a text message that contains name value pairs.
+        /// </summary>
+        /// <param name="message">Text message</param>
+        /// <param name="entrySeperator">Char used to seperate entries</param>
+        /// <param name="pairSeperator">Char used to seperate pairs</param>
+        /// <returns>Dictionary with parsed name value pairs</returns>
         public static Dictionary<string, string> ParseNameValuePairTextMessage(this string message, char entrySeperator = '|', char pairSeperator = ':')
         {
             var entries = message.Split(new[] {entrySeperator}, StringSplitOptions.RemoveEmptyEntries);

@@ -32,7 +32,7 @@ namespace CoreRemoting
             SessionRepository = _config.SessionRepository ?? new SessionRepository(_config.KeySize);
             _container = _config.DependencyInjectionContainer ?? new CastleWindsorDependencyInjectionContainer();
             Serializer = _config.Serializer ?? new BinarySerializerAdapter();
-            MethodCallMethodCallMessageBuilder = new MethodCallMethodCallMessageBuilder();
+            MethodCallMessageBuilder = new MethodCallMessageBuilder();
             MessageEncryptionManager = new MessageEncryptionManager();
             KnownTypeProvider = _config.KnownTypeProvider ?? new KnownTypeProvider();
             
@@ -63,7 +63,7 @@ namespace CoreRemoting
         
         public ISerializerAdapter Serializer { get; }
 
-        public MethodCallMethodCallMessageBuilder MethodCallMethodCallMessageBuilder { get; }
+        public MethodCallMessageBuilder MethodCallMessageBuilder { get; }
 
         public IMessageEncryptionManager MessageEncryptionManager { get; }
         

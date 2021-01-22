@@ -10,6 +10,9 @@ namespace CoreRemoting.RpcMessaging
     [Serializable]
     public class GoodbyeMessage
     {
+        /// <summary>
+        /// Gets or sets the session ID of the session that should be ended.
+        /// </summary>
         [DataMember]
         public Guid SessionId { get; set; }
     }

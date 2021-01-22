@@ -46,7 +46,7 @@ namespace CoreRemoting
         
         private RemotingClient()
         {
-            MethodCallMessageBuilder = new MethodCallMethodCallMessageBuilder();
+            MethodCallMessageBuilder = new MethodCallMessageBuilder();
             MessageEncryptionManager = new MessageEncryptionManager();
             _proxyGenerator = new ProxyGenerator();
             _activeCalls = new ConcurrentDictionary<Guid, ClientRpcContext>();
