@@ -31,7 +31,8 @@ RPC library (.NET Standard 2.0) with classic .NET Remoting flavour
 - Built-in session management
 
 ## Hello world example 
-https://github.com/theRainbird/CoreRemoting/tree/master/Examples
+Let's create a simple multi user chat server as hello world application.
+
 ### Shared contract
 To be able to call a remote service, the client needs to know an interface implemented by the service.
 This interfaces should be placed in a shared assembly (Just like it is common with .NET remoting)
@@ -41,7 +42,9 @@ namespace HelloWorld.Shared
 {
     public interface ISayHelloService
     {
-        string SayHello(string name);
+        event Action<string, string> MessageReceived;
+        
+        void Say(string name, string message);
     }
 }
 ```
@@ -58,9 +61,13 @@ namespace HelloWorld.Server
 {
     public class SayHelloService : ISayHelloService
     {
-        public string SayHello(string name)
+        // Event to notify clients when users post new chat messages
+        public event Action<string, string> MessageReceived;
+        
+        // Call via RPC to say something in the chat 
+        public void Say(string name, string message)
         {
-            return $"Hello {name}";
+            MessageReceived?.Invoke(name, message);
         }
     }
 
@@ -110,14 +117,37 @@ namespace HelloWorld.Client
             
             client.Connect();
 
+            // Create a proxy of the remote service, which behaves almost like a regular local object
             var proxy = client.CreateProxy<ISayHelloService>();
+            
+            // Receive chat messages send by other remote users by event
+            proxy.MessageReceived += (senderName, message) => 
+                Console.WriteLine($"\n  {senderName} says: {message}\n");
             
             Console.WriteLine("What's your name?");
             var name = Console.ReadLine();
 
-            var result = proxy.SayHello(name);
-            Console.WriteLine(result);
+            Console.WriteLine("\nEntered chat. Type 'quit' to leave.");
+
+            bool quit = false;
+
+            while (!quit)
+            {
+                var text = Console.ReadLine();
+
+                if (text != null && text.Equals("quit", StringComparison.InvariantCultureIgnoreCase))
+                    quit = true;
+                else
+                {
+                    // Post a new chat message
+                    proxy.Say(name, text);
+                }
+            }
         }
     }
 }
 ```
+Source code of this example is also available in the repository at https://github.com/theRainbird/CoreRemoting/tree/master/Examples.
+
+To test the hello world solution, start the server (HelloWorld.Server) and then multiple clients (HelloWorld.Client).
+Have fun.
