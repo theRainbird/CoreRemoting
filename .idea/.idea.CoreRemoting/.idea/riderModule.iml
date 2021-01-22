@@ -7,6 +7,27 @@
     <content url="file://$USER_HOME$/.nuget/packages/nunit3testadapter/3.16.1/build/netcoreapp2.1/nunit.engine.api.dll" />
     <content url="file://$USER_HOME$/.nuget/packages/nunit3testadapter/3.16.1/build/netcoreapp2.1/nunit.engine.dll" />
     <content url="file://$MODULE_DIR$/../..">
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Authentication.LinuxPamAuthProvider/bin" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Authentication.LinuxPamAuthProvider/obj" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/cs" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/de" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/es" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/fr" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/it" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/ja" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/ko" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/pl" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/pt-BR" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/ref" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/ru" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/runtimes" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/tr" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/zh-Hans" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/bin/Debug/net5.0/zh-Hant" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting.Tests/obj" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting/bin" />
+      <excludeFolder url="file://$MODULE_DIR$/../../CoreRemoting/obj" />
+      <excludeFolder url="file://$MODULE_DIR$/../../Examples/HelloWorld.Client" />
       <excludeFolder url="file://$MODULE_DIR$/../../Examples/HelloWorld/HelloWorld.Server/obj/Debug" />
       <excludeFolder url="file://$MODULE_DIR$/../../Examples/HelloWorld/HelloWorld.Shared/obj/Debug" />
     </content>
