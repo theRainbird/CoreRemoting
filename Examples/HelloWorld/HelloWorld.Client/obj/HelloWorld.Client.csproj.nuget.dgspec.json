@@ -1,0 +1,235 @@
+{
+  "format": 1,
+  "restore": {
+    "/home/rainbird/RiderProjects/CoreRemoting/Examples/HelloWorld.Client/HelloWorld.Client.csproj": {}
+  },
+  "projects": {
+    "/home/rainbird/RiderProjects/CoreRemoting/CoreRemoting/CoreRemoting.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/rainbird/RiderProjects/CoreRemoting/CoreRemoting/CoreRemoting.csproj",
+        "projectName": "CoreRemoting",
+        "projectPath": "/home/rainbird/RiderProjects/CoreRemoting/CoreRemoting/CoreRemoting.csproj",
+        "packagesPath": "/home/rainbird/.nuget/packages/",
+        "outputPath": "/home/rainbird/RiderProjects/CoreRemoting/CoreRemoting/obj/",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "/usr/share/dotnet/sdk/NuGetFallbackFolder"
+        ],
+        "configFilePaths": [
+          "/home/rainbird/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "netstandard2.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "netstandard2.0": {
+            "targetAlias": "netstandard2.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "netstandard2.0": {
+          "targetAlias": "netstandard2.0",
+          "dependencies": {
+            "Castle.Core": {
+              "target": "Package",
+              "version": "[4.4.1, )"
+            },
+            "Castle.Windsor": {
+              "target": "Package",
+              "version": "[5.1.1, )"
+            },
+            "Microsoft.Extensions.DependencyInjection": {
+              "target": "Package",
+              "version": "[5.0.1, )"
+            },
+            "NETStandard.Library": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[2.0.3, )",
+              "autoReferenced": true
+            },
+            "Newtonsoft.Json": {
+              "target": "Package",
+              "version": "[12.0.3, )"
+            },
+            "System.Configuration.ConfigurationManager": {
+              "target": "Package",
+              "version": "[5.0.0, )"
+            },
+            "System.Data.DataSetExtensions": {
+              "target": "Package",
+              "version": "[4.5.0, )"
+            },
+            "System.Reflection.Emit.Lightweight": {
+              "target": "Package",
+              "version": "[4.7.0, )"
+            },
+            "System.Runtime.Serialization.Formatters": {
+              "target": "Package",
+              "version": "[4.3.0, )"
+            },
+            "System.Security.Cryptography.Algorithms": {
+              "target": "Package",
+              "version": "[4.3.1, )"
+            },
+            "System.Security.Cryptography.Cng": {
+              "target": "Package",
+              "version": "[5.0.0, )"
+            },
+            "System.Security.Cryptography.OpenSsl": {
+              "target": "Package",
+              "version": "[5.0.0, )"
+            },
+            "System.Security.Principal.Windows": {
+              "target": "Package",
+              "version": "[5.0.0, )"
+            },
+            "websocketsharp.core": {
+              "target": "Package",
+              "version": "[1.0.0, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/5.0.102/RuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "/home/rainbird/RiderProjects/CoreRemoting/Examples/HelloWorld.Client/HelloWorld.Client.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/rainbird/RiderProjects/CoreRemoting/Examples/HelloWorld.Client/HelloWorld.Client.csproj",
+        "projectName": "HelloWorld.Client",
+        "projectPath": "/home/rainbird/RiderProjects/CoreRemoting/Examples/HelloWorld.Client/HelloWorld.Client.csproj",
+        "packagesPath": "/home/rainbird/.nuget/packages/",
+        "outputPath": "/home/rainbird/RiderProjects/CoreRemoting/Examples/HelloWorld.Client/obj/",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "/usr/share/dotnet/sdk/NuGetFallbackFolder"
+        ],
+        "configFilePaths": [
+          "/home/rainbird/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net5.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net5.0": {
+            "targetAlias": "net5.0",
+            "projectReferences": {
+              "/home/rainbird/RiderProjects/CoreRemoting/CoreRemoting/CoreRemoting.csproj": {
+                "projectPath": "/home/rainbird/RiderProjects/CoreRemoting/CoreRemoting/CoreRemoting.csproj"
+              },
+              "/home/rainbird/RiderProjects/CoreRemoting/Examples/HelloWorld.Shared/HelloWorld.Shared.csproj": {
+                "projectPath": "/home/rainbird/RiderProjects/CoreRemoting/Examples/HelloWorld.Shared/HelloWorld.Shared.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net5.0": {
+          "targetAlias": "net5.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/5.0.102/RuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "/home/rainbird/RiderProjects/CoreRemoting/Examples/HelloWorld.Shared/HelloWorld.Shared.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/rainbird/RiderProjects/CoreRemoting/Examples/HelloWorld.Shared/HelloWorld.Shared.csproj",
+        "projectName": "HelloWorld.Shared",
+        "projectPath": "/home/rainbird/RiderProjects/CoreRemoting/Examples/HelloWorld.Shared/HelloWorld.Shared.csproj",
+        "packagesPath": "/home/rainbird/.nuget/packages/",
+        "outputPath": "/home/rainbird/RiderProjects/CoreRemoting/Examples/HelloWorld.Shared/obj/",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "/usr/share/dotnet/sdk/NuGetFallbackFolder"
+        ],
+        "configFilePaths": [
+          "/home/rainbird/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net5.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net5.0": {
+            "targetAlias": "net5.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net5.0": {
+          "targetAlias": "net5.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/5.0.102/RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}
