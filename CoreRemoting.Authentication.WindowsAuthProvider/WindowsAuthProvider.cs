@@ -51,10 +51,6 @@ namespace CoreRemoting.Authentication
             if (isAuthenticated)
             {
                 var principal = UserPrincipal.FindByIdentity(principalContext, identityName);
-
-                // find all groups the user is member of (the check is recursive).
-                // Guid != null check is intended to remove all built-in objects that are not really AD gorups.
-                // the Sid.Translate method gets the DOMAIN\Group name format.
                 var userIsMemberOf = principal.GetAuthorizationGroups().Select(group => group.Name);
 
                 authenticatedIdentity =
