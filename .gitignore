@@ -10,7 +10,6 @@
 /CoreRemoting.Authentication.LinuxPamAuthProvider/obj/
 /CoreRemoting.Tests/bin/
 /CoreRemoting.Tests/obj/
-/Examples/HelloWorld.Client/obj/
 /CoreRemoting.Authentication.WindowsAuthProvider/bin/Debug/netstandard2.0
 /CoreRemoting.Authentication.WindowsAuthProvider/obj
 /WindowsAuthTest/bin/Debug/netcoreapp3.1
