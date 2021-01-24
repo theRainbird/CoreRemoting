@@ -1,6 +1,8 @@
 # CoreRemoting
 RPC library (.NET Standard 2.0) with classic .NET Remoting flavour
 
+NuGet package: https://www.nuget.org/packages/CoreRemoting/
+
 ### What is it for?
 - To help migrate applications that use .NET Remoting to .NET Core / .NET 5.
 - To provide easy-to-use RPC functionality
