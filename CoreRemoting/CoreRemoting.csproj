@@ -11,6 +11,10 @@
         <Company>Hagen Siegel</Company>
         <AssemblyVersion>1.0</AssemblyVersion>
         <TargetFramework>netstandard2.0</TargetFramework>
+        <PackageProjectUrl>https://github.com/theRainbird/CoreRemoting</PackageProjectUrl>
+        <PackageLicenseUrl>https://github.com/theRainbird/CoreRemoting/blob/master/LICENSE</PackageLicenseUrl>
+        <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
     </PropertyGroup>
 
     <ItemGroup>
