@@ -24,6 +24,7 @@ RPC library (.NET Standard 2.0) with classic .NET Remoting flavour
 - Custom serializers can be plugged in (Just implement `ISerializerAdapter`)
 - Support for custom authentication (Just implement `IAuthenticationProvider`)
 - Pluggable authentication provider to authenticate Linux user on server with PAM is available
+- Pluggable authentication provider to authenticate Windows user on server is available
 - Message encryption with RSA key exchange and AES (No SSL, no X509 certificates needed, works also on Linux)
 - Supports .NET Remoting style `CallContext` (also on .NET Core / .NET 5) to implicitly transfer objects on RPC calls / threads
 - Supports Microsoft Dependency Injection (Just call `AddCoreRemotingServer` or `AddCoreRemotingClient` on your `IServiceCollection`)
