@@ -1,5 +1,4 @@
 using System;
-using System.Security.Cryptography;
 using CoreRemoting.Encryption;
 
 namespace CoreRemoting.RpcMessaging

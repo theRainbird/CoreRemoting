@@ -21,7 +21,7 @@ namespace CoreRemoting.Tests
             var testService = 
                 new TestService
                 {
-                    TestMethodFake = arg =>
+                    TestMethodFake = _ =>
                     {
                         CallContext.SetData("test", "Changed");
                         return CallContext.GetData("test");

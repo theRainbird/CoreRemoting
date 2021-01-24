@@ -1,5 +1,4 @@
 using System;
-using System.Security.Authentication;
 using WebSocketSharp;
 using WebSocketSharp.Net;
 

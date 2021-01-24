@@ -4,7 +4,6 @@ using CoreRemoting.Channels.Websocket;
 using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Serialization.Binary;
-using CoreRemoting.Serialization.DataContract;
 using CoreRemoting.Tests.Tools;
 using NUnit.Framework;
 

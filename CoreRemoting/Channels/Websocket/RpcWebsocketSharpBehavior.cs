@@ -78,7 +78,6 @@ namespace CoreRemoting.Channels.Websocket
         /// </summary>
         private void BeforeDisposeSession()
         {
-            Guid sessionId = _session.SessionId;
             _session = null;
             Sessions.CloseSession(ID);
         }

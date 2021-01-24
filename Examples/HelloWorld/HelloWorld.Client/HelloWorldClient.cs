@@ -4,20 +4,30 @@ using HelloWorld.Shared;
 
 namespace HelloWorld.Client
 {
+    /// <summary>
+    /// Client application class of hello world chat example.
+    /// </summary>
     public static class HelloWorldClient
     {
-        static void Main(string[] args)
+        /// <summary>
+        /// Application entry point.
+        /// </summary>
+        static void Main()
         {
+            // Create and configure new CoreRemoting client 
             using var client = new RemotingClient(new ClientConfig()
             {
                 ServerHostName = "localhost",
                 ServerPort = 9090
             });
             
+            // Establish connection to server
             client.Connect();
 
+            // Creates proxy for remote service
             var proxy = client.CreateProxy<ISayHelloService>();
             
+            // Subscribe MessageReceived eveng of remote service
             proxy.MessageReceived += (senderName, message) => 
                 Console.WriteLine($"\n  {senderName} says: {message}\n");
             
@@ -35,7 +45,10 @@ namespace HelloWorld.Client
                 if (text != null && text.Equals("quit", StringComparison.InvariantCultureIgnoreCase))
                     quit = true;
                 else
+                {
+                    // Call remote method
                     proxy.Say(name, text);
+                }
             }
         }
     }

@@ -119,7 +119,7 @@ namespace CoreRemoting.Tests
             int serverErrorCount = 0;
             
             using var server = new RemotingServer(serverConfig);
-            server.Error += (sender, exception) => serverErrorCount++;
+            server.Error += (_, _) => serverErrorCount++;
             server.Start();
 
             var clientAction = new Action<string, bool>((password, shouldThrow) =>

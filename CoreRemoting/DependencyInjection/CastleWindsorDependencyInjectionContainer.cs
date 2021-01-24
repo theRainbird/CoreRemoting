@@ -76,7 +76,7 @@ namespace CoreRemoting.DependencyInjection
             if (string.IsNullOrWhiteSpace(serviceName))
                 serviceName = serviceInterfaceType.FullName;
             
-            if (_serviceNameRegistry.ContainsKey(serviceName))
+            if (_serviceNameRegistry.ContainsKey(serviceName!))
                 return;
 
             _serviceNameRegistry.TryAdd(serviceName, serviceInterfaceType);

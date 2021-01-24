@@ -3,6 +3,8 @@
  * Many thanks to yallie for this great extensions to make BinaryFormatter a lot safer.
  */
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace CoreRemoting.Serialization.Binary
 {
 using System;
@@ -56,6 +58,7 @@ using System;
         /// Throws exceptions for methods defined in the blacklisted namespaces.
         /// </summary>
         /// <param name="del">The delegate to validate.</param>
+        [SuppressMessage("ReSharper", "PossibleNullReferenceException")]
         public void ValidateDelegate(Delegate del)
         {
             if (del == null)

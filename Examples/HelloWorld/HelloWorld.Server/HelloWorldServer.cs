@@ -5,20 +5,38 @@ using HelloWorld.Shared;
 
 namespace HelloWorld.Server
 {
+    /// <summary>
+    /// Hello wordl chat service.
+    /// </summary>
     public class SayHelloService : ISayHelloService
     {
+        /// <summary>
+        /// Event: Fired when a chat message is received.
+        /// </summary>
         public event Action<string, string> MessageReceived;
         
+        /// <summary>
+        /// Say something in the chat.
+        /// </summary>
+        /// <param name="name">User name</param>
+        /// <param name="message">Message to post in chat</param>
         public void Say(string name, string message)
         {
             MessageReceived?.Invoke(name, message);
         }
     }
 
+    /// <summary>
+    /// Hello world chat server application class.
+    /// </summary>
     public static class HelloWorldServer
     {
-        static void Main(string[] args)
+        /// <summary>
+        /// Server application entry point.
+        /// </summary>
+        static void Main()
         {
+            // Create an configure a CoreRemoting server
             using var server = new RemotingServer(new ServerConfig()
             {
                 HostName = "localhost",
@@ -29,6 +47,7 @@ namespace HelloWorld.Server
                 }
             });
             
+            // Start server
             server.Start();
             
             Console.WriteLine("Server is running.");

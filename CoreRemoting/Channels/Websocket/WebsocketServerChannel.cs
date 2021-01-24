@@ -1,5 +1,4 @@
 using System;
-using System.Security.Cryptography.X509Certificates;
 using WebSocketSharp.Server;
 
 namespace CoreRemoting.Channels.Websocket

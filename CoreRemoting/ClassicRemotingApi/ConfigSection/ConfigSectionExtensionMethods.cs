@@ -96,7 +96,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         private static IServerChannel CreateServerChannelFromConfigName(string channelTypeName)
         {
             var websocketServerChannelShortcuts = 
-                new string[] {"ws", "websocket"};
+                new[] {"ws", "websocket"};
 
             if (websocketServerChannelShortcuts.Contains(channelTypeName.ToLower()))
                 return new WebsocketServerChannel();

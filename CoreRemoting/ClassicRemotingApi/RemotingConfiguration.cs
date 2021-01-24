@@ -18,7 +18,7 @@ namespace CoreRemoting.ClassicRemotingApi
         private static ConcurrentDictionary<string, IRemotingServer> _remotingServers = 
             new ConcurrentDictionary<string, IRemotingServer>();
 
-        private static bool _classicRemotingApiDisabled = false;
+        private static bool _classicRemotingApiDisabled;
 
         /// <summary>
         /// Disables the Classic Remoting API.
@@ -76,7 +76,7 @@ namespace CoreRemoting.ClassicRemotingApi
             if (_classicRemotingApiDisabled)
                 return;
             
-            _remotingServers.TryRemove(server.UniqueServerInstanceName, out IRemotingServer removedServer);
+            _remotingServers.TryRemove(server.UniqueServerInstanceName, out _);
         }
 
         /// <summary>
@@ -198,6 +198,7 @@ namespace CoreRemoting.ClassicRemotingApi
             {
                 var serverConfig = serverInstanceConfig.ToServerConfig();
                 var server = new RemotingServer(serverConfig);
+                RegisterServer(server);
             }
             
             foreach (WellKnownServiceConfigElement serviceConfigElement in configSection.Services)
