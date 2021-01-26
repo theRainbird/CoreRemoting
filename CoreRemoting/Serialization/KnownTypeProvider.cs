@@ -12,6 +12,9 @@ using CoreRemoting.RpcMessaging;
 
 namespace CoreRemoting.Serialization
 {
+    /// <summary>
+    /// Component to provide known types that are safe for deserialization.
+    /// </summary>
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
     [SuppressMessage("ReSharper", "InconsistentNaming")]
     [SuppressMessage("ReSharper", "ClassWithVirtualMembersNeverInherited.Global")]
@@ -19,11 +22,17 @@ namespace CoreRemoting.Serialization
     {
         protected readonly ConcurrentDictionary<Type, List<Type>> _knownTypes;
 
+        /// <summary>
+        /// Creates a new instance of the KnownTypeProvider class.
+        /// </summary>
         public KnownTypeProvider()
         {
             _knownTypes = new ConcurrentDictionary<Type, List<Type>>();
         }
 
+        /// <summary>
+        /// Gets a list of static known types that are safe for deserialization.
+        /// </summary>
         public virtual List<Type> StaticKnownTypes =>
             new List<Type>()
             {
@@ -79,6 +88,11 @@ namespace CoreRemoting.Serialization
                 typeof(GoodbyeMessage)
             };
 
+        /// <summary>
+        /// Gets a list of types for one or more specified types.
+        /// </summary>
+        /// <param name="types">Type whose known types should be determined</param>
+        /// <returns>List of known types safe for deserialization</returns>
         public virtual List<Type> GetKnownTypesByTypeList(IEnumerable<Type> types)
         {
             var knownTypeList = new List<Type>(StaticKnownTypes);

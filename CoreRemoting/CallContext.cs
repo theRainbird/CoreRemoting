@@ -29,6 +29,10 @@ namespace CoreRemoting
         public static object GetData(string name) =>
             State.TryGetValue(name, out AsyncLocal<object> data) ? data.Value : null;
 
+        /// <summary>
+        /// Gets a serializable snapshot of the current call context.
+        /// </summary>
+        /// <returns>Array of call context entries</returns>
         public static CallContextEntry[] GetSnapshot()
         {
             var stateSnaphsot = State.ToArray();
@@ -49,6 +53,10 @@ namespace CoreRemoting
             return result;
         }
 
+        /// <summary>
+        /// Restore the call context from a snapshot.
+        /// </summary>
+        /// <param name="entries">Call context entries</param>
         public static void RestoreFromSnapshot(IEnumerable<CallContextEntry> entries)
         {
             if (entries == null)
