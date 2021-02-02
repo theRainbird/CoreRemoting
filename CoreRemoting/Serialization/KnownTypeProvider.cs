@@ -20,6 +20,9 @@ namespace CoreRemoting.Serialization
     [SuppressMessage("ReSharper", "ClassWithVirtualMembersNeverInherited.Global")]
     public class KnownTypeProvider : IKnownTypeProvider
     {
+        /// <summary>
+        /// Mapping of known types that a correlated to a specified type.
+        /// </summary>
         protected readonly ConcurrentDictionary<Type, List<Type>> _knownTypes;
 
         /// <summary>

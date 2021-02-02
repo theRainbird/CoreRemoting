@@ -7,6 +7,11 @@ namespace CoreRemoting.RemoteDelegates
     /// </summary>
     public class ClientDelegateInfo
     {
+        /// <summary>
+        /// Creates a new instance of the ClientDelegateInfo class.
+        /// </summary>
+        /// <param name="clientDelegate">Client delegate</param>
+        /// <param name="serviceProxy">Proxy object of the remote service, which invokes the client delegate as callback</param>
         public ClientDelegateInfo(Delegate clientDelegate, object serviceProxy)
         {
             ClientDelegate = clientDelegate;

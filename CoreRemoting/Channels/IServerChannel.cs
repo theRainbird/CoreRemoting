@@ -2,6 +2,9 @@ using System;
 
 namespace CoreRemoting.Channels
 {
+    /// <summary>
+    /// Interface for CoreRemoting server side transport channel.
+    /// </summary>
     public interface IServerChannel : IDisposable
     {
         /// <summary>

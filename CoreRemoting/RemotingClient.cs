@@ -130,14 +130,29 @@ namespace CoreRemoting
         /// </summary>
         public bool MessageEncryption { get; private set; }
 
+        /// <summary>
+        /// Gets the configuration settings used by the CoreRemoting client instance.
+        /// </summary>
         public ClientConfig Config => _config;
 
+        /// <summary>
+        /// Gets the public key of this CoreRemoting client instance.
+        /// </summary>
         public byte[] PublicKey => _keyPair.PublicKey;
 
+        /// <summary>
+        /// Gets whether the connction to the server is established or not.
+        /// </summary>
         public bool IsConnected => _channel?.IsConnected ?? false;
 
+        /// <summary>
+        /// Gets whether this CoreRemoting client instance has a session or not.
+        /// </summary>
         public bool HasSession => _sessionId != Guid.Empty;
         
+        /// <summary>
+        /// Gets the authenticated identity. May be null if authentication failed or if authentication is not configured.
+        /// </summary>
         [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")] 
         public RemotingIdentity Identity { get; private set; }
         
@@ -145,6 +160,11 @@ namespace CoreRemoting
         
         #region Connection management
         
+        /// <summary>
+        /// Connects this CoreRemoting client instance to the configured CoreRemoting server.
+        /// </summary>
+        /// <exception cref="RemotingException">Thrown, if no channel is configured.</exception>
+        /// <exception cref="NetworkException">Thrown, if handshake with server failed.</exception>
         public void Connect()
         {
             if (_channel == null)
@@ -163,6 +183,9 @@ namespace CoreRemoting
                 Authenticate();
         }
 
+        /// <summary>
+        /// Disconnects from the server. The server is actively notified about disconnection.
+        /// </summary>
         public void Disconnect()
         {
             if (_channel != null && HasSession)
@@ -203,6 +226,10 @@ namespace CoreRemoting
         
         #region Authentication
 
+        /// <summary>
+        /// Authenticates this CoreRemoting client instance with the specified credentials.
+        /// </summary>
+        /// <exception cref="SecurityException">Thrown, if authentication failed or timed out</exception>
         private void Authenticate()
         {
             if (_config.Credentials == null || (_config.Credentials!=null && _config.Credentials.Length == 0))
@@ -250,6 +277,10 @@ namespace CoreRemoting
         
         #region Handling received messages
         
+        /// <summary>
+        /// Called when a message is received from server.
+        /// </summary>
+        /// <param name="rawMessage">Raw message data</param>
         private void OnMessage(byte[] rawMessage)
         {
             var message = Serializer.Deserialize<WireMessage>(rawMessage);
@@ -274,6 +305,10 @@ namespace CoreRemoting
             }
         }
 
+        /// <summary>
+        /// Processes a complete handshake message from server.
+        /// </summary>
+        /// <param name="message">Deserialized WireMessage that contains a plain or encrypted Session ID</param>
         private void ProcessCompleteHandshakeMessage(WireMessage message)
         {
             if (MessageEncryption)
@@ -295,6 +330,10 @@ namespace CoreRemoting
             _handshakeCompletedWaitHandle.Set();
         }
 
+        /// <summary>
+        /// Processes a authentication response message from server.
+        /// </summary>
+        /// <param name="message">Deserialized WireMessage that contains a AuthenticationResponseMessage</param>
         private void ProcessAuthenticationResponseMessage(WireMessage message)
         {
             byte[] sharedSecret =
@@ -316,6 +355,10 @@ namespace CoreRemoting
             _authenticationCompletedWaitHandle.Set();
         }
 
+        /// <summary>
+        /// Processes a remote delegate invocation message from server.
+        /// </summary>
+        /// <param name="message">Deserialized WireMessage that contains a RemoteDelegateInvocationMessage</param>
         private void ProcessRemoteDelegateInvocationMessage(WireMessage message)
         {
             byte[] sharedSecret =
@@ -337,6 +380,11 @@ namespace CoreRemoting
             localDelegate.DynamicInvoke(delegateInvocationMessage.DelegateArguments);
         }
         
+        /// <summary>
+        /// Processes a RPC result message from server.
+        /// </summary>
+        /// <param name="message">Deserialized WireMessage that contains a MethodCallResultMessage or a RemoteInvocationException</param>
+        /// <exception cref="KeyNotFoundException">Thrown, when the received result is of a unknown call</exception>
         private void ProcessRpcResultMessage(WireMessage message)
         {
             byte[] sharedSecret =
@@ -468,7 +516,7 @@ namespace CoreRemoting
         /// <summary>
         /// Shuts a specified service proxy down and frees ressources.
         /// </summary>
-        /// <param name="serviceProxy"></param>
+        /// <param name="serviceProxy">Proxy object that should be shut down</param>
         public void ShutdownProxy(object serviceProxy)
         {
             if (!ProxyUtil.IsProxy(serviceProxy))

@@ -28,6 +28,7 @@ namespace CoreRemoting.Serialization.Binary
 
         /// <inheritdoc cref="ISerializationSurrogate" />
         [SecurityPermission(SecurityAction.LinkDemand, Flags = SecurityPermissionFlag.SerializationFormatter)]
+        [SuppressMessage("ReSharper", "PossibleNullReferenceException")]
         public void GetObjectData(object obj, SerializationInfo info, StreamingContext context)
         {
             var ds = obj as ISerializable;

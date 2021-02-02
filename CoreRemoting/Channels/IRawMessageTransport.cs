@@ -2,6 +2,9 @@ using System;
 
 namespace CoreRemoting.Channels
 {
+    /// <summary>
+    /// Interface to be implemented by raw message transport components.
+    /// </summary>
     public interface IRawMessageTransport
     {
         /// <summary>

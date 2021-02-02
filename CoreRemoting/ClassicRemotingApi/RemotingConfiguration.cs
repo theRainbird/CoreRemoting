@@ -198,7 +198,6 @@ namespace CoreRemoting.ClassicRemotingApi
             {
                 var serverConfig = serverInstanceConfig.ToServerConfig();
                 var server = new RemotingServer(serverConfig);
-                RegisterServer(server);
             }
             
             foreach (WellKnownServiceConfigElement serviceConfigElement in configSection.Services)

@@ -6,7 +6,7 @@
     </configSections>
     <coreRemoting>
         <serverInstances>
-            <add uniqueInstanceName = "TestServer"
+            <add uniqueInstanceName = "TestServer4711"
                  hostName = "test"
                  networkPort = "8080"
                  keySize = "2048"
@@ -22,7 +22,7 @@
                  implementationAssemblyName = "CoreRemoting.Tests"
                  implementationTypeName = "CoreRemoting.Tests.Tools.TestService"
                  lifetime = "Singleton"
-                 uniqueServerInstanceName = "TestServer" />
+                 uniqueServerInstanceName = "TestServer4711" />
         </services>
     </coreRemoting>
 </configuration>

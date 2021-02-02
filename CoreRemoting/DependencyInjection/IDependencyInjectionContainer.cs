@@ -3,6 +3,9 @@ using System.Collections.Generic;
 
 namespace CoreRemoting.DependencyInjection
 {
+    /// <summary>
+    /// Interface to be implemented by dependency injection container integration classes.
+    /// </summary>
     public interface IDependencyInjectionContainer : IDisposable
     {
         /// <summary>

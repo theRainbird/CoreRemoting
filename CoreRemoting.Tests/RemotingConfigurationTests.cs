@@ -66,7 +66,7 @@ namespace CoreRemoting.Tests
             
             RemotingConfiguration.Configure(configFileName);
 
-            var server = RemotingConfiguration.GetRegisteredServer("TestServer");
+            var server = RemotingConfiguration.GetRegisteredServer("TestServer4711");
             
             Assert.IsNotNull(server);
             Assert.AreEqual(8080, server.Config.NetworkPort);

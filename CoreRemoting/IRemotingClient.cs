@@ -2,10 +2,19 @@ using System;
 
 namespace CoreRemoting
 {
+    /// <summary>
+    /// Interface of a CoreRemoting client.
+    /// </summary>
     public interface IRemotingClient : IDisposable
     {
+        /// <summary>
+        /// Gets the configuration settings used by the CoreRemoting client instance.
+        /// </summary>
         ClientConfig Config { get; }
         
+        /// <summary>
+        /// Gets the public key of this CoreRemoting client instance.
+        /// </summary>
         byte[] PublicKey { get; }
         
         /// <summary>
@@ -38,12 +47,24 @@ namespace CoreRemoting
         /// <param name="serviceProxy"></param>
         void ShutdownProxy(object serviceProxy);
 
+        /// <summary>
+        /// Connects this CoreRemoting client instance to the configured CoreRemoting server.
+        /// </summary>
         void Connect();
 
+        /// <summary>
+        /// Disconnects from the server. The server is actively notified about disconnection.
+        /// </summary>
         void Disconnect();
 
+        /// <summary>
+        /// Gets whether the connction to the server is established or not.
+        /// </summary>
         bool IsConnected { get; }
         
+        /// <summary>
+        /// Gets whether this CoreRemoting client instance has a session or not.
+        /// </summary>
         bool HasSession { get; }
     }
 }
