@@ -8,6 +8,11 @@ using CoreRemoting.RemoteDelegates;
 
 namespace CoreRemoting
 {
+    /// <summary>
+    /// Implements a proxy of a remote service that is hosted on a CoreRemoting server..
+    /// This is doing the RPC magic of CoreRemoting at client side.
+    /// </summary>
+    /// <typeparam name="TServiceInterface">Type of the remote service's interface (also known as contract of the service)</typeparam>
     public class ServiceProxy<TServiceInterface> : IInterceptor, IServiceProxy
     {
         private readonly string _serviceName;
@@ -51,10 +56,20 @@ namespace CoreRemoting
             GC.SuppressFinalize(this);
         }
 
+        /// <summary>
+        /// Gets or sets the interface type of the proxied remote service.
+        /// </summary>
         [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Local")]
         [SuppressMessage("ReSharper", "AutoPropertyCanBeMadeGetOnly.Local")]
         private TServiceInterface Interface { get; set; }
 
+        /// <summary>
+        /// Intercepts a call of a memeber on the proxy object. 
+        /// </summary>
+        /// <param name="invocation">Intercepted invocation details</param>
+        /// <exception cref="RemotingException">Thrown if a remoting operation has been failed</exception>
+        /// <exception cref="NotSupportedException">Thrown if a member of a type marked as OneWay is intercepted, that has another return type than void</exception>
+        /// <exception cref="RemoteInvocationException">Thrown if an exception occured when the remote method was invoked</exception>
         void IInterceptor.Intercept(IInvocation invocation)
         {
            var method = invocation.Method;
@@ -117,6 +132,12 @@ namespace CoreRemoting
             CallContext.RestoreFromSnapshot(resultMessage.CallContextSnapshot);
         }
         
+        /// <summary>
+        /// Maps delegate arguments into serializable RemoteDelegateInfo objects.
+        /// </summary>
+        /// <param name="invocation">Invocation details</param>
+        /// <returns>Array of arguments (includes mapped ones)</returns>
+        /// <exception cref="NotSupportedException"></exception>
         private object[] MapDelegateArguments(IInvocation invocation)
         {
             var arguments =

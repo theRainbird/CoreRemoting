@@ -52,7 +52,7 @@ namespace CoreRemoting
         /// <param name="networkPort">Network port on which the server should be listening for client requests</param>
         public static void AddCoreRemotingServer(this IServiceCollection services, int networkPort)
         {
-            var config = new ServerConfig()
+            var config = new ServerConfig
             {
                 NetworkPort = networkPort
             };

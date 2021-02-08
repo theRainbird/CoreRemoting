@@ -44,7 +44,7 @@ namespace CoreRemoting
         /// <param name="keySize">Key size of the RSA keys for asymmetric encryption</param>
         /// <param name="clientPublicKey">Public key of this session's client</param>
         /// <param name="server">Server instance, that hosts this session</param>
-        /// <param name="rawMessageTransport">Component, that does the raw message transport (send & receive)</param>
+        /// <param name="rawMessageTransport">Component, that does the raw message transport (send and receive)</param>
         internal RemotingSession(int keySize, byte[] clientPublicKey, IRemotingServer server,
             IRawMessageTransport rawMessageTransport)
         {
@@ -175,7 +175,7 @@ namespace CoreRemoting
             _remoteDelegateInvocationEventAggregator;
 
         /// <summary>
-        /// Gets component that does the raw message transport (send & receive).
+        /// Gets component that does the raw message transport (send and receive).
         /// </summary>
         internal IRawMessageTransport Messaging => _rawMessageTransport;
 
