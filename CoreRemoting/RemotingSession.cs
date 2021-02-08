@@ -12,6 +12,10 @@ using CoreRemoting.Encryption;
 
 namespace CoreRemoting
 {
+    /// <summary>
+    /// Implements a CoreRemoting session, which controls the CoreRemoting protocol on application layer at server side.
+    /// This is doing the RPC magic of CoreRemoting at server side.
+    /// </summary>
     public class RemotingSession : IDisposable
     {
         #region Fields
@@ -25,12 +29,22 @@ namespace CoreRemoting
         private ConcurrentDictionary<Guid, IDelegateProxy> _delegateProxyCache;
         private bool _isAuthenticated;
 
+        /// <summary>
+        /// Event: Fired before the session is disposed to do some clean up.
+        /// </summary>
         public event Action BeforeDispose;
         
         #endregion
 
         #region Construction
 
+        /// <summary>
+        /// Creates a new instance of the RemotingSession class.
+        /// </summary>
+        /// <param name="keySize">Key size of the RSA keys for asymmetric encryption</param>
+        /// <param name="clientPublicKey">Public key of this session's client</param>
+        /// <param name="server">Server instance, that hosts this session</param>
+        /// <param name="rawMessageTransport">Component, that does the raw message transport (send & receive)</param>
         internal RemotingSession(int keySize, byte[] clientPublicKey, IRemotingServer server,
             IRawMessageTransport rawMessageTransport)
         {
@@ -109,6 +123,11 @@ namespace CoreRemoting
             _rawMessageTransport.SendMessage(_server.Serializer.Serialize(completeHandshakeMessage));
         }
 
+        /// <summary>
+        /// Event procedure: Called if the ErrorOccured event is fired on the raw message transport component.
+        /// </summary>
+        /// <param name="errorMessage">Error message</param>
+        /// <param name="ex">Optional exception from the transport infrastructure</param>
         private void OnErrorOccured(string errorMessage, Exception ex)
         {
             var exception = new RemotingException(errorMessage, innerEx: ex); 
@@ -120,32 +139,61 @@ namespace CoreRemoting
 
         #region Properties
 
+        /// <summary>
+        /// Gets this session's uique session ID.
+        /// </summary>
         public Guid SessionId => _sessionId;
 
+        /// <summary>
+        /// Gets whether message encryption is enabled for this session.
+        /// </summary>
         [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
         public bool MessageEncryption { get; }
 
+        /// <summary>
+        /// Gets the timestamp when this session was created.
+        /// </summary>
         [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
         [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
         public DateTime CreatedOn { get; }
 
+        /// <summary>
+        /// Gets whether authentication was successful.
+        /// </summary>
         public bool IsAuthenticated => _isAuthenticated;
 
+        /// <summary>
+        /// Gets the server side RSA key pair of this session.
+        /// </summary>
         internal RsaKeyPair KeyPair => _keyPair;
 
+        /// <summary>
+        /// Gets the remote delegate invocation event aggregator.
+        /// </summary>
         [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
         internal RemoteDelegateInvocationEventAggregator RemoteDelegateInvocation =>
             _remoteDelegateInvocationEventAggregator;
 
+        /// <summary>
+        /// Gets component that does the raw message transport (send & receive).
+        /// </summary>
         internal IRawMessageTransport Messaging => _rawMessageTransport;
 
-        [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")] 
+        /// <summary>
+        /// Gets the authenticated identity of this session.
+        /// </summary>
+        [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
+        [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
         public RemotingIdentity Identity { get; private set; }
 
         #endregion
 
         #region Handling received messages
 
+        /// <summary>
+        /// Event procedure: Called when the ReceiveMessage event is fired on the raw message transport component.
+        /// </summary>
+        /// <param name="rawMessage">Raw message data that has been received</param>
         private void OnReceiveMessage(byte[] rawMessage)
         {
             var message = _server.Serializer.Deserialize<WireMessage>(rawMessage);
@@ -167,6 +215,10 @@ namespace CoreRemoting
             }
         }
 
+        /// <summary>
+        /// Processes a wire message that contains a goodbye message, which is sent from a client to close the session. 
+        /// </summary>
+        /// <param name="request">Wire message from client</param>
         private void ProcessGoodbyeMessage(WireMessage request)
         {
             var sharedSecret =
@@ -189,6 +241,10 @@ namespace CoreRemoting
             _server.SessionRepository.RemoveSession(_sessionId);
         }
 
+        /// <summary>
+        /// Processes a wire message that contains a authentication request message, which is sent from a client to request authentication of a set of credentials. 
+        /// </summary>
+        /// <param name="request">Wire message from client</param>
         private void ProcessAuthenticationRequestMessage(WireMessage request)
         {
             if (_isAuthenticated)
@@ -407,6 +463,9 @@ namespace CoreRemoting
 
         #region IDisposable implementation
 
+        /// <summary>
+        /// Frees managed resources.
+        /// </summary>
         public void Dispose()
         {
             BeforeDispose?.Invoke();
