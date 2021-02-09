@@ -75,6 +75,19 @@ namespace CoreRemoting.Serialization.Binary
         }
 
         /// <summary>
+        /// Serializes an object graph.
+        /// </summary>
+        /// <param name="type">Object type</param>
+        /// <param name="graph">Object graph to be serialized</param>
+        /// <param name="knownTypes">Optional list of known types</param>
+        /// <returns>Serialized data</returns>
+        public byte[] Serialize(Type type, object graph, IEnumerable<Type> knownTypes = null)
+        {
+            var binaryFormatter = GetFormatter();
+            return binaryFormatter.SerializeByteArray(graph);
+        }
+
+        /// <summary>
         /// Deserializes raw data back into an object graph.
         /// </summary>
         /// <param name="rawData">Raw data that should be deserialized</param>
@@ -85,6 +98,19 @@ namespace CoreRemoting.Serialization.Binary
         {
             var binaryFormatter = GetFormatter();
             return (T)binaryFormatter.DeserializeSafe(rawData);
+        }
+
+        /// <summary>
+        /// Deserializes raw data back into an object graph.
+        /// </summary>
+        /// <param name="type">Object type</param>
+        /// <param name="rawData">Raw data that should be deserialized</param>
+        /// <param name="knownTypes">Optional list of known types</param>
+        /// <returns>Deserialized object graph</returns>
+        public object Deserialize(Type type, byte[] rawData, IEnumerable<Type> knownTypes = null)
+        {
+            var binaryFormatter = GetFormatter();
+            return binaryFormatter.DeserializeSafe(rawData);
         }
     }
 }

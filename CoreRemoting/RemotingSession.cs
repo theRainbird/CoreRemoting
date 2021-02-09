@@ -340,20 +340,24 @@ namespace CoreRemoting
 
             ((RemotingServer) _server).OnBeforeCall(serverRpcContext);
 
-            var parameterTypes =
-                callMessage.Parameters
-                    .Select(parameter => Type.GetType(parameter.ParameterTypeName))
-                    .ToArray();
+            var parameterTypes = new Type[callMessage.Parameters.Length];
+            var deserializedParameterValues = new object[callMessage.Parameters.Length];
+            
+            for (int i = 0; i < callMessage.Parameters.Length; i++)
+            {
+                var parameter = callMessage.Parameters[i];
+                var parameterType = Type.GetType(parameter.ParameterTypeName);
+                parameterTypes[i] = parameterType;
+                
+                deserializedParameterValues[i] =
+                    parameter.IsValueNull
+                        ? null
+                        : _server.Serializer.Deserialize(parameterType, parameter.Value, knownTypes);
+            }
 
             var parameterValues =
-                MapDelegateArguments(
-                    parameterValues: callMessage.Parameters
-                        .Select(parameter =>
-                            parameter.IsValueNull
-                                ? null
-                                : parameter.Value)
-                        .ToArray());
-
+                MapDelegateArguments(deserializedParameterValues);
+            
             var method =
                 serviceInterfaceType.GetMethod(
                     name: callMessage.MethodName,
@@ -379,8 +383,13 @@ namespace CoreRemoting
                     serverRpcContext.MethodCallResultMessage =
                         _server
                             .MethodCallMessageBuilder
-                            .BuildMethodCallResultMessage(serverRpcContext.UniqueCallKey, method, parameterValues,
-                                result);
+                            .BuildMethodCallResultMessage(
+                                serializer: _server.Serializer, 
+                                uniqueCallKey: serverRpcContext.UniqueCallKey, 
+                                method: method, 
+                                args: parameterValues,
+                                returnValue: result,
+                                knownTypes: knownTypes);
                 }
 
                 ((RemotingServer) _server).OnAfterCall(serverRpcContext);

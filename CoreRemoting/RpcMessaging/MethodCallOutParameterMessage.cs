@@ -17,10 +17,10 @@ namespace CoreRemoting.RpcMessaging
         public string ParameterName { get; set; }
         
         /// <summary>
-        /// Gets or sets the out value of the parameter.
+        /// Gets or sets the out value of the parameter as serialized raw data.
         /// </summary>
         [DataMember]
-        public object OutValue { get; set; }
+        public byte[] OutValue { get; set; }
         
         /// <summary>
         /// Gets or sets whether the out value is null.

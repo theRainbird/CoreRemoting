@@ -82,20 +82,22 @@ namespace CoreRemoting
                 
             if (oneWay && method.ReturnType != typeof(void))
                 throw new NotSupportedException("OneWay methods must not have a return type.");
-                
-            var arguments = MapDelegateArguments(invocation);
-                
-            var remoteMethodCallMessage =
-                _client.MethodCallMessageBuilder.BuildMethodCallMessage(
-                    remoteServiceName: _serviceName,
-                    targetMethod: method,
-                    args: arguments);
-
+            
             List<Type> knownTypes = null;
                 
             if (_client.Serializer.NeedsKnownTypes)
                 knownTypes = _client.KnownTypeProvider.GetKnownTypesByTypeList(new[] { method.DeclaringType });
-
+            
+            var arguments = MapDelegateArguments(invocation);
+                
+            var remoteMethodCallMessage =
+                _client.MethodCallMessageBuilder.BuildMethodCallMessage(
+                    serializer: _client.Serializer,
+                    remoteServiceName: _serviceName,
+                    targetMethod: method,
+                    args: arguments,
+                    knownTypes: knownTypes);
+            
             var clientRpcContext = _client.InvokeRemoteMethod(remoteMethodCallMessage, oneWay, knownTypes);
 
             if (clientRpcContext.Error)
@@ -124,7 +126,10 @@ namespace CoreRemoting
                 invocation.Arguments[parameterInfo.Position] =
                     outParameterValue.IsOutValueNull
                         ? null
-                        : outParameterValue.OutValue;
+                        : _client.Serializer.Deserialize(
+                            type: parameterInfo.ParameterType, 
+                            rawData: outParameterValue.OutValue,
+                            knownTypes: knownTypes);
             }
                         
             invocation.ReturnValue = resultMessage.IsReturnValueNull ? null : resultMessage.ReturnValue;
