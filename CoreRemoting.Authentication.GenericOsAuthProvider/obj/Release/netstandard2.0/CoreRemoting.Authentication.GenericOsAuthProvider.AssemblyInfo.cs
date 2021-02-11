@@ -10,13 +10,16 @@
 using System;
 using System.Reflection;
 
-[assembly: System.Reflection.AssemblyCompanyAttribute("CoreRemoting.Authentication.GenericOsAuthProvider")]
+[assembly: System.Reflection.AssemblyCompanyAttribute("Hagen Siegel")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
+[assembly: System.Reflection.AssemblyCopyrightAttribute("2020 Hagen Siegel")]
+[assembly: System.Reflection.AssemblyDescriptionAttribute("Generic OS user authentication provider for CoreRemoting")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
 [assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
 [assembly: System.Reflection.AssemblyProductAttribute("CoreRemoting.Authentication.GenericOsAuthProvider")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CoreRemoting.Authentication.GenericOsAuthProvider")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
+[assembly: System.Reflection.AssemblyMetadataAttribute("RepositoryUrl", "https://github.com/theRainbird/CoreRemoting.git")]
 
 // Von der MSBuild WriteCodeFragment-Klasse generiert.
 

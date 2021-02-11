@@ -3,6 +3,18 @@
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
         <RootNamespace>CoreRemoting.Authentication</RootNamespace>
+        <AssemblyName>CoreRemoting.Authentication.LinuxPamAuthProvider</AssemblyName>
+        <PackageVersion>1.1.0</PackageVersion>
+        <Authors>Hagen Siegel</Authors>
+        <Description>Linux user authentication provider for CoreRemoting</Description>
+        <Copyright>2020 Hagen Siegel</Copyright>
+        <PackageProjectUrl>https://github.com/theRainbird/CoreRemoting</PackageProjectUrl>
+        <PackageLicenseUrl>https://github.com/theRainbird/CoreRemoting/blob/master/LICENSE</PackageLicenseUrl>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Title>CoreRemoting.Authentication.LinuxPamAuthProvider</Title>
+        <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageTags>Remoting RPC Network Authentication Linux</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
