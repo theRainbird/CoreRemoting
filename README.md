@@ -32,6 +32,8 @@ NuGet package: https://www.nuget.org/packages/CoreRemoting/
 - Supports Microsoft Dependency Injection (Just call `AddCoreRemotingServer` or `AddCoreRemotingClient` on your `IServiceCollection`)
 - Supports also Castle Windsor Container to provide Dependecy Injection
 - Built-in session management
+- Automatic sweeping of inactive sessions
+- Keep session alive feature
 
 ## Hello world example 
 Let's create a simple multi user chat server as hello world application.
