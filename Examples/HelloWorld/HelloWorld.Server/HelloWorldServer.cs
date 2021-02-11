@@ -41,8 +41,6 @@ namespace HelloWorld.Server
             {
                 HostName = "localhost",
                 NetworkPort = 9090,
-                MaximumSessionInactivityTime = 1,
-                InactiveSessionSweepInterval = 10,
                 RegisterServicesAction = container =>
                 {
                     container.RegisterService<ISayHelloService, SayHelloService>(ServiceLifetime.Singleton);
