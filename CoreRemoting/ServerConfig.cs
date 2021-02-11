@@ -84,5 +84,15 @@ namespace CoreRemoting
         /// Gets or sets the unque name of this server instance.
         /// </summary>
         public string UniqueServerInstanceName { get; set; }
+
+        /// <summary>
+        /// Gets or sets the sweep interval for inactive sessions in seconds (No session sweeping if set to 0).
+        /// </summary>
+        public int InactiveSessionSweepInterval { get; set; } = 60;
+
+        /// <summary>
+        /// Gets or sets the maximum session inactivity time in minutes.
+        /// </summary>
+        public int MaximumSessionInactivityTime { get; set; } = 30;
     }
 }

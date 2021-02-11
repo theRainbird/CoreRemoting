@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Security;
 using System.Threading;
+using System.Timers;
 using Castle.DynamicProxy;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
@@ -16,6 +17,7 @@ using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Encryption;
 using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Binary;
+using Timer = System.Timers.Timer;
 
 namespace CoreRemoting
 {
@@ -39,6 +41,7 @@ namespace CoreRemoting
         private ManualResetEventSlim _authenticationCompletedWaitHandle;
         private ManualResetEventSlim _goodbyeCompletedWaitHandle;
         private bool _isAuthenticated;
+        private Timer _keepSessionAliveTimer;
         
         #endregion
         
@@ -181,6 +184,8 @@ namespace CoreRemoting
                 throw new NetworkException("Handshake with server failed.");
             else
                 Authenticate();
+            
+            StartKeepSessionAliveTimer();
         }
 
         /// <summary>
@@ -190,6 +195,13 @@ namespace CoreRemoting
         {
             if (_channel != null && HasSession)
             {
+                if (_keepSessionAliveTimer != null)
+                {
+                    _keepSessionAliveTimer.Stop();
+                    _keepSessionAliveTimer.Dispose();
+                    _keepSessionAliveTimer = null;
+                }
+
                 byte[] sharedSecret =
                     MessageEncryption
                         ? _sessionId.ToByteArray()
@@ -220,6 +232,44 @@ namespace CoreRemoting
             _handshakeCompletedWaitHandle.Reset();
             _authenticationCompletedWaitHandle.Reset();
             Identity = null;
+        }
+
+        /// <summary>
+        /// Starts the keep session alive timer.
+        /// </summary>
+        private void StartKeepSessionAliveTimer()
+        {
+            if (_config.KeepSessionAliveInterval <= 0)
+                return;
+            
+            _keepSessionAliveTimer =
+                new Timer(Convert.ToDouble(_config.KeepSessionAliveInterval * 1000));
+
+            _keepSessionAliveTimer.Elapsed += KeepSessionAliveTimerOnElapsed;
+            _keepSessionAliveTimer.Start();
+        }
+
+        /// <summary>
+        /// Event procedure: Called when the keep session alive timer elapses. 
+        /// </summary>
+        /// <param name="sender">Event sender</param>
+        /// <param name="e">Event arguments</param>
+        private void KeepSessionAliveTimerOnElapsed(object sender, ElapsedEventArgs e)
+        {
+            if (_keepSessionAliveTimer == null)
+                return;
+            
+            if (!_keepSessionAliveTimer.Enabled)
+                return;
+            
+            if (_rawMessageTransport == null)
+                return;
+         
+            if (!HasSession)
+                return;
+            
+            // Send empty message to keep session alive
+            _rawMessageTransport.SendMessage(new byte[0]);
         }
 
         #endregion

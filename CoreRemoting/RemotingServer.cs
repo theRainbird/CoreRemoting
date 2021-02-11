@@ -37,7 +37,13 @@ namespace CoreRemoting
                 
             RemotingConfiguration.RegisterServer(this);
             
-            SessionRepository = _config.SessionRepository ?? new SessionRepository(_config.KeySize);
+            SessionRepository = 
+                _config.SessionRepository ?? 
+                    new SessionRepository( 
+                        keySize: _config.KeySize,
+                        inactiveSessionSweepInterval: _config.InactiveSessionSweepInterval,
+                        maximumSessionInactivityTime: _config.MaximumSessionInactivityTime);
+            
             _container = _config.DependencyInjectionContainer ?? new CastleWindsorDependencyInjectionContainer();
             Serializer = _config.Serializer ?? new BinarySerializerAdapter();
             MethodCallMessageBuilder = new MethodCallMessageBuilder();

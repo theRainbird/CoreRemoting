@@ -179,6 +179,7 @@ namespace CoreRemoting.ClassicRemotingApi
         /// Applies CoreRemoting configuration from config file. 
         /// </summary>
         /// <param name="fileName">Path to XML configuration file (Default EXE configuration file will be used, if empty)</param>
+        [SuppressMessage("ReSharper", "ObjectCreationAsStatement")]
         public static void Configure(string fileName = "")
         {
             if (_classicRemotingApiDisabled)
@@ -197,7 +198,7 @@ namespace CoreRemoting.ClassicRemotingApi
             foreach (ServerInstanceConfigElement serverInstanceConfig in configSection.ServerInstances)
             {
                 var serverConfig = serverInstanceConfig.ToServerConfig();
-                var server = new RemotingServer(serverConfig);
+                new RemotingServer(serverConfig);
             }
             
             foreach (WellKnownServiceConfigElement serviceConfigElement in configSection.Services)

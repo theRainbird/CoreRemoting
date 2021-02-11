@@ -66,5 +66,10 @@ namespace CoreRemoting
         /// Gets or sets an array of credentials for authentication (depends on the authentication provider used on server side). 
         /// </summary>
         public Credential[] Credentials { get; set; }
+
+        /// <summary>
+        /// Gets or sets an interval in seconds to keep session alive, even on idle (session is not kept alive if set to 0).
+        /// </summary>
+        public int KeepSessionAliveInterval { get; set; } = 20;
     }
 }

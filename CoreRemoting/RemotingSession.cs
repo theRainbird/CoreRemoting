@@ -28,6 +28,7 @@ namespace CoreRemoting
         private IDelegateProxyFactory _delegateProxyFactory;
         private ConcurrentDictionary<Guid, IDelegateProxy> _delegateProxyCache;
         private bool _isAuthenticated;
+        private DateTime _lastActivityTimestamp;
 
         /// <summary>
         /// Event: Fired before the session is disposed to do some clean up.
@@ -49,6 +50,7 @@ namespace CoreRemoting
             IRawMessageTransport rawMessageTransport)
         {
             _sessionId = Guid.NewGuid();
+            _lastActivityTimestamp = DateTime.Now;
             _isAuthenticated = false;
             _keyPair = new RsaKeyPair(keySize);
             CreatedOn = DateTime.Now;
@@ -140,6 +142,11 @@ namespace CoreRemoting
         #region Properties
 
         /// <summary>
+        /// Gets the timestamp of the last activity of this session.
+        /// </summary>
+        public DateTime LastActivityTimestamp => _lastActivityTimestamp;
+
+        /// <summary>
         /// Gets this session's uique session ID.
         /// </summary>
         public Guid SessionId => _sessionId;
@@ -196,6 +203,14 @@ namespace CoreRemoting
         /// <param name="rawMessage">Raw message data that has been received</param>
         private void OnReceiveMessage(byte[] rawMessage)
         {
+            _lastActivityTimestamp = DateTime.Now;
+            
+            if (rawMessage == null)
+                return;
+            
+            if (rawMessage.Length == 0)
+                return;
+            
             var message = _server.Serializer.Deserialize<WireMessage>(rawMessage);
 
             switch (message.MessageType.ToLower())

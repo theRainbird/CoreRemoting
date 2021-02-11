@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Timers;
 using CoreRemoting.Channels;
 
 namespace CoreRemoting
@@ -12,15 +13,64 @@ namespace CoreRemoting
     public class SessionRepository : ISessionRepository
     {
         private readonly ConcurrentDictionary<Guid, RemotingSession> _sessions;
+        private Timer _inactiveSessionSweepTimer;
+        private readonly int _maximumSessionInactivityTime;
 
         /// <summary>
         /// Creates a new instance of the SessionRepository class.
         /// </summary>
         /// <param name="keySize">Key size for asymmetric encryption. Should be 3072 or better in 2021 (Please use steps os 1024).</param>
-        public SessionRepository(int keySize)
+        /// <param name="inactiveSessionSweepInterval">Sweep interval for inactive sessions in seconds (No session sweeping, if set to 0)</param>
+        /// <param name="maximumSessionInactivityTime">Maximum session inactivity time in minutes</param>
+        public SessionRepository(int keySize, int inactiveSessionSweepInterval, int maximumSessionInactivityTime)
         {
             KeySize = keySize;
             _sessions = new ConcurrentDictionary<Guid, RemotingSession>();
+
+            _maximumSessionInactivityTime = maximumSessionInactivityTime;
+
+            StartInactiveSessionSweepTimer(inactiveSessionSweepInterval);
+        }
+
+        /// <summary>
+        /// Starts the inactive session sweep timer.
+        /// </summary>
+        /// <param name="inactiveSessionSweepInterval">Sweep interval for inactive sessions in seconds</param>
+        private void StartInactiveSessionSweepTimer(int inactiveSessionSweepInterval)
+        {
+            if (inactiveSessionSweepInterval <= 0)
+                return;
+            
+            _inactiveSessionSweepTimer =
+                new Timer(Convert.ToDouble(inactiveSessionSweepInterval * 1000));
+
+            _inactiveSessionSweepTimer.Elapsed += InactiveSessionSweepTimerOnElapsed;
+            _inactiveSessionSweepTimer.Start();
+        }
+
+        /// <summary>
+        /// Event procedure: Called when the inactive session sweep timer elapses. 
+        /// </summary>
+        /// <param name="sender">Event sender</param>
+        /// <param name="e">Event arguments</param>
+        private void InactiveSessionSweepTimerOnElapsed(object sender, ElapsedEventArgs e)
+        {
+            if (_inactiveSessionSweepTimer == null)
+                return;
+            
+            if (!_inactiveSessionSweepTimer.Enabled)
+                return;
+            
+            var inactiveSessionIdList =
+                _sessions
+                    .Where(item => 
+                        DateTime.Now.Subtract(item.Value.LastActivityTimestamp).TotalMinutes > _maximumSessionInactivityTime)
+                    .Select(item => item.Key);
+
+            foreach (var inactiveSessionId in inactiveSessionIdList)
+            {
+                RemoveSession(inactiveSessionId);
+            }
         }
 
         /// <summary>
@@ -88,6 +138,13 @@ namespace CoreRemoting
         /// </summary>
         public void Dispose()
         {
+            if (_inactiveSessionSweepTimer != null)
+            {
+                _inactiveSessionSweepTimer.Stop();
+                _inactiveSessionSweepTimer.Dispose();
+                _inactiveSessionSweepTimer = null;
+            }
+
             while (_sessions.Count > 0)
             {
                 var sessionId = _sessions.First().Key;
