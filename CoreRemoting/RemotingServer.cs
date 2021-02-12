@@ -8,7 +8,7 @@ using CoreRemoting.DependencyInjection;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Serialization;
-using CoreRemoting.Serialization.Binary;
+using CoreRemoting.Serialization.Bson;
 using ServiceLifetime = CoreRemoting.DependencyInjection.ServiceLifetime;
 
 namespace CoreRemoting
@@ -45,10 +45,9 @@ namespace CoreRemoting
                         maximumSessionInactivityTime: _config.MaximumSessionInactivityTime);
             
             _container = _config.DependencyInjectionContainer ?? new CastleWindsorDependencyInjectionContainer();
-            Serializer = _config.Serializer ?? new BinarySerializerAdapter();
+            Serializer = _config.Serializer ?? new BsonSerializerAdapter();
             MethodCallMessageBuilder = new MethodCallMessageBuilder();
             MessageEncryptionManager = new MessageEncryptionManager();
-            KnownTypeProvider = _config.KnownTypeProvider ?? new KnownTypeProvider();
             
             _container.RegisterService<IDelegateProxyFactory, DelegateProxyFactory>(
                 lifetime: ServiceLifetime.Singleton);
@@ -119,11 +118,6 @@ namespace CoreRemoting
         [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
         public IServerChannel Channel { get; private set; }
 
-        /// <summary>
-        /// Gets the provider for managing known types for safe serialization.
-        /// </summary>
-        public IKnownTypeProvider KnownTypeProvider { get; }
-        
         /// <summary>
         /// Fires the OnBeforeCall event.
         /// </summary>

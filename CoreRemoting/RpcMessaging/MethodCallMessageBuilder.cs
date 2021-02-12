@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using CoreRemoting.Serialization;
+using CoreRemoting.Serialization.Bson;
 
 namespace CoreRemoting.RpcMessaging
 {
@@ -18,14 +19,12 @@ namespace CoreRemoting.RpcMessaging
         /// <param name="remoteServiceName">Unique name of the remote service that should be called</param>
         /// <param name="targetMethod">Target method information</param>
         /// <param name="args">Array of arguments, which should passed a parameters</param>
-        /// <param name="knownTypes">Optional list of known types for safe deserialization (only needed if the configured serializer needs known types)</param>
         /// <returns>The created method call message</returns>
         public MethodCallMessage BuildMethodCallMessage(
             ISerializerAdapter serializer,
             string remoteServiceName, 
             MethodInfo targetMethod, 
-            object[] args,
-            List<Type> knownTypes = null)
+            object[] args)
         {
             if (targetMethod == null)
                 throw new ArgumentNullException(nameof(targetMethod));
@@ -52,13 +51,11 @@ namespace CoreRemoting.RpcMessaging
         /// <param name="serializer">Serializer adapter used to serialize argument values</param>
         /// <param name="targetMethod">Target method information</param>
         /// <param name="args">Array of arguments, which should passed a parameters</param>
-        /// <param name="knownTypes">Optional list of known types for safe deserialization (only needed if the configured serializer needs known types)</param>
         /// <returns>Enumerable of method call parameter messages</returns>
         public IEnumerable<MethodCallParameterMessage> BuildMethodParameterInfos(
             ISerializerAdapter serializer, 
             MethodInfo targetMethod, 
-            object[] args,
-            List<Type> knownTypes = null)
+            object[] args)
         {
             var parameterInfos = targetMethod.GetParameters();
 
@@ -78,19 +75,16 @@ namespace CoreRemoting.RpcMessaging
                 {
                     for (var j = i; j < args.Length; j++)
                     {
-                        paramArrayValues.Add(args[j]);
+                        paramArrayValues.Add(new Envelope(args[j]));
                     }
                 }
 
                 var isArgNull = arg == null;
 
-                var parameterValue = 
+                object parameterValue = 
                     useParamArray 
                         ? paramArrayValues.ToArray() 
-                        : arg;
-
-                var parameterValueRawData =
-                    serializer.Serialize(parameterValue, knownTypes);
+                        : (object)new Envelope(arg);
                 
                 yield return
                     new MethodCallParameterMessage()
@@ -98,7 +92,7 @@ namespace CoreRemoting.RpcMessaging
                         IsOut = parameterInfo.IsOut,
                         ParameterName = parameterInfo.Name,
                         ParameterTypeName = parameterInfo.ParameterType.FullName,
-                        Value = parameterValueRawData,
+                        Value = parameterValue,
                         IsValueNull = isArgNull
                     };
             }
@@ -112,15 +106,13 @@ namespace CoreRemoting.RpcMessaging
         /// <param name="method">Method information of the called method</param>
         /// <param name="args">Arguments</param>
         /// <param name="returnValue">Returned return value</param>
-        /// <param name="knownTypes">Optional list of known types for safe deserialization (only needed if the configured serializer needs known types)</param>
         /// <returns>Method call result message</returns>
         public MethodCallResultMessage BuildMethodCallResultMessage(
             ISerializerAdapter serializer,
             Guid uniqueCallKey, 
             MethodInfo method, 
             object[] args, 
-            object returnValue,
-            List<Type> knownTypes = null)
+            object returnValue)
         {
             if (serializer == null)
                 throw new ArgumentNullException(nameof(serializer));
@@ -147,7 +139,7 @@ namespace CoreRemoting.RpcMessaging
                 
                 var isArgNull = arg == null;
 
-                var serializedArgValue = serializer.Serialize(parameterInfo.ParameterType, arg, knownTypes);
+                var serializedArgValue = serializer.Serialize(parameterInfo.ParameterType, arg);
                 
                 outParameters.Add(
                     new MethodCallOutParameterMessage()

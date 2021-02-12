@@ -35,9 +35,9 @@ namespace CoreRemoting.RpcMessaging
         public bool IsValueNull { get; set; }
         
         /// <summary>
-        /// Gets or sets the serialized raw data of the parameter value.
+        /// Gets or sets the the parameter value.
         /// </summary>
         [DataMember]
-        public byte[] Value { get; set; }
+        public object Value { get; set; }
     }
 }

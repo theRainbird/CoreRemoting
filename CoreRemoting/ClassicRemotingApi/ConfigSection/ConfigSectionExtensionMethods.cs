@@ -6,7 +6,7 @@ using CoreRemoting.Channels;
 using CoreRemoting.Channels.Websocket;
 using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Binary;
-using CoreRemoting.Serialization.DataContract;
+using CoreRemoting.Serialization.Bson;
 
 namespace CoreRemoting.ClassicRemotingApi.ConfigSection
 {
@@ -117,22 +117,23 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
                 new[]
                 {
                     "binary", 
-                    "binaryformatter", 
+                    "binaryformatter",
+                    "binaryserializer"
                 };
 
-            var dataContractSerializerShortcusts =
+            var bsonSerializerShortcusts =
                 new[]
                 {
-                    "datacontract", 
-                    "datacontracts", 
-                    "datacontractserializer", 
+                    "bson", 
+                    "bsonformatter", 
+                    "bsonserializer", 
                 };
             
             if (binarySerializerShortcuts.Contains(serializerName.ToLower()))
                 return new BinarySerializerAdapter();
 
-            if (dataContractSerializerShortcusts.Contains(serializerName.ToLower()))
-                return new DataContractSerializerAdapter();
+            if (bsonSerializerShortcusts.Contains(serializerName.ToLower()))
+                return new BsonSerializerAdapter();
             
             var serializerAdapterType = GetTypeFromConfigString(serializerName);
             

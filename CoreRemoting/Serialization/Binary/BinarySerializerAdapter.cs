@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.Serialization.Formatters.Binary;
 
@@ -13,11 +12,6 @@ namespace CoreRemoting.Serialization.Binary
         [ThreadStatic] 
         private static BinaryFormatter _formatter;
         private readonly BinarySerializerConfig _config;
-
-        /// <summary>
-        /// Get whether this serialization adapter needs known types to be specified.
-        /// </summary>
-        public bool NeedsKnownTypes => false;
 
         /// <summary>
         /// Creates a new instance of the BinarySerializerAdapter class.
@@ -65,10 +59,9 @@ namespace CoreRemoting.Serialization.Binary
         /// Serializes an object graph.
         /// </summary>
         /// <param name="graph">Object graph to be serialized</param>
-        /// <param name="knownTypes">Optional list of known types</param>
         /// <typeparam name="T">Object type</typeparam>
         /// <returns>Serialized data</returns>
-        public byte[] Serialize<T>(T graph, IEnumerable<Type> knownTypes = null)
+        public byte[] Serialize<T>(T graph)
         {
             var binaryFormatter = GetFormatter();
             return binaryFormatter.SerializeByteArray(graph);
@@ -79,9 +72,8 @@ namespace CoreRemoting.Serialization.Binary
         /// </summary>
         /// <param name="type">Object type</param>
         /// <param name="graph">Object graph to be serialized</param>
-        /// <param name="knownTypes">Optional list of known types</param>
         /// <returns>Serialized data</returns>
-        public byte[] Serialize(Type type, object graph, IEnumerable<Type> knownTypes = null)
+        public byte[] Serialize(Type type, object graph)
         {
             var binaryFormatter = GetFormatter();
             return binaryFormatter.SerializeByteArray(graph);
@@ -91,10 +83,9 @@ namespace CoreRemoting.Serialization.Binary
         /// Deserializes raw data back into an object graph.
         /// </summary>
         /// <param name="rawData">Raw data that should be deserialized</param>
-        /// <param name="knownTypes">Optional list of known types</param>
         /// <typeparam name="T">Object type</typeparam>
         /// <returns>Deserialized object graph</returns>
-        public T Deserialize<T>(byte[] rawData, IEnumerable<Type> knownTypes = null)
+        public T Deserialize<T>(byte[] rawData)
         {
             var binaryFormatter = GetFormatter();
             return (T)binaryFormatter.DeserializeSafe(rawData);
@@ -105,9 +96,8 @@ namespace CoreRemoting.Serialization.Binary
         /// </summary>
         /// <param name="type">Object type</param>
         /// <param name="rawData">Raw data that should be deserialized</param>
-        /// <param name="knownTypes">Optional list of known types</param>
         /// <returns>Deserialized object graph</returns>
-        public object Deserialize(Type type, byte[] rawData, IEnumerable<Type> knownTypes = null)
+        public object Deserialize(Type type, byte[] rawData)
         {
             var binaryFormatter = GetFormatter();
             return binaryFormatter.DeserializeSafe(rawData);

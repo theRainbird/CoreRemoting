@@ -16,7 +16,7 @@ using CoreRemoting.RpcMessaging;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Encryption;
 using CoreRemoting.Serialization;
-using CoreRemoting.Serialization.Binary;
+using CoreRemoting.Serialization.Bson;
 using Timer = System.Timers.Timer;
 
 namespace CoreRemoting
@@ -71,8 +71,7 @@ namespace CoreRemoting
             if (config == null)
                 throw new ArgumentException("No config provided and no default configuration found.");
             
-            Serializer = config.Serializer ?? new BinarySerializerAdapter();
-            KnownTypeProvider = config.KnownTypeProvider ?? new KnownTypeProvider();
+            Serializer = config.Serializer ?? new BsonSerializerAdapter();
             MessageEncryption = config.MessageEncryption;
             
             _config = config;
@@ -106,8 +105,6 @@ namespace CoreRemoting
         /// </summary>
         internal IMethodCallMessageBuilder MethodCallMessageBuilder { get; }
 
-        internal IKnownTypeProvider KnownTypeProvider { get; }
-        
         /// <summary>
         /// Gets a utility object tp provide encryption of remoting messages.
         /// </summary>
@@ -177,8 +174,11 @@ namespace CoreRemoting
 
             if (_channel.RawMessageTransport.LastException != null)
                 throw _channel.RawMessageTransport.LastException;
-            
-            _handshakeCompletedWaitHandle.Wait(_config.ConnectionTimeout * 1000);
+
+            if (_config.ConnectionTimeout == 0)
+                _handshakeCompletedWaitHandle.Wait();
+            else
+                _handshakeCompletedWaitHandle.Wait(_config.ConnectionTimeout * 1000);
 
             if (!_handshakeCompletedWaitHandle.IsSet)
                 throw new NetworkException("Handshake with server failed.");
@@ -458,8 +458,7 @@ namespace CoreRemoting
                     Serializer.Deserialize<RemoteInvocationException>(
                         MessageEncryptionManager.GetDecryptedMessageData(
                             message: message,
-                            sharedSecret: sharedSecret),
-                        knownTypes: clientRpcContext.KnownTypes);
+                            sharedSecret: sharedSecret));
 
                 clientRpcContext.RemoteException = remoteException;
             }
@@ -470,8 +469,7 @@ namespace CoreRemoting
                         .Deserialize<MethodCallResultMessage>(
                             MessageEncryptionManager.GetDecryptedMessageData(
                                 message: message,
-                                sharedSecret: sharedSecret),
-                            knownTypes: clientRpcContext.KnownTypes);
+                                sharedSecret: sharedSecret));
 
                 clientRpcContext.ResultMessage = resultMessage;
             }
@@ -488,9 +486,8 @@ namespace CoreRemoting
         /// </summary>
         /// <param name="methodCallMessage">Details of the remote method to be invoked</param>
         /// <param name="oneWay">Invoke methode without waiting for or proceesing result.</param>
-        /// <param name="knownTypes">Optional list of known types</param>
         /// <returns>Results of the remote method invocation</returns>
-        internal ClientRpcContext InvokeRemoteMethod(MethodCallMessage methodCallMessage, bool oneWay = false, IEnumerable<Type> knownTypes = null)
+        internal ClientRpcContext InvokeRemoteMethod(MethodCallMessage methodCallMessage, bool oneWay = false)
         {
             byte[] sharedSecret =
                 MessageEncryption
@@ -502,13 +499,10 @@ namespace CoreRemoting
             if (!_activeCalls.TryAdd(clientRpcContext.UniqueCallKey, clientRpcContext))
                 throw new ApplicationException("Duplicate uniqe call key.");
 
-            clientRpcContext.KnownTypes = knownTypes;
-            var knownTypesList = (clientRpcContext.KnownTypes ?? Type.EmptyTypes).ToList();
-
             var wireMessage =
                 MessageEncryptionManager.CreateWireMessage(
                     messageType: "rpc",
-                    serializedMessage: Serializer.Serialize(methodCallMessage, knownTypesList),
+                    serializedMessage: Serializer.Serialize(methodCallMessage),
                     sharedSecret: sharedSecret,
                     uniqueCallKey: clientRpcContext.UniqueCallKey.ToByteArray());
 

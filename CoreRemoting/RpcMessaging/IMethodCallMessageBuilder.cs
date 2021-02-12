@@ -17,14 +17,12 @@ namespace CoreRemoting.RpcMessaging
         /// <param name="remoteServiceName">Unique name of the remote service that should be called</param>
         /// <param name="targetMethod">Target method information</param>
         /// <param name="args">Array of arguments, which should passed a parameters</param>
-        /// <param name="knownTypes">Optional list of known types for safe deserialization (only needed if the configured serializer needs known types)</param>
         /// <returns>The created method call message</returns>
         MethodCallMessage BuildMethodCallMessage(
             ISerializerAdapter serializer,
             string remoteServiceName,
             MethodInfo targetMethod,
-            object[] args,
-            List<Type> knownTypes = null);
+            object[] args);
 
         /// <summary>
         /// Builds method call parameter messages from arguments for a specified target method.
@@ -32,13 +30,11 @@ namespace CoreRemoting.RpcMessaging
         /// <param name="serializer">Serializer adapter used to serialize argument values</param>
         /// <param name="targetMethod">Target method information</param>
         /// <param name="args">Array of arguments, which should passed a parameters</param>
-        /// <param name="knownTypes">Optional list of known types for safe deserialization (only needed if the configured serializer needs known types)</param>
         /// <returns>Enumerable of method call parameter messages</returns>
         IEnumerable<MethodCallParameterMessage> BuildMethodParameterInfos(
             ISerializerAdapter serializer,
             MethodInfo targetMethod,
-            object[] args,
-            List<Type> knownTypes = null);
+            object[] args);
 
         /// <summary>
         /// Builds a new method call result message.
@@ -48,14 +44,12 @@ namespace CoreRemoting.RpcMessaging
         /// <param name="method">Method information of the called method</param>
         /// <param name="args">Arguments</param>
         /// <param name="returnValue">Returned return value</param>
-        /// <param name="knownTypes">Optional list of known types for safe deserialization (only needed if the configured serializer needs known types)</param>
         /// <returns>Method call result message</returns>
         MethodCallResultMessage BuildMethodCallResultMessage(
             ISerializerAdapter serializer,
             Guid uniqueCallKey,
             MethodInfo method,
             object[] args,
-            object returnValue,
-            List<Type> knownTypes = null);
+            object returnValue);
     }
 }

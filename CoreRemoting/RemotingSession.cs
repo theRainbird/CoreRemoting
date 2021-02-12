@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
@@ -316,22 +315,12 @@ namespace CoreRemoting
                     ? SessionId.ToByteArray()
                     : null;
 
-            List<Type> knownTypes = null;
-
-            if (_server.Serializer.NeedsKnownTypes)
-            {
-                knownTypes =
-                    _server.KnownTypeProvider.GetKnownTypesByTypeList(
-                        _server.ServiceRegistry.GetAllRegisteredTypes());
-            }
-
             var callMessage =
                 _server.Serializer
                     .Deserialize<MethodCallMessage>(
                         _server.MessageEncryptionManager.GetDecryptedMessageData(
                             message: request,
-                            sharedSecret: sharedSecret),
-                        knownTypes: knownTypes);
+                            sharedSecret: sharedSecret));
 
             var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
             var serviceInterfaceType =
@@ -355,23 +344,11 @@ namespace CoreRemoting
 
             ((RemotingServer) _server).OnBeforeCall(serverRpcContext);
 
-            var parameterTypes = new Type[callMessage.Parameters.Length];
-            var deserializedParameterValues = new object[callMessage.Parameters.Length];
-            
-            for (int i = 0; i < callMessage.Parameters.Length; i++)
-            {
-                var parameter = callMessage.Parameters[i];
-                var parameterType = Type.GetType(parameter.ParameterTypeName);
-                parameterTypes[i] = parameterType;
-                
-                deserializedParameterValues[i] =
-                    parameter.IsValueNull
-                        ? null
-                        : _server.Serializer.Deserialize(parameterType, parameter.Value, knownTypes);
-            }
+            callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
+                out var parameterValues, 
+                out var parameterTypes);
 
-            var parameterValues =
-                MapDelegateArguments(deserializedParameterValues);
+            parameterValues = MapDelegateArguments(parameterValues);
             
             var method =
                 serviceInterfaceType.GetMethod(
@@ -399,12 +376,11 @@ namespace CoreRemoting
                         _server
                             .MethodCallMessageBuilder
                             .BuildMethodCallResultMessage(
-                                serializer: _server.Serializer, 
-                                uniqueCallKey: serverRpcContext.UniqueCallKey, 
-                                method: method, 
+                                serializer: _server.Serializer,
+                                uniqueCallKey: serverRpcContext.UniqueCallKey,
+                                method: method,
                                 args: parameterValues,
-                                returnValue: result,
-                                knownTypes: knownTypes);
+                                returnValue: result);
                 }
 
                 ((RemotingServer) _server).OnAfterCall(serverRpcContext);
@@ -413,7 +389,7 @@ namespace CoreRemoting
                     return;
 
                 serializedResult =
-                    _server.Serializer.Serialize(serverRpcContext.MethodCallResultMessage, knownTypes);
+                    _server.Serializer.Serialize(serverRpcContext.MethodCallResultMessage);
             }
             catch (Exception ex)
             {
@@ -430,7 +406,7 @@ namespace CoreRemoting
                     return;
 
                 serializedResult =
-                    _server.Serializer.Serialize(serverRpcContext.Exception, knownTypes);
+                    _server.Serializer.Serialize(serverRpcContext.Exception);
             }
 
             var methodReultMessage =

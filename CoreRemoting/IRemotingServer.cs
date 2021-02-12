@@ -57,11 +57,6 @@ namespace CoreRemoting
         ISessionRepository SessionRepository { get; }
         
         /// <summary>
-        /// Gets the provider for managing known types for safe serialization.
-        /// </summary>
-        IKnownTypeProvider KnownTypeProvider { get; }
-        
-        /// <summary>
         /// Gets the configuration settings.
         /// </summary>
         ServerConfig Config { get; }

@@ -49,7 +49,8 @@ namespace CoreRemoting.Tests
                     var client =
                         new RemotingClient(new ClientConfig()
                         {
-                            ServerPort = 9093
+                            ServerPort = 9093,
+                            ConnectionTimeout = 0
                         });
 
                     client.Connect();

@@ -16,7 +16,7 @@
       <group targetFramework=".NETStandard2.0">
         <dependency id="CoreRemoting.Authentication.LinuxPamAuthProvider" version="1.1.0" exclude="Build,Analyzers" />
         <dependency id="CoreRemoting.Authentication.WindowsAuthProvider" version="1.1.0" exclude="Build,Analyzers" />
-        <dependency id="CoreRemoting" version="1.1.0" exclude="Build,Analyzers" />
+        <dependency id="CoreRemoting" version="1.1.1" exclude="Build,Analyzers" />
       </group>
     </dependencies>
   </metadata>

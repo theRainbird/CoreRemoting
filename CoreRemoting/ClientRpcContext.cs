@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using CoreRemoting.RpcMessaging;
 
@@ -38,11 +37,6 @@ namespace CoreRemoting
         /// Gets or sets an exception that describes an error that occured on server side RPC invocation.
         /// </summary>
         public RemoteInvocationException RemoteException { get; set; }
-        
-        /// <summary>
-        /// Gets or sets a list of known types to be used for (de)serialization of messages related to this RPC call.
-        /// </summary>
-        public IEnumerable<Type> KnownTypes { get; set; }
         
         /// <summary>
         /// Gets a wait handle that is set, when the response of this RPC call is received from server.

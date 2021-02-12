@@ -57,12 +57,6 @@ namespace CoreRemoting
         public IClientChannel Channel { get; set; }
         
         /// <summary>
-        /// Gets or sets the known type provider (only relevant if the serializer needs known types specified).
-        /// </summary>
-        [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
-        public IKnownTypeProvider KnownTypeProvider { get; set; }
-        
-        /// <summary>
         /// Gets or sets an array of credentials for authentication (depends on the authentication provider used on server side). 
         /// </summary>
         public Credential[] Credentials { get; set; }

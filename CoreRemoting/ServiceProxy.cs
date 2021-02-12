@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
@@ -83,22 +82,16 @@ namespace CoreRemoting
             if (oneWay && method.ReturnType != typeof(void))
                 throw new NotSupportedException("OneWay methods must not have a return type.");
             
-            List<Type> knownTypes = null;
-                
-            if (_client.Serializer.NeedsKnownTypes)
-                knownTypes = _client.KnownTypeProvider.GetKnownTypesByTypeList(new[] { method.DeclaringType });
-            
             var arguments = MapDelegateArguments(invocation);
-                
+
             var remoteMethodCallMessage =
                 _client.MethodCallMessageBuilder.BuildMethodCallMessage(
                     serializer: _client.Serializer,
                     remoteServiceName: _serviceName,
                     targetMethod: method,
-                    args: arguments,
-                    knownTypes: knownTypes);
+                    args: arguments);
             
-            var clientRpcContext = _client.InvokeRemoteMethod(remoteMethodCallMessage, oneWay, knownTypes);
+            var clientRpcContext = _client.InvokeRemoteMethod(remoteMethodCallMessage, oneWay);
 
             if (clientRpcContext.Error)
             {
@@ -126,10 +119,7 @@ namespace CoreRemoting
                 invocation.Arguments[parameterInfo.Position] =
                     outParameterValue.IsOutValueNull
                         ? null
-                        : _client.Serializer.Deserialize(
-                            type: parameterInfo.ParameterType, 
-                            rawData: outParameterValue.OutValue,
-                            knownTypes: knownTypes);
+                        : outParameterValue.OutValue;
             }
                         
             invocation.ReturnValue = resultMessage.IsReturnValueNull ? null : resultMessage.ReturnValue;
