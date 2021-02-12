@@ -36,7 +36,7 @@ namespace CoreRemoting.Tests
             Assert.AreEqual("arg", deserializedMessage.Parameters[0].ParameterName);
             Assert.AreEqual("System.Object", deserializedMessage.Parameters[0].ParameterTypeName);
             Assert.AreEqual(typeof(int), parameterValues[0].GetType());
-            Assert.AreEqual(typeof(int), parameterTypes[0]);
+            Assert.AreEqual(typeof(object), parameterTypes[0]);
             Assert.AreEqual(4711, parameterValues[0]);
         }
 
