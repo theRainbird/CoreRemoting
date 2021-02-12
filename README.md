@@ -34,6 +34,7 @@ NuGet package: https://www.nuget.org/packages/CoreRemoting/
 - Built-in session management
 - Automatic sweeping of inactive sessions
 - Keep session alive feature
+- Can be used in Blazor Server projects to communicate to a central application server
 
 ## Hello world example 
 Let's create a simple multi user chat server as hello world application.
