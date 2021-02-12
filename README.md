@@ -20,9 +20,9 @@ NuGet package: https://www.nuget.org/packages/CoreRemoting/
 - Services can have `SingleCall` or `Singeton` lifetime
 - Uses websockets for TCP duplex network communication by default (based on webshocket-sharp)
 - Custom transport channels can be plugged in (Just implement `IServerChannel` and `IClientChannel`)
-- Uses classic BinaryFormatter for serialization by default
+- Used Bson serialization by default (via Json.NET)
+- Also supports classic BinaryFormatter for best possible DataSet / DataTable support
 - BinaryFormatter is hardened against known deserialization attack patterns
-- DataContractSerializer can alternatively used (especially to support Blazor Server Apps, because BinayFormatter is blocked in Blazor Apps)
 - Custom serializers can be plugged in (Just implement `ISerializerAdapter`)
 - Support for custom authentication (Just implement `IAuthenticationProvider`)
 - Pluggable authentication provider to authenticate Linux user on server with PAM is available
