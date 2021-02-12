@@ -10,14 +10,14 @@ namespace CoreRemoting.Serialization.Bson
     /// </summary>
     public class BsonSerializerAdapter : ISerializerAdapter
     {
-        private JsonSerializerSettings _settings;
+        private readonly JsonSerializer _serializer;
 
         /// <summary>
         /// Creates a new instance of the BsonSerializerAdapter class.
         /// </summary>
         public BsonSerializerAdapter()
         {
-            _settings = new JsonSerializerSettings()
+            var settings = new JsonSerializerSettings()
             {
                 TypeNameHandling = TypeNameHandling.All,
                 TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Full,
@@ -28,6 +28,8 @@ namespace CoreRemoting.Serialization.Bson
                 ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
                 CheckAdditionalContent = true
             };
+
+            _serializer = JsonSerializer.Create(settings);
         }
         
         /// <summary>
@@ -51,11 +53,9 @@ namespace CoreRemoting.Serialization.Bson
         {
             var envelope = new Envelope(graph);
             
-            var serializer = JsonSerializer.Create(_settings);
-            
             using var stream = new MemoryStream();
             using var writer = new BsonDataWriter(stream);
-            serializer.Serialize(writer, envelope);
+            _serializer.Serialize(writer, envelope);
 
             return stream.ToArray();
         }
@@ -79,11 +79,9 @@ namespace CoreRemoting.Serialization.Bson
         /// <returns>Deserialized object graph</returns>
         public object Deserialize(Type type, byte[] rawData)
         {
-            var serializer = JsonSerializer.Create(_settings);
-            
             using var stream = new MemoryStream(rawData);
             using var reader = new BsonDataReader(stream);
-            var envelope = serializer.Deserialize<Envelope>(reader);
+            var envelope = _serializer.Deserialize<Envelope>(reader);
 
             var bsonValue = envelope?.Value;
             object value = null;
