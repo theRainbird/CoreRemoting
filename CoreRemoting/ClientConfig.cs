@@ -48,7 +48,7 @@ namespace CoreRemoting
         /// <summary>
         /// Gets or sets whether messages should be encrypted or not.
         /// </summary>
-        public bool MessageEncryption { get; set; }
+        public bool MessageEncryption { get; set; } = true;
         
         /// <summary>
         /// Gets or sets the client channel to be used for transport of messages over the wire (WebsocketClientChannel is used, if set to null).

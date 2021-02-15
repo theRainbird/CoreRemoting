@@ -23,6 +23,7 @@ namespace CoreRemoting
         private IRawMessageTransport _rawMessageTransport;
         private readonly RsaKeyPair _keyPair;
         private readonly Guid _sessionId;
+        private readonly byte[] _clientPublicKeyBlob;
         private readonly RemoteDelegateInvocationEventAggregator _remoteDelegateInvocationEventAggregator;
         private IDelegateProxyFactory _delegateProxyFactory;
         private ConcurrentDictionary<Guid, IDelegateProxy> _delegateProxyCache;
@@ -58,7 +59,8 @@ namespace CoreRemoting
             _delegateProxyFactory = _server.ServiceRegistry.GetService<IDelegateProxyFactory>();
             _delegateProxyCache = new ConcurrentDictionary<Guid, IDelegateProxy>();
             _rawMessageTransport = rawMessageTransport ?? throw new ArgumentNullException(nameof(rawMessageTransport));
-
+            _clientPublicKeyBlob = clientPublicKey;
+            
             _rawMessageTransport.ReceiveMessage += OnReceiveMessage;
             _rawMessageTransport.ErrorOccured += OnErrorOccured;
 
@@ -72,13 +74,29 @@ namespace CoreRemoting
                     RsaKeyExchange.EncryptSecret(
                         keySize: _server.SessionRepository.KeySize,
                         receiversPublicKeyBlob: clientPublicKey,
-                        secretToEncrypt: _sessionId.ToByteArray());
+                        secretToEncrypt: _sessionId.ToByteArray(),
+                        sendersPublicKeyBlob: _keyPair.PublicKey);
+
+                var rawContent = _server.Serializer.Serialize(encryptedSessionId);
+
+                var signedMessageData =
+                    new SignedMessageData()
+                    {
+                        MessageRawData = rawContent,
+                        Signature =
+                            RsaSignature.CreateSignature(
+                                keySize: keySize,
+                                sendersPrivateKeyBlob: _keyPair.PrivateKey,
+                                rawData: rawContent)
+                    };
+
+                var rawData = _server.Serializer.Serialize(typeof(SignedMessageData), signedMessageData); 
 
                 completeHandshakeMessage =
                     new WireMessage
                     {
                         MessageType = "complete_handshake",
-                        Data = _server.Serializer.Serialize(encryptedSessionId)
+                        Data = rawData
                     };
             }
             else
@@ -106,12 +124,14 @@ namespace CoreRemoting
                             HandlerKey = handlerKey,
                             DelegateArguments = arguments
                         };
-
+                    
                     var remoteDelegateInvocationWebsocketMessage =
                         _server.MessageEncryptionManager
                             .CreateWireMessage(
                                 serializedMessage: _server.Serializer.Serialize(remoteDelegateInvocationMessage),
+                                serializer: _server.Serializer,
                                 sharedSecret: sharedSecret,
+                                keyPair: _keyPair,
                                 messageType: "invoke");
 
                     // Invoke remote delegate on client
@@ -245,12 +265,24 @@ namespace CoreRemoting
                     .Deserialize<GoodbyeMessage>(
                         _server.MessageEncryptionManager.GetDecryptedMessageData(
                             message: request,
-                            sharedSecret: sharedSecret));
+                            serializer: _server.Serializer,
+                            sharedSecret: sharedSecret,
+                            sendersPublicKeyBlob: _clientPublicKeyBlob,
+                            sendersPublicKeySize: _keyPair?.KeySize ?? 0));
             
             if (goodbyeMessage.SessionId != _sessionId)
                 return;
+
+            var resultMessage =
+                _server.MessageEncryptionManager.CreateWireMessage(
+                    messageType: request.MessageType,
+                    serializedMessage: new byte[0],
+                    serializer: _server.Serializer,
+                    keyPair: _keyPair,
+                    sharedSecret: sharedSecret,
+                    uniqueCallKey: request.UniqueCallKey);
             
-            _rawMessageTransport.SendMessage(_server.Serializer.Serialize(request));
+            _rawMessageTransport.SendMessage(_server.Serializer.Serialize(resultMessage));
             
             _server.SessionRepository.RemoveSession(_sessionId);
         }
@@ -276,7 +308,10 @@ namespace CoreRemoting
                     .Deserialize<AuthenticationRequestMessage>(
                         _server.MessageEncryptionManager.GetDecryptedMessageData(
                             message: request,
-                            sharedSecret: sharedSecret));
+                            serializer: _server.Serializer,
+                            sharedSecret: sharedSecret,
+                            sendersPublicKeyBlob: _clientPublicKeyBlob,
+                            sendersPublicKeySize: _keyPair?.KeySize ?? 0));
 
             _isAuthenticated = _server.Authenticate(authRequestMessage.Credentials, out var authenticatedIdentity);
 
@@ -295,7 +330,9 @@ namespace CoreRemoting
             var wireMessage =
                 _server.MessageEncryptionManager.CreateWireMessage(
                     serializedMessage: serializedAuthResponse,
+                    serializer: _server.Serializer,
                     sharedSecret: sharedSecret,
+                    keyPair: _keyPair,
                     messageType: "auth_response");
 
             _rawMessageTransport.SendMessage(
@@ -320,7 +357,10 @@ namespace CoreRemoting
                     .Deserialize<MethodCallMessage>(
                         _server.MessageEncryptionManager.GetDecryptedMessageData(
                             message: request,
-                            sharedSecret: sharedSecret));
+                            serializer: _server.Serializer,
+                            sharedSecret: sharedSecret,
+                            sendersPublicKeyBlob: _clientPublicKeyBlob,
+                            sendersPublicKeySize: _keyPair?.KeySize ?? 0));
 
             var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
             var serviceInterfaceType =
@@ -410,12 +450,14 @@ namespace CoreRemoting
             }
 
             var methodReultMessage =
-            _server.MessageEncryptionManager.CreateWireMessage(
-                serializedMessage: serializedResult,
-                error: serverRpcContext.Exception != null,
-                sharedSecret: sharedSecret,
-                messageType: "rpc_result",
-                uniqueCallKey: serverRpcContext.UniqueCallKey.ToByteArray());
+                _server.MessageEncryptionManager.CreateWireMessage(
+                    serializedMessage: serializedResult,
+                    serializer: _server.Serializer,
+                    error: serverRpcContext.Exception != null,
+                    sharedSecret: sharedSecret,
+                    keyPair: _keyPair,
+                    messageType: "rpc_result",
+                    uniqueCallKey: serverRpcContext.UniqueCallKey.ToByteArray());
 
             _rawMessageTransport.SendMessage(
                 _server.Serializer.Serialize(methodReultMessage));

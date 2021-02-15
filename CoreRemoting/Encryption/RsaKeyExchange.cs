@@ -14,8 +14,9 @@ namespace CoreRemoting.Encryption
         /// <param name="keySize">Key size (1024, 2048, 4096, ...)</param>
         /// <param name="receiversPublicKeyBlob">Public key of the receiver</param>
         /// <param name="secretToEncrypt">Secret to encrypt</param>
+        /// <param name="sendersPublicKeyBlob">Public key of the sender (It's not needed to encrypt the secret, but to transfer the sender's public key to the receiver)</param>
         /// <returns>Encrypted secret</returns>
-        public static EncryptedSecret EncryptSecret(int keySize, byte[] receiversPublicKeyBlob, byte[] secretToEncrypt)
+        public static EncryptedSecret EncryptSecret(int keySize, byte[] receiversPublicKeyBlob, byte[] secretToEncrypt, byte[] sendersPublicKeyBlob)
         {
             using var receiversPublicKey = new RSACryptoServiceProvider(dwKeySize: keySize);
             receiversPublicKey.ImportCspBlob(receiversPublicKeyBlob);
@@ -35,7 +36,8 @@ namespace CoreRemoting.Encryption
             return new EncryptedSecret(
                 encryptedSessionKey: keyFormatter.CreateKeyExchange(aes.Key, typeof(Aes)),
                 iv: aes.IV, 
-                encryptedMessage: ciphertext.ToArray());
+                encryptedMessage: ciphertext.ToArray(),
+                sendersPublicKeyBlob: sendersPublicKeyBlob);
         }
 
         /// <summary>

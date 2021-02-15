@@ -42,6 +42,11 @@ namespace CoreRemoting.Encryption
         public byte[] PublicKey => _rsa.ExportCspBlob(includePrivateParameters: false);
 
         /// <summary>
+        /// Gets the key size.
+        /// </summary>
+        public int KeySize => _rsa.KeySize;
+        
+        /// <summary>
         /// Frees managed ressources.
         /// </summary>
         public void Dispose()

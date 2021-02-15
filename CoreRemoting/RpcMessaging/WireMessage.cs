@@ -1,4 +1,5 @@
 using System;
+using CoreRemoting.Encryption;
 
 namespace CoreRemoting.RpcMessaging
 {
@@ -14,7 +15,7 @@ namespace CoreRemoting.RpcMessaging
         public string MessageType { get; set; }
         
         /// <summary>
-        /// Gets or sets the raw data of the message content as byte array.
+        /// Gets or sets the raw data of the message content and its RSA signatures (only if message encryption is enabled).
         /// </summary>
         public byte[] Data { get; set; }
         

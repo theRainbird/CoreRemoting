@@ -22,7 +22,6 @@ namespace CoreRemoting.Tests
         }
         
         [Test]
-        [NonParallelizable]
         public void Client_Connect_should_create_new_session_AND_Disconnect_should_close_session()
         {
             var testService =
@@ -54,7 +53,7 @@ namespace CoreRemoting.Tests
                 var client =
                     new RemotingClient(new ClientConfig()
                     {
-                        ConnectionTimeout = 1,
+                        ConnectionTimeout = 0,
                         ServerPort = 9091
                     });
 
@@ -94,7 +93,6 @@ namespace CoreRemoting.Tests
         }
 
         [Test]
-        [NonParallelizable]
         public void Client_Connect_should_throw_exception_on_invalid_auth_credentials()
         {
             var testService = new TestService();
@@ -127,7 +125,7 @@ namespace CoreRemoting.Tests
                 using var client = 
                     new RemotingClient(new ClientConfig()
                     {
-                        ConnectionTimeout = 1,
+                        ConnectionTimeout = 0,
                         ServerPort = 9092,
                         Credentials = new []
                         {

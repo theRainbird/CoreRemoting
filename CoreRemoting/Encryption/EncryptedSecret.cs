@@ -14,11 +14,13 @@ namespace CoreRemoting.Encryption
         /// <param name="encryptedSessionKey">Encrypted session key</param>
         /// <param name="iv">Initialization vector</param>
         /// <param name="encryptedMessage">Encrypted message</param>
-        public EncryptedSecret(byte[] encryptedSessionKey, byte[] iv, byte[] encryptedMessage)
+        /// <param name="sendersPublicKeyBlob">Public key of the sender</param>
+        public EncryptedSecret(byte[] encryptedSessionKey, byte[] iv, byte[] encryptedMessage, byte[] sendersPublicKeyBlob)
         {
             Iv = iv;
             EncryptedMessage = encryptedMessage;
             EncryptedSessionKey = encryptedSessionKey;
+            SendersPublicKeyBlob = sendersPublicKeyBlob;
         }
         
         /// <summary>
@@ -35,5 +37,10 @@ namespace CoreRemoting.Encryption
         /// Gets the initialization vector.
         /// </summary>
         public byte[] Iv { get; private set; }
+        
+        /// <summary>
+        /// Gets the public key of the sender.
+        /// </summary>
+        public byte[] SendersPublicKeyBlob { get; private set; }
     }
 }
