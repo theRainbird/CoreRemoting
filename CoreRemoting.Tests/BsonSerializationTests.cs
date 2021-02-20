@@ -1,13 +1,40 @@
 using System;
+using System.Collections.Generic;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization.Bson;
 using CoreRemoting.Tests.Tools;
+using Newtonsoft.Json;
 using NUnit.Framework;
 
 namespace CoreRemoting.Tests
 {
     public class BsonSerializationTests
     {
+        #region Fake DateTime Json Converter
+
+        private class FakeDateTimeConverter : JsonConverter
+        {
+            public int WriteCount { get; private set; }
+
+            public override bool CanConvert(Type objectType)
+            {
+                return objectType == typeof(DateTime) || objectType == typeof(string);
+            }
+
+            public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
+            {
+                throw new NotImplementedException();
+            }
+
+            public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+            {
+                WriteCount++;
+                writer.WriteValue(value);
+            }
+        }
+        
+        #endregion
+        
         [Test]
         public void BsonSerializerAdapter_should_deserialize_MethodCallMessage()
         {
@@ -40,6 +67,7 @@ namespace CoreRemoting.Tests
             Assert.AreEqual(4711, parameterValues[0]);
         }
 
+        [Test]
         public void BsonSerializerAdapter_should_deserialize_CompleteHandshakeWireMessage()
         {
             var sessionId = Guid.NewGuid();
@@ -58,6 +86,27 @@ namespace CoreRemoting.Tests
             
             Assert.AreEqual("complete_handshake", deserializedMessage.MessageType);
             Assert.AreEqual(sessionId, new Guid(deserializedMessage.Data));
+        }
+
+        [Test]
+        public void BsonSerializerAdapter_should_use_configured_JsonConverters()
+        {
+            var fakeConverter = new FakeDateTimeConverter();
+            var config = new BsonSerializerConfig(new []
+            {
+                fakeConverter
+            });
+
+            var serializerAdapter = new BsonSerializerAdapter(config);
+
+            var dateToSerialize = DateTime.Today;
+            var raw = serializerAdapter.Serialize(dateToSerialize);
+            
+            Assert.AreNotEqual(0, fakeConverter.WriteCount);
+
+            var deserializedDate = serializerAdapter.Deserialize<DateTime>(raw);
+
+            Assert.AreEqual(dateToSerialize, deserializedDate);
         }
     }
 }

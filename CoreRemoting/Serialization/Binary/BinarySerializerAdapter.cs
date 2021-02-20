@@ -12,20 +12,13 @@ namespace CoreRemoting.Serialization.Binary
         [ThreadStatic] 
         private static BinaryFormatter _formatter;
         private readonly BinarySerializerConfig _config;
-
-        /// <summary>
-        /// Creates a new instance of the BinarySerializerAdapter class.
-        /// </summary>
-        public BinarySerializerAdapter()
-        {
-        }
-        
+       
         /// <summary>
         /// Creates a new instance of the BinarySerializerAdapter class.
         /// </summary>
         /// <param name="config">Configuration settings</param>
         [SuppressMessage("ReSharper", "UnusedMember.Global")]
-        public BinarySerializerAdapter(BinarySerializerConfig config)
+        public BinarySerializerAdapter(BinarySerializerConfig config = null)
         {
             _config = config;
         }

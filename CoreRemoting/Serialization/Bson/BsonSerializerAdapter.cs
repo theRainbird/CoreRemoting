@@ -15,7 +15,8 @@ namespace CoreRemoting.Serialization.Bson
         /// <summary>
         /// Creates a new instance of the BsonSerializerAdapter class.
         /// </summary>
-        public BsonSerializerAdapter()
+        /// <param name="config">Optional configuration settings</param>
+        public BsonSerializerAdapter(BsonSerializerConfig config = null)
         {
             var settings = new JsonSerializerSettings()
             {
@@ -26,9 +27,17 @@ namespace CoreRemoting.Serialization.Bson
                 FloatFormatHandling = FloatFormatHandling.String,
                 PreserveReferencesHandling = PreserveReferencesHandling.Objects,
                 ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
-                CheckAdditionalContent = true
+                CheckAdditionalContent = true,
+                ConstructorHandling = ConstructorHandling.AllowNonPublicDefaultConstructor,
+                DateFormatHandling = DateFormatHandling.IsoDateFormat,
+                DateParseHandling = DateParseHandling.DateTime,
+                DefaultValueHandling = DefaultValueHandling.Include,
+                FloatParseHandling = FloatParseHandling.Double
             };
 
+            if (config != null)
+                settings.Converters = config.JsonConverters;
+            
             _serializer = JsonSerializer.Create(settings);
         }
         
