@@ -6,6 +6,8 @@ namespace CoreRemoting.Tests.Tools
     {
         public Func<object, object> TestMethodFake { get; set; }
 
+        public Action OneWayMethodFake { get; set; }
+        
         public event Action ServiceEvent; 
         
         public object TestMethod(object arg)
@@ -21,6 +23,11 @@ namespace CoreRemoting.Tests.Tools
         public void FireServiceEvent()
         {
             ServiceEvent?.Invoke();
+        }
+        
+        public void OneWayMethod()
+        {
+            OneWayMethodFake?.Invoke();
         }
     }
 }

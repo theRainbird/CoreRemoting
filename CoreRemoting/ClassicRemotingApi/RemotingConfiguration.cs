@@ -53,6 +53,11 @@ namespace CoreRemoting.ClassicRemotingApi
         }
 
         /// <summary>
+        /// Gets whether the classic Remoting API is disabled or not.
+        /// </summary>
+        public static bool IsClassicRemotingApiDisabled => _classicRemotingApiDisabled;
+        
+        /// <summary>
         /// Registers a CoreRemoting server in the centralized server collection.
         /// </summary>
         /// <param name="server">CoreRemoting server</param>
@@ -153,24 +158,7 @@ namespace CoreRemoting.ClassicRemotingApi
             var container = server.ServiceRegistry;
 
             var registerServiceMethod =
-                container
-                    .GetType()
-                    .GetMethods()
-                    .Where(m =>
-                        m.Name == "RegisterService" &&
-                        m.IsGenericMethodDefinition)
-                    .Select(m => new
-                    {
-                        Method = m,
-                        Params = m.GetParameters(),
-                        Args = m.GetGenericArguments()
-                    })
-                    .Where(x =>
-                        x.Params.Length == 2 &&
-                        x.Args.Length == 2)
-                    .Select(x => x.Method)
-                    .First()
-                    .MakeGenericMethod(interfaceType, implementationType);
+                container.GetRegisterServiceMethodForWellknownServiceType(interfaceType, implementationType);
 
             registerServiceMethod.Invoke(container, new object[]{ lifetime, serviceName });
         }

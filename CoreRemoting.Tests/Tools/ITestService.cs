@@ -11,5 +11,8 @@ namespace CoreRemoting.Tests.Tools
         void TestMethodWithDelegateArg(Action<string> callback);
 
         void FireServiceEvent();
+
+        [OneWay]
+        void OneWayMethod();
     }
 }
