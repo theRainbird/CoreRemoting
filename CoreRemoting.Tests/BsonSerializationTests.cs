@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Configuration;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization.Bson;
 using CoreRemoting.Tests.Tools;
@@ -107,6 +108,76 @@ namespace CoreRemoting.Tests
             var deserializedDate = serializerAdapter.Deserialize<DateTime>(raw);
 
             Assert.AreEqual(dateToSerialize, deserializedDate);
+        }
+
+        private class PrimitiveValuesContainer
+        {
+            public byte ByteValue { get; set; }
+            public sbyte SByteValue { get; set; }
+            public short Int16Value { get; set; }
+            public ushort UInt16Value { get; set; }
+            public int Int32Value { get; set; }
+            public uint UInt32Value { get; set; }
+            public long Int64Value { get; set; }
+            public ulong UInt64Value { get; set; }
+            public float SingleValue { get; set; }
+            public double DoubleValue { get; set; }
+            public decimal DecimalValue { get; set; }
+            public bool BoolValue { get; set; }
+            public DateTime DateTimeValue { get; set; }
+            public Guid GuidValue { get; set; }
+        }
+
+        [Test]
+        public void BsonSerializerAdapter_should_deserialize_primitive_properties_correctly()
+        {
+            var csharpDateTime = DateTime.Now;
+            var ticksTruncatedCSharpDate =
+                new DateTime(
+                    csharpDateTime.Year,
+                    csharpDateTime.Month,
+                    csharpDateTime.Day,
+                    csharpDateTime.Hour,
+                    csharpDateTime.Minute,
+                    csharpDateTime.Second,
+                    csharpDateTime.Millisecond);
+            
+            var test = new PrimitiveValuesContainer()
+            {
+                ByteValue = byte.MaxValue,
+                SByteValue = sbyte.MinValue,
+                BoolValue = true,
+                DecimalValue = (decimal)(10^6145),
+                SingleValue = float.MaxValue,
+                DoubleValue = double.MaxValue,
+                GuidValue = Guid.NewGuid(),
+                Int16Value = short.MaxValue,
+                Int32Value = int.MaxValue,
+                Int64Value = long.MaxValue,
+                DateTimeValue = ticksTruncatedCSharpDate,
+                UInt16Value = ushort.MaxValue,
+                UInt32Value = (uint)int.MaxValue, // BSON doesn't support integer values larger than Int32
+                UInt64Value = (ulong)int.MaxValue // BSON doesn't support integer values larger than Int32
+            };
+
+            var serializer = new BsonSerializerAdapter();
+            var raw = serializer.Serialize(test);
+            var deserializedTest = serializer.Deserialize<PrimitiveValuesContainer>(raw);
+            
+            Assert.AreEqual(test.ByteValue, deserializedTest.ByteValue);
+            Assert.AreEqual(test.SByteValue, deserializedTest.SByteValue);
+            Assert.AreEqual(test.BoolValue, deserializedTest.BoolValue);
+            Assert.AreEqual(test.DecimalValue, deserializedTest.DecimalValue);
+            Assert.AreEqual(test.DoubleValue, deserializedTest.DoubleValue);
+            Assert.AreEqual(test.SingleValue, deserializedTest.SingleValue);
+            Assert.AreEqual(test.GuidValue, deserializedTest.GuidValue);
+            Assert.AreEqual(test.Int16Value, deserializedTest.Int16Value);
+            Assert.AreEqual(test.Int32Value, deserializedTest.Int32Value);
+            Assert.AreEqual(test.Int64Value, deserializedTest.Int64Value);
+            Assert.AreEqual(test.DateTimeValue, deserializedTest.DateTimeValue);
+            Assert.AreEqual(test.UInt16Value, deserializedTest.UInt16Value);
+            Assert.AreEqual(test.UInt32Value, deserializedTest.UInt32Value);
+            Assert.AreEqual(test.UInt64Value, deserializedTest.UInt64Value);
         }
     }
 }

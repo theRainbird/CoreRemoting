@@ -100,5 +100,10 @@ namespace CoreRemoting.Serialization.Bson
 
             return value;
         }
+
+        /// <summary>
+        /// Gets whether parameter values must be put in an envelope object for proper deserialization, or not. 
+        /// </summary>
+        public bool EnvelopeNeededForParameterSerialization => true;
     }
 }

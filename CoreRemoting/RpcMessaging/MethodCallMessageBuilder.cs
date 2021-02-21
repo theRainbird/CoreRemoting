@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using CoreRemoting.Serialization;
+using CoreRemoting.Serialization.Binary;
 using CoreRemoting.Serialization.Bson;
 
 namespace CoreRemoting.RpcMessaging
@@ -75,7 +76,10 @@ namespace CoreRemoting.RpcMessaging
                 {
                     for (var j = i; j < args.Length; j++)
                     {
-                        paramArrayValues.Add(new Envelope(args[j]));
+                        paramArrayValues.Add(
+                            serializer.EnvelopeNeededForParameterSerialization 
+                                ? new Envelope(args[j]) 
+                                : args[j]);
                     }
                 }
 
@@ -84,7 +88,9 @@ namespace CoreRemoting.RpcMessaging
                 object parameterValue = 
                     useParamArray 
                         ? paramArrayValues.ToArray() 
-                        : (object)new Envelope(arg);
+                        : serializer.EnvelopeNeededForParameterSerialization
+                            ? (object)new Envelope(arg)
+                            : arg;
                 
                 yield return
                     new MethodCallParameterMessage()
