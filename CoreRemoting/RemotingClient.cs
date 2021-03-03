@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
@@ -586,11 +585,12 @@ namespace CoreRemoting
         /// Creates a proxy object to provide access to a remote service.
         /// </summary>
         /// <param name="serviceInterfaceType">Interface type of the remote service</param>
+        /// <param name="serviceName">Unique name of the remote service</param>
         /// <returns>Proxy object</returns>
-        public object CreateProxy(Type serviceInterfaceType)
+        public object CreateProxy(Type serviceInterfaceType, string serviceName = "")
         {
             var serviceProxyType = typeof(ServiceProxy<>).MakeGenericType(serviceInterfaceType);
-            var serviceProxy = Activator.CreateInstance(serviceProxyType, this);
+            var serviceProxy = Activator.CreateInstance(serviceProxyType, this, serviceName);
             
             return _proxyGenerator.CreateInterfaceProxyWithoutTarget(
                 interfaceToProxy: serviceInterfaceType,

@@ -1,4 +1,3 @@
-using System;
 using System.Threading;
 using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.Tests.Tools;
@@ -24,11 +23,13 @@ namespace CoreRemoting.Tests
         [Test]
         public void IsTransparentProxy_should_return_true_if_the_provided_object_is_a_proxy()
         {
-            var client = new RemotingClient(new ClientConfig()
+            var client = new RemotingClient(
+                new ClientConfig()
                 {
                     ServerPort = 9099,
                     ServerHostName = "localhost"
                 });
+            
             var proxy = client.CreateProxy<ITestService>();
 
             var isProxy = RemotingServices.IsTransparentProxy(proxy);
@@ -50,12 +51,46 @@ namespace CoreRemoting.Tests
             server.Start();            
             
             string serviceName =
-                RemotingServices.Marshal(testService, typeof(ITestService), server.UniqueServerInstanceName);
+                RemotingServices.Marshal(testService, "test", typeof(ITestService), server.UniqueServerInstanceName);
 
             var registeredServiceInstance = server.ServiceRegistry.GetService(serviceName);
 
             Assert.AreSame(testService, registeredServiceInstance);
             Assert.IsTrue(registeredServiceInstance is ITestService);
+        }
+
+        [Test]
+        public void Connect_should_create_a_proxy_for_a_remote_service()
+        {
+            var testService = 
+                new TestService 
+                {
+                    TestMethodFake = arg => 
+                        arg
+                };
+
+            var server = new RemotingServer(new ServerConfig { NetworkPort = 9099 });
+            RemotingServices.Marshal(testService, "test", typeof(ITestService));
+            server.Start();
+
+            var clientThread = new Thread(() =>
+            {
+                DefaultRemotingInfrastructure.DefaultClientConfig = new ClientConfig { ServerPort = 9099 };
+                var proxy = 
+                    RemotingServices.Connect(
+                        typeof(ITestService),
+                        "test",
+                        DefaultRemotingInfrastructure.DefaultClientConfig);
+                
+                Assert.IsTrue(RemotingServices.IsTransparentProxy(proxy));
+
+                object result = ((ITestService) proxy).TestMethod(1);
+                
+                Assert.AreEqual(1, result);
+            });
+            
+            clientThread.Start();
+            clientThread.Join();
         }
     }
 }

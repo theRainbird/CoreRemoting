@@ -23,7 +23,7 @@ namespace CoreRemoting
         /// <summary>
         /// Gets or sets the invocation timeout in seconds (0 means infinite).
         /// </summary>
-        public int InvocationTimeout { get; set; }
+        public int InvocationTimeout { get; set; } = 0;
 
         /// <summary>
         /// Gets or sets the host name of the CoreRemoting server to be connected to.

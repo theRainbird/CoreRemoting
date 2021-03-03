@@ -2,7 +2,6 @@ using System;
 using System.Reflection;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.RemoteDelegates;
-using Newtonsoft.Json.Schema;
 
 namespace CoreRemoting.ClassicRemotingApi
 {
@@ -35,12 +34,14 @@ namespace CoreRemoting.ClassicRemotingApi
         /// Registers a object as CoreRemoting service.
         /// </summary>
         /// <param name="serviceInstance">Object instance that should be registred as service</param>
+        /// <param name="serviceName">Unique service name (Interface full type name is used, if left blank)</param>
         /// <param name="interfaceType">Service interface type</param>
         /// <param name="uniqueServerInstanceName">Unique server instance name</param>
         /// <returns>Service name</returns>
         /// <exception cref="InvalidOperationException">Thrown if classic Remoting API is diabled</exception>
         public static string Marshal(
             object serviceInstance, 
+            string serviceName,
             Type interfaceType, 
             string uniqueServerInstanceName = "")
         {
@@ -57,7 +58,8 @@ namespace CoreRemoting.ClassicRemotingApi
             var registerServiceMethod =
                 container.GetRegisterServiceMethodForServiceInstance(interfaceType, serviceInstance);
 
-            var serviceName = interfaceType.Name + "_" + Guid.NewGuid().ToString();
+            if (string.IsNullOrWhiteSpace(serviceName))
+                serviceName = interfaceType.FullName;
 
             var genericFunc = typeof(Func<>);
             var factoryFunc = genericFunc.MakeGenericType(interfaceType);
@@ -72,6 +74,37 @@ namespace CoreRemoting.ClassicRemotingApi
             });
 
             return serviceName;
+        }
+
+        /// <summary>
+        /// Creates a proxy for a remote CoreRemoting service.
+        /// </summary>
+        /// <param name="interfaceType">Service interface type</param>
+        /// <param name="serviceName">Optional service name</param>
+        /// <param name="clientConfig">Optional client configuration (Default client is used if null)</param>
+        /// <returns>Proxy</returns>
+        public static object Connect(Type interfaceType, string serviceName = "", ClientConfig clientConfig = null)
+        {
+            if (RemotingConfiguration.IsClassicRemotingApiDisabled)
+                throw new InvalidOperationException("Classic Remoting API is disabled.");
+
+            if (clientConfig == null)
+                clientConfig = DefaultRemotingInfrastructure.DefaultClientConfig;
+
+            IRemotingClient client;
+
+            if (clientConfig == DefaultRemotingInfrastructure.DefaultClientConfig)
+                client =
+                    DefaultRemotingInfrastructure.DefaultRemotingClient == null
+                        ? new RemotingClient(clientConfig)
+                        : DefaultRemotingInfrastructure.DefaultRemotingClient;
+            else
+                client = new RemotingClient(clientConfig);
+
+            if (!client.IsConnected)
+                client.Connect();
+            
+            return client.CreateProxy(interfaceType, serviceName);
         }
     }
 }

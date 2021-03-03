@@ -1,7 +1,6 @@
 using System;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization.Binary;
-using CoreRemoting.Serialization.Bson;
 using CoreRemoting.Tests.Tools;
 using NUnit.Framework;
 

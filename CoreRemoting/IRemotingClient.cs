@@ -38,8 +38,9 @@ namespace CoreRemoting
         /// Creates a proxy object to provide access to a remote service.
         /// </summary>
         /// <param name="serviceInterfaceType">Interface type of the remote service</param>
+        /// <param name="serviceName">Unique name of the remote service</param>
         /// <returns>Proxy object</returns>
-        object CreateProxy(Type serviceInterfaceType);
+        object CreateProxy(Type serviceInterfaceType, string serviceName = "");
 
         /// <summary>
         /// Shuts a specified service proxy down and frees ressources.

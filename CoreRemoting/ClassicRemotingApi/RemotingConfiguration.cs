@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Configuration;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Reflection;
 using CoreRemoting.ClassicRemotingApi.ConfigSection;
 using CoreRemoting.DependencyInjection;

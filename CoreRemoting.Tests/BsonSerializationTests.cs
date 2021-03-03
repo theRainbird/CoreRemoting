@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Configuration;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization.Bson;
 using CoreRemoting.Tests.Tools;
@@ -147,7 +145,7 @@ namespace CoreRemoting.Tests
                 ByteValue = byte.MaxValue,
                 SByteValue = sbyte.MinValue,
                 BoolValue = true,
-                DecimalValue = (decimal)(10^6145),
+                DecimalValue = 10^6145,
                 SingleValue = float.MaxValue,
                 DoubleValue = double.MaxValue,
                 GuidValue = Guid.NewGuid(),
@@ -156,8 +154,8 @@ namespace CoreRemoting.Tests
                 Int64Value = long.MaxValue,
                 DateTimeValue = ticksTruncatedCSharpDate,
                 UInt16Value = ushort.MaxValue,
-                UInt32Value = (uint)int.MaxValue, // BSON doesn't support integer values larger than Int32
-                UInt64Value = (ulong)int.MaxValue // BSON doesn't support integer values larger than Int32
+                UInt32Value = int.MaxValue, // BSON doesn't support integer values larger than Int32
+                UInt64Value = int.MaxValue // BSON doesn't support integer values larger than Int32
             };
 
             var serializer = new BsonSerializerAdapter();

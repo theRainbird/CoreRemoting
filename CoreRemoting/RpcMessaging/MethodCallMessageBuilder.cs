@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using CoreRemoting.Serialization;
-using CoreRemoting.Serialization.Binary;
 using CoreRemoting.Serialization.Bson;
 
 namespace CoreRemoting.RpcMessaging
@@ -89,7 +88,7 @@ namespace CoreRemoting.RpcMessaging
                     useParamArray 
                         ? paramArrayValues.ToArray() 
                         : serializer.EnvelopeNeededForParameterSerialization
-                            ? (object)new Envelope(arg)
+                            ? new Envelope(arg)
                             : arg;
                 
                 yield return

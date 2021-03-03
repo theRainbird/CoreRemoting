@@ -21,12 +21,17 @@ namespace CoreRemoting
         /// Creates a new instance of the ServiceProxy class.
         /// </summary>
         /// <param name="client">CoreRemoting client to be used for client/server communication</param>
-        public ServiceProxy(RemotingClient client)
+        /// <param name="serviceName">Unique name of the remote service</param>
+        public ServiceProxy(RemotingClient client, string serviceName = "")
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));
             
             var serviceInterfaceType = typeof(TServiceInterface);
-            _serviceName = serviceInterfaceType.FullName;
+
+            _serviceName =
+                string.IsNullOrWhiteSpace(serviceName)
+                    ? serviceInterfaceType.FullName
+                    : serviceName;
             
             var generator = new ProxyGenerator();
             Interface =
