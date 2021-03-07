@@ -15,7 +15,11 @@
         <PackageLicenseUrl>https://github.com/theRainbird/CoreRemoting/blob/master/LICENSE</PackageLicenseUrl>
         <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageVersion>1.1.1</PackageVersion>
+        <PackageVersion>1.1.2</PackageVersion>
+        <PackageReleaseNotes>- Fixed binary serializer adapter
+- Messages are now signed before encrypted
+- Classic Remoting API is completed
+- Custom JsonConverts are now supported</PackageReleaseNotes>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">

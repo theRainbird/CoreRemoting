@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <RootNamespace>CoreRemoting.Authentication</RootNamespace>
     <AssemblyName>CoreRemoting.Authentication.WindowsAuthProvider</AssemblyName>
-    <PackageVersion>1.1.1</PackageVersion>
+    <PackageVersion>1.1.2</PackageVersion>
     <Authors>Hagen Siegel</Authors>
     <Description>Windows user authentication provider for CoreRemoting</Description>
     <Copyright>2020 Hagen Siegel</Copyright>
