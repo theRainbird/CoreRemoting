@@ -148,7 +148,7 @@ namespace CoreRemoting.RemoteDelegates
 	    }
 
 	    /// <summary>
-	    /// Frees managed ressources.
+	    /// Frees managed resources.
 	    /// </summary>
 	    public void Dispose()
 	    {

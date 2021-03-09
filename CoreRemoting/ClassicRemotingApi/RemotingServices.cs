@@ -33,12 +33,12 @@ namespace CoreRemoting.ClassicRemotingApi
         /// <summary>
         /// Registers a object as CoreRemoting service.
         /// </summary>
-        /// <param name="serviceInstance">Object instance that should be registred as service</param>
+        /// <param name="serviceInstance">Object instance that should be registered as service</param>
         /// <param name="serviceName">Unique service name (Interface full type name is used, if left blank)</param>
         /// <param name="interfaceType">Service interface type</param>
         /// <param name="uniqueServerInstanceName">Unique server instance name</param>
         /// <returns>Service name</returns>
-        /// <exception cref="InvalidOperationException">Thrown if classic Remoting API is diabled</exception>
+        /// <exception cref="InvalidOperationException">Thrown if classic Remoting API is disabled</exception>
         public static string Marshal(
             object serviceInstance, 
             string serviceName,

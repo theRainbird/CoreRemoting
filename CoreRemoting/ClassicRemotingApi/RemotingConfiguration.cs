@@ -68,7 +68,7 @@ namespace CoreRemoting.ClassicRemotingApi
             
             if (!_remotingServers.TryAdd(server.UniqueServerInstanceName, server))
                 throw new DuplicateNameException(
-                    $"A server with unique instance name '{server.UniqueServerInstanceName}' is already registerd.");
+                    $"A server with unique instance name '{server.UniqueServerInstanceName}' is already registered.");
         }
 
         /// <summary>
@@ -102,7 +102,7 @@ namespace CoreRemoting.ClassicRemotingApi
         }
 
         /// <summary>
-        /// Registeres a service.
+        /// Registers a service.
         /// </summary>
         /// <param name="entry">Service configuration data</param>
         /// <exception cref="InvalidOperationException">Thrown if the Classic Remoting API is disabled</exception>

@@ -27,7 +27,7 @@ namespace CoreRemoting.RemoteDelegates
         /// <param name="serviceProxy">Service proxy of the remote service</param>
         /// <returns>Unique handler key</returns>
         /// <exception cref="ArgumentNullException">Thrown an argument is null</exception>
-        /// <exception cref="ApplicationException">Thrown, if a race condition occures while adding the client delegate to the registry</exception>
+        /// <exception cref="ApplicationException">Thrown, if a race condition occurs while adding the client delegate to the registry</exception>
         public Guid RegisterClientDelegate(Delegate clientDelegate, object serviceProxy)
         {
             if (clientDelegate == null)
@@ -70,7 +70,7 @@ namespace CoreRemoting.RemoteDelegates
         }
 
         /// <summary>
-        /// Gets a registered client delegate by its hanlder key.
+        /// Gets a registered client delegate by its handler key.
         /// </summary>
         /// <param name="handlerKey">Unique handler key</param>
         /// <returns>Client delegate</returns>
@@ -80,7 +80,7 @@ namespace CoreRemoting.RemoteDelegates
         }
 
         /// <summary>
-        /// Unregisteres all client delegates that are paired withe a specified service proxy.
+        /// Unregisters all client delegates that are paired withe a specified service proxy.
         /// </summary>
         /// <param name="serviceProxy">Service proxy</param>
         public void UnregisterClientDelegatesOfServiceProxy(object serviceProxy)
@@ -95,7 +95,7 @@ namespace CoreRemoting.RemoteDelegates
         }
 
         /// <summary>
-        /// Unregisteres a specified client delegate by its handler key.
+        /// Unregisters a specified client delegate by its handler key.
         /// </summary>
         /// <param name="handlerKey">Unique handler key</param>
         [SuppressMessage("ReSharper", "UnusedVariable")]

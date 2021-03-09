@@ -9,7 +9,7 @@ namespace CoreRemoting.Encryption
     public static class RsaKeyExchange
     {
         /// <summary>
-        /// Encrypts a secret with assymetric RSA algorithm.
+        /// Encrypts a secret with asymmetric RSA algorithm.
         /// </summary>
         /// <param name="keySize">Key size (1024, 2048, 4096, ...)</param>
         /// <param name="receiversPublicKeyBlob">Public key of the receiver</param>
@@ -26,7 +26,7 @@ namespace CoreRemoting.Encryption
             // Encrypt the session key
             var keyFormatter = new RSAPKCS1KeyExchangeFormatter(receiversPublicKey);
             
-            // Encrypt the seceret
+            // Encrypt the secret
             using MemoryStream ciphertext = new MemoryStream();
             using CryptoStream stream = new CryptoStream(ciphertext, aes.CreateEncryptor(), CryptoStreamMode.Write);
             
@@ -41,7 +41,7 @@ namespace CoreRemoting.Encryption
         }
 
         /// <summary>
-        /// Decrypts a secret with assymetric RSA alogrithm.
+        /// Decrypts a secret with asymmetric RSA algorithm.
         /// </summary>
         /// <param name="keySize">Key size (1024, 2048, 4096, ...)</param>
         /// <param name="receiversPrivateKeyBlob">Private key of the receiver</param>

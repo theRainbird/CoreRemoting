@@ -35,7 +35,7 @@ namespace CoreRemoting.RpcMessaging
         public bool IsValueNull { get; set; }
         
         /// <summary>
-        /// Gets or sets the the parameter value.
+        /// Gets or sets the parameter value.
         /// </summary>
         [DataMember]
         public object Value { get; set; }

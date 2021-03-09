@@ -19,7 +19,7 @@ namespace CoreRemoting
         /// <summary>
         /// Creates a new instance of the SessionRepository class.
         /// </summary>
-        /// <param name="keySize">Key size for asymmetric encryption. Should be 3072 or better in 2021 (Please use steps os 1024).</param>
+        /// <param name="keySize">Key size for asymmetric encryption. Should be 3072 or better in 2021 (Please use steps of 1024).</param>
         /// <param name="inactiveSessionSweepInterval">Sweep interval for inactive sessions in seconds (No session sweeping, if set to 0)</param>
         /// <param name="maximumSessionInactivityTime">Maximum session inactivity time in minutes</param>
         public SessionRepository(int keySize, int inactiveSessionSweepInterval, int maximumSessionInactivityTime)
@@ -109,7 +109,7 @@ namespace CoreRemoting
         /// </summary>
         /// <param name="sessionId">Session ID</param>
         /// <returns>The session correlating to the specified session ID</returns>
-        /// <exception cref="KeyNotFoundException">Thrown, if no session with the secified session ID is found</exception>
+        /// <exception cref="KeyNotFoundException">Thrown, if no session with the specified session ID is found</exception>
         public RemotingSession GetSession(Guid sessionId)
         {
             if (_sessions.TryGetValue(sessionId, out var session))
@@ -119,7 +119,7 @@ namespace CoreRemoting
         }
 
         /// <summary>
-        /// Removes a specified seesion by its ID.
+        /// Removes a specified session by its ID.
         /// </summary>
         /// <param name="sessionId">Session ID</param>
         public void RemoveSession(Guid sessionId)

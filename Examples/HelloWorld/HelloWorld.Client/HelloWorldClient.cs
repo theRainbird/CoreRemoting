@@ -27,7 +27,7 @@ namespace HelloWorld.Client
             // Creates proxy for remote service
             var proxy = client.CreateProxy<ISayHelloService>();
             
-            // Subscribe MessageReceived eveng of remote service
+            // Subscribe MessageReceived event of remote service
             proxy.MessageReceived += (senderName, message) => 
                 Console.WriteLine($"\n  {senderName} says: {message}\n");
             

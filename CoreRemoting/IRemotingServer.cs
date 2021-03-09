@@ -20,9 +20,9 @@ namespace CoreRemoting
         /// Event: Fires after an RPC call is invoked.
         /// </summary>
         event EventHandler<ServerRpcContext> AfterCall;
-        
+
         /// <summary>
-        /// Event: Fires if an error occures.
+        /// Event: Fires if an error occurs.
         /// </summary>
         event EventHandler<Exception> Error;
         

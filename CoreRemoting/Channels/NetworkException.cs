@@ -23,7 +23,7 @@ namespace CoreRemoting.Channels
         /// Without this constructor, deserialization will fail. 
         /// </summary>
         /// <param name="info">Serialization info</param>
-        /// <param name="context">Stremaing context</param>
+        /// <param name="context">Streaming context</param>
         public NetworkException(SerializationInfo info, StreamingContext context) 
             : base(info, context)
         {

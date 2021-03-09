@@ -3,7 +3,7 @@ using System;
 namespace CoreRemoting.Encryption
 {
     /// <summary>
-    /// Describes an ecrypted secret.
+    /// Describes an encrypted secret.
     /// </summary>
     [Serializable]
     public class EncryptedSecret

@@ -55,7 +55,7 @@ namespace CoreRemoting.Channels.Websocket
         public bool IsListening => _webSocketServer != null && _webSocketServer.IsListening;
 
         /// <summary>
-        /// Stops listening and frees managed ressources.
+        /// Stops listening and frees managed resources.
         /// </summary>
         public void Dispose()
         {

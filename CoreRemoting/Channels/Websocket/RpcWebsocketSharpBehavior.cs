@@ -18,7 +18,7 @@ namespace CoreRemoting.Channels.Websocket
         public event Action<byte[]> ReceiveMessage;
         
         /// <summary>
-        /// Event: Fires when an error is occured.
+        /// Event: Fires when an error is occurred.
         /// </summary>
         public event Action<string, Exception> ErrorOccured;
         
@@ -83,7 +83,7 @@ namespace CoreRemoting.Channels.Websocket
         }
 
         /// <summary>
-        /// Event procedure: Called, if an error occures at the websocket layer.
+        /// Event procedure: Called, if an error occurs at the websocket layer.
         /// </summary>
         /// <param name="e">Message and optional Exception info</param>
         protected override void OnError(ErrorEventArgs e)
@@ -94,7 +94,7 @@ namespace CoreRemoting.Channels.Websocket
         }
 
         /// <summary>
-        /// Frees managed ressources.
+        /// Frees managed resources.
         /// </summary>
         public void Dispose()
         {

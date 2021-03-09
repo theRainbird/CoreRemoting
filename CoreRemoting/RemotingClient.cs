@@ -107,7 +107,7 @@ namespace CoreRemoting
         internal IMethodCallMessageBuilder MethodCallMessageBuilder { get; }
 
         /// <summary>
-        /// Gets a utility object tp provide encryption of remoting messages.
+        /// Gets a utility object to provide encryption of remoting messages.
         /// </summary>
         private IMessageEncryptionManager MessageEncryptionManager { get; }
         
@@ -142,7 +142,7 @@ namespace CoreRemoting
         public byte[] PublicKey => _keyPair.PublicKey;
 
         /// <summary>
-        /// Gets whether the connction to the server is established or not.
+        /// Gets whether the connection to the server is established or not.
         /// </summary>
         public bool IsConnected => _channel?.IsConnected ?? false;
 
@@ -522,7 +522,7 @@ namespace CoreRemoting
         /// Calls a method on a remote service synchronously.
         /// </summary>
         /// <param name="methodCallMessage">Details of the remote method to be invoked</param>
-        /// <param name="oneWay">Invoke methode without waiting for or proceesing result.</param>
+        /// <param name="oneWay">Invoke method without waiting for or processing result.</param>
         /// <returns>Results of the remote method invocation</returns>
         internal ClientRpcContext InvokeRemoteMethod(MethodCallMessage methodCallMessage, bool oneWay = false)
         {
@@ -534,7 +534,7 @@ namespace CoreRemoting
             var clientRpcContext = new ClientRpcContext();
 
             if (!_activeCalls.TryAdd(clientRpcContext.UniqueCallKey, clientRpcContext))
-                throw new ApplicationException("Duplicate uniqe call key.");
+                throw new ApplicationException("Duplicate unique call key.");
 
             var wireMessage =
                 MessageEncryptionManager.CreateWireMessage(
@@ -598,7 +598,7 @@ namespace CoreRemoting
         }
 
         /// <summary>
-        /// Shuts a specified service proxy down and frees ressources.
+        /// Shuts a specified service proxy down and frees resources.
         /// </summary>
         /// <param name="serviceProxy">Proxy object that should be shut down</param>
         public void ShutdownProxy(object serviceProxy)

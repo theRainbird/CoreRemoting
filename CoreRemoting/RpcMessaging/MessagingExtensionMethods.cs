@@ -13,8 +13,8 @@ namespace CoreRemoting.RpcMessaging
         /// Parses a text message that contains name value pairs.
         /// </summary>
         /// <param name="message">Text message</param>
-        /// <param name="entrySeperator">Char used to seperate entries</param>
-        /// <param name="pairSeperator">Char used to seperate pairs</param>
+        /// <param name="entrySeperator">Char used to separate entries</param>
+        /// <param name="pairSeperator">Char used to separate pairs</param>
         /// <returns>Dictionary with parsed name value pairs</returns>
         public static Dictionary<string, string> ParseNameValuePairTextMessage(this string message, char entrySeperator = '|', char pairSeperator = ':')
         {

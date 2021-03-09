@@ -13,7 +13,7 @@ namespace CoreRemoting.Channels
         event Action<byte[]> ReceiveMessage;
 
         /// <summary>
-        /// Event: Fires when an error is occured.
+        /// Event: Fires when an error is occurred.
         /// </summary>
         event Action<string, Exception> ErrorOccured;
         

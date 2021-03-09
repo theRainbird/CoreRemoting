@@ -71,8 +71,8 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         /// <summary>
         /// Gets a type from a string that contains type name and assembly name.
         /// </summary>
-        /// <param name="assemblyAndTypeConfigString">String containing type name and assembly name, seperated by a comma</param>
-        /// <returns>Type obejct</returns>
+        /// <param name="assemblyAndTypeConfigString">String containing type name and assembly name, separated by a comma</param>
+        /// <returns>Type object</returns>
         /// <exception cref="FormatException">Thrown, if string format is invalid</exception>
         private static Type GetTypeFromConfigString(string assemblyAndTypeConfigString)
         {
@@ -91,7 +91,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         /// <summary>
         /// Creates a server channel from a type string.
         /// </summary>
-        /// <param name="channelTypeName">String containing a channel type shortcut (e.G. "ws" for websockets) or a type name and assembly name, seperated by a comma</param>
+        /// <param name="channelTypeName">String containing a channel type shortcut (e.g. "ws" for websockets) or a type name and assembly name, separated by a comma</param>
         /// <returns>Server channel</returns>
         private static IServerChannel CreateServerChannelFromConfigName(string channelTypeName)
         {
@@ -107,9 +107,9 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         }
         
         /// <summary>
-        /// Creates a serializer adaüter from a type string.
+        /// Creates a serializer adapter from a type string.
         /// </summary>
-        /// <param name="serializerName">String containing a serializer (e.G. "binary" for a binary serializer) type shortcut or a type name and assembly name, seperated by a comma</param>
+        /// <param name="serializerName">String containing a serializer (e.g. "binary" for a binary serializer) type shortcut or a type name and assembly name, separated by a comma</param>
         /// <returns></returns>
         private static ISerializerAdapter CreateSerializerAdapterFromConfigName(string serializerName)
         {

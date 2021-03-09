@@ -25,7 +25,7 @@ namespace CoreRemoting
         public int NetworkPort { get; set; } = 9090;
 
         /// <summary>
-        /// Gets or sets the key size for assymetric encryption (only relevant, if message encryption is enabled).
+        /// Gets or sets the key size for asymmetric encryption (only relevant, if message encryption is enabled).
         /// </summary>
         [SuppressMessage("ReSharper", "AutoPropertyCanBeMadeGetOnly.Global")] 
         public int KeySize { get; set; } = 4096;
@@ -75,7 +75,7 @@ namespace CoreRemoting
         public IAuthenticationProvider AuthenticationProvider { get; set; }
         
         /// <summary>
-        /// Gets or sets the unque name of this server instance.
+        /// Gets or sets the unique name of this server instance.
         /// </summary>
         public string UniqueServerInstanceName { get; set; }
 
