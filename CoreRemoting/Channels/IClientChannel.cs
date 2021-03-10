@@ -24,7 +24,7 @@ namespace CoreRemoting.Channels
         void Disconnect();
         
         /// <summary>
-        /// Gets whether the connection is esablished or not.
+        /// Gets whether the connection is established or not.
         /// </summary>
         bool IsConnected { get; }
         

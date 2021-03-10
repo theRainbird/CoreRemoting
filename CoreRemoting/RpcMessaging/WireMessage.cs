@@ -29,7 +29,7 @@ namespace CoreRemoting.RpcMessaging
         public bool Error { get; set; }
         
         /// <summary>
-        /// Gets or sets an unique key to correlate rpc calls.
+        /// Gets or sets an unique key to correlate RPC calls.
         /// </summary>
         public byte[] UniqueCallKey { get; set; }
     }

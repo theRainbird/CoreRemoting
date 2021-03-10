@@ -15,7 +15,7 @@ namespace CoreRemoting
         public Guid UniqueCallKey { get; set; }
         
         /// <summary>
-        /// Gets or sets the last exception that is occured.
+        /// Gets or sets the last exception that is occurred.
         /// </summary>
         public Exception Exception { get; set; }
         

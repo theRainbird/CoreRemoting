@@ -166,7 +166,7 @@ namespace CoreRemoting
         public DateTime LastActivityTimestamp => _lastActivityTimestamp;
 
         /// <summary>
-        /// Gets this session's uique session ID.
+        /// Gets this session's unique session ID.
         /// </summary>
         public Guid SessionId => _sessionId;
 
@@ -343,8 +343,8 @@ namespace CoreRemoting
         /// Calls a method on a server side service.
         /// </summary>
         /// <param name="request">RPC message from client</param>
-        /// <returns>Task which provides the serialized response message containing the method result asnynchronously</returns>
-        /// <exception cref="MissingMethodException">Thrown if specified method in request does't exist</exception>
+        /// <returns>Task which provides the serialized response message containing the method result asynchronously</returns>
+        /// <exception cref="MissingMethodException">Thrown if specified method in request doesn't exist</exception>
         private void ProcessRpcMessage(WireMessage request)
         {
             var sharedSecret =
@@ -481,7 +481,7 @@ namespace CoreRemoting
 
                         var delegateType = Type.GetType(remoteDelegateInfo.DelegateTypeName);
 
-                        // Froge a delegate proxy and initiate remote delegate invokation, when it is invoked
+                        // Forge a delegate proxy and initiate remote delegate invocation, when it is invoked
                         var delegateProxy =
                             _delegateProxyFactory.Create(delegateType, delegateArgs =>
                                 RemoteDelegateInvocation

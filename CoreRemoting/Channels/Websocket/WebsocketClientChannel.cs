@@ -17,7 +17,7 @@ namespace CoreRemoting.Channels.Websocket
         public event Action<byte[]> ReceiveMessage;
         
         /// <summary>
-        /// Event: Fires when an error is occured.
+        /// Event: Fires when an error is occurred.
         /// </summary>
         public event Action<string, Exception> ErrorOccured;
         
@@ -71,7 +71,7 @@ namespace CoreRemoting.Channels.Websocket
         }
 
         /// <summary>
-        /// Event procedure: Called when a error occures on the websocket layer.
+        /// Event procedure: Called when a error occurs on the websocket layer.
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
@@ -97,7 +97,7 @@ namespace CoreRemoting.Channels.Websocket
         }
 
         /// <summary>
-        /// Gets whether the websocket connection is esablished or not.
+        /// Gets whether the websocket connection is established or not.
         /// </summary>
         public bool IsConnected
         {
@@ -116,7 +116,7 @@ namespace CoreRemoting.Channels.Websocket
         public IRawMessageTransport RawMessageTransport => this;
         
         /// <summary>
-        /// Diconnect and free manages ressources.
+        /// Disconnect and free manages resources.
         /// </summary>
         public void Dispose()
         {

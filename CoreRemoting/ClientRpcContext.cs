@@ -34,7 +34,7 @@ namespace CoreRemoting
         public bool Error { get; set; }
 
         /// <summary>
-        /// Gets or sets an exception that describes an error that occured on server side RPC invocation.
+        /// Gets or sets an exception that describes an error that occurred on server side RPC invocation.
         /// </summary>
         public RemoteInvocationException RemoteException { get; set; }
         

@@ -6,7 +6,7 @@ using HelloWorld.Shared;
 namespace HelloWorld.Server
 {
     /// <summary>
-    /// Hello wordl chat service.
+    /// Hello world chat service.
     /// </summary>
     public class SayHelloService : ISayHelloService
     {

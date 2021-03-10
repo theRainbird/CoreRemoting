@@ -36,7 +36,7 @@ namespace CoreRemoting.ClassicRemotingApi
         }
         
         /// <summary>
-        /// Gets or sets the unqiue instance name of the host server.
+        /// Gets or sets the unique instance name of the host server.
         /// </summary>
         public string UniqueServerInstanceName { get; set; }
         
@@ -66,7 +66,7 @@ namespace CoreRemoting.ClassicRemotingApi
         public ServiceLifetime Lifetime { get; set; }
         
         /// <summary>
-        /// Gets or sets the unqiue service name (Full name of interface type is used, if left blank).
+        /// Gets or sets the unique service name (Full name of interface type is used, if left blank).
         /// </summary>
         public string ServiceName { get; set; }
     }

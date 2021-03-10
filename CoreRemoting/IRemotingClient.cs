@@ -43,7 +43,7 @@ namespace CoreRemoting
         object CreateProxy(Type serviceInterfaceType, string serviceName = "");
 
         /// <summary>
-        /// Shuts a specified service proxy down and frees ressources.
+        /// Shuts a specified service proxy down and frees resources.
         /// </summary>
         /// <param name="serviceProxy"></param>
         void ShutdownProxy(object serviceProxy);
@@ -59,7 +59,7 @@ namespace CoreRemoting
         void Disconnect();
 
         /// <summary>
-        /// Gets whether the connction to the server is established or not.
+        /// Gets whether the connection to the server is established or not.
         /// </summary>
         bool IsConnected { get; }
         

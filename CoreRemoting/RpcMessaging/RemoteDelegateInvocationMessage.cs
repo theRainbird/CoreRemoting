@@ -11,7 +11,7 @@ namespace CoreRemoting.RpcMessaging
     public class RemoteDelegateInvocationMessage
     {
         /// <summary>
-        /// Gets or sets an unique key to correlate rpc calls.
+        /// Gets or sets an unique key to correlate RPC calls.
         /// </summary>
         [DataMember]
         public Guid UniqueCallKey { get; set; }

@@ -3,7 +3,7 @@ using System;
 namespace CoreRemoting.RemoteDelegates
 {
     /// <summary>
-    /// Paires a client delegate with a service proxy instance.
+    /// Pairs a client delegate with a service proxy instance.
     /// </summary>
     public class ClientDelegateInfo
     {

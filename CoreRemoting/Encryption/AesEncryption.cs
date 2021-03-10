@@ -53,7 +53,7 @@ namespace CoreRemoting.Encryption
             if (aes == null)
                 throw new NotSupportedException();
             
-            aes.Key = CreateHash(sharedSecret);  
+            aes.Key = CreateHash(sharedSecret);
             aes.IV = iv;
             aes.Mode = CipherMode.CBC;
             aes.Padding = PaddingMode.PKCS7;
@@ -89,7 +89,7 @@ namespace CoreRemoting.Encryption
             if (aes == null)
                 throw new NotSupportedException();
             
-            aes.Key = CreateHash(sharedSecret);  
+            aes.Key = CreateHash(sharedSecret);
             aes.IV = iv;
             aes.Mode = CipherMode.CBC;
             aes.Padding = PaddingMode.PKCS7;

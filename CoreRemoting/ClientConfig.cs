@@ -41,7 +41,7 @@ namespace CoreRemoting
         public ISerializerAdapter Serializer { get; set; }
 
         /// <summary>
-        /// Gets or sets the key size for assymetric encryption (only relevant, if message encryption is enabled).
+        /// Gets or sets the key size for asymmetric encryption (only relevant, if message encryption is enabled).
         /// </summary>
         public int KeySize { get; set; } = 4096;
 

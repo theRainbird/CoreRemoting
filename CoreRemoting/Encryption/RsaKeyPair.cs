@@ -47,7 +47,7 @@ namespace CoreRemoting.Encryption
         public int KeySize => _rsa.KeySize;
         
         /// <summary>
-        /// Frees managed ressources.
+        /// Frees managed resources.
         /// </summary>
         public void Dispose()
         {

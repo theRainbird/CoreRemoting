@@ -39,7 +39,7 @@ namespace CoreRemoting
         IEnumerable<RemotingSession> Sessions { get; }
         
         /// <summary>
-        /// Removes a specified seesion by its ID.
+        /// Removes a specified session by its ID.
         /// </summary>
         /// <param name="sessionId">Session ID</param>
         void RemoveSession(Guid sessionId);

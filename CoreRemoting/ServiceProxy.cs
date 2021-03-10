@@ -68,12 +68,12 @@ namespace CoreRemoting
         private TServiceInterface Interface { get; set; }
 
         /// <summary>
-        /// Intercepts a call of a memeber on the proxy object. 
+        /// Intercepts a call of a member on the proxy object. 
         /// </summary>
         /// <param name="invocation">Intercepted invocation details</param>
         /// <exception cref="RemotingException">Thrown if a remoting operation has been failed</exception>
         /// <exception cref="NotSupportedException">Thrown if a member of a type marked as OneWay is intercepted, that has another return type than void</exception>
-        /// <exception cref="RemoteInvocationException">Thrown if an exception occured when the remote method was invoked</exception>
+        /// <exception cref="RemoteInvocationException">Thrown if an exception occurred when the remote method was invoked</exception>
         void IInterceptor.Intercept(IInvocation invocation)
         {
            var method = invocation.Method;

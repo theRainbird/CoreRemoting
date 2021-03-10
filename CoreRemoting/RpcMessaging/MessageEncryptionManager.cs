@@ -81,14 +81,14 @@ namespace CoreRemoting.RpcMessaging
         }
 
         /// <summary>
-        /// Gets decrpyted data from a wire message.
+        /// Gets decrypted data from a wire message.
         /// </summary>
         /// <param name="message">Wire message</param>
         /// <param name="serializer">Serializer used to deserialized the signed content</param>
         /// <param name="sharedSecret">Shared secret (null, if the wire message is not encrypted)</param>
         /// <param name="sendersPublicKeyBlob">Public key of the sender used for RSA signature verification</param>
         /// <param name="sendersPublicKeySize">Sender's public key size</param>
-        /// <returns>Decrpyted raw data</returns>
+        /// <returns>Decrypted raw data</returns>
         public byte[] GetDecryptedMessageData(
             WireMessage message,
             ISerializerAdapter serializer,

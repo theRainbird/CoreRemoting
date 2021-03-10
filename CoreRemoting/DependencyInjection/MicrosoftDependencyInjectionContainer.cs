@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace CoreRemoting.DependencyInjection
 {
     /// <summary>
-    /// Microsoft Dependecy Injection DI-Container-Wrapper.
+    /// Microsoft Dependency Injection DI-Container-Wrapper.
     /// </summary>
     public class MicrosoftDependencyInjectionContainer : IDependencyInjectionContainer
     {
@@ -180,7 +180,7 @@ namespace CoreRemoting.DependencyInjection
         }
 
         /// <summary>
-        /// Frees managed ressources.
+        /// Frees managed resources.
         /// </summary>
         public void Dispose()
         {

@@ -73,7 +73,7 @@ namespace CoreRemoting
         public event EventHandler<ServerRpcContext> AfterCall;
 
         /// <summary>
-        /// Event: Fires if an error occures.
+        /// Event: Fires if an error occurs.
         /// </summary>
         public event EventHandler<Exception> Error;
         
@@ -139,7 +139,7 @@ namespace CoreRemoting
         /// <summary>
         /// Fires the OnError event.
         /// </summary>
-        /// <param name="ex">Exception that describes the occured error</param>
+        /// <param name="ex">Exception that describes the occurred error</param>
         internal void OnError(Exception ex)
         {
             Error?.Invoke(this, ex);

@@ -5,8 +5,8 @@ using System.Runtime.InteropServices;
 namespace CoreRemoting.Authentication
 {
     /// <summary>
-    /// Authentication provider to check credentials against local operationg system user accounts.
-    /// Works with Windows user accounts (local or domain) an local linux user accounts (passwd).
+    /// Authentication provider to check credentials against local operation system user accounts.
+    /// Works with Windows user accounts (local or domain) and local linux user accounts (passwd).
     /// </summary>
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
     public class GenericOsAuthProvider : IAuthenticationProvider
