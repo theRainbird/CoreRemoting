@@ -28,6 +28,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.Authentication
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.Authentication.GenericOsAuthProvider", "CoreRemoting.Authentication.GenericOsAuthProvider\CoreRemoting.Authentication.GenericOsAuthProvider.csproj", "{BC94361A-CA63-4D28-9FD0-BEF492952B6E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.Tests.ExternalTypes", "CoreRemoting.Tests.ExternalTypes\CoreRemoting.Tests.ExternalTypes.csproj", "{6A63A1C8-FF93-4E23-BB19-7071BF635174}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -66,6 +68,10 @@ Global
 		{BC94361A-CA63-4D28-9FD0-BEF492952B6E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BC94361A-CA63-4D28-9FD0-BEF492952B6E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BC94361A-CA63-4D28-9FD0-BEF492952B6E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6A63A1C8-FF93-4E23-BB19-7071BF635174}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6A63A1C8-FF93-4E23-BB19-7071BF635174}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6A63A1C8-FF93-4E23-BB19-7071BF635174}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6A63A1C8-FF93-4E23-BB19-7071BF635174}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

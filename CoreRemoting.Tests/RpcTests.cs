@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.DependencyInjection;
+using CoreRemoting.Tests.ExternalTypes;
 using CoreRemoting.Tests.Tools;
 using NUnit.Framework;
 
@@ -236,6 +237,70 @@ namespace CoreRemoting.Tests
             proxy.FireServiceEvent();
 
             Assert.IsTrue(serviceEventCalled);
+            Assert.AreEqual(0, serverErrorCount);
+        }
+        
+        [Test]
+        public void External_types_should_work_as_remote_service_parameters()
+        {
+            bool remoteServiceCalled = false;
+            DataClass parameterValue = null;
+
+            var testService =
+                new TestService()
+                {
+                    TestExternalTypeParameterFake = arg =>
+                    {
+                        remoteServiceCalled = true;
+                        parameterValue = arg;
+                    }
+                };
+            
+            var serverConfig =
+                new ServerConfig()
+                {
+                    NetworkPort = 9097,
+                    RegisterServicesAction = container =>
+                        container.RegisterService<ITestService>(
+                            factoryDelegate: () => testService,
+                            lifetime: ServiceLifetime.Singleton)
+                };
+
+            int serverErrorCount = 0;
+            
+            using var server = new RemotingServer(serverConfig);
+            server.Error += (_, _) => serverErrorCount++;
+            server.Start();
+
+            void ClientAction()
+            {
+                try
+                {
+                    using var client = new RemotingClient(new ClientConfig()
+                    {
+                        ConnectionTimeout = 0, 
+                        ServerPort = 9097
+                    });
+
+                    client.Connect();
+
+                    var proxy = client.CreateProxy<ITestService>();
+                    proxy.TestExternalTypeParameter(new DataClass() {Value = 42});
+
+                    Assert.AreEqual(42, parameterValue.Value);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    throw;
+                }
+            }
+
+            var clientThread = new Thread(ClientAction);
+            clientThread.Start();
+            clientThread.Join();
+            
+            Assert.IsTrue(remoteServiceCalled);
             Assert.AreEqual(0, serverErrorCount);
         }
     }

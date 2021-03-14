@@ -1,4 +1,5 @@
 using System;
+using CoreRemoting.Tests.ExternalTypes;
 
 namespace CoreRemoting.Tests.Tools
 {
@@ -14,5 +15,7 @@ namespace CoreRemoting.Tests.Tools
 
         [OneWay]
         void OneWayMethod();
+
+        void TestExternalTypeParameter(DataClass data);
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using CoreRemoting.Tests.ExternalTypes;
 
 namespace CoreRemoting.Tests.Tools
 {
@@ -7,6 +8,8 @@ namespace CoreRemoting.Tests.Tools
         public Func<object, object> TestMethodFake { get; set; }
 
         public Action OneWayMethodFake { get; set; }
+        
+        public Action<DataClass> TestExternalTypeParameterFake { get; set; }
         
         public event Action ServiceEvent; 
         
@@ -28,6 +31,11 @@ namespace CoreRemoting.Tests.Tools
         public void OneWayMethod()
         {
             OneWayMethodFake?.Invoke();
+        }
+
+        public void TestExternalTypeParameter(DataClass data)
+        {
+            TestExternalTypeParameterFake?.Invoke(data);
         }
     }
 }
