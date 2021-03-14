@@ -96,7 +96,7 @@ namespace CoreRemoting.RpcMessaging
                     {
                         IsOut = parameterInfo.IsOut,
                         ParameterName = parameterInfo.Name,
-                        ParameterTypeName = parameterInfo.ParameterType.FullName,
+                        ParameterTypeName =  parameterInfo.ParameterType.FullName + "," + parameterInfo.ParameterType.Assembly.GetName().Name,
                         Value = parameterValue,
                         IsValueNull = isArgNull
                     };
