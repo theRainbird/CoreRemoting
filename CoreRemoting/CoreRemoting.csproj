@@ -16,10 +16,7 @@
         <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageVersion>1.1.4</PackageVersion>
-        <PackageReleaseNotes>- Fixed binary serializer adapter
-- Messages are now signed before encrypted
-- Classic Remoting API is completed
-- Custom JsonConverts are now supported</PackageReleaseNotes>
+        <PackageReleaseNotes> Fixed bug:  #6 Not working with custom classes</PackageReleaseNotes>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
