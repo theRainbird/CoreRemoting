@@ -5,6 +5,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
     /// <summary>
     /// Defines a configuration section for CoreRemoting configuration in a XML config file.
     /// </summary>
+    // ReSharper disable once ClassNeverInstantiated.Global
     public class CoreRemotingConfigSection : ConfigurationSection
     {
         /// <summary>
@@ -22,5 +23,13 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         [ConfigurationCollection(typeof(WellKnownServiceConfigElementCollection))]
         public WellKnownServiceConfigElementCollection Services => 
             (WellKnownServiceConfigElementCollection)this["services"];
+        
+        /// <summary>
+        /// Gets a collection of configured CoreRemoting client instances.
+        /// </summary>
+        [ConfigurationProperty("clientInstances", IsRequired = false)]
+        [ConfigurationCollection(typeof(ClientInstanceConfigElementCollection))]
+        public ClientInstanceConfigElementCollection ClientInstances => 
+            (ClientInstanceConfigElementCollection)this["clientInstances"];
     }
 }

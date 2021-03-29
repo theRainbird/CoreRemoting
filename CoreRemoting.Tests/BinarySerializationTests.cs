@@ -2,13 +2,13 @@ using System;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization.Binary;
 using CoreRemoting.Tests.Tools;
-using NUnit.Framework;
+using Xunit;
 
 namespace CoreRemoting.Tests
 {
     public class BinarySerializationTests
     {
-        [Test]
+        [Fact]
         public void BinarySerializerAdapter_should_deserialize_MethodCallMessage()
         {
             var serializer = new BinarySerializerAdapter();
@@ -31,16 +31,16 @@ namespace CoreRemoting.Tests
                 out var parameterValues,
                 out var parameterTypes);
             
-            Assert.AreEqual(1, deserializedMessage.Parameters.Length);
+            Assert.Equal(1, deserializedMessage.Parameters.Length);
             Assert.NotNull(deserializedMessage.Parameters[0]);
-            Assert.AreEqual("arg", deserializedMessage.Parameters[0].ParameterName);
-            Assert.AreEqual("System.Object", deserializedMessage.Parameters[0].ParameterTypeName);
-            Assert.AreEqual(typeof(int), parameterValues[0].GetType());
-            Assert.AreEqual(typeof(object), parameterTypes[0]);
-            Assert.AreEqual(4711, parameterValues[0]);
+            Assert.Equal("arg", deserializedMessage.Parameters[0].ParameterName);
+            Assert.StartsWith("System.Object,", deserializedMessage.Parameters[0].ParameterTypeName);
+            Assert.Equal(typeof(int), parameterValues[0].GetType());
+            Assert.Equal(typeof(object), parameterTypes[0]);
+            Assert.Equal(4711, parameterValues[0]);
         }
 
-        [Test]
+        [Fact]
         public void BinarySerializerAdapter_should_deserialize_CompleteHandshakeWireMessage()
         {
             var sessionId = Guid.NewGuid();
@@ -57,8 +57,8 @@ namespace CoreRemoting.Tests
 
             var deserializedMessage = serializer.Deserialize<WireMessage>(rawData);
             
-            Assert.AreEqual("complete_handshake", deserializedMessage.MessageType);
-            Assert.AreEqual(sessionId, new Guid(deserializedMessage.Data));
+            Assert.Equal("complete_handshake", deserializedMessage.MessageType);
+            Assert.Equal(sessionId, new Guid(deserializedMessage.Data));
         }
     }
 }

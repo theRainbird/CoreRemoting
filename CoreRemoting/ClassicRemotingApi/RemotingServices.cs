@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.RemoteDelegates;
@@ -38,16 +39,12 @@ namespace CoreRemoting.ClassicRemotingApi
         /// <param name="interfaceType">Service interface type</param>
         /// <param name="uniqueServerInstanceName">Unique server instance name</param>
         /// <returns>Service name</returns>
-        /// <exception cref="InvalidOperationException">Thrown if classic Remoting API is disabled</exception>
         public static string Marshal(
             object serviceInstance, 
             string serviceName,
             Type interfaceType, 
             string uniqueServerInstanceName = "")
         {
-            if (RemotingConfiguration.IsClassicRemotingApiDisabled)
-                throw new InvalidOperationException("Classic Remoting API is disabled.");
-            
             var server = 
                 string.IsNullOrWhiteSpace(uniqueServerInstanceName) 
                     ? DefaultRemotingInfrastructure.DefaultRemotingServer
@@ -81,25 +78,23 @@ namespace CoreRemoting.ClassicRemotingApi
         /// </summary>
         /// <param name="interfaceType">Service interface type</param>
         /// <param name="serviceName">Optional service name</param>
-        /// <param name="clientConfig">Optional client configuration (Default client is used if null)</param>
+        /// <param name="uniqueClientInstanceName">Unique client instance name (Default client is used if empty)</param>
         /// <returns>Proxy</returns>
-        public static object Connect(Type interfaceType, string serviceName = "", ClientConfig clientConfig = null)
+        public static object Connect(Type interfaceType, string serviceName = "", string uniqueClientInstanceName = "")
         {
-            if (RemotingConfiguration.IsClassicRemotingApiDisabled)
-                throw new InvalidOperationException("Classic Remoting API is disabled.");
+            var client =
+                string.IsNullOrWhiteSpace(uniqueClientInstanceName)
+                    ? DefaultRemotingInfrastructure.DefaultRemotingClient
+                    : RemotingClient.GetActiveClientInstance(uniqueClientInstanceName);
 
-            if (clientConfig == null)
-                clientConfig = DefaultRemotingInfrastructure.DefaultClientConfig;
+            if (client == null)
+            {
+                if (DefaultRemotingInfrastructure.DefaultClientConfig == null)
+                    throw new KeyNotFoundException(
+                        $"No remoting client instance named '{uniqueClientInstanceName}' found.");
 
-            IRemotingClient client;
-
-            if (clientConfig == DefaultRemotingInfrastructure.DefaultClientConfig)
-                client =
-                    DefaultRemotingInfrastructure.DefaultRemotingClient == null
-                        ? new RemotingClient(clientConfig)
-                        : DefaultRemotingInfrastructure.DefaultRemotingClient;
-            else
-                client = new RemotingClient(clientConfig);
+                client = new RemotingClient(DefaultRemotingInfrastructure.DefaultClientConfig);
+            }
 
             if (!client.IsConnected)
                 client.Connect();

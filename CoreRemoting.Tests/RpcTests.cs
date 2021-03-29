@@ -1,22 +1,23 @@
 using System;
 using System.Threading;
-using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.ExternalTypes;
 using CoreRemoting.Tests.Tools;
-using NUnit.Framework;
+using Xunit;
+using Xunit.Abstractions;
 
 namespace CoreRemoting.Tests
 {
     public class RpcTests
     {
-        [SetUp]
-        public void Init()
+        private readonly ITestOutputHelper _testOutputHelper;
+
+        public RpcTests(ITestOutputHelper testOutputHelper)
         {
-            RemotingConfiguration.DisableClassicRemotingApi();
+            _testOutputHelper = testOutputHelper;
         }
-        
-        [Test]
+
+        [Fact]
         public void Call_on_Proxy_should_be_invoked_on_remote_service()
         {
             bool remoteServiceCalled = false;
@@ -62,11 +63,11 @@ namespace CoreRemoting.Tests
                     var proxy = client.CreateProxy<ITestService>();
                     var result = proxy.TestMethod("test");
 
-                    Assert.AreEqual("test", result);
+                    Assert.Equal("test", result);
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e);
+                    _testOutputHelper.WriteLine(e.ToString());
                     throw;
                 }
             }
@@ -75,11 +76,11 @@ namespace CoreRemoting.Tests
             clientThread.Start();
             clientThread.Join();
             
-            Assert.IsTrue(remoteServiceCalled);
-            Assert.AreEqual(0, serverErrorCount);
+            Assert.True(remoteServiceCalled);
+            Assert.Equal(0, serverErrorCount);
         }
         
-        [Test]
+        [Fact]
         public void Call_on_Proxy_should_be_invoked_on_remote_service_without_MessageEncryption()
         {
             bool remoteServiceCalled = false;
@@ -127,11 +128,11 @@ namespace CoreRemoting.Tests
                     var proxy = client.CreateProxy<ITestService>();
                     var result = proxy.TestMethod("test");
 
-                    Assert.AreEqual("test", result);
+                    Assert.Equal("test", result);
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e);
+                    _testOutputHelper.WriteLine(e.ToString());
                     throw;
                 }
             }
@@ -140,11 +141,11 @@ namespace CoreRemoting.Tests
             clientThread.Start();
             clientThread.Join();
             
-            Assert.IsTrue(remoteServiceCalled);
-            Assert.AreEqual(0, serverErrorCount);
+            Assert.True(remoteServiceCalled);
+            Assert.Equal(0, serverErrorCount);
         }
 
-        [Test]
+        [Fact]
         public void Delegate_invoked_on_server_should_callback_client()
         {
             string argumentFromServer = null;
@@ -185,7 +186,7 @@ namespace CoreRemoting.Tests
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e);
+                    _testOutputHelper.WriteLine(e.ToString());
                     throw;
                 }
             }
@@ -194,11 +195,11 @@ namespace CoreRemoting.Tests
             clientThread.Start();
             clientThread.Join();
                 
-            Assert.AreEqual("test", argumentFromServer);
-            Assert.AreEqual(0, serverErrorCount);
+            Assert.Equal("test", argumentFromServer);
+            Assert.Equal(0, serverErrorCount);
         }
         
-        [Test]
+        [Fact]
         public void Events_should_work_remotly()
         {
             var testService = new TestService();
@@ -236,11 +237,11 @@ namespace CoreRemoting.Tests
             
             proxy.FireServiceEvent();
 
-            Assert.IsTrue(serviceEventCalled);
-            Assert.AreEqual(0, serverErrorCount);
+            Assert.True(serviceEventCalled);
+            Assert.Equal(0, serverErrorCount);
         }
         
-        [Test]
+        [Fact]
         public void External_types_should_work_as_remote_service_parameters()
         {
             bool remoteServiceCalled = false;
@@ -287,11 +288,11 @@ namespace CoreRemoting.Tests
                     var proxy = client.CreateProxy<ITestService>();
                     proxy.TestExternalTypeParameter(new DataClass() {Value = 42});
 
-                    Assert.AreEqual(42, parameterValue.Value);
+                    Assert.Equal(42, parameterValue.Value);
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e);
+                    _testOutputHelper.WriteLine(e.ToString());
                     throw;
                 }
             }
@@ -300,8 +301,8 @@ namespace CoreRemoting.Tests
             clientThread.Start();
             clientThread.Join();
             
-            Assert.IsTrue(remoteServiceCalled);
-            Assert.AreEqual(0, serverErrorCount);
+            Assert.True(remoteServiceCalled);
+            Assert.Equal(0, serverErrorCount);
         }
     }
 }

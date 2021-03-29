@@ -14,6 +14,14 @@ namespace CoreRemoting
     public class ServerConfig
     {
         /// <summary>
+        /// Creates new new instance of the ServerConfig class.
+        /// </summary>
+        public ServerConfig()
+        {
+            UniqueServerInstanceName = Guid.NewGuid().ToString();
+        }
+        
+        /// <summary>
         /// Gets or sets the host name.
         /// </summary>
         [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
@@ -88,5 +96,10 @@ namespace CoreRemoting
         /// Gets or sets the maximum session inactivity time in minutes.
         /// </summary>
         public int MaximumSessionInactivityTime { get; set; } = 30;
+        
+        /// <summary>
+        /// Gets or set whether this is the default server.
+        /// </summary>
+        public bool IsDefault { get; set; } = false;
     }
 }

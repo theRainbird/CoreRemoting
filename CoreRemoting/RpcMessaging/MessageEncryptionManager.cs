@@ -39,7 +39,7 @@ namespace CoreRemoting.RpcMessaging
                     ? new byte[0]
                     : AesEncryption.GenerateIv();
             
-            byte[] rawContent = null;
+            byte[] rawContent;
             
             if (keyPair != null && sharedSecret != null)
             {

@@ -41,7 +41,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         /// <summary>
         /// Converts a server XML config object into a ServerConfig object.
         /// </summary>
-        /// <param name="configElement"></param>
+        /// <param name="configElement">Configuration element</param>
         /// <returns>ServerConfig object</returns>
         public static ServerConfig ToServerConfig(
             this ServerInstanceConfigElement configElement)
@@ -68,6 +68,31 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             return serverConfig;
         }
 
+        /// <summary>
+        /// Converts a client XML config object into a ClientConfig object.
+        /// </summary>
+        /// <param name="configElement">Configuration element</param>
+        /// <returns>ClientConfig object</returns>
+        public static ClientConfig ToClientConfig(
+            this ClientInstanceConfigElement configElement)
+        {
+            if (configElement == null)
+                throw new ArgumentNullException(nameof(configElement));
+
+            var clientConfig = new ClientConfig()
+            {
+                Channel = CreateClientChannelFromConfigName(configElement.Channel),
+                Serializer = CreateSerializerAdapterFromConfigName(configElement.Serializer),
+                ServerHostName = configElement.ServerHostName,
+                ServerPort = configElement.ServerPort,
+                KeySize = configElement.KeySize,
+                MessageEncryption = configElement.MessageEncryption,
+                UniqueClientInstanceName = configElement.UniqueInstanceName
+            };
+
+            return clientConfig;
+        }
+        
         /// <summary>
         /// Gets a type from a string that contains type name and assembly name.
         /// </summary>
@@ -104,6 +129,24 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             var channelType = GetTypeFromConfigString(channelTypeName);
             
             return (IServerChannel) Activator.CreateInstance(channelType);
+        }
+        
+        /// <summary>
+        /// Creates a client channel from a type string.
+        /// </summary>
+        /// <param name="channelTypeName">String containing a channel type shortcut (e.g. "ws" for websockets) or a type name and assembly name, separated by a comma</param>
+        /// <returns>Client channel</returns>
+        private static IClientChannel CreateClientChannelFromConfigName(string channelTypeName)
+        {
+            var websocketServerChannelShortcuts = 
+                new[] {"ws", "websocket"};
+
+            if (websocketServerChannelShortcuts.Contains(channelTypeName.ToLower()))
+                return new WebsocketClientChannel();
+
+            var channelType = GetTypeFromConfigString(channelTypeName);
+            
+            return (IClientChannel) Activator.CreateInstance(channelType);
         }
         
         /// <summary>

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
@@ -21,6 +23,10 @@ namespace CoreRemoting
         private readonly IDependencyInjectionContainer _container;
         private readonly ServerConfig _config;
         private readonly string _uniqueServerInstanceName;
+        
+        // ReSharper disable once InconsistentNaming
+        private static readonly ConcurrentDictionary<string, IRemotingServer> _serverInstances = 
+            new ConcurrentDictionary<string, IRemotingServer>();
 
         /// <summary>
         /// Creates a new instance of the RemotingServer class.
@@ -34,9 +40,25 @@ namespace CoreRemoting
                 string.IsNullOrWhiteSpace(_config.UniqueServerInstanceName) 
                     ? Guid.NewGuid().ToString() 
                     : _config.UniqueServerInstanceName;
-                
-            RemotingConfiguration.RegisterServer(this);
             
+            _serverInstances.AddOrUpdate(
+                key: _config.UniqueServerInstanceName,
+                addValueFactory: uniqueInstanceName => this,
+                updateValueFactory: (uniqueInstanceName, oldServer) =>
+                {
+                    oldServer?.Dispose();
+                    return this;
+                });
+
+            if (_config.IsDefault)
+            {
+                if (DefaultRemotingInfrastructure.DefaultRemotingServer == null)
+                {
+                    DefaultRemotingInfrastructure.DefaultServerConfig = _config;
+                    DefaultRemotingInfrastructure.DefaultRemotingServer = this;
+                }
+            }
+
             SessionRepository = 
                 _config.SessionRepository ?? 
                     new SessionRepository( 
@@ -183,7 +205,7 @@ namespace CoreRemoting
         /// </summary>
         public void Dispose()
         {
-            RemotingConfiguration.UnregisterServer(this);
+            _serverInstances.TryRemove(_config.UniqueServerInstanceName, out _);
             
             if (Channel != null)
             {
@@ -191,5 +213,25 @@ namespace CoreRemoting
                 Channel = null;
             }
         }
+        
+        #region Managing server instances
+
+        /// <summary>
+        /// Gets a list of active server instances.
+        /// </summary>
+        public static IEnumerable<IRemotingServer> ActiveServerInstances => _serverInstances.Values;
+
+        /// <summary>
+        /// Gets a active server instance by its unqiue instance name.
+        /// </summary>
+        /// <param name="uniqueServerInstanceName">Unique server instance name</param>
+        /// <returns>Active CoreRemoting server</returns>
+        public static IRemotingServer GetActiveServerInstance(string uniqueServerInstanceName)
+        {
+            _serverInstances.TryGetValue(uniqueServerInstanceName, out var server);
+            return server;
+        }
+
+        #endregion
     }
 }

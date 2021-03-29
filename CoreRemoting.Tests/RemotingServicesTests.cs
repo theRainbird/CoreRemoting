@@ -1,32 +1,33 @@
+using System;
 using System.Threading;
 using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.Tests.Tools;
-using NUnit.Framework;
+using Xunit;
 
 namespace CoreRemoting.Tests
 {
     public class RemotingServicesTests
     {
-        [Test]
+        [Fact]
         public void IsOneWay_should_return_true_if_provided_method_is_OneWay()
         {
             var serviceType = typeof(ITestService);
             var isOneWay = RemotingServices.IsOneWay(serviceType.GetMethod("OneWayMethod"));
             
-            Assert.IsTrue(isOneWay);
+            Assert.True(isOneWay);
             
             isOneWay = RemotingServices.IsOneWay(serviceType.GetMethod("TestMethod"));
             
-            Assert.IsFalse(isOneWay);
+            Assert.False(isOneWay);
         }
 
-        [Test]
+        [Fact]
         public void IsTransparentProxy_should_return_true_if_the_provided_object_is_a_proxy()
         {
             var client = new RemotingClient(
                 new ClientConfig()
                 {
-                    ServerPort = 9099,
+                    ServerPort = 9199,
                     ServerHostName = "localhost"
                 });
             
@@ -34,15 +35,15 @@ namespace CoreRemoting.Tests
 
             var isProxy = RemotingServices.IsTransparentProxy(proxy);
             
-            Assert.IsTrue(isProxy);
+            Assert.True(isProxy);
 
             var service = new TestService();
             isProxy = RemotingServices.IsTransparentProxy(service);
             
-            Assert.IsFalse(isProxy);
+            Assert.False(isProxy);
         }
 
-        [Test]
+        [Fact]
         public void Marshal_should_register_a_service_instance()
         {
             var testService = new TestService();
@@ -55,11 +56,11 @@ namespace CoreRemoting.Tests
 
             var registeredServiceInstance = server.ServiceRegistry.GetService(serviceName);
 
-            Assert.AreSame(testService, registeredServiceInstance);
-            Assert.IsTrue(registeredServiceInstance is ITestService);
+            Assert.Same(testService, registeredServiceInstance);
+            Assert.True(registeredServiceInstance is ITestService);
         }
 
-        [Test]
+        [Fact]
         public void Connect_should_create_a_proxy_for_a_remote_service()
         {
             var testService = 
@@ -69,28 +70,32 @@ namespace CoreRemoting.Tests
                         arg
                 };
 
-            var server = new RemotingServer(new ServerConfig { NetworkPort = 9099 });
+            using var server = new RemotingServer(new ServerConfig { NetworkPort = 9199, IsDefault = true });
             RemotingServices.Marshal(testService, "test", typeof(ITestService));
             server.Start();
 
             var clientThread = new Thread(() =>
             {
-                DefaultRemotingInfrastructure.DefaultClientConfig = new ClientConfig { ServerPort = 9099 };
+                DefaultRemotingInfrastructure.DefaultClientConfig = new ClientConfig { ServerPort = 9199 };
                 var proxy = 
                     RemotingServices.Connect(
                         typeof(ITestService),
                         "test",
-                        DefaultRemotingInfrastructure.DefaultClientConfig);
+                        string.Empty);
                 
-                Assert.IsTrue(RemotingServices.IsTransparentProxy(proxy));
+                Assert.True(RemotingServices.IsTransparentProxy(proxy));
 
                 object result = ((ITestService) proxy).TestMethod(1);
                 
-                Assert.AreEqual(1, result);
+                DefaultRemotingInfrastructure.DefaultRemotingClient.Dispose();
+                
+                Assert.Equal(1, Convert.ToInt32(result));
             });
             
             clientThread.Start();
             clientThread.Join();
+            
+            server.Dispose();
         }
     }
 }

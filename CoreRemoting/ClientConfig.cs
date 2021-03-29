@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics.CodeAnalysis;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
@@ -10,6 +11,19 @@ namespace CoreRemoting
     /// </summary>
     public class ClientConfig
     {
+        /// <summary>
+        /// Creates a new instance of the ClientConfig class.
+        /// </summary>
+        public ClientConfig()
+        {
+            UniqueClientInstanceName = Guid.NewGuid().ToString();
+        }
+        
+        /// <summary>
+        /// Gets or sets the unqiue name of the configured client instance.
+        /// </summary>
+        public string UniqueClientInstanceName { get; set; }
+        
         /// <summary>
         /// Gets or sets the connection timeout in seconds (0 means infinite).
         /// </summary>
@@ -65,5 +79,10 @@ namespace CoreRemoting
         /// Gets or sets an interval in seconds to keep session alive, even on idle (session is not kept alive if set to 0).
         /// </summary>
         public int KeepSessionAliveInterval { get; set; } = 20;
+
+        /// <summary>
+        /// Gets or set whether this is the default client.
+        /// </summary>
+        public bool IsDefault { get; set; } = false;
     }
 }

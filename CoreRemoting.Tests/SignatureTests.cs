@@ -1,12 +1,12 @@
 using System.Text;
 using CoreRemoting.Encryption;
-using NUnit.Framework;
+using Xunit;
 
 namespace CoreRemoting.Tests
 {
     public class SignatureTests
     {
-        [Test]
+        [Fact]
         public void VerifySignature_should_return_true_if_signature_is_valid()
         {
             int keySize = 4096;
@@ -27,8 +27,8 @@ namespace CoreRemoting.Tests
                     rawData: data,
                     signature: signature);
             
-            Assert.AreEqual(512, signature.Length);
-            Assert.IsTrue(result);
+            Assert.Equal(512, signature.Length);
+            Assert.True(result);
         }
     }
 }

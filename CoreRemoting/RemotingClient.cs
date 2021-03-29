@@ -43,6 +43,10 @@ namespace CoreRemoting
         private bool _isAuthenticated;
         private Timer _keepSessionAliveTimer;
         private byte[] _serverPublicKeyBlob;
+
+        // ReSharper disable once InconsistentNaming
+        private static readonly ConcurrentDictionary<string, IRemotingClient> _clientInstances = 
+            new ConcurrentDictionary<string, IRemotingClient>();
         
         #endregion
         
@@ -93,8 +97,23 @@ namespace CoreRemoting
                 throw new NetworkException(s);
             };
 
-            if (config == DefaultRemotingInfrastructure.DefaultClientConfig)
-                DefaultRemotingInfrastructure.DefaultRemotingClient ??= this;
+            _clientInstances.AddOrUpdate(
+                key: config.UniqueClientInstanceName,
+                addValueFactory: uniqueInstanceName => this,
+                updateValueFactory: (uniqueInstanceName, oldClient) =>
+                {
+                    oldClient?.Dispose();
+                    return this;
+                });
+            
+            if (!config.IsDefault) 
+                return;
+            
+            if (DefaultRemotingInfrastructure.DefaultRemotingClient == null)
+            {
+                DefaultRemotingInfrastructure.DefaultClientConfig = config;
+                DefaultRemotingInfrastructure.DefaultRemotingClient = this;
+            }
         }
 
         #endregion
@@ -670,8 +689,30 @@ namespace CoreRemoting
             }
 
             _keyPair?.Dispose();
+
+            _clientInstances.TryRemove(_config.UniqueClientInstanceName, out _);
         }
         
+        #endregion
+        
+        #region Managing client instances
+
+        /// <summary>
+        /// Gets a list of active client instances.
+        /// </summary>
+        public static IEnumerable<IRemotingClient> ActiveClientInstances => _clientInstances.Values;
+
+        /// <summary>
+        /// Gets a active client instance by its unqiue instance name.
+        /// </summary>
+        /// <param name="uniqueClientInstanceName">Unique client instance name</param>
+        /// <returns>Active CoreRemoting client</returns>
+        public static IRemotingClient GetActiveClientInstance(string uniqueClientInstanceName)
+        {
+            _clientInstances.TryGetValue(uniqueClientInstanceName, out var client);
+            return client;
+        }
+
         #endregion
     }
 }

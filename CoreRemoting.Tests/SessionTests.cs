@@ -4,10 +4,9 @@ using System.Linq;
 using System.Security;
 using System.Threading;
 using CoreRemoting.Authentication;
-using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
-using NUnit.Framework;
+using Xunit;
 
 namespace CoreRemoting.Tests
 {
@@ -15,13 +14,7 @@ namespace CoreRemoting.Tests
     [SuppressMessage("ReSharper", "CoVariantArrayConversion")]
     public class SessionTests
     {
-        [SetUp]
-        public void Init()
-        {
-            RemotingConfiguration.DisableClassicRemotingApi();
-        }
-        
-        [Test]
+        [Fact]
         public void Client_Connect_should_create_new_session_AND_Disconnect_should_close_session()
         {
             var testService =
@@ -57,12 +50,12 @@ namespace CoreRemoting.Tests
                         ServerPort = 9091
                     });
 
-                Assert.IsFalse(client.HasSession);
+                Assert.False(client.HasSession);
                 client.Connect();
 
                 connectedWaitHandles[index].Set();
 
-                Assert.IsTrue(client.HasSession);
+                Assert.True(client.HasSession);
 
                 quitWaitHandle.Wait();
 
@@ -72,7 +65,7 @@ namespace CoreRemoting.Tests
             var clientThread1 = new Thread(() => clientAction(0));
             var clientThread2 = new Thread(() => clientAction(1));
 
-            Assert.AreEqual(0, server.SessionRepository.Sessions.Count());
+            Assert.Empty(server.SessionRepository.Sessions);
 
             // Start two clients to create two sessions
             clientThread1.Start();
@@ -81,7 +74,7 @@ namespace CoreRemoting.Tests
             // Wait for connection of both clients
             WaitHandle.WaitAll(connectedWaitHandles);
 
-            Assert.AreEqual(2, server.SessionRepository.Sessions.Count());
+            Assert.Equal(2, server.SessionRepository.Sessions.Count());
 
             quitWaitHandle.Set();
 
@@ -89,10 +82,10 @@ namespace CoreRemoting.Tests
             clientThread2.Join();
 
             // There should be no sessions left, after both clients disconnedted
-            Assert.AreEqual(0, server.SessionRepository.Sessions.Count());
+            Assert.Empty(server.SessionRepository.Sessions);
         }
 
-        [Test]
+        [Fact]
         public void Client_Connect_should_throw_exception_on_invalid_auth_credentials()
         {
             var testService = new TestService();
@@ -148,7 +141,7 @@ namespace CoreRemoting.Tests
             clientThread2.Start();
             clientThread2.Join();
 
-            Assert.AreEqual(0, serverErrorCount);
+            Assert.Equal(0, serverErrorCount);
         }
     }
 }

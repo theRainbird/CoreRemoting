@@ -5,20 +5,13 @@ using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Serialization.Binary;
 using CoreRemoting.Tests.Tools;
-using NUnit.Framework;
+using Xunit;
 
 namespace CoreRemoting.Tests
 {
     public class RemotingConfigurationTests
     {
-        [SetUp]
-        public void Init()
-        {
-            RemotingConfiguration.EnableClassicRemotingApi();
-        }
-
-        [Test]
-        [NonParallelizable]
+        [Fact]
         public void RegisterWellKnownServiceType_should_register_type_resolved_at_runtime()
         {
             using var server = new RemotingServer(new ServerConfig { UniqueServerInstanceName = "Server1" });
@@ -32,30 +25,28 @@ namespace CoreRemoting.Tests
 
             var service = server.ServiceRegistry.GetService("Service1");
             
-            Assert.IsNotNull(service);
-            Assert.AreEqual(typeof(TestService), service.GetType());
+            Assert.NotNull(service);
+            Assert.Equal(typeof(TestService), service.GetType());
             
             RemotingConfiguration.ShutdownAll();
         }
         
-        [Test]
-        [NonParallelizable]
+        [Fact]
         public void RemotingServer_should_register_on_construction_AND_unregister_on_Dispose()
         {
-            var server = new RemotingServer(new ServerConfig()
+            using var server = new RemotingServer(new ServerConfig()
             {
                 UniqueServerInstanceName = "TestServer"
             });
             
-            Assert.IsNotNull(RemotingConfiguration.GetRegisteredServer("TestServer"));
+            Assert.NotNull(RemotingConfiguration.GetRegisteredServer("TestServer"));
             
             server.Dispose();
             
-            Assert.IsNull(RemotingConfiguration.GetRegisteredServer("TestServer"));
+            Assert.Null(RemotingConfiguration.GetRegisteredServer("TestServer"));
         }
 
-        [Test]
-        [NonParallelizable]
+        [Fact]
         public void RemotingConfiguration_Configure_should_configure_a_server()
         {
             // See TestConfig.xml to check test configuration
@@ -66,18 +57,18 @@ namespace CoreRemoting.Tests
             
             RemotingConfiguration.Configure(configFileName);
 
-            var server = RemotingConfiguration.GetRegisteredServer("TestServer4711");
+            using var server = RemotingConfiguration.GetRegisteredServer("TestServer4711");
             
-            Assert.IsNotNull(server);
-            Assert.AreEqual(8080, server.Config.NetworkPort);
-            Assert.AreEqual("test", server.Config.HostName);
-            Assert.AreEqual(2048, server.Config.KeySize);
-            Assert.IsInstanceOf<BinarySerializerAdapter>(server.Serializer);
-            Assert.IsInstanceOf<WebsocketServerChannel>(server.Config.Channel);
-            Assert.IsInstanceOf<FakeAuthProvider>(server.Config.AuthenticationProvider);
-            Assert.AreEqual(true, server.Config.AuthenticationRequired);
-            Assert.IsNotNull(server.ServiceRegistry.GetService("TestService"));
-            Assert.IsInstanceOf<TestService>(server.ServiceRegistry.GetService("TestService"));
+            Assert.NotNull(server);
+            Assert.Equal(8080, server.Config.NetworkPort);
+            Assert.Equal("test", server.Config.HostName);
+            Assert.Equal(2048, server.Config.KeySize);
+            Assert.IsType<BinarySerializerAdapter>(server.Serializer);
+            Assert.IsType<WebsocketServerChannel>(server.Config.Channel);
+            Assert.IsType<FakeAuthProvider>(server.Config.AuthenticationProvider);
+            Assert.True(server.Config.AuthenticationRequired);
+            Assert.NotNull(server.ServiceRegistry.GetService("TestService"));
+            Assert.IsType<TestService>(server.ServiceRegistry.GetService("TestService"));
             
             RemotingConfiguration.ShutdownAll();
         }

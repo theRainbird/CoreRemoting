@@ -1,21 +1,13 @@
 using System.Threading;
-using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
-using NUnit.Framework;
+using Xunit;
 
 namespace CoreRemoting.Tests
 {
     public class CallContextTests
     {
-        [SetUp]
-        public void Init()
-        {
-            RemotingConfiguration.DisableClassicRemotingApi();
-        }
-
-        [Test]
-        [NonParallelizable]
+        [Fact]
         public void CallContext_should_flow_from_client_to_server_and_back()
         {
             var testService = 
@@ -62,15 +54,17 @@ namespace CoreRemoting.Tests
 
                     var localCallContextValueAfterRpc = CallContext.GetData("test");
                     
-                    Assert.AreNotEqual(localCallContextValueBeforeRpc, result);
-                    Assert.AreEqual("Changed", result);
-                    Assert.AreEqual("Changed", localCallContextValueAfterRpc);
+                    Assert.NotEqual(localCallContextValueBeforeRpc, result);
+                    Assert.Equal("Changed", result);
+                    Assert.Equal("Changed", localCallContextValueAfterRpc);
 
                     client.Dispose();
                 });
             
             clientThread.Start();
             clientThread.Join();
+            
+            server.Dispose();
         }
     }
 }

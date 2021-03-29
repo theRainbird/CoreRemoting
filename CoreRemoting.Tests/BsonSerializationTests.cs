@@ -3,7 +3,7 @@ using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization.Bson;
 using CoreRemoting.Tests.Tools;
 using Newtonsoft.Json;
-using NUnit.Framework;
+using Xunit;
 
 namespace CoreRemoting.Tests
 {
@@ -34,7 +34,7 @@ namespace CoreRemoting.Tests
         
         #endregion
         
-        [Test]
+        [Fact]
         public void BsonSerializerAdapter_should_deserialize_MethodCallMessage()
         {
             var serializer = new BsonSerializerAdapter();
@@ -57,16 +57,16 @@ namespace CoreRemoting.Tests
                 out var parameterValues,
                 out var parameterTypes);
             
-            Assert.AreEqual(1, deserializedMessage.Parameters.Length);
+            Assert.Equal(1, deserializedMessage.Parameters.Length);
             Assert.NotNull(deserializedMessage.Parameters[0]);
-            Assert.AreEqual("arg", deserializedMessage.Parameters[0].ParameterName);
-            Assert.AreEqual("System.Object", deserializedMessage.Parameters[0].ParameterTypeName);
-            Assert.AreEqual(typeof(int), parameterValues[0].GetType());
-            Assert.AreEqual(typeof(object), parameterTypes[0]);
-            Assert.AreEqual(4711, parameterValues[0]);
+            Assert.Equal("arg", deserializedMessage.Parameters[0].ParameterName);
+            Assert.StartsWith("System.Object,", deserializedMessage.Parameters[0].ParameterTypeName);
+            Assert.Equal(typeof(int), parameterValues[0].GetType());
+            Assert.Equal(typeof(object), parameterTypes[0]);
+            Assert.Equal(4711, parameterValues[0]);
         }
 
-        [Test]
+        [Fact]
         public void BsonSerializerAdapter_should_deserialize_CompleteHandshakeWireMessage()
         {
             var sessionId = Guid.NewGuid();
@@ -83,11 +83,11 @@ namespace CoreRemoting.Tests
 
             var deserializedMessage = serializer.Deserialize<WireMessage>(rawData);
             
-            Assert.AreEqual("complete_handshake", deserializedMessage.MessageType);
-            Assert.AreEqual(sessionId, new Guid(deserializedMessage.Data));
+            Assert.Equal("complete_handshake", deserializedMessage.MessageType);
+            Assert.Equal(sessionId, new Guid(deserializedMessage.Data));
         }
 
-        [Test]
+        [Fact]
         public void BsonSerializerAdapter_should_use_configured_JsonConverters()
         {
             var fakeConverter = new FakeDateTimeConverter();
@@ -101,11 +101,11 @@ namespace CoreRemoting.Tests
             var dateToSerialize = DateTime.Today;
             var raw = serializerAdapter.Serialize(dateToSerialize);
             
-            Assert.AreNotEqual(0, fakeConverter.WriteCount);
+            Assert.NotEqual(0, fakeConverter.WriteCount);
 
             var deserializedDate = serializerAdapter.Deserialize<DateTime>(raw);
 
-            Assert.AreEqual(dateToSerialize, deserializedDate);
+            Assert.Equal(dateToSerialize, deserializedDate);
         }
 
         private class PrimitiveValuesContainer
@@ -126,7 +126,7 @@ namespace CoreRemoting.Tests
             public Guid GuidValue { get; set; }
         }
 
-        [Test]
+        [Fact]
         public void BsonSerializerAdapter_should_deserialize_primitive_properties_correctly()
         {
             var csharpDateTime = DateTime.Now;
@@ -162,20 +162,20 @@ namespace CoreRemoting.Tests
             var raw = serializer.Serialize(test);
             var deserializedTest = serializer.Deserialize<PrimitiveValuesContainer>(raw);
             
-            Assert.AreEqual(test.ByteValue, deserializedTest.ByteValue);
-            Assert.AreEqual(test.SByteValue, deserializedTest.SByteValue);
-            Assert.AreEqual(test.BoolValue, deserializedTest.BoolValue);
-            Assert.AreEqual(test.DecimalValue, deserializedTest.DecimalValue);
-            Assert.AreEqual(test.DoubleValue, deserializedTest.DoubleValue);
-            Assert.AreEqual(test.SingleValue, deserializedTest.SingleValue);
-            Assert.AreEqual(test.GuidValue, deserializedTest.GuidValue);
-            Assert.AreEqual(test.Int16Value, deserializedTest.Int16Value);
-            Assert.AreEqual(test.Int32Value, deserializedTest.Int32Value);
-            Assert.AreEqual(test.Int64Value, deserializedTest.Int64Value);
-            Assert.AreEqual(test.DateTimeValue, deserializedTest.DateTimeValue);
-            Assert.AreEqual(test.UInt16Value, deserializedTest.UInt16Value);
-            Assert.AreEqual(test.UInt32Value, deserializedTest.UInt32Value);
-            Assert.AreEqual(test.UInt64Value, deserializedTest.UInt64Value);
+            Assert.Equal(test.ByteValue, deserializedTest.ByteValue);
+            Assert.Equal(test.SByteValue, deserializedTest.SByteValue);
+            Assert.Equal(test.BoolValue, deserializedTest.BoolValue);
+            Assert.Equal(test.DecimalValue, deserializedTest.DecimalValue);
+            Assert.Equal(test.DoubleValue, deserializedTest.DoubleValue);
+            Assert.Equal(test.SingleValue, deserializedTest.SingleValue);
+            Assert.Equal(test.GuidValue, deserializedTest.GuidValue);
+            Assert.Equal(test.Int16Value, deserializedTest.Int16Value);
+            Assert.Equal(test.Int32Value, deserializedTest.Int32Value);
+            Assert.Equal(test.Int64Value, deserializedTest.Int64Value);
+            Assert.Equal(test.DateTimeValue, deserializedTest.DateTimeValue);
+            Assert.Equal(test.UInt16Value, deserializedTest.UInt16Value);
+            Assert.Equal(test.UInt32Value, deserializedTest.UInt32Value);
+            Assert.Equal(test.UInt64Value, deserializedTest.UInt64Value);
         }
     }
 }
