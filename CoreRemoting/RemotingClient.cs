@@ -11,7 +11,6 @@ using Castle.DynamicProxy;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
 using CoreRemoting.Channels.Websocket;
-using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Encryption;
@@ -48,6 +47,8 @@ namespace CoreRemoting
         private static readonly ConcurrentDictionary<string, IRemotingClient> _clientInstances = 
             new ConcurrentDictionary<string, IRemotingClient>();
         
+        private static WeakReference<IRemotingClient> _defaultRemotingClientRef;
+        
         #endregion
         
         #region Construction
@@ -69,10 +70,8 @@ namespace CoreRemoting
         /// Creates a new instance of the RemotingClient class.
         /// </summary>
         /// <param name="config">Configuration settings</param>
-        public RemotingClient(ClientConfig config = null) : this()
+        public RemotingClient(ClientConfig config) : this()
         {
-            config ??= DefaultRemotingInfrastructure.DefaultClientConfig;
-
             if (config == null)
                 throw new ArgumentException("No config provided and no default configuration found.");
             
@@ -109,11 +108,7 @@ namespace CoreRemoting
             if (!config.IsDefault) 
                 return;
             
-            if (DefaultRemotingInfrastructure.DefaultRemotingClient == null)
-            {
-                DefaultRemotingInfrastructure.DefaultClientConfig = config;
-                DefaultRemotingInfrastructure.DefaultRemotingClient = this;
-            }
+            RemotingClient.DefaultRemotingClient ??= this;
         }
 
         #endregion
@@ -653,6 +648,11 @@ namespace CoreRemoting
         /// </summary>
         public void Dispose()
         {
+            if (RemotingClient.DefaultRemotingClient == this)
+                RemotingClient.DefaultRemotingClient = null;
+
+            _clientInstances.TryRemove(_config.UniqueClientInstanceName, out _);
+            
             Disconnect();
             
             _cancellationTokenSource.Cancel();
@@ -689,8 +689,6 @@ namespace CoreRemoting
             }
 
             _keyPair?.Dispose();
-
-            _clientInstances.TryRemove(_config.UniqueClientInstanceName, out _);
         }
         
         #endregion
@@ -713,6 +711,30 @@ namespace CoreRemoting
             return client;
         }
 
+        /// <summary>
+        /// Gets or sets the default CoreRemoting client.
+        /// </summary>
+        [SuppressMessage("ReSharper", "ArrangeAccessorOwnerBody")]
+        public static IRemotingClient DefaultRemotingClient
+        {
+            get
+            {
+                if (_defaultRemotingClientRef == null)
+                    return null;
+
+                _defaultRemotingClientRef.TryGetTarget(out var defaultClient);
+
+                return defaultClient;
+            }
+            internal set
+            {
+                _defaultRemotingClientRef = 
+                    value == null 
+                        ? null 
+                        : new WeakReference<IRemotingClient>(value);
+            }
+        }
+        
         #endregion
     }
 }

@@ -11,8 +11,20 @@ namespace CoreRemoting.ClassicRemotingApi
     /// <summary>
     /// Provides CoreRemoting configuration in classic .NET Remoting style.
     /// </summary>
+    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
+    [SuppressMessage("ReSharper", "ObjectCreationAsStatement")]
     public static class RemotingConfiguration
     {
+        /// <summary>
+        /// Gets a list of currently registered CoreRemoting server instances.
+        /// </summary>
+        public static IRemotingServer[] RegisteredServerInstances => RemotingServer.ActiveServerInstances.ToArray();
+
+        /// <summary>
+        /// Gets a list of currently registered CoreRemoting client instances.
+        /// </summary>
+        public static IRemotingClient[] RegisteredClientInstances => RemotingClient.ActiveClientInstances.ToArray();
+        
         /// <summary>
         /// Gets a registered server instance by its unique name.
         /// </summary>
@@ -21,13 +33,72 @@ namespace CoreRemoting.ClassicRemotingApi
         public static IRemotingServer GetRegisteredServer(string uniqueServerInstanceName)
         {
             if (string.IsNullOrWhiteSpace(uniqueServerInstanceName))
-                return DefaultRemotingInfrastructure.DefaultRemotingServer;
+                return RemotingServer.DefaultRemotingServer;
 
             return
                 RemotingServer
                     .ActiveServerInstances
                     .FirstOrDefault(instance =>
                         instance.Config.UniqueServerInstanceName.Equals(uniqueServerInstanceName));
+        }
+        
+        /// <summary>
+        /// Gets a registered client instance by its unique name.
+        /// </summary>
+        /// <param name="uniqueClientInstanceName">Unique client instance name</param>
+        /// <returns>CoreRemoting client</returns>
+        public static IRemotingClient GetRegisteredClient(string uniqueClientInstanceName)
+        {
+            if (string.IsNullOrWhiteSpace(uniqueClientInstanceName))
+                return RemotingClient.DefaultRemotingClient;
+
+            return
+                RemotingClient
+                    .ActiveClientInstances
+                    .FirstOrDefault(instance =>
+                        instance.Config.UniqueClientInstanceName.Equals(uniqueClientInstanceName));
+        }
+
+        /// <summary>
+        /// Registers a new CoreRemoting server instance and returns it's unique instance name.
+        /// </summary>
+        /// <param name="config">Server configuration</param>
+        /// <returns>Unique server instance name</returns>
+        public static string RegisterServer(ServerConfig config)
+        {
+            var server = new RemotingServer(config);
+            return server.Config.UniqueServerInstanceName;
+        }
+        
+        /// <summary>
+        /// Registers a new CoreRemoting client instance and returns it's unique instance name.
+        /// </summary>
+        /// <param name="config">Client configuration</param>
+        /// <returns>Unique client instance name</returns>
+        public static string RegisterClient(ClientConfig config)
+        {
+            var client = new RemotingClient(config);
+            return client.Config.UniqueClientInstanceName;
+        }
+
+        /// <summary>
+        /// Unregisters a CoreRemoting server.
+        /// </summary>
+        /// <param name="uniqueServerInstanceName">Unique name of the server instance</param>
+        public static void UnregisterServer(string uniqueServerInstanceName)
+        {
+            var server = RemotingServer.GetActiveServerInstance(uniqueServerInstanceName);
+            server?.Dispose();
+        }
+        
+        /// <summary>
+        /// Unregisters a CoreRemoting client.
+        /// </summary>
+        /// <param name="uniqueClientInstanceName">Unique name of the client instance</param>
+        public static void UnregisterClient(string uniqueClientInstanceName)
+        {
+            var client = RemotingClient.GetActiveClientInstance(uniqueClientInstanceName);
+            client?.Dispose();
         }
 
         /// <summary>
@@ -72,7 +143,7 @@ namespace CoreRemoting.ClassicRemotingApi
         {
             var server = 
                 string.IsNullOrWhiteSpace(uniqueServerInstanceName) 
-                    ? DefaultRemotingInfrastructure.DefaultRemotingServer
+                    ? RemotingServer.DefaultRemotingServer
                     : GetRegisteredServer(uniqueServerInstanceName);
             
             var container = server.ServiceRegistry;
@@ -120,14 +191,15 @@ namespace CoreRemoting.ClassicRemotingApi
         }
 
         /// <summary>
-        /// Shutdown all registered servers.
+        /// Shutdown all registered clients and servers.
         /// </summary>
         public static void ShutdownAll()
         {
-            foreach (var registeredServer in RemotingServer.ActiveServerInstances.ToArray())
-            {
+            foreach (var registeredClient in RegisteredClientInstances)
+                registeredClient.Dispose();
+            
+            foreach (var registeredServer in RegisteredServerInstances)
                 registeredServer.Dispose();
-            }
         }
     }
 }

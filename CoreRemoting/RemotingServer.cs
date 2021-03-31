@@ -5,7 +5,6 @@ using System.Diagnostics.CodeAnalysis;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
 using CoreRemoting.Channels.Websocket;
-using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.RemoteDelegates;
@@ -28,6 +27,8 @@ namespace CoreRemoting
         private static readonly ConcurrentDictionary<string, IRemotingServer> _serverInstances = 
             new ConcurrentDictionary<string, IRemotingServer>();
 
+        private static WeakReference<IRemotingServer> _defaultRemotingServerRef;
+        
         /// <summary>
         /// Creates a new instance of the RemotingServer class.
         /// </summary>
@@ -49,16 +50,7 @@ namespace CoreRemoting
                     oldServer?.Dispose();
                     return this;
                 });
-
-            if (_config.IsDefault)
-            {
-                if (DefaultRemotingInfrastructure.DefaultRemotingServer == null)
-                {
-                    DefaultRemotingInfrastructure.DefaultServerConfig = _config;
-                    DefaultRemotingInfrastructure.DefaultRemotingServer = this;
-                }
-            }
-
+            
             SessionRepository = 
                 _config.SessionRepository ?? 
                     new SessionRepository( 
@@ -80,8 +72,8 @@ namespace CoreRemoting
             
             Channel.Init(this);
             
-            if (string.IsNullOrWhiteSpace(_config.UniqueServerInstanceName))
-                DefaultRemotingInfrastructure.DefaultRemotingServer ??= this;
+            if (_config.IsDefault)
+                RemotingServer.DefaultRemotingServer ??= this;
         }
         
         /// <summary>
@@ -205,6 +197,9 @@ namespace CoreRemoting
         /// </summary>
         public void Dispose()
         {
+            if (RemotingServer.DefaultRemotingServer == this)
+                RemotingServer.DefaultRemotingServer = null;
+            
             _serverInstances.TryRemove(_config.UniqueServerInstanceName, out _);
             
             if (Channel != null)
@@ -232,6 +227,30 @@ namespace CoreRemoting
             return server;
         }
 
+        /// <summary>
+        /// Gets or sets the default CoreRemoting server.
+        /// </summary>
+        [SuppressMessage("ReSharper", "ArrangeAccessorOwnerBody")]
+        public static IRemotingServer DefaultRemotingServer
+        {
+            get
+            {
+                if (_defaultRemotingServerRef == null)
+                    return null;
+
+                _defaultRemotingServerRef.TryGetTarget(out var defaultServer);
+
+                return defaultServer;
+            }
+            internal set
+            {
+                _defaultRemotingServerRef = 
+                    value == null 
+                        ? null 
+                        : new WeakReference<IRemotingServer>(value);
+            }
+        }
+        
         #endregion
     }
 }

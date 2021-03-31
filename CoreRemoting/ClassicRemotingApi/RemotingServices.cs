@@ -47,7 +47,7 @@ namespace CoreRemoting.ClassicRemotingApi
         {
             var server = 
                 string.IsNullOrWhiteSpace(uniqueServerInstanceName) 
-                    ? DefaultRemotingInfrastructure.DefaultRemotingServer
+                    ? RemotingServer.DefaultRemotingServer
                     : RemotingConfiguration.GetRegisteredServer(uniqueServerInstanceName);
             
             var container = server.ServiceRegistry;
@@ -84,17 +84,12 @@ namespace CoreRemoting.ClassicRemotingApi
         {
             var client =
                 string.IsNullOrWhiteSpace(uniqueClientInstanceName)
-                    ? DefaultRemotingInfrastructure.DefaultRemotingClient
+                    ? RemotingClient.DefaultRemotingClient
                     : RemotingClient.GetActiveClientInstance(uniqueClientInstanceName);
 
             if (client == null)
-            {
-                if (DefaultRemotingInfrastructure.DefaultClientConfig == null)
-                    throw new KeyNotFoundException(
-                        $"No remoting client instance named '{uniqueClientInstanceName}' found.");
-
-                client = new RemotingClient(DefaultRemotingInfrastructure.DefaultClientConfig);
-            }
+                throw new KeyNotFoundException(
+                    $"No remoting client instance named '{uniqueClientInstanceName}' found.");
 
             if (!client.IsConnected)
                 client.Connect();

@@ -70,13 +70,21 @@ namespace CoreRemoting.Tests
                         arg
                 };
 
-            using var server = new RemotingServer(new ServerConfig { NetworkPort = 9199, IsDefault = true });
+            using var server = 
+                new RemotingServer(new ServerConfig
+                {
+                    NetworkPort = 9199, 
+                    IsDefault = true
+                });
+            
             RemotingServices.Marshal(testService, "test", typeof(ITestService));
             server.Start();
 
             var clientThread = new Thread(() =>
             {
-                DefaultRemotingInfrastructure.DefaultClientConfig = new ClientConfig { ServerPort = 9199 };
+                // ReSharper disable once ObjectCreationAsStatement
+                new RemotingClient(new ClientConfig {ServerPort = 9199, IsDefault = true});
+                
                 var proxy = 
                     RemotingServices.Connect(
                         typeof(ITestService),
@@ -87,7 +95,7 @@ namespace CoreRemoting.Tests
 
                 object result = ((ITestService) proxy).TestMethod(1);
                 
-                DefaultRemotingInfrastructure.DefaultRemotingClient.Dispose();
+                RemotingClient.DefaultRemotingClient.Dispose();
                 
                 Assert.Equal(1, Convert.ToInt32(result));
             });
