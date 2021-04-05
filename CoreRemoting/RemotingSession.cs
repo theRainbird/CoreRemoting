@@ -351,7 +351,7 @@ namespace CoreRemoting
                 MessageEncryption
                     ? SessionId.ToByteArray()
                     : null;
-
+            
             var callMessage =
                 _server.Serializer
                     .Deserialize<MethodCallMessage>(
@@ -362,49 +362,51 @@ namespace CoreRemoting
                             sendersPublicKeyBlob: _clientPublicKeyBlob,
                             sendersPublicKeySize: _keyPair?.KeySize ?? 0));
 
-            var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
-            var serviceInterfaceType =
-                _server.ServiceRegistry.GetServiceInterfaceType(callMessage.ServiceName);
-
-            var uniqueCallKey =
-                request.UniqueCallKey == null
-                    ? Guid.Empty
-                    : new Guid(request.UniqueCallKey);
-
-            CallContext.RestoreFromSnapshot(callMessage.CallContextSnapshot);
-            
-            var serverRpcContext =
+            ServerRpcContext serverRpcContext = 
                 new ServerRpcContext
                 {
-                    UniqueCallKey = uniqueCallKey,
-                    ServiceInstance = service,
+                    UniqueCallKey = 
+                        request.UniqueCallKey == null
+                            ? Guid.Empty
+                            : new Guid(request.UniqueCallKey),
+                    ServiceInstance = null,
                     MethodCallMessage = callMessage,
                     Session = this
                 };
-
-            ((RemotingServer) _server).OnBeforeCall(serverRpcContext);
-
-            callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
-                out var parameterValues, 
-                out var parameterTypes);
-
-            parameterValues = MapDelegateArguments(parameterValues);
             
-            var method =
-                serviceInterfaceType.GetMethod(
-                    name: callMessage.MethodName,
-                    types: parameterTypes);
-
-            if (method == null)
-                throw new MissingMethodException(
-                    className: callMessage.ServiceName,
-                    methodName: callMessage.MethodName);
-
+            bool oneWay = false;
             byte[] serializedResult;
-            var oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
             
             try
             {
+                var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
+                var serviceInterfaceType =
+                    _server.ServiceRegistry.GetServiceInterfaceType(callMessage.ServiceName);
+
+                CallContext.RestoreFromSnapshot(callMessage.CallContextSnapshot);
+
+                serverRpcContext.ServiceInstance = service;
+                
+                ((RemotingServer) _server).OnBeforeCall(serverRpcContext);
+
+                callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
+                    out var parameterValues, 
+                    out var parameterTypes);
+
+                parameterValues = MapDelegateArguments(parameterValues);
+                
+                var method =
+                    serviceInterfaceType.GetMethod(
+                        name: callMessage.MethodName,
+                        types: parameterTypes);
+
+                if (method == null)
+                    throw new MissingMethodException(
+                        className: callMessage.ServiceName,
+                        methodName: callMessage.MethodName);
+
+                oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
+            
                 if (_server.Config.AuthenticationRequired && !_isAuthenticated)
                     throw new NetworkException("Session is not authenticated.");
                 
@@ -434,7 +436,10 @@ namespace CoreRemoting
             catch (Exception ex)
             {
                 Console.WriteLine(ex);
-
+                
+                if (serverRpcContext == null)
+                    return;
+                
                 serverRpcContext.Exception = 
                     new RemoteInvocationException(
                         message: ex.Message,

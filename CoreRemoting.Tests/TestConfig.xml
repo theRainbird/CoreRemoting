@@ -6,23 +6,35 @@
     </configSections>
     <coreRemoting>
         <serverInstances>
-            <add uniqueInstanceName = "TestServer4711"
-                 hostName = "test"
-                 networkPort = "8080"
-                 keySize = "2048"
-                 serializer = "binary"
-                 channel = "ws"
-                 authenticationProvider = "CoreRemoting.Tests.Tools.FakeAuthProvider, CoreRemoting.Tests"
-                 authenticationRequired = "true" />
+            <add uniqueInstanceName="TestServer4711"
+                 hostName="localhost"
+                 networkPort="8089"
+                 keySize="2048"
+                 serializer="binary"
+                 channel="ws"
+                 authenticationProvider="CoreRemoting.Tests.Tools.FakeAuthProvider, CoreRemoting.Tests"
+                 authenticationRequired="true" 
+                 messageEncryption="true"
+                 isDefault="true"/>
         </serverInstances>
         <services>
-            <add serviceName = "TestService"
-                 interfaceAssemblyName = "CoreRemoting.Tests"
-                 interfaceTypeName = "CoreRemoting.Tests.Tools.ITestService"
-                 implementationAssemblyName = "CoreRemoting.Tests"
-                 implementationTypeName = "CoreRemoting.Tests.Tools.TestService"
-                 lifetime = "Singleton"
-                 uniqueServerInstanceName = "TestServer4711" />
+            <add serviceName="TestService"
+                 interfaceAssemblyName="CoreRemoting.Tests"
+                 interfaceTypeName="CoreRemoting.Tests.Tools.ITestService"
+                 implementationAssemblyName="CoreRemoting.Tests"
+                 implementationTypeName="CoreRemoting.Tests.Tools.TestService"
+                 lifetime="Singleton"
+                 uniqueServerInstanceName="TestServer4711" />
         </services>
+        <clientInstances>
+            <add uniqueInstanceName="TestClient"
+                 serverHostName="localhost"
+                 serverPort="8089"
+                 serializer="binary"
+                 channel="ws" 
+                 keySize="2048"
+                 messageEncryption="true"
+                 isDefault="true" />
+        </clientInstances>
     </coreRemoting>
 </configuration>

@@ -1,9 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
 using Xunit;
@@ -66,15 +63,13 @@ namespace CoreRemoting.Tests
                     proxy.TestMethod("test");
                 else
                 {
-                    Parallel.For(0, 100, i =>
-                    {
-                        var result = proxy.TestMethod("test");
-                    });    
+                    Parallel.For(0, 100, _ => 
+                        proxy.TestMethod("test"));
                 }
                 
                 client.Disconnect();
             }
-
+            
             var firstClientThread = new Thread(ClientAction);
             firstClientThread.Start();
             firstClientThread.Join();

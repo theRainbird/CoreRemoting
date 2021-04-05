@@ -3,6 +3,7 @@ using System.Configuration;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
+using CoreRemoting.Authentication;
 using CoreRemoting.ClassicRemotingApi.ConfigSection;
 using CoreRemoting.DependencyInjection;
 
@@ -158,8 +159,9 @@ namespace CoreRemoting.ClassicRemotingApi
         /// Applies CoreRemoting server configuration from config file. 
         /// </summary>
         /// <param name="fileName">Path to XML configuration file (Default EXE configuration file will be used, if empty)</param>
+        /// <param name="credentials">Optional credentials for authentication</param>
         [SuppressMessage("ReSharper", "ObjectCreationAsStatement")]
-        public static void Configure(string fileName = "")
+        public static void Configure(string fileName = "", Credential[] credentials = null)
         {
             Configuration configuration =
                 string.IsNullOrWhiteSpace(fileName)
@@ -174,7 +176,8 @@ namespace CoreRemoting.ClassicRemotingApi
             foreach (ServerInstanceConfigElement serverInstanceConfig in configSection.ServerInstances)
             {
                 var serverConfig = serverInstanceConfig.ToServerConfig();
-                new RemotingServer(serverConfig);
+                var server = new RemotingServer(serverConfig);
+                server.Start();
             }
             
             foreach (WellKnownServiceConfigElement serviceConfigElement in configSection.Services)
@@ -186,7 +189,8 @@ namespace CoreRemoting.ClassicRemotingApi
             foreach (ClientInstanceConfigElement clientInstanceConfig in configSection.ClientInstances)
             {
                 var clientConfig = clientInstanceConfig.ToClientConfig();
-                new RemotingClient(clientConfig);
+                clientConfig.Credentials = credentials;
+                var client = new RemotingClient(clientConfig);
             }
         }
 

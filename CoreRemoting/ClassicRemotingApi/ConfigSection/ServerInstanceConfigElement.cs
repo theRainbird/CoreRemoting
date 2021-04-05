@@ -97,5 +97,15 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (bool)base["messageEncryption"];
             set => base["messageEncryption"] = value;
         }
+        
+        /// <summary>
+        /// Gets or set whether this is the default server.
+        /// </summary>
+        [ConfigurationProperty("isDefault", IsRequired = false, DefaultValue = false)]
+        public bool IsDefault
+        {
+            get => (bool)base["isDefault"];
+            set => base["isDefault"] = value;
+        }
     }
 }

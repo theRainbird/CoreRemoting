@@ -62,7 +62,8 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
                 KeySize = configElement.KeySize,
                 MessageEncryption = configElement.MessageEncryption,
                 NetworkPort = configElement.NetworkPort,
-                UniqueServerInstanceName = configElement.UniqueInstanceName
+                UniqueServerInstanceName = configElement.UniqueInstanceName,
+                IsDefault = configElement.IsDefault
             };
 
             return serverConfig;
@@ -87,7 +88,8 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
                 ServerPort = configElement.ServerPort,
                 KeySize = configElement.KeySize,
                 MessageEncryption = configElement.MessageEncryption,
-                UniqueClientInstanceName = configElement.UniqueInstanceName
+                UniqueClientInstanceName = configElement.UniqueInstanceName,
+                IsDefault = configElement.IsDefault
             };
 
             return clientConfig;

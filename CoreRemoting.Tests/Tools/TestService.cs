@@ -37,5 +37,10 @@ namespace CoreRemoting.Tests.Tools
         {
             TestExternalTypeParameterFake?.Invoke(data);
         }
+
+        public string Echo(string text)
+        {
+            return text;
+        }
     }
 }

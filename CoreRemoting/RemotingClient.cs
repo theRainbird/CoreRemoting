@@ -246,8 +246,8 @@ namespace CoreRemoting
             }
 
             _channel?.Disconnect();
-            _handshakeCompletedWaitHandle.Reset();
-            _authenticationCompletedWaitHandle.Reset();
+            _handshakeCompletedWaitHandle?.Reset();
+            _authenticationCompletedWaitHandle?.Reset();
             Identity = null;
         }
 
@@ -401,6 +401,7 @@ namespace CoreRemoting
                     new Guid(
                         RsaKeyExchange.DecrpytSecret(
                             keySize: _config.KeySize,
+                            // ReSharper disable once PossibleNullReferenceException
                             receiversPrivateKeyBlob: _keyPair.PrivateKey,
                             encryptedSecret: encryptedSecret));
             }
@@ -587,12 +588,15 @@ namespace CoreRemoting
         /// Creates a proxy object to provide access to a remote service.
         /// </summary>
         /// <typeparam name="T">Type of the shared interface of the remote service</typeparam>
+        /// <param name="serviceName">Unique name of the remote service</param>
         /// <returns>Proxy object</returns>
-        public T CreateProxy<T>()
+        public T CreateProxy<T>(string serviceName = "")
         {
             return (T) _proxyGenerator.CreateInterfaceProxyWithoutTarget(
                 interfaceToProxy: typeof(T),
-                interceptor: new ServiceProxy<T>(this));
+                interceptor: new ServiceProxy<T>(
+                    client: this,
+                    serviceName: serviceName));
         }
 
         /// <summary>

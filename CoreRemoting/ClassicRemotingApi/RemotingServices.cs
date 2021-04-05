@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Threading;
+using CoreRemoting.Authentication;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.RemoteDelegates;
 
@@ -92,8 +94,10 @@ namespace CoreRemoting.ClassicRemotingApi
                     $"No remoting client instance named '{uniqueClientInstanceName}' found.");
 
             if (!client.IsConnected)
+            {
                 client.Connect();
-            
+            }
+
             return client.CreateProxy(interfaceType, serviceName);
         }
     }

@@ -17,5 +17,7 @@ namespace CoreRemoting.Tests.Tools
         void OneWayMethod();
 
         void TestExternalTypeParameter(DataClass data);
+
+        string Echo(string text);
     }
 }
