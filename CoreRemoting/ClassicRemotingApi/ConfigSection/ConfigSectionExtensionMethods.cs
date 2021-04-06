@@ -89,7 +89,10 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
                 KeySize = configElement.KeySize,
                 MessageEncryption = configElement.MessageEncryption,
                 UniqueClientInstanceName = configElement.UniqueInstanceName,
-                IsDefault = configElement.IsDefault
+                IsDefault = configElement.IsDefault,
+                ConnectionTimeout = configElement.ConnectionTimeout,
+                AuthenticationTimeout = configElement.AuthenticationTimeout,
+                InvocationTimeout = configElement.InvocationTimeout
             };
 
             return clientConfig;

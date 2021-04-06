@@ -101,6 +101,9 @@ namespace CoreRemoting.Tests
             Assert.IsType<WebsocketClientChannel>(client.Config.Channel);
             Assert.True(client.Config.MessageEncryption);
             Assert.True(client.Config.IsDefault);
+            Assert.Equal(200, client.Config.ConnectionTimeout);
+            Assert.Equal(110, client.Config.AuthenticationTimeout);
+            Assert.Equal(30000, client.Config.InvocationTimeout);
 
             var proxy = (ITestService)RemotingServices.Connect(typeof(ITestService), "TestService");
             Assert.True(client.IsConnected);

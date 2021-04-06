@@ -27,12 +27,12 @@ namespace CoreRemoting
         /// <summary>
         /// Gets or sets the connection timeout in seconds (0 means infinite).
         /// </summary>
-        public int ConnectionTimeout { get; set; } = 10;
+        public int ConnectionTimeout { get; set; } = 120;
         
         /// <summary>
         /// Gets or sets the authentication timeout in seconds (0 means infinite).
         /// </summary>
-        public int AuthenticationTimeout { get; set; } = 10;
+        public int AuthenticationTimeout { get; set; } = 30;
 
         /// <summary>
         /// Gets or sets the invocation timeout in seconds (0 means infinite).

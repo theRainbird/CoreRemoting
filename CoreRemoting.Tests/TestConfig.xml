@@ -34,7 +34,10 @@
                  channel="ws" 
                  keySize="2048"
                  messageEncryption="true"
-                 isDefault="true" />
+                 isDefault="true" 
+                 connectionTimeout="200"
+                 authenticationTimeout="110"
+                 invocationTimeout="30000" />
         </clientInstances>
     </coreRemoting>
 </configuration>

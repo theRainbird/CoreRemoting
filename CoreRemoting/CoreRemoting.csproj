@@ -9,14 +9,15 @@
         <Copyright>2020 Hagen Siegel</Copyright>
         <PackageTags>Remoting RPC Network</PackageTags>
         <Company>Hagen Siegel</Company>
-        <AssemblyVersion>1.1.6</AssemblyVersion>
+        <AssemblyVersion>1.1.7</AssemblyVersion>
         <TargetFramework>netstandard2.0</TargetFramework>
         <PackageProjectUrl>https://github.com/theRainbird/CoreRemoting</PackageProjectUrl>
         <PackageLicenseUrl></PackageLicenseUrl>
         <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageVersion>1.1.6</PackageVersion>
-        <PackageReleaseNotes>Fixed bug: RPC call hangs forever, if service name cannot be resolved.</PackageReleaseNotes>
+        <PackageVersion>1.1.7</PackageVersion>
+        <PackageReleaseNotes>- Changed default values for client timeout settings to prevent handshake fail on Mono when running on Linux
+- Client timeout settings can now be specified via XML config file</PackageReleaseNotes>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">

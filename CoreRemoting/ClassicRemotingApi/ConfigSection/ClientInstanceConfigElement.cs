@@ -87,5 +87,35 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (bool)base["isDefault"];
             set => base["isDefault"] = value;
         }
+        
+        /// <summary>
+        /// Gets or sets the connection timeout in seconds (0 means infinite).
+        /// </summary>
+        [ConfigurationProperty("connectionTimeout", IsRequired = false, DefaultValue = 120)]
+        public int ConnectionTimeout
+        {
+            get => (int)base["connectionTimeout"];
+            set => base["connectionTimeout"] = value;
+        }
+        
+        /// <summary>
+        /// Gets or sets the authentication timeout in seconds (0 means infinite).
+        /// </summary>
+        [ConfigurationProperty("authenticationTimeout", IsRequired = false, DefaultValue = 30)]
+        public int AuthenticationTimeout
+        {
+            get => (int)base["authenticationTimeout"];
+            set => base["authenticationTimeout"] = value;
+        }
+
+        /// <summary>
+        /// Gets or sets the invocation timeout in seconds (0 means infinite).
+        /// </summary>
+        [ConfigurationProperty("invocationTimeout", IsRequired = false, DefaultValue = 0)]
+        public int InvocationTimeout
+        {
+            get => (int)base["invocationTimeout"];
+            set => base["invocationTimeout"] = value;
+        }
     }
 }
