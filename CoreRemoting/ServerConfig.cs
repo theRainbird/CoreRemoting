@@ -45,7 +45,7 @@ namespace CoreRemoting
         public bool MessageEncryption { get; set; } = true;
         
         /// <summary>
-        /// Gets or sets the serializer to be used (Binary serializer is used, if set to null).
+        /// Gets or sets the serializer to be used (Bson serializer is used, if set to null).
         /// </summary>
         public ISerializerAdapter Serializer { get; set; }
 

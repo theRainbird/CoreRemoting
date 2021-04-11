@@ -50,7 +50,7 @@ namespace CoreRemoting
         public int ServerPort { get; set; } = 9090;
         
         /// <summary>
-        /// Gets or sets the serializer to be used (Binary serializer is used, if set to null).
+        /// Gets or sets the serializer to be used (Bson serializer is used, if set to null).
         /// </summary>
         public ISerializerAdapter Serializer { get; set; }
 
