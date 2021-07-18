@@ -190,7 +190,7 @@ namespace CoreRemoting.ClassicRemotingApi
             {
                 var clientConfig = clientInstanceConfig.ToClientConfig();
                 clientConfig.Credentials = credentials;
-                var client = new RemotingClient(clientConfig);
+                new RemotingClient(clientConfig);
             }
         }
 

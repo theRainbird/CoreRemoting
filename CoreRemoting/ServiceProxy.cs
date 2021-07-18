@@ -32,10 +32,9 @@ namespace CoreRemoting
                 string.IsNullOrWhiteSpace(serviceName)
                     ? serviceInterfaceType.FullName
                     : serviceName;
-            
-            var generator = new ProxyGenerator();
+
             Interface =
-                (TServiceInterface) generator.CreateInterfaceProxyWithoutTarget(typeof (TServiceInterface), this);
+                (TServiceInterface)_client.ProxyGenerator.CreateInterfaceProxyWithoutTarget(typeof (TServiceInterface), this);
         }
 
         /// <summary>

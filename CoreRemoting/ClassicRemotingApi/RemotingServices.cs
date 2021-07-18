@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Threading;
-using CoreRemoting.Authentication;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.RemoteDelegates;
 

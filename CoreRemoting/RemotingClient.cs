@@ -114,6 +114,11 @@ namespace CoreRemoting
         #endregion
         
         #region Properties
+
+        /// <summary>
+        /// Gets the internal proxy generator instance.
+        /// </summary>
+        internal ProxyGenerator ProxyGenerator => _proxyGenerator;
         
         /// <summary>
         /// Gets a utility object for building remoting messages.
