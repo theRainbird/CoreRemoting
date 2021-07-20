@@ -1,15 +1,11 @@
 using System;
 using System.IO;
-using System.Net;
 using System.Reflection;
-using System.Threading;
-using Castle.DynamicProxy.Generators.Emitters.SimpleAST;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels.Websocket;
 using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Serialization.Binary;
-using CoreRemoting.Serialization.Bson;
 using CoreRemoting.Tests.Tools;
 using Xunit;
 

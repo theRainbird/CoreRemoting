@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using Castle.DynamicProxy;
@@ -32,9 +31,6 @@ namespace CoreRemoting
                 string.IsNullOrWhiteSpace(serviceName)
                     ? serviceInterfaceType.FullName
                     : serviceName;
-
-            Interface =
-                (TServiceInterface)_client.ProxyGenerator.CreateInterfaceProxyWithoutTarget(typeof (TServiceInterface), this);
         }
 
         /// <summary>
@@ -58,13 +54,6 @@ namespace CoreRemoting
             
             GC.SuppressFinalize(this);
         }
-
-        /// <summary>
-        /// Gets or sets the interface type of the proxied remote service.
-        /// </summary>
-        [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Local")]
-        [SuppressMessage("ReSharper", "AutoPropertyCanBeMadeGetOnly.Local")]
-        private TServiceInterface Interface { get; set; }
 
         /// <summary>
         /// Intercepts a call of a member on the proxy object. 
