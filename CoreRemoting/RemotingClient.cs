@@ -26,10 +26,9 @@ namespace CoreRemoting
     public sealed class RemotingClient : IRemotingClient
     {
         #region Fields
-        
+
         private IClientChannel _channel;
         private IRawMessageTransport _rawMessageTransport;
-        private readonly ProxyGenerator _proxyGenerator;
         private readonly RsaKeyPair _keyPair;
         private readonly ClientDelegateRegistry _delegateRegistry;
         private readonly CancellationTokenSource _cancellationTokenSource;
@@ -57,7 +56,6 @@ namespace CoreRemoting
         {
             MethodCallMessageBuilder = new MethodCallMessageBuilder();
             MessageEncryptionManager = new MessageEncryptionManager();
-            _proxyGenerator = new ProxyGenerator();
             _activeCalls = new ConcurrentDictionary<Guid, ClientRpcContext>();
             _cancellationTokenSource = new CancellationTokenSource();
             _delegateRegistry = new ClientDelegateRegistry();
@@ -116,9 +114,9 @@ namespace CoreRemoting
         #region Properties
 
         /// <summary>
-        /// Gets the internal proxy generator instance.
+        /// Gets the proxy generator instance.
         /// </summary>
-        internal ProxyGenerator ProxyGenerator => _proxyGenerator;
+        private static readonly ProxyGenerator ProxyGenerator = new ProxyGenerator();       
         
         /// <summary>
         /// Gets a utility object for building remoting messages.
@@ -597,7 +595,7 @@ namespace CoreRemoting
         /// <returns>Proxy object</returns>
         public T CreateProxy<T>(string serviceName = "")
         {
-            return (T) _proxyGenerator.CreateInterfaceProxyWithoutTarget(
+            return (T) ProxyGenerator.CreateInterfaceProxyWithoutTarget(
                 interfaceToProxy: typeof(T),
                 interceptor: new ServiceProxy<T>(
                     client: this,
@@ -615,7 +613,7 @@ namespace CoreRemoting
             var serviceProxyType = typeof(ServiceProxy<>).MakeGenericType(serviceInterfaceType);
             var serviceProxy = Activator.CreateInstance(serviceProxyType, this, serviceName);
             
-            return _proxyGenerator.CreateInterfaceProxyWithoutTarget(
+            return ProxyGenerator.CreateInterfaceProxyWithoutTarget(
                 interfaceToProxy: serviceInterfaceType,
                 interceptor: (IInterceptor)serviceProxy);
         }
