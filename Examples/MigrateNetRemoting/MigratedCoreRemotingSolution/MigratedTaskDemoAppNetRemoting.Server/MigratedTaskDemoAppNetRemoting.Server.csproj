@@ -16,14 +16,5 @@
     <PackageReference Include="LiteDB">
       <Version>5.0.10</Version>
     </PackageReference>
-   <PackageReference Include="Newtonsoft.Json">
-      <Version>12.0.3</Version>
-    </PackageReference>
-    <PackageReference Include="Newtonsoft.Json.Bson">
-      <Version>1.0.2</Version>
-    </PackageReference>
-    <PackageReference Include="websocketsharp.core">
-      <Version>1.0.0</Version>
-    </PackageReference>
   </ItemGroup>
 </Project>
