@@ -30,8 +30,10 @@ namespace CoreRemoting.Tests
             deserializedMessage.UnwrapParametersFromDeserializedMethodCallMessage(
                 out var parameterValues,
                 out var parameterTypes);
+
+            var parametersLength = deserializedMessage.Parameters.Length;
             
-            Assert.Equal(1, deserializedMessage.Parameters.Length);
+            Assert.Equal(1, parametersLength);
             Assert.NotNull(deserializedMessage.Parameters[0]);
             Assert.Equal("arg", deserializedMessage.Parameters[0].ParameterName);
             Assert.StartsWith("System.Object,", deserializedMessage.Parameters[0].ParameterTypeName);
