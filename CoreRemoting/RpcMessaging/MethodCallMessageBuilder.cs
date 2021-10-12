@@ -34,14 +34,20 @@ namespace CoreRemoting.RpcMessaging
             
             args ??= new object[0];
 
+            var genericArgumentTypeNames =
+                targetMethod.GetGenericArguments()
+                    .Select(arg => arg.FullName + "," + arg.Assembly.GetName().Name)
+                    .ToArray();
+            
             var message = new MethodCallMessage()
             {
                 ServiceName = remoteServiceName,
                 MethodName = targetMethod.Name,
                 Parameters = BuildMethodParameterInfos(serializer, targetMethod, args).ToArray(),
+                GenericArgumentTypeNames = genericArgumentTypeNames,
                 CallContextSnapshot = CallContext.GetSnapshot()
             };
-
+            
             return message;
         }
 

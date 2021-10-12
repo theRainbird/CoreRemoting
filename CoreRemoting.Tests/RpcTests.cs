@@ -304,5 +304,51 @@ namespace CoreRemoting.Tests
             Assert.True(remoteServiceCalled);
             Assert.Equal(0, serverErrorCount);
         }
+        
+        #region Service with generic method
+        
+        public interface IGenericEchoService
+        {
+            T Echo<T>(T value);
+        }
+
+        public class GenericEchoService : IGenericEchoService
+        {
+            public T Echo<T>(T value)
+            {
+                return value;
+            }
+        }
+
+        #endregion
+        
+        [Fact]
+        public void Generic_methods_should_be_called_correctly()
+        {
+            var serverConfig =
+                new ServerConfig()
+                {
+                    NetworkPort = 9197,
+                    RegisterServicesAction = container =>
+                        container.RegisterService<IGenericEchoService, GenericEchoService>(
+                            lifetime: ServiceLifetime.Singleton)
+                };
+
+            using var server = new RemotingServer(serverConfig);
+            server.Start();
+
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0, 
+                ServerPort = 9197
+            });
+
+            client.Connect();
+            var proxy = client.CreateProxy<IGenericEchoService>();
+
+            var result = proxy.Echo("Yay");
+            
+            Assert.Equal("Yay", result);
+        }
     }
 }

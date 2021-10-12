@@ -394,11 +394,33 @@ namespace CoreRemoting
                     out var parameterTypes);
 
                 parameterValues = MapDelegateArguments(parameterValues);
+
+                MethodInfo method;
                 
-                var method =
-                    serviceInterfaceType.GetMethod(
-                        name: callMessage.MethodName,
-                        types: parameterTypes);
+                if (callMessage.GenericArgumentTypeNames != null && callMessage.GenericArgumentTypeNames.Length > 0)
+                {
+                    var methods = serviceInterfaceType.GetMethods();
+                    method = 
+                        methods
+                            .SingleOrDefault(m => m.IsGenericMethod && m.Name.Equals(callMessage.MethodName, StringComparison.Ordinal));
+
+                    if (method != null)
+                    {
+                        Type[] genericArguments =
+                            callMessage.GenericArgumentTypeNames
+                                .Select(typeName => Type.GetType(typeName))
+                                .ToArray();
+                        
+                        method = method.MakeGenericMethod(genericArguments);
+                    }
+                }
+                else
+                {
+                    method =
+                        serviceInterfaceType.GetMethod(
+                            name: callMessage.MethodName,
+                            types: parameterTypes);    
+                }
 
                 if (method == null)
                     throw new MissingMethodException(

@@ -33,5 +33,11 @@ namespace CoreRemoting.RpcMessaging
         /// </summary>
         [DataMember]
         public CallContextEntry[] CallContextSnapshot { get; set; }
+        
+        /// <summary>
+        /// Gets or sets an array of generic type parameter names.
+        /// </summary>
+        [DataMember]
+        public string[] GenericArgumentTypeNames { get; set; }
     }
 }
