@@ -41,6 +41,21 @@ namespace CoreRemoting.Serialization.Bson
         /// <summary>
         /// Gets the wrapped value.
         /// </summary>
-        public object Value => _value;
+        public object Value
+        {
+            get
+            {
+                if (_value == null)
+                    return null;
+
+                if (_type == null)
+                    return _value;
+                
+                if (_value.GetType() != _type)
+                    return Convert.ChangeType(_value, _type);
+                    
+                return _value;
+            }
+        }
     }
 }

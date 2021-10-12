@@ -177,5 +177,18 @@ namespace CoreRemoting.Tests
             Assert.Equal(test.UInt32Value, deserializedTest.UInt32Value);
             Assert.Equal(test.UInt64Value, deserializedTest.UInt64Value);
         }
+
+        [Fact]
+        public void BsonSerializerAdapter_should_deserialize_Int32_value_in_envelope_correctly()
+        {
+            var envelope = new Envelope(Int32.MaxValue);
+            
+            var serializer = new BsonSerializerAdapter();
+            var raw = serializer.Serialize(envelope);
+            var deserializedValue = serializer.Deserialize<Envelope>(raw);
+
+            Assert.Equal(envelope.Value, deserializedValue.Value);
+            Assert.IsType<Int32>(envelope.Value);
+        }
     }
 }

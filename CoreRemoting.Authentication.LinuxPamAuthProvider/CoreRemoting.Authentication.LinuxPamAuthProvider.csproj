@@ -16,13 +16,11 @@
         <RepositoryType>git</RepositoryType>
         <PackageTags>Remoting RPC Network Authentication Linux</PackageTags>
         <AssemblyVersion>1.1.7</AssemblyVersion>
+        <LangVersion>8</LangVersion>
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\CoreRemoting\CoreRemoting.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
+      <PackageReference Include="CoreRemoting" Version="1.1.7" />
       <PackageReference Include="Npam" Version="1.0.1" />
     </ItemGroup>
 

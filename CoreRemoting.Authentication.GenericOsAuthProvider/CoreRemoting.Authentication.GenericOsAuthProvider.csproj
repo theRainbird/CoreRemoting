@@ -16,12 +16,14 @@
         <RepositoryType>git</RepositoryType>
         <PackageTags>Remoting RPC Network Authentication Windows Linux</PackageTags>
         <AssemblyVersion>1.1.7</AssemblyVersion>
+        <LangVersion>8</LangVersion>
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\CoreRemoting.Authentication.LinuxPamAuthProvider\CoreRemoting.Authentication.LinuxPamAuthProvider.csproj" />
-      <ProjectReference Include="..\CoreRemoting.Authentication.WindowsAuthProvider\CoreRemoting.Authentication.WindowsAuthProvider.csproj" />
-      <ProjectReference Include="..\CoreRemoting\CoreRemoting.csproj" />
+      <PackageReference Include="CoreRemoting" Version="1.1.7" />
+      <PackageReference Include="CoreRemoting.Authentication.LinuxPamAuthProvider" Version="1.1.7" />
+      <PackageReference Include="CoreRemoting.Authentication.WindowsAuthProvider" Version="1.1.7" />
+      <PackageReference Include="System.Diagnostics.Tools" Version="4.3.0" />
     </ItemGroup>
 
 </Project>
