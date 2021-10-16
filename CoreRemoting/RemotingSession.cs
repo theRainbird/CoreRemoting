@@ -379,6 +379,8 @@ namespace CoreRemoting
             
             try
             {
+                ((RemotingServer) _server).OnBeforeCall(serverRpcContext);
+
                 var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
                 var serviceInterfaceType =
                     _server.ServiceRegistry.GetServiceInterfaceType(callMessage.ServiceName);
@@ -387,8 +389,6 @@ namespace CoreRemoting
 
                 serverRpcContext.ServiceInstance = service;
                 
-                ((RemotingServer) _server).OnBeforeCall(serverRpcContext);
-
                 callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
                     out var parameterValues, 
                     out var parameterTypes);
@@ -446,14 +446,6 @@ namespace CoreRemoting
                                 args: parameterValues,
                                 returnValue: result);
                 }
-
-                ((RemotingServer) _server).OnAfterCall(serverRpcContext);
-
-                if (oneWay)
-                    return;
-
-                serializedResult =
-                    _server.Serializer.Serialize(serverRpcContext.MethodCallResultMessage);
             }
             catch (Exception ex)
             {
@@ -466,17 +458,21 @@ namespace CoreRemoting
                     new RemoteInvocationException(
                         message: ex.Message,
                         innerEx: ex.GetType().IsSerializable ? ex : null);
-
-                ((RemotingServer) _server).OnAfterCall(serverRpcContext);
-
-                if (oneWay)
-                    return;
-
-                serializedResult =
-                    _server.Serializer.Serialize(serverRpcContext.Exception);
+            }
+            finally
+            {
+                ((RemotingServer)_server).OnAfterCall(serverRpcContext);
             }
 
-            var methodReultMessage =
+            if (oneWay)
+                return;
+
+            serializedResult = 
+                serverRpcContext.Exception != null 
+                    ? _server.Serializer.Serialize(serverRpcContext.Exception) 
+                    : _server.Serializer.Serialize(serverRpcContext.MethodCallResultMessage);
+
+            var methodResultMessage =
                 _server.MessageEncryptionManager.CreateWireMessage(
                     serializedMessage: serializedResult,
                     serializer: _server.Serializer,
@@ -487,7 +483,7 @@ namespace CoreRemoting
                     uniqueCallKey: serverRpcContext.UniqueCallKey.ToByteArray());
 
             _rawMessageTransport.SendMessage(
-                _server.Serializer.Serialize(methodReultMessage));
+                _server.Serializer.Serialize(methodResultMessage));
         }
 
         /// <summary>
