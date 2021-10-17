@@ -376,76 +376,66 @@ namespace CoreRemoting
             
             bool oneWay = false;
             byte[] serializedResult;
-            
+
+
+            var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
+            var serviceInterfaceType =
+                _server.ServiceRegistry.GetServiceInterfaceType(callMessage.ServiceName);
+
+            CallContext.RestoreFromSnapshot(callMessage.CallContextSnapshot);
+
+            serverRpcContext.ServiceInstance = service;
+
+            callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
+                out var parameterValues,
+                out var parameterTypes);
+
+            parameterValues = MapDelegateArguments(parameterValues);
+
+            MethodInfo method;
+
+            if (callMessage.GenericArgumentTypeNames != null && callMessage.GenericArgumentTypeNames.Length > 0)
+            {
+                var methods = serviceInterfaceType.GetMethods();
+                method =
+                    methods
+                        .SingleOrDefault(m => m.IsGenericMethod && m.Name.Equals(callMessage.MethodName, StringComparison.Ordinal));
+
+                if (method != null)
+                {
+                    Type[] genericArguments =
+                        callMessage.GenericArgumentTypeNames
+                            .Select(typeName => Type.GetType(typeName))
+                            .ToArray();
+
+                    method = method.MakeGenericMethod(genericArguments);
+                }
+            }
+            else
+            {
+                method =
+                    serviceInterfaceType.GetMethod(
+                        name: callMessage.MethodName,
+                        types: parameterTypes);
+            }
+
+            if (method == null)
+                throw new MissingMethodException(
+                    className: callMessage.ServiceName,
+                    methodName: callMessage.MethodName);
+
+            oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
+
+            if (_server.Config.AuthenticationRequired && !_isAuthenticated)
+                throw new NetworkException("Session is not authenticated.");
+
+            object result = null;
+
             try
             {
-                ((RemotingServer) _server).OnBeforeCall(serverRpcContext);
+                ((RemotingServer)_server).OnBeforeCall(serverRpcContext);
 
-                var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
-                var serviceInterfaceType =
-                    _server.ServiceRegistry.GetServiceInterfaceType(callMessage.ServiceName);
-
-                CallContext.RestoreFromSnapshot(callMessage.CallContextSnapshot);
-
-                serverRpcContext.ServiceInstance = service;
-                
-                callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
-                    out var parameterValues, 
-                    out var parameterTypes);
-
-                parameterValues = MapDelegateArguments(parameterValues);
-
-                MethodInfo method;
-                
-                if (callMessage.GenericArgumentTypeNames != null && callMessage.GenericArgumentTypeNames.Length > 0)
-                {
-                    var methods = serviceInterfaceType.GetMethods();
-                    method = 
-                        methods
-                            .SingleOrDefault(m => m.IsGenericMethod && m.Name.Equals(callMessage.MethodName, StringComparison.Ordinal));
-
-                    if (method != null)
-                    {
-                        Type[] genericArguments =
-                            callMessage.GenericArgumentTypeNames
-                                .Select(typeName => Type.GetType(typeName))
-                                .ToArray();
-                        
-                        method = method.MakeGenericMethod(genericArguments);
-                    }
-                }
-                else
-                {
-                    method =
-                        serviceInterfaceType.GetMethod(
-                            name: callMessage.MethodName,
-                            types: parameterTypes);    
-                }
-
-                if (method == null)
-                    throw new MissingMethodException(
-                        className: callMessage.ServiceName,
-                        methodName: callMessage.MethodName);
-
-                oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
-            
-                if (_server.Config.AuthenticationRequired && !_isAuthenticated)
-                    throw new NetworkException("Session is not authenticated.");
-                
-                var result = method.Invoke(service, parameterValues);
-
-                if (!oneWay)
-                {
-                    serverRpcContext.MethodCallResultMessage =
-                        _server
-                            .MethodCallMessageBuilder
-                            .BuildMethodCallResultMessage(
-                                serializer: _server.Serializer,
-                                uniqueCallKey: serverRpcContext.UniqueCallKey,
-                                method: method,
-                                args: parameterValues,
-                                returnValue: result);
-                }
+                result = method.Invoke(service, parameterValues);
             }
             catch (Exception ex)
             {
@@ -466,6 +456,16 @@ namespace CoreRemoting
 
             if (oneWay)
                 return;
+
+            serverRpcContext.MethodCallResultMessage =
+                _server
+                    .MethodCallMessageBuilder
+                    .BuildMethodCallResultMessage(
+                        serializer: _server.Serializer,
+                        uniqueCallKey: serverRpcContext.UniqueCallKey,
+                        method: method,
+                        args: parameterValues,
+                        returnValue: result);
 
             serializedResult = 
                 serverRpcContext.Exception != null 
