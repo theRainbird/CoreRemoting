@@ -1,8 +1,10 @@
 using System;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using Castle.DynamicProxy;
 using CoreRemoting.RemoteDelegates;
+using Serialize.Linq.Extensions;
 
 namespace CoreRemoting
 {
@@ -75,7 +77,7 @@ namespace CoreRemoting
             if (oneWay && method.ReturnType != typeof(void))
                 throw new NotSupportedException("OneWay methods must not have a return type.");
             
-            var arguments = MapDelegateArguments(invocation);
+            var arguments = MapArguments(invocation);
 
             var remoteMethodCallMessage =
                 _client.MethodCallMessageBuilder.BuildMethodCallMessage(
@@ -121,33 +123,81 @@ namespace CoreRemoting
         }
         
         /// <summary>
-        /// Maps delegate arguments into serializable RemoteDelegateInfo objects.
+        /// Maps a delegate argument into a serializable RemoteDelegateInfo object.
+        /// </summary>
+        /// <param name="argumentType">Type of argument to be mapped</param>
+        /// <param name="argument">Argument to be wrapped</param>
+        /// <param name="mappedArgument">Out: Mapped argument</param>
+        /// <returns>True if mapping applied, otherwise false</returns>
+        private bool MapDelegateArgument(Type argumentType, object argument, out object mappedArgument)
+        {
+            if (argumentType == null || !typeof(Delegate).IsAssignableFrom(argumentType))
+            {
+                mappedArgument = argument;
+                return false;
+            }
+
+            var delegateReturnType = argumentType.GetMethod("Invoke")?.ReturnType;
+
+            if (delegateReturnType != typeof(void))
+                throw new NotSupportedException("Only void delegates are supported.");
+                
+            var remoteDelegateInfo =
+                new RemoteDelegateInfo(
+                    handlerKey: _client.ClientDelegateRegistry.RegisterClientDelegate((Delegate)argument, this),
+                    delegateTypeName: argumentType.FullName);
+
+            mappedArgument = remoteDelegateInfo;
+            return true;
+        }
+        
+        /// <summary>
+        /// Maps a Linq expression argument into a serializable ExpressionNode object.
+        /// </summary>
+        /// <param name="argumentType">Type of argument to be mapped</param>
+        /// <param name="argument">Argument to be wrapped</param>
+        /// <param name="mappedArgument">Out: Mapped argument</param>
+        /// <returns>True if mapping applied, otherwise false</returns>
+        private bool MapLinqExpressionArgument(Type argumentType, object argument, out object mappedArgument)
+        {
+            var isLinqExpression =
+                argumentType is
+                {
+                    IsGenericType: true, 
+                    BaseType: { IsGenericType: true }
+                } && argumentType.BaseType.GetGenericTypeDefinition() == typeof(Expression<>);
+
+            if (!isLinqExpression)
+            {
+                mappedArgument = argument;
+                return false;
+            }
+
+            var expression = (Expression)argument;
+            mappedArgument = expression.ToExpressionNode();
+            
+            return true;
+        }
+        
+        /// <summary>
+        /// Maps non serializable arguments into a serializable form.
         /// </summary>
         /// <param name="invocation">Invocation details</param>
         /// <returns>Array of arguments (includes mapped ones)</returns>
-        /// <exception cref="NotSupportedException"></exception>
-        private object[] MapDelegateArguments(IInvocation invocation)
+        private object[] MapArguments(IInvocation invocation)
         {
             var arguments =
                 invocation.Arguments.Select(argument =>
                 {
                     var type = argument?.GetType();
 
-                    if (type == null || !typeof(Delegate).IsAssignableFrom(type)) 
-                        return argument;
-                    
-                    var delegateReturnType = type.GetMethod("Invoke")?.ReturnType;
+                    if (MapDelegateArgument(type, argument, out var mappedArgument))
+                        return mappedArgument;
 
-                    if (delegateReturnType != typeof(void))
-                        throw new NotSupportedException("Only void delegates are supported.");
+                    if (MapLinqExpressionArgument(type, argument, out mappedArgument))
+                        return mappedArgument;
                         
-                    var remoteDelegateInfo =
-                        new RemoteDelegateInfo(
-                            handlerKey: _client.ClientDelegateRegistry.RegisterClientDelegate((Delegate)argument, this),
-                            delegateTypeName: type.FullName);
-
-                    return remoteDelegateInfo;
-
+                    return argument;
                 }).ToArray();
             return arguments;
         }

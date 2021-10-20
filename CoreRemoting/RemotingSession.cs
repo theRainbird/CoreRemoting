@@ -2,12 +2,14 @@ using System;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Encryption;
+using Serialize.Linq.Nodes;
 
 namespace CoreRemoting
 {
@@ -393,7 +395,7 @@ namespace CoreRemoting
                     out var parameterValues, 
                     out var parameterTypes);
 
-                parameterValues = MapDelegateArguments(parameterValues);
+                parameterValues = MapArguments(parameterValues, parameterTypes);
 
                 MethodInfo method;
                 
@@ -491,43 +493,94 @@ namespace CoreRemoting
         }
 
         /// <summary>
-        /// Maps delegate arguments into delegate proxies.
+        /// Maps non serializable arguments into a serializable form.
         /// </summary>
-        /// <param name="parameterValues">Array of parameter values</param>
-        /// <returns>Array of parameter values where delegate values are mapped into delegate proxies</returns>
-        /// <exception cref="ArgumentNullException">Thrown if no session is provided</exception>
-        private object[] MapDelegateArguments(object[] parameterValues)
+        /// <param name="arguments">Array of parameter values</param>
+        /// <param name="argumentTypes">Array of parameter types</param>
+        /// <returns>Array of arguments (includes mapped ones)</returns>
+        private object[] MapArguments(object[] arguments, Type[] argumentTypes)
         {
-            var arguments =
-                parameterValues?.Select(argument =>
-                {
-                    if (argument is RemoteDelegateInfo remoteDelegateInfo)
-                    {
-                        if (_delegateProxyCache.ContainsKey(remoteDelegateInfo.HandlerKey))
-                            return _delegateProxyCache[remoteDelegateInfo.HandlerKey].ProxiedDelegate;
+            object[] mappedArguments = new object[arguments.Length];
+            
+            for(int i = 0; i< arguments.Length; i++)
+            {
+                var argument = arguments[i];
+                var type = argumentTypes[i];
 
-                        var delegateType = Type.GetType(remoteDelegateInfo.DelegateTypeName);
+                if (MapDelegateArgument(type, argument, out var mappedArgument))
+                    mappedArguments[i] = mappedArgument;
 
-                        // Forge a delegate proxy and initiate remote delegate invocation, when it is invoked
-                        var delegateProxy =
-                            _delegateProxyFactory.Create(delegateType, delegateArgs =>
-                                RemoteDelegateInvocation
-                                    .InvokeRemoteDelegate(
-                                        delegateType: delegateType,
-                                        handlerKey: remoteDelegateInfo.HandlerKey,
-                                        remoteDelegateArguments: delegateArgs));
+                if (MapLinqExpressionArgument(type, argument, out mappedArgument))
+                    mappedArguments[i] = mappedArgument;
+            }
+            
+            return mappedArguments;
+        }
+        
+        /// <summary>
+        /// Maps a delegate argument into a delegate proxy.
+        /// </summary>
+        /// <param name="argumentType">argument type</param>
+        /// <param name="argument">argument value</param>
+        /// <param name="mappedArgument">Out: argument value where delegate value is mapped into delegate proxy</param>
+        /// <returns>True if mapping applied, otherwise false</returns>
+        /// <exception cref="ArgumentNullException">Thrown if no session is provided</exception>
+        private bool MapDelegateArgument(Type argumentType, object argument, out object mappedArgument)
+        {
+            if (!(argument is RemoteDelegateInfo remoteDelegateInfo))
+            {
+                mappedArgument = argument;
+                return false;
+            }
 
-                        _delegateProxyCache.TryAdd(remoteDelegateInfo.HandlerKey, delegateProxy);
+            if (_delegateProxyCache.ContainsKey(remoteDelegateInfo.HandlerKey))
+            {
+                mappedArgument = _delegateProxyCache[remoteDelegateInfo.HandlerKey].ProxiedDelegate;
+                return true;
+            }
 
-                        return delegateProxy.ProxiedDelegate;
-                    }
-                    
-                    return argument;
-                }).ToArray();
+            var delegateType = Type.GetType(remoteDelegateInfo.DelegateTypeName);
 
-            return arguments;
+            // Forge a delegate proxy and initiate remote delegate invocation, when it is invoked
+            var delegateProxy =
+                _delegateProxyFactory.Create(delegateType, delegateArgs =>
+                    RemoteDelegateInvocation
+                        .InvokeRemoteDelegate(
+                            delegateType: delegateType,
+                            handlerKey: remoteDelegateInfo.HandlerKey,
+                            remoteDelegateArguments: delegateArgs));
+
+            _delegateProxyCache.TryAdd(remoteDelegateInfo.HandlerKey, delegateProxy);
+
+            mappedArgument = delegateProxy.ProxiedDelegate;
+            return true;
         }
 
+        /// <summary>
+        /// Maps a Linq expression argument into a serializable ExpressionNode object.
+        /// </summary>
+        /// <param name="argumentType">Type of argument to be mapped</param>
+        /// <param name="argument">Argument to be wrapped</param>
+        /// <param name="mappedArgument">Out: Mapped argument</param>
+        /// <returns>True if mapping applied, otherwise false</returns>
+        private bool MapLinqExpressionArgument(Type argumentType, object argument, out object mappedArgument)
+        {
+            var isLinqExpression =
+                argumentType.IsGenericType &&
+                argumentType.BaseType == typeof(LambdaExpression);
+
+            if (!isLinqExpression)
+            {
+                mappedArgument = argument;
+                return false;
+            }
+            
+            var expression = ((ExpressionNode)argument).ToExpression();
+            mappedArgument = expression;
+            
+            return true;
+        }
+        
         #endregion
 
         #region IDisposable implementation
