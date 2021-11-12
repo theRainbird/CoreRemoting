@@ -502,15 +502,16 @@ namespace CoreRemoting
         {
             object[] mappedArguments = new object[arguments.Length];
             
-            for(int i = 0; i< arguments.Length; i++)
+            for (int i = 0; i< arguments.Length; i++)
             {
                 var argument = arguments[i];
                 var type = argumentTypes[i];
 
                 if (MapDelegateArgument(type, argument, out var mappedArgument))
                     mappedArguments[i] = mappedArgument;
-
-                if (MapLinqExpressionArgument(type, argument, out mappedArgument))
+                else if (MapLinqExpressionArgument(type, argument, out mappedArgument))
+                    mappedArguments[i] = mappedArgument;
+                else
                     mappedArguments[i] = mappedArgument;
             }
             
