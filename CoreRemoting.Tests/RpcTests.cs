@@ -350,5 +350,59 @@ namespace CoreRemoting.Tests
             
             Assert.Equal("Yay", result);
         }
+        
+        #region Service with enum as operation argument
+
+        public enum TestEnum
+        {
+            First = 1,
+            Second = 2
+        }
+
+        public interface IEnumTestService
+        {
+            TestEnum Echo(TestEnum inputValue);
+        }
+
+        public class EnumTestService : IEnumTestService
+        {
+            public TestEnum Echo(TestEnum inputValue)
+            {
+                return inputValue;
+            }
+        }
+
+        #endregion
+        
+        [Fact]
+        public void Enum_arguments_should_be_passed_correctly()
+        {
+            var serverConfig =
+                new ServerConfig()
+                {
+                    NetworkPort = 9198,
+                    RegisterServicesAction = container =>
+                        container.RegisterService<IEnumTestService, EnumTestService>(
+                            lifetime: ServiceLifetime.Singleton)
+                };
+
+            using var server = new RemotingServer(serverConfig);
+            server.Start();
+
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0, 
+                ServerPort = 9198
+            });
+
+            client.Connect();
+            var proxy = client.CreateProxy<IEnumTestService>();
+
+            var resultFirst = proxy.Echo(TestEnum.First);
+            var resultSecond = proxy.Echo(TestEnum.Second);
+            
+            Assert.Equal(TestEnum.First, resultFirst);
+            Assert.Equal(TestEnum.Second, resultSecond);
+        }
     }
 }

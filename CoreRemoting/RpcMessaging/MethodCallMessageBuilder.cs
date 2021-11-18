@@ -135,7 +135,10 @@ namespace CoreRemoting.RpcMessaging
             var message = new MethodCallResultMessage()
             { 
                 IsReturnValueNull = isReturnValueNull,
-                ReturnValue = returnValue
+                ReturnValue = 
+                    serializer.EnvelopeNeededForParameterSerialization 
+                        ? new Envelope(returnValue) 
+                        : returnValue
             };
 
             var outParameters = new List<MethodCallOutParameterMessage>();
@@ -150,7 +153,14 @@ namespace CoreRemoting.RpcMessaging
                 
                 var isArgNull = arg == null;
 
-                var serializedArgValue = serializer.Serialize(parameterInfo.ParameterType, arg);
+                var serializedArgValue = 
+                    serializer.Serialize(
+                        serializer.EnvelopeNeededForParameterSerialization
+                            ? typeof(Envelope)
+                            : parameterInfo.ParameterType, 
+                        serializer.EnvelopeNeededForParameterSerialization
+                            ? new Envelope(arg)
+                            : arg);
                 
                 outParameters.Add(
                     new MethodCallOutParameterMessage()

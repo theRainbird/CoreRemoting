@@ -50,10 +50,18 @@ namespace CoreRemoting.Serialization.Bson
 
                 if (_type == null)
                     return _value;
+
+                var valueType = _value.GetType();
                 
-                if (_value.GetType() != _type)
+                if (valueType != _type)
+                {
+                    // Special handling for enum values, because BSON serializes every integer as Int64!
+                    if (_type.IsEnum && valueType != _type)
+                        return Enum.ToObject(_type, _value);
+
                     return Convert.ChangeType(_value, _type);
-                    
+                }
+
                 return _value;
             }
         }

@@ -4,6 +4,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using Castle.DynamicProxy;
 using CoreRemoting.RemoteDelegates;
+using CoreRemoting.Serialization.Bson;
 using Serialize.Linq.Extensions;
 
 namespace CoreRemoting
@@ -114,10 +115,17 @@ namespace CoreRemoting
                 invocation.Arguments[parameterInfo.Position] =
                     outParameterValue.IsOutValueNull
                         ? null
-                        : outParameterValue.OutValue;
+                        : outParameterValue.OutValue is Envelope outParamEnvelope
+                            ? outParamEnvelope.Value
+                            : outParameterValue.OutValue;
             }
                         
-            invocation.ReturnValue = resultMessage.IsReturnValueNull ? null : resultMessage.ReturnValue;
+            invocation.ReturnValue = 
+                resultMessage.IsReturnValueNull 
+                    ? null 
+                    : resultMessage.ReturnValue is Envelope returnValueEnvelope 
+                        ? returnValueEnvelope.Value
+                        : resultMessage.ReturnValue;
             
             CallContext.RestoreFromSnapshot(resultMessage.CallContextSnapshot);
         }

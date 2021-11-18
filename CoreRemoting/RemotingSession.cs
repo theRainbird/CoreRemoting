@@ -379,63 +379,63 @@ namespace CoreRemoting
             bool oneWay = false;
             byte[] serializedResult;
             
+            var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
+            var serviceInterfaceType =
+                _server.ServiceRegistry.GetServiceInterfaceType(callMessage.ServiceName);
+
+            CallContext.RestoreFromSnapshot(callMessage.CallContextSnapshot);
+
+            serverRpcContext.ServiceInstance = service;
+            
+            ((RemotingServer) _server).OnBeforeCall(serverRpcContext);
+
+            callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
+                out var parameterValues, 
+                out var parameterTypes);
+
+            parameterValues = MapArguments(parameterValues, parameterTypes);
+
+            MethodInfo method;
+            
+            if (callMessage.GenericArgumentTypeNames != null && callMessage.GenericArgumentTypeNames.Length > 0)
+            {
+                var methods = serviceInterfaceType.GetMethods();
+                method = 
+                    methods
+                        .SingleOrDefault(m => m.IsGenericMethod && m.Name.Equals(callMessage.MethodName, StringComparison.Ordinal));
+
+                if (method != null)
+                {
+                    Type[] genericArguments =
+                        callMessage.GenericArgumentTypeNames
+                            .Select(typeName => Type.GetType(typeName))
+                            .ToArray();
+                    
+                    method = method.MakeGenericMethod(genericArguments);
+                }
+            }
+            else
+            {
+                method =
+                    serviceInterfaceType.GetMethod(
+                        name: callMessage.MethodName,
+                        types: parameterTypes);    
+            }
+
+            if (method == null)
+                throw new MissingMethodException(
+                    className: callMessage.ServiceName,
+                    methodName: callMessage.MethodName);
+
+            oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
+        
+            if (_server.Config.AuthenticationRequired && !_isAuthenticated)
+                throw new NetworkException("Session is not authenticated.");
+            
             try
             {
-                var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
-                var serviceInterfaceType =
-                    _server.ServiceRegistry.GetServiceInterfaceType(callMessage.ServiceName);
-
-                CallContext.RestoreFromSnapshot(callMessage.CallContextSnapshot);
-
-                serverRpcContext.ServiceInstance = service;
-                
-                ((RemotingServer) _server).OnBeforeCall(serverRpcContext);
-
-                callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
-                    out var parameterValues, 
-                    out var parameterTypes);
-
-                parameterValues = MapArguments(parameterValues, parameterTypes);
-
-                MethodInfo method;
-                
-                if (callMessage.GenericArgumentTypeNames != null && callMessage.GenericArgumentTypeNames.Length > 0)
-                {
-                    var methods = serviceInterfaceType.GetMethods();
-                    method = 
-                        methods
-                            .SingleOrDefault(m => m.IsGenericMethod && m.Name.Equals(callMessage.MethodName, StringComparison.Ordinal));
-
-                    if (method != null)
-                    {
-                        Type[] genericArguments =
-                            callMessage.GenericArgumentTypeNames
-                                .Select(typeName => Type.GetType(typeName))
-                                .ToArray();
-                        
-                        method = method.MakeGenericMethod(genericArguments);
-                    }
-                }
-                else
-                {
-                    method =
-                        serviceInterfaceType.GetMethod(
-                            name: callMessage.MethodName,
-                            types: parameterTypes);    
-                }
-
-                if (method == null)
-                    throw new MissingMethodException(
-                        className: callMessage.ServiceName,
-                        methodName: callMessage.MethodName);
-
-                oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
-            
-                if (_server.Config.AuthenticationRequired && !_isAuthenticated)
-                    throw new NetworkException("Session is not authenticated.");
-                
                 var result = method.Invoke(service, parameterValues);
-
+                
                 if (!oneWay)
                 {
                     serverRpcContext.MethodCallResultMessage =
@@ -459,11 +459,6 @@ namespace CoreRemoting
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
-                
-                if (serverRpcContext == null)
-                    return;
-                
                 serverRpcContext.Exception = 
                     new RemoteInvocationException(
                         message: ex.Message,
@@ -507,25 +502,32 @@ namespace CoreRemoting
                 var argument = arguments[i];
                 var type = argumentTypes[i];
 
-                if (MapDelegateArgument(type, argument, out var mappedArgument))
+                if (MapDelegateArgument(argument, out var mappedArgument))
+                {
                     mappedArguments[i] = mappedArgument;
+                    continue;
+                }
 
                 if (MapLinqExpressionArgument(type, argument, out mappedArgument))
+                {
                     mappedArguments[i] = mappedArgument;
+                    continue;
+                }
+
+                mappedArguments[i] = argument;
             }
             
             return mappedArguments;
         }
-        
+
         /// <summary>
         /// Maps a delegate argument into a delegate proxy.
         /// </summary>
-        /// <param name="argumentType">argument type</param>
         /// <param name="argument">argument value</param>
         /// <param name="mappedArgument">Out: argument value where delegate value is mapped into delegate proxy</param>
         /// <returns>True if mapping applied, otherwise false</returns>
         /// <exception cref="ArgumentNullException">Thrown if no session is provided</exception>
-        private bool MapDelegateArgument(Type argumentType, object argument, out object mappedArgument)
+        private bool MapDelegateArgument(object argument, out object mappedArgument)
         {
             if (!(argument is RemoteDelegateInfo remoteDelegateInfo))
             {
