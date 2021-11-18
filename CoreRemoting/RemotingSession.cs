@@ -497,32 +497,26 @@ namespace CoreRemoting
         {
             object[] mappedArguments = new object[arguments.Length];
             
-            for(int i = 0; i< arguments.Length; i++)
+            for (int i = 0; i < arguments.Length; i++)
             {
                 var argument = arguments[i];
                 var type = argumentTypes[i];
 
                 if (MapDelegateArgument(argument, out var mappedArgument))
-                {
                     mappedArguments[i] = mappedArgument;
-                    continue;
-                }
-
-                if (MapLinqExpressionArgument(type, argument, out mappedArgument))
-                {
+                else if (MapLinqExpressionArgument(type, argument, out mappedArgument))
                     mappedArguments[i] = mappedArgument;
-                    continue;
-                }
-
-                mappedArguments[i] = argument;
+                else
+                    mappedArguments[i] = argument;
             }
             
             return mappedArguments;
         }
-
+        
         /// <summary>
         /// Maps a delegate argument into a delegate proxy.
         /// </summary>
+        /// <param name="argumentType">argument type</param>
         /// <param name="argument">argument value</param>
         /// <param name="mappedArgument">Out: argument value where delegate value is mapped into delegate proxy</param>
         /// <returns>True if mapping applied, otherwise false</returns>

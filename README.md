@@ -36,6 +36,7 @@ Documentation: https://github.com/theRainbird/CoreRemoting/wiki
 - Automatic sweeping of inactive sessions
 - Keep session alive feature
 - Can be used in Blazor Server projects to communicate to a central application server
+- Supports Linq Expression parameters
 
 ## Hello world example 
 Let's create a simple multi user chat server as hello world application.
