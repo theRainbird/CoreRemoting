@@ -376,8 +376,8 @@ namespace CoreRemoting
                     Session = this
                 };
             
-            bool oneWay = false;
-            byte[] serializedResult;
+            var oneWay = false;
+            var serializedResult = new byte[] { };
             
             var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
             var serviceInterfaceType =
@@ -431,31 +431,12 @@ namespace CoreRemoting
         
             if (_server.Config.AuthenticationRequired && !_isAuthenticated)
                 throw new NetworkException("Session is not authenticated.");
+
+            object result = null;
             
             try
             {
-                var result = method.Invoke(service, parameterValues);
-                
-                if (!oneWay)
-                {
-                    serverRpcContext.MethodCallResultMessage =
-                        _server
-                            .MethodCallMessageBuilder
-                            .BuildMethodCallResultMessage(
-                                serializer: _server.Serializer,
-                                uniqueCallKey: serverRpcContext.UniqueCallKey,
-                                method: method,
-                                args: parameterValues,
-                                returnValue: result);
-                }
-
-                ((RemotingServer) _server).OnAfterCall(serverRpcContext);
-
-                if (oneWay)
-                    return;
-
-                serializedResult =
-                    _server.Serializer.Serialize(serverRpcContext.MethodCallResultMessage);
+                result = method.Invoke(service, parameterValues);
             }
             catch (Exception ex)
             {
@@ -471,6 +452,30 @@ namespace CoreRemoting
 
                 serializedResult =
                     _server.Serializer.Serialize(serverRpcContext.Exception);
+            }
+
+            if (serverRpcContext.Exception == null)
+            {
+                if (!oneWay)
+                {
+                    serverRpcContext.MethodCallResultMessage =
+                        _server
+                            .MethodCallMessageBuilder
+                            .BuildMethodCallResultMessage(
+                                serializer: _server.Serializer,
+                                uniqueCallKey: serverRpcContext.UniqueCallKey,
+                                method: method,
+                                args: parameterValues,
+                                returnValue: result);
+                }
+
+                ((RemotingServer)_server).OnAfterCall(serverRpcContext);
+
+                if (oneWay)
+                    return;
+
+                serializedResult =
+                    _server.Serializer.Serialize(serverRpcContext.MethodCallResultMessage);
             }
 
             var methodReultMessage =
@@ -516,7 +521,6 @@ namespace CoreRemoting
         /// <summary>
         /// Maps a delegate argument into a delegate proxy.
         /// </summary>
-        /// <param name="argumentType">argument type</param>
         /// <param name="argument">argument value</param>
         /// <param name="mappedArgument">Out: argument value where delegate value is mapped into delegate proxy</param>
         /// <returns>True if mapping applied, otherwise false</returns>
