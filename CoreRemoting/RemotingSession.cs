@@ -234,20 +234,27 @@ namespace CoreRemoting
             
             var message = _server.Serializer.Deserialize<WireMessage>(rawMessage);
 
-            switch (message.MessageType.ToLower())
+            try
             {
-                case "auth":
-                    ProcessAuthenticationRequestMessage(message);
-                    break;
-                case "rpc":
-                    ProcessRpcMessage(message);
-                    break;
-                case "goodbye":
-                    ProcessGoodbyeMessage(message);
-                    break;
-                default:
-                    OnErrorOccured("Invalid message type " + message.MessageType + ".", ex: null);
-                    break;
+                switch (message.MessageType.ToLower())
+                {
+                    case "auth":
+                        ProcessAuthenticationRequestMessage(message);
+                        break;
+                    case "rpc":
+                        ProcessRpcMessage(message);
+                        break;
+                    case "goodbye":
+                        ProcessGoodbyeMessage(message);
+                        break;
+                    default:
+                        OnErrorOccured("Invalid message type " + message.MessageType + ".", ex: null);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                OnErrorOccured("Error processing message.", ex);
             }
         }
 
@@ -387,8 +394,6 @@ namespace CoreRemoting
 
             serverRpcContext.ServiceInstance = service;
             
-            ((RemotingServer) _server).OnBeforeCall(serverRpcContext);
-
             callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
                 out var parameterValues, 
                 out var parameterTypes);
@@ -436,6 +441,8 @@ namespace CoreRemoting
             
             try
             {
+                ((RemotingServer) _server).OnBeforeCall(serverRpcContext);    
+                
                 result = method.Invoke(service, parameterValues);
             }
             catch (Exception ex)
