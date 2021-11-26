@@ -485,7 +485,7 @@ namespace CoreRemoting
                     _server.Serializer.Serialize(serverRpcContext.MethodCallResultMessage);
             }
 
-            var methodReultMessage =
+            var methodResultMessage =
                 _server.MessageEncryptionManager.CreateWireMessage(
                     serializedMessage: serializedResult,
                     serializer: _server.Serializer,
@@ -496,7 +496,7 @@ namespace CoreRemoting
                     uniqueCallKey: serverRpcContext.UniqueCallKey.ToByteArray());
 
             _rawMessageTransport.SendMessage(
-                _server.Serializer.Serialize(methodReultMessage));
+                _server.Serializer.Serialize(methodResultMessage));
         }
 
         /// <summary>
