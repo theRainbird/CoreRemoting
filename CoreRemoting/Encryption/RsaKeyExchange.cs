@@ -47,7 +47,7 @@ namespace CoreRemoting.Encryption
         /// <param name="receiversPrivateKeyBlob">Private key of the receiver</param>
         /// <param name="encryptedSecret">Encrypted secret</param>
         /// <returns>Decrypted secret</returns>
-        public static byte[] DecrpytSecret(int keySize, byte[] receiversPrivateKeyBlob, EncryptedSecret encryptedSecret)
+        public static byte[] DecryptSecret(int keySize, byte[] receiversPrivateKeyBlob, EncryptedSecret encryptedSecret)
         {
             using var receiversPrivateKey = new RSACryptoServiceProvider(dwKeySize: keySize);
             receiversPrivateKey.ImportCspBlob(receiversPrivateKeyBlob);

@@ -217,7 +217,7 @@ namespace CoreRemoting
         public static IEnumerable<IRemotingServer> ActiveServerInstances => _serverInstances.Values;
 
         /// <summary>
-        /// Gets a active server instance by its unqiue instance name.
+        /// Gets a active server instance by its unique instance name.
         /// </summary>
         /// <param name="uniqueServerInstanceName">Unique server instance name</param>
         /// <returns>Active CoreRemoting server</returns>

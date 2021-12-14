@@ -20,7 +20,7 @@ namespace CoreRemoting
         }
         
         /// <summary>
-        /// Gets or sets the unqiue name of the configured client instance.
+        /// Gets or sets the unique name of the configured client instance.
         /// </summary>
         public string UniqueClientInstanceName { get; set; }
         
