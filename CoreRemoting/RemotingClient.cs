@@ -403,7 +403,7 @@ namespace CoreRemoting
                 
                 _sessionId =
                     new Guid(
-                        RsaKeyExchange.DecrpytSecret(
+                        RsaKeyExchange.DecryptSecret(
                             keySize: _config.KeySize,
                             // ReSharper disable once PossibleNullReferenceException
                             receiversPrivateKeyBlob: _keyPair.PrivateKey,
