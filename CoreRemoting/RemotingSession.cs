@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Threading.Tasks;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
 using CoreRemoting.RpcMessaging;
@@ -382,8 +383,7 @@ namespace CoreRemoting
                     MethodCallMessage = callMessage,
                     Session = this
                 };
-            
-            var oneWay = false;
+
             var serializedResult = new byte[] { };
             
             var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
@@ -405,9 +405,11 @@ namespace CoreRemoting
             if (callMessage.GenericArgumentTypeNames != null && callMessage.GenericArgumentTypeNames.Length > 0)
             {
                 var methods = serviceInterfaceType.GetMethods();
+                
                 method = 
-                    methods
-                        .SingleOrDefault(m => m.IsGenericMethod && m.Name.Equals(callMessage.MethodName, StringComparison.Ordinal));
+                    methods.SingleOrDefault(m => 
+                        m.IsGenericMethod && 
+                        m.Name.Equals(callMessage.MethodName, StringComparison.Ordinal));
 
                 if (method != null)
                 {
@@ -432,7 +434,7 @@ namespace CoreRemoting
                     className: callMessage.ServiceName,
                     methodName: callMessage.MethodName);
 
-            oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
+            var oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
         
             if (_server.Config.AuthenticationRequired && !_isAuthenticated)
                 throw new NetworkException("Session is not authenticated.");
@@ -441,9 +443,19 @@ namespace CoreRemoting
             
             try
             {
-                ((RemotingServer) _server).OnBeforeCall(serverRpcContext);    
-                
+                ((RemotingServer) _server).OnBeforeCall(serverRpcContext);
+
                 result = method.Invoke(service, parameterValues);
+
+                var returnType = method.ReturnType;
+                
+                if (result != null && typeof(Task).IsAssignableFrom(returnType) && returnType.IsGenericType)
+                {
+                    var resultTask = (Task)result;
+                    resultTask.Wait();
+
+                    result = returnType.GetProperty("Result")?.GetValue(resultTask);
+                }
             }
             catch (Exception ex)
             {

@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Threading.Tasks;
 using Castle.DynamicProxy;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Serialization.Bson;
 using Serialize.Linq.Extensions;
+using stakx.DynamicProxy;
 
 namespace CoreRemoting
 {
@@ -14,11 +17,11 @@ namespace CoreRemoting
     /// This is doing the RPC magic of CoreRemoting at client side.
     /// </summary>
     /// <typeparam name="TServiceInterface">Type of the remote service's interface (also known as contract of the service)</typeparam>
-    public class ServiceProxy<TServiceInterface> : IInterceptor, IServiceProxy
+    public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
     {
         private readonly string _serviceName;
         private RemotingClient _client;
-        
+
         /// <summary>
         /// Creates a new instance of the ServiceProxy class.
         /// </summary>
@@ -27,7 +30,7 @@ namespace CoreRemoting
         public ServiceProxy(RemotingClient client, string serviceName = "")
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));
-            
+
             var serviceInterfaceType = typeof(TServiceInterface);
 
             _serviceName =
@@ -54,31 +57,27 @@ namespace CoreRemoting
                 _client.ClientDelegateRegistry.UnregisterClientDelegatesOfServiceProxy(this);
                 _client = null;
             }
-            
+
             GC.SuppressFinalize(this);
         }
 
         /// <summary>
-        /// Intercepts a call of a member on the proxy object. 
+        /// Intercepts a synchronous call of a member on the proxy object. 
         /// </summary>
         /// <param name="invocation">Intercepted invocation details</param>
         /// <exception cref="RemotingException">Thrown if a remoting operation has been failed</exception>
         /// <exception cref="NotSupportedException">Thrown if a member of a type marked as OneWay is intercepted, that has another return type than void</exception>
         /// <exception cref="RemoteInvocationException">Thrown if an exception occurred when the remote method was invoked</exception>
-        void IInterceptor.Intercept(IInvocation invocation)
+        protected override void Intercept(IInvocation invocation)
         {
-           var method = invocation.Method;
+            var method = invocation.Method;
+            var oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
+            var returnType = method.ReturnType;
 
-           if (method == null)
-               throw new RemotingException(
-                   $"No match was found for method {invocation.Method.Name}.");
-           
-           var oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
-                
-            if (oneWay && method.ReturnType != typeof(void))
+            if (oneWay && returnType != typeof(void))
                 throw new NotSupportedException("OneWay methods must not have a return type.");
             
-            var arguments = MapArguments(invocation);
+            var arguments = MapArguments(invocation.Arguments);
 
             var remoteMethodCallMessage =
                 _client.MethodCallMessageBuilder.BuildMethodCallMessage(
@@ -86,14 +85,19 @@ namespace CoreRemoting
                     remoteServiceName: _serviceName,
                     targetMethod: method,
                     args: arguments);
-            
-            var clientRpcContext = _client.InvokeRemoteMethod(remoteMethodCallMessage, oneWay);
 
+            var sendTask = 
+                _client.InvokeRemoteMethod(remoteMethodCallMessage, oneWay);
+
+            sendTask.Wait();
+
+            var clientRpcContext = sendTask.Result;
+            
             if (clientRpcContext.Error)
             {
                 if (clientRpcContext.RemoteException == null)
                     throw new RemoteInvocationException();
-                
+
                 throw clientRpcContext.RemoteException;
             }
 
@@ -106,7 +110,7 @@ namespace CoreRemoting
             }
 
             var parameterInfos = method.GetParameters();
-                
+
             foreach (var outParameterValue in resultMessage.OutParameters)
             {
                 var parameterInfo =
@@ -119,17 +123,72 @@ namespace CoreRemoting
                             ? outParamEnvelope.Value
                             : outParameterValue.OutValue;
             }
-                        
-            invocation.ReturnValue = 
-                resultMessage.IsReturnValueNull 
-                    ? null 
-                    : resultMessage.ReturnValue is Envelope returnValueEnvelope 
+
+            invocation.ReturnValue =
+                resultMessage.IsReturnValueNull
+                    ? null
+                    : resultMessage.ReturnValue is Envelope returnValueEnvelope
                         ? returnValueEnvelope.Value
                         : resultMessage.ReturnValue;
-            
+
             CallContext.RestoreFromSnapshot(resultMessage.CallContextSnapshot);
         }
-        
+
+        /// <summary>
+        /// Intercepts a asynchronous call of a member on the proxy object. 
+        /// </summary>
+        /// <param name="invocation">Intercepted invocation details</param>
+        /// <returns>Asynchronous running task</returns>
+        /// <exception cref="RemotingException">Thrown if a remoting operation has been failed</exception>
+        /// <exception cref="NotSupportedException">Thrown if a member of a type marked as OneWay is intercepted, that has another return type than void</exception>
+        /// <exception cref="RemoteInvocationException">Thrown if an exception occurred when the remote method was invoked</exception>
+        protected override async ValueTask InterceptAsync(IAsyncInvocation invocation)
+        {
+            var method = invocation.Method;
+            var oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
+            var returnType = method.ReturnType;
+
+            if (oneWay && returnType != typeof(void))
+                throw new NotSupportedException("OneWay methods must not have a return type.");
+            
+            var arguments = MapArguments(invocation.Arguments);
+
+            var remoteMethodCallMessage =
+                _client.MethodCallMessageBuilder.BuildMethodCallMessage(
+                    serializer: _client.Serializer,
+                    remoteServiceName: _serviceName,
+                    targetMethod: method,
+                    args: arguments);
+
+            var clientRpcContext = 
+                await _client.InvokeRemoteMethod(remoteMethodCallMessage, oneWay);
+            
+            if (clientRpcContext.Error)
+            {
+                if (clientRpcContext.RemoteException == null)
+                    throw new RemoteInvocationException();
+
+                throw clientRpcContext.RemoteException;
+            }
+
+            var resultMessage = clientRpcContext.ResultMessage;
+
+            if (resultMessage == null)
+            {
+                invocation.Result = null;
+                return;
+            }
+
+            invocation.Result =
+                resultMessage.IsReturnValueNull
+                    ? null
+                    : resultMessage.ReturnValue is Envelope returnValueEnvelope
+                        ? returnValueEnvelope.Value
+                        : resultMessage.ReturnValue;
+
+            CallContext.RestoreFromSnapshot(resultMessage.CallContextSnapshot);
+        }
+       
         /// <summary>
         /// Maps a delegate argument into a serializable RemoteDelegateInfo object.
         /// </summary>
@@ -149,7 +208,7 @@ namespace CoreRemoting
 
             if (delegateReturnType != typeof(void))
                 throw new NotSupportedException("Only void delegates are supported.");
-                
+
             var remoteDelegateInfo =
                 new RemoteDelegateInfo(
                     handlerKey: _client.ClientDelegateRegistry.RegisterClientDelegate((Delegate)argument, this),
@@ -158,7 +217,7 @@ namespace CoreRemoting
             mappedArgument = remoteDelegateInfo;
             return true;
         }
-        
+
         /// <summary>
         /// Maps a Linq expression argument into a serializable ExpressionNode object.
         /// </summary>
@@ -171,7 +230,7 @@ namespace CoreRemoting
             var isLinqExpression =
                 argumentType is
                 {
-                    IsGenericType: true, 
+                    IsGenericType: true,
                     BaseType: { IsGenericType: true }
                 } && argumentType.BaseType.GetGenericTypeDefinition() == typeof(Expression<>);
 
@@ -183,19 +242,19 @@ namespace CoreRemoting
 
             var expression = (Expression)argument;
             mappedArgument = expression.ToExpressionNode();
-            
+
             return true;
         }
-        
+
         /// <summary>
         /// Maps non serializable arguments into a serializable form.
         /// </summary>
-        /// <param name="invocation">Invocation details</param>
+        /// <param name="arguments">Arguments</param>
         /// <returns>Array of arguments (includes mapped ones)</returns>
-        private object[] MapArguments(IInvocation invocation)
+        private object[] MapArguments(IEnumerable<object> arguments)
         {
-            var arguments =
-                invocation.Arguments.Select(argument =>
+            var mappedArguments =
+                arguments.Select(argument =>
                 {
                     var type = argument?.GetType();
 
@@ -204,10 +263,11 @@ namespace CoreRemoting
 
                     if (MapLinqExpressionArgument(type, argument, out mappedArgument))
                         return mappedArgument;
-                        
+
                     return argument;
                 }).ToArray();
-            return arguments;
+            
+            return mappedArguments;
         }
     }
 }
