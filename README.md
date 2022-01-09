@@ -5,7 +5,7 @@ NuGet package: https://www.nuget.org/packages/CoreRemoting/<br>
 Documentation: https://github.com/theRainbird/CoreRemoting/wiki
 
 ### What is it for?
-- To help migrate applications that use .NET Remoting to .NET Core / .NET 5.
+- To help migrate applications that use .NET Remoting to .NET Core / .NET 5 / .NET 6.
 - To provide easy-to-use RPC functionality
 - To support events and delegates in a distributed application
 - To run on Linux, Windows and Mac
