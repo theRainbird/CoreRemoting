@@ -37,6 +37,7 @@ Documentation: https://github.com/theRainbird/CoreRemoting/wiki
 - Keep session alive feature
 - Can be used in Blazor Server projects to communicate to a central application server
 - Supports Linq Expression parameters
+- Supports remote invocation of async methods (async / await)
 
 ## Hello world example 
 Let's create a simple multi user chat server as hello world application.
