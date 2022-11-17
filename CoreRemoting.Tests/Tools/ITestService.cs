@@ -3,6 +3,7 @@ using CoreRemoting.Tests.ExternalTypes;
 
 namespace CoreRemoting.Tests.Tools
 {
+    [ReturnAsProxy]
     public interface ITestService
     {
         event Action ServiceEvent;

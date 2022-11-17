@@ -20,7 +20,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="CoreRemoting" Version="1.1.7" />
+      <PackageReference Include="CoreRemoting" Version="1.1.13" />
       <PackageReference Include="CoreRemoting.Authentication.LinuxPamAuthProvider" Version="1.1.7" />
       <PackageReference Include="CoreRemoting.Authentication.WindowsAuthProvider" Version="1.1.7" />
       <PackageReference Include="System.Diagnostics.Tools" Version="4.3.0" />

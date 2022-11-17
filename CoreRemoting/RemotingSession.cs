@@ -10,6 +10,7 @@ using CoreRemoting.Channels;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Encryption;
+using CoreRemoting.Serialization;
 using Serialize.Linq.Nodes;
 
 namespace CoreRemoting
@@ -138,13 +139,13 @@ namespace CoreRemoting
                                 messageType: "invoke");
 
                     // Invoke remote delegate on client
-                    _rawMessageTransport.SendMessage(
+                    _rawMessageTransport?.SendMessage(
                         _server.Serializer.Serialize(remoteDelegateInvocationWebsocketMessage));
 
                     return null;
                 };
 
-            _rawMessageTransport.SendMessage(_server.Serializer.Serialize(completeHandshakeMessage));
+            _rawMessageTransport?.SendMessage(_server.Serializer.Serialize(completeHandshakeMessage));
         }
 
         /// <summary>
@@ -361,16 +362,18 @@ namespace CoreRemoting
                 MessageEncryption
                     ? SessionId.ToByteArray()
                     : null;
+
+            var decryptedRawMessage =
+                _server.MessageEncryptionManager.GetDecryptedMessageData(
+                    message: request,
+                    serializer: _server.Serializer,
+                    sharedSecret: sharedSecret,
+                    sendersPublicKeyBlob: _clientPublicKeyBlob,
+                    sendersPublicKeySize: _keyPair?.KeySize ?? 0);
             
             var callMessage =
                 _server.Serializer
-                    .Deserialize<MethodCallMessage>(
-                        _server.MessageEncryptionManager.GetDecryptedMessageData(
-                            message: request,
-                            serializer: _server.Serializer,
-                            sharedSecret: sharedSecret,
-                            sendersPublicKeyBlob: _clientPublicKeyBlob,
-                            sendersPublicKeySize: _keyPair?.KeySize ?? 0));
+                    .Deserialize<MethodCallMessage>(decryptedRawMessage);
 
             ServerRpcContext serverRpcContext = 
                 new ServerRpcContext
@@ -449,12 +452,30 @@ namespace CoreRemoting
 
                 var returnType = method.ReturnType;
                 
-                if (result != null && typeof(Task).IsAssignableFrom(returnType) && returnType.IsGenericType)
+                if (result != null)
                 {
-                    var resultTask = (Task)result;
-                    resultTask.Wait();
+                    // Wait for result value if result is a Task
+                    if (typeof(Task).IsAssignableFrom(returnType) && returnType.IsGenericType)
+                    {
+                        var resultTask = (Task)result;
+                        resultTask.Wait();
 
-                    result = returnType.GetProperty("Result")?.GetValue(resultTask);
+                        result = returnType.GetProperty("Result")?.GetValue(resultTask);
+                    }
+                    else if (returnType.GetCustomAttribute<ReturnAsProxyAttribute>() != null)
+                    {
+                        var isRegisteredService =
+                            returnType.IsInterface &&
+                            _server.ServiceRegistry
+                                .GetAllRegisteredTypes().Any(s =>
+                                    returnType.AssemblyQualifiedName != null && 
+                                    returnType.AssemblyQualifiedName.Equals(s.AssemblyQualifiedName));
+                        
+                        if (isRegisteredService)
+                            result = new ServiceReference(
+                                serviceInterfaceTypeName: returnType.FullName + ", " + returnType.Assembly.GetName().Name, 
+                                serviceName: returnType.FullName);
+                    }
                 }
             }
             catch (Exception ex)

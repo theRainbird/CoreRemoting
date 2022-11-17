@@ -1,5 +1,7 @@
 ﻿using System;
 using CoreRemoting;
+using CoreRemoting.Serialization.Binary;
+using CoreRemoting.Serialization.Bson;
 using HelloWorld.Shared;
 
 namespace HelloWorld.Client
@@ -18,6 +20,8 @@ namespace HelloWorld.Client
             using var client = new RemotingClient(new ClientConfig()
             {
                 ServerHostName = "localhost",
+                Serializer = new BinarySerializerAdapter(),
+                MessageEncryption = false,
                 ServerPort = 9090
             });
             

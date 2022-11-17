@@ -96,14 +96,18 @@ namespace CoreRemoting.Encryption
             
             var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
 
-            using MemoryStream memoryStream = new MemoryStream(encryptedData);
-            using CryptoStream cryptoStream = new CryptoStream(memoryStream, decryptor, CryptoStreamMode.Read);
+            using var memoryStream = new MemoryStream(encryptedData);
+            using var cryptoStream = new CryptoStream(memoryStream, decryptor, CryptoStreamMode.Read);
+            using var decryptedStream = new MemoryStream();
             
-            byte[] decryptedBytes = new byte[encryptedData.Length];
-            cryptoStream.Read(decryptedBytes, 0, decryptedBytes.Length);
+            cryptoStream.CopyTo(decryptedStream);
+            byte[] decryptedBytes = decryptedStream.ToArray();
+
+            //cryptoStream.Read(decryptedBytes, 0, decryptedBytes.Length);
             
             cryptoStream.Close();
             memoryStream.Close();
+            decryptedStream.Close();
             
             return decryptedBytes;
         }

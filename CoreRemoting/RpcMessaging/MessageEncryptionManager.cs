@@ -36,7 +36,7 @@ namespace CoreRemoting.RpcMessaging
 
             byte[] iv = 
                 sharedSecret == null
-                    ? new byte[0]
+                    ? Array.Empty<byte>()
                     : AesEncryption.GenerateIv();
             
             byte[] rawContent;

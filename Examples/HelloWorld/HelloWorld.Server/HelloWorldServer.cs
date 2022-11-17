@@ -1,6 +1,9 @@
 ﻿using System;
+using System.Runtime.InteropServices;
 using CoreRemoting;
 using CoreRemoting.DependencyInjection;
+using CoreRemoting.Serialization.Binary;
+using CoreRemoting.Serialization.Bson;
 using HelloWorld.Shared;
 
 namespace HelloWorld.Server
@@ -41,12 +44,29 @@ namespace HelloWorld.Server
             {
                 HostName = "localhost",
                 NetworkPort = 9090,
+                MessageEncryption = false,
+                Serializer = new BinarySerializerAdapter(),
                 RegisterServicesAction = container =>
                 {
                     container.RegisterService<ISayHelloService, SayHelloService>(ServiceLifetime.Singleton);
                 }
             });
-            
+
+            server.Error += (sender, exception) =>
+            {
+                Console.WriteLine("--[Error]--------------------------");
+                Console.WriteLine(exception.Message);
+                Console.WriteLine(exception.StackTrace);
+                
+                if (exception.InnerException != null)
+                {
+                    Console.WriteLine(exception.InnerException.Message);
+                    Console.WriteLine(exception.InnerException.StackTrace);
+                }
+
+                Console.WriteLine("-----------------------------------");
+            };
+
             // Start server
             server.Start();
             

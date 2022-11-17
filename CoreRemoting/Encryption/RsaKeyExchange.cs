@@ -31,6 +31,7 @@ namespace CoreRemoting.Encryption
             using CryptoStream stream = new CryptoStream(ciphertext, aes.CreateEncryptor(), CryptoStreamMode.Write);
             
             stream.Write(secretToEncrypt, 0, secretToEncrypt.Length);
+            stream.FlushFinalBlock();
             stream.Close();
             
             return new EncryptedSecret(
@@ -63,6 +64,7 @@ namespace CoreRemoting.Encryption
             using MemoryStream stream = new MemoryStream();
             using CryptoStream cryptoStream = new CryptoStream(stream, aes.CreateDecryptor(), CryptoStreamMode.Write);
             cryptoStream.Write(encryptedSecret.EncryptedMessage, 0, encryptedSecret.EncryptedMessage.Length);
+            cryptoStream.FlushFinalBlock();
             cryptoStream.Close();
 
             return stream.ToArray();

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.ExternalTypes;
@@ -52,18 +53,48 @@ namespace CoreRemoting.Tests
             {
                 try
                 {
+                    var stopWatch = new Stopwatch();
+                    stopWatch.Start();
+                    
                     using var client = new RemotingClient(new ClientConfig()
                     {
                         ConnectionTimeout = 0, 
                         ServerPort = 9094
                     });
 
+                    stopWatch.Stop();
+                    _testOutputHelper.WriteLine($"Creating client took {stopWatch.ElapsedMilliseconds} ms");
+                    stopWatch.Reset();
+                    stopWatch.Start();
+                    
                     client.Connect();
 
+                    stopWatch.Stop();
+                    _testOutputHelper.WriteLine($"Establishing connection took {stopWatch.ElapsedMilliseconds} ms");
+                    stopWatch.Reset();
+                    stopWatch.Start();
+                    
                     var proxy = client.CreateProxy<ITestService>();
+                    
+                    stopWatch.Stop();
+                    _testOutputHelper.WriteLine($"Creating proxy took {stopWatch.ElapsedMilliseconds} ms");
+                    stopWatch.Reset();
+                    stopWatch.Start();
+                    
                     var result = proxy.TestMethod("test");
 
+                    stopWatch.Stop();
+                    _testOutputHelper.WriteLine($"Remote method invocation took {stopWatch.ElapsedMilliseconds} ms");
+                    stopWatch.Reset();
+                    stopWatch.Start();
+                    
+                    var result2 = proxy.TestMethod("test");
+
+                    stopWatch.Stop();
+                    _testOutputHelper.WriteLine($"Second remote method invocation took {stopWatch.ElapsedMilliseconds} ms");
+                    
                     Assert.Equal("test", result);
+                    Assert.Equal("test", result2);
                 }
                 catch (Exception e)
                 {
@@ -116,6 +147,9 @@ namespace CoreRemoting.Tests
             {
                 try
                 {
+                    var stopWatch = new Stopwatch();
+                    stopWatch.Start();
+                    
                     using var client = new RemotingClient(new ClientConfig()
                     {
                         ConnectionTimeout = 0, 
@@ -123,12 +157,39 @@ namespace CoreRemoting.Tests
                         MessageEncryption = false
                     });
 
+                    stopWatch.Stop();
+                    _testOutputHelper.WriteLine($"Creating client took {stopWatch.ElapsedMilliseconds} ms");
+                    stopWatch.Reset();
+                    stopWatch.Start();
+                    
                     client.Connect();
 
+                    stopWatch.Stop();
+                    _testOutputHelper.WriteLine($"Establishing connection took {stopWatch.ElapsedMilliseconds} ms");
+                    stopWatch.Reset();
+                    stopWatch.Start();
+                    
                     var proxy = client.CreateProxy<ITestService>();
+                    
+                    stopWatch.Stop();
+                    _testOutputHelper.WriteLine($"Creating proxy took {stopWatch.ElapsedMilliseconds} ms");
+                    stopWatch.Reset();
+                    stopWatch.Start();
+                    
                     var result = proxy.TestMethod("test");
 
+                    stopWatch.Stop();
+                    _testOutputHelper.WriteLine($"Remote method invocation took {stopWatch.ElapsedMilliseconds} ms");
+                    stopWatch.Reset();
+                    stopWatch.Start();
+                    
+                    var result2 = proxy.TestMethod("test");
+
+                    stopWatch.Stop();
+                    _testOutputHelper.WriteLine($"Second remote method invocation took {stopWatch.ElapsedMilliseconds} ms");
+                    
                     Assert.Equal("test", result);
+                    Assert.Equal("test", result2);
                 }
                 catch (Exception e)
                 {

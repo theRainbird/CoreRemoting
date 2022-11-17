@@ -20,8 +20,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="CoreRemoting" Version="1.1.7" />
-      <PackageReference Include="Npam" Version="1.0.1" />
+      <PackageReference Include="CoreRemoting" Version="1.1.13" />
+      <PackageReference Include="Npam" Version="1.0.2" />
     </ItemGroup>
 
 </Project>

@@ -40,6 +40,11 @@ namespace CoreRemoting
         public int InvocationTimeout { get; set; } = 0;
 
         /// <summary>
+        /// Gets or sets the send timeout in seconds (0 means infinite).
+        /// </summary>
+        public int SendTimeout { get; set; } = 30;
+        
+        /// <summary>
         /// Gets or sets the host name of the CoreRemoting server to be connected to.
         /// </summary>
         public string ServerHostName { get; set; } = "localhost";

@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Castle.DynamicProxy;
 using CoreRemoting.RemoteDelegates;
+using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Bson;
 using Serialize.Linq.Extensions;
 using stakx.DynamicProxy;
@@ -89,7 +90,13 @@ namespace CoreRemoting
             var sendTask = 
                 _client.InvokeRemoteMethod(remoteMethodCallMessage, oneWay);
 
-            sendTask.Wait();
+            if (!sendTask.Wait(
+                    _client.Config.SendTimeout == 0
+                        ? -1 // Infinite 
+                        : _client.Config.SendTimeout * 1000))
+            {
+                throw new TimeoutException($"Send timeout ({_client.Config.SendTimeout}) exceeded.");
+            }
 
             var clientRpcContext = sendTask.Result;
             
@@ -124,13 +131,22 @@ namespace CoreRemoting
                             : outParameterValue.OutValue;
             }
 
-            invocation.ReturnValue =
+            var returnValue =
                 resultMessage.IsReturnValueNull
                     ? null
                     : resultMessage.ReturnValue is Envelope returnValueEnvelope
                         ? returnValueEnvelope.Value
                         : resultMessage.ReturnValue;
 
+            // Create a proxy to remote service, if return type is a service reference  
+            if (returnValue is ServiceReference serviceReference)
+            {
+                var serviceInterfaceType = Type.GetType(serviceReference.ServiceInterfaceTypeName);
+                returnValue = _client.CreateProxy(serviceInterfaceType, serviceReference.ServiceName);
+            }
+
+            invocation.ReturnValue = returnValue;
+                
             CallContext.RestoreFromSnapshot(resultMessage.CallContextSnapshot);
         }
 

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <LangVersion>8</LangVersion>
+        <LangVersion>default</LangVersion>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <Title>CoreRemoting</Title>
         <Authors>Hagen Siegel</Authors>
@@ -28,14 +28,13 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Castle.Core" Version="4.4.1" />
-      <PackageReference Include="Castle.Windsor" Version="5.1.1" />
-      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="5.0.2" />
+      <PackageReference Include="Castle.Windsor" Version="5.1.2" />
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.0" />
       <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
       <PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.2" />
       <PackageReference Include="Serialize.Linq" Version="2.0.0" />
       <PackageReference Include="stakx.DynamicProxy.AsyncInterceptor" Version="0.1.0" />
-      <PackageReference Include="System.Configuration.ConfigurationManager" Version="5.0.0" />
+      <PackageReference Include="System.Configuration.ConfigurationManager" Version="6.0.1" />
       <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
       <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.7.0" />
       <PackageReference Include="System.Runtime.Serialization.Formatters" Version="4.3.0" />
