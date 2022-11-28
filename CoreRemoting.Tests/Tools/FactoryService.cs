@@ -6,7 +6,7 @@ namespace CoreRemoting.Tests.Tools
     {
         public ITestService GetTestService()
         {
-            return RemotingServer.DefaultRemotingServer.ServiceRegistry.GetService<ITestService>();
+            return new TestService();
         }
     }
 }

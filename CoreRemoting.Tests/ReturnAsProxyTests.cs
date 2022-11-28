@@ -22,7 +22,6 @@ namespace CoreRemoting.Tests
         [Fact]
         public void Call_on_Proxy_should_be_invoked_on_remote_service()
         {
-            var testService = new TestService();
             var factoryService = new FactoryService();
             
             var serverConfig =
@@ -31,10 +30,6 @@ namespace CoreRemoting.Tests
                     NetworkPort = 9084,
                     RegisterServicesAction = container =>
                     {
-                        container.RegisterService<ITestService>(
-                            factoryDelegate: () => testService,
-                            lifetime: ServiceLifetime.Singleton);
-                        
                         container.RegisterService<IFactoryService>(
                             factoryDelegate: () => factoryService,
                             lifetime: ServiceLifetime.Singleton);

@@ -7,6 +7,8 @@ using System.Reflection;
 using System.Threading.Tasks;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
+using CoreRemoting.ClassicRemotingApi;
+using CoreRemoting.DependencyInjection;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Encryption;
@@ -470,11 +472,22 @@ namespace CoreRemoting
                                 .GetAllRegisteredTypes().Any(s =>
                                     returnType.AssemblyQualifiedName != null && 
                                     returnType.AssemblyQualifiedName.Equals(s.AssemblyQualifiedName));
-                        
-                        if (isRegisteredService)
-                            result = new ServiceReference(
-                                serviceInterfaceTypeName: returnType.FullName + ", " + returnType.Assembly.GetName().Name, 
-                                serviceName: returnType.FullName);
+
+                        if (!isRegisteredService)
+                        {
+                            // Registers the result object as Singleton service, if it's not already registered
+                            RemotingServices.Marshal(
+                                serviceInstance: result,
+                                serviceName: null,
+                                interfaceType: returnType,
+                                uniqueServerInstanceName: _server.UniqueServerInstanceName);
+
+                            isRegisteredService = true;
+                        }
+
+                        result = new ServiceReference(
+                            serviceInterfaceTypeName: returnType.FullName + ", " + returnType.Assembly.GetName().Name, 
+                            serviceName: returnType.FullName);
                     }
                 }
             }
