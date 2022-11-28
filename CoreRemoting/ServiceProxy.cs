@@ -118,17 +118,32 @@ namespace CoreRemoting
 
             var parameterInfos = method.GetParameters();
 
+            var serializer = _client.Serializer;
+            
             foreach (var outParameterValue in resultMessage.OutParameters)
             {
                 var parameterInfo =
                     parameterInfos.First(p => p.Name == outParameterValue.ParameterName);
 
-                invocation.Arguments[parameterInfo.Position] =
-                    outParameterValue.IsOutValueNull
-                        ? null
-                        : outParameterValue.OutValue is Envelope outParamEnvelope
-                            ? outParamEnvelope.Value
-                            : outParameterValue.OutValue;
+                if (outParameterValue.IsOutValueNull)
+                    invocation.Arguments[parameterInfo.Position] = null;
+                else
+                {
+                    if (serializer.EnvelopeNeededForParameterSerialization)
+                    {
+                        var outParamEnvelope =
+                            serializer.Deserialize<Envelope>((byte[])outParameterValue.OutValue);
+
+                        invocation.Arguments[parameterInfo.Position] = outParamEnvelope.Value;
+                    }
+                    else
+                    {
+                        var outParamValue =
+                            serializer.Deserialize(parameterInfo.ParameterType, (byte[])outParameterValue.OutValue);
+
+                        invocation.Arguments[parameterInfo.Position] = outParamValue;
+                    }
+                }
             }
 
             var returnValue =

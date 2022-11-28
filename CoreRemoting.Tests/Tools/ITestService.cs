@@ -20,5 +20,7 @@ namespace CoreRemoting.Tests.Tools
         void TestExternalTypeParameter(DataClass data);
 
         string Echo(string text);
+
+        void MethodWithOutParameter(out int counter);
     }
 }

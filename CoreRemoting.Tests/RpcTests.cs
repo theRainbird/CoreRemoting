@@ -95,6 +95,10 @@ namespace CoreRemoting.Tests
                     
                     Assert.Equal("test", result);
                     Assert.Equal("test", result2);
+                    
+                    proxy.MethodWithOutParameter(out int methodCallCount);
+                    
+                    Assert.Equal(1, methodCallCount);
                 }
                 catch (Exception e)
                 {

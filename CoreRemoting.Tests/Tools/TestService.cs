@@ -5,6 +5,8 @@ namespace CoreRemoting.Tests.Tools
 {
     public class TestService : ITestService
     {
+        private int _counter = 0;
+        
         public Func<object, object> TestMethodFake { get; set; }
 
         public Action OneWayMethodFake { get; set; }
@@ -41,6 +43,12 @@ namespace CoreRemoting.Tests.Tools
         public string Echo(string text)
         {
             return text;
+        }
+
+        public void MethodWithOutParameter(out int counter)
+        {
+            _counter++;
+            counter = _counter;
         }
     }
 }
