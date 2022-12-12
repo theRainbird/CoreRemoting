@@ -457,12 +457,19 @@ namespace CoreRemoting
                 if (result != null)
                 {
                     // Wait for result value if result is a Task
-                    if (typeof(Task).IsAssignableFrom(returnType) && returnType.IsGenericType)
+                    if (typeof(Task).IsAssignableFrom(returnType))
                     {
                         var resultTask = (Task)result;
                         resultTask.Wait();
-
-                        result = returnType.GetProperty("Result")?.GetValue(resultTask);
+                        
+                        if (returnType.IsGenericType)
+                        {
+                            result = returnType.GetProperty("Result")?.GetValue(resultTask);
+                        }
+                        else // ordinary non-generic task
+                        {
+                            result = null;
+                        }
                     }
                     else if (returnType.GetCustomAttribute<ReturnAsProxyAttribute>() != null)
                     {
