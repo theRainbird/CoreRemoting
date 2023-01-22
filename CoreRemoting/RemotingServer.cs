@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
+using CoreRemoting.Channels.Tcp;
 using CoreRemoting.Channels.Websocket;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.RpcMessaging;
@@ -68,7 +69,7 @@ namespace CoreRemoting
             
             _config.RegisterServicesAction?.Invoke(_container);
 
-            Channel = _config.Channel ?? new WebsocketServerChannel();
+            Channel = _config.Channel ?? new TcpServerChannel();
             
             Channel.Init(this);
             

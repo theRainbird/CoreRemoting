@@ -237,7 +237,7 @@ namespace CoreRemoting
 
             var delegateReturnType = argumentType.GetMethod("Invoke")?.ReturnType;
 
-            if (delegateReturnType != typeof(void))
+            if (delegateReturnType != null && delegateReturnType != typeof(void))
                 throw new NotSupportedException("Only void delegates are supported.");
 
             var remoteDelegateInfo =

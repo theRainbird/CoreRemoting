@@ -5,34 +5,24 @@ using Xunit;
 
 namespace CoreRemoting.Tests
 {
-    public class CallContextTests
+    public class CallContextTests : IClassFixture<ServerFixture>
     {
+        private ServerFixture _serverFixture;
+        
+        public CallContextTests(ServerFixture serverFixture)
+        {
+            _serverFixture = serverFixture;
+        }
+        
         [Fact]
         public void CallContext_should_flow_from_client_to_server_and_back()
         {
-            var testService = 
-                new TestService
-                {
-                    TestMethodFake = _ =>
-                    {
-                        CallContext.SetData("test", "Changed");
-                        return CallContext.GetData("test");
-                    }
-                };
-
-            var serverConfig =
-                new ServerConfig()
-                {
-                    NetworkPort = 9093,
-                    RegisterServicesAction = container =>
-                        container.RegisterService<ITestService>(
-                            factoryDelegate: () => testService,
-                            lifetime: ServiceLifetime.Singleton)
-                };
-
-            using var server = new RemotingServer(serverConfig);
-            server.Start();
-
+            _serverFixture.TestService.TestMethodFake = _ =>
+            {
+                CallContext.SetData("test", "Changed");
+                return CallContext.GetData("test");
+            };
+            
             var clientThread =
                 new Thread(() =>
                 {
@@ -41,7 +31,7 @@ namespace CoreRemoting.Tests
                     var client =
                         new RemotingClient(new ClientConfig()
                         {
-                            ServerPort = 9093,
+                            ServerPort = _serverFixture.Server.Config.NetworkPort,
                             ConnectionTimeout = 0
                         });
 
@@ -63,8 +53,6 @@ namespace CoreRemoting.Tests
             
             clientThread.Start();
             clientThread.Join();
-            
-            server.Dispose();
         }
     }
 }

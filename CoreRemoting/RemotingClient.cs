@@ -11,6 +11,7 @@ using System.Timers;
 using Castle.DynamicProxy;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
+using CoreRemoting.Channels.Tcp;
 using CoreRemoting.Channels.Websocket;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.RemoteDelegates;
@@ -82,7 +83,7 @@ namespace CoreRemoting
             if (MessageEncryption)
                 _keyPair = new RsaKeyPair(config.KeySize);
             
-            _channel = config.Channel ?? new WebsocketClientChannel();
+            _channel = config.Channel ?? new TcpClientChannel();
             
             _channel.Init(this);
             _rawMessageTransport = _channel.RawMessageTransport;

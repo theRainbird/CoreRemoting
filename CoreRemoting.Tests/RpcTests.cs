@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
-using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.ExternalTypes;
 using CoreRemoting.Tests.Tools;
 using Xunit;
@@ -9,46 +8,34 @@ using Xunit.Abstractions;
 
 namespace CoreRemoting.Tests
 {
-    public class RpcTests
+    public class RpcTests : IClassFixture<ServerFixture>
     {
+        private ServerFixture _serverFixture;
         private readonly ITestOutputHelper _testOutputHelper;
+        private bool _remoteServiceCalled = false;
+        private int _serverErrorCount;
 
-        public RpcTests(ITestOutputHelper testOutputHelper)
+        public RpcTests(ServerFixture serverFixture, ITestOutputHelper testOutputHelper)
         {
+            _serverFixture = serverFixture;
             _testOutputHelper = testOutputHelper;
+            
+            _serverFixture.Server.Error += (s , e)  =>
+            {
+                _testOutputHelper.WriteLine($"server.Error: {e.Message}{Environment.NewLine}{e.StackTrace}");
+                _serverErrorCount++;
+            };
+            
+            _serverFixture.TestService.TestMethodFake = arg =>
+            {
+                _remoteServiceCalled = true;
+                return arg;
+            };
         }
 
         [Fact]
         public void Call_on_Proxy_should_be_invoked_on_remote_service()
         {
-            bool remoteServiceCalled = false;
-
-            var testService =
-                new TestService()
-                {
-                    TestMethodFake = arg =>
-                    {
-                        remoteServiceCalled = true;
-                        return arg;
-                    }
-                };
-            
-            var serverConfig =
-                new ServerConfig()
-                {
-                    NetworkPort = 9094,
-                    RegisterServicesAction = container =>
-                        container.RegisterService<ITestService>(
-                            factoryDelegate: () => testService,
-                            lifetime: ServiceLifetime.Singleton)
-                };
-
-            int serverErrorCount = 0;
-            
-            using var server = new RemotingServer(serverConfig);
-            server.Error += (_, _) => serverErrorCount++;
-            server.Start();
-
             void ClientAction()
             {
                 try
@@ -59,7 +46,7 @@ namespace CoreRemoting.Tests
                     using var client = new RemotingClient(new ClientConfig()
                     {
                         ConnectionTimeout = 0, 
-                        ServerPort = 9094
+                        ServerPort = _serverFixture.Server.Config.NetworkPort
                     });
 
                     stopWatch.Stop();
@@ -111,42 +98,15 @@ namespace CoreRemoting.Tests
             clientThread.Start();
             clientThread.Join();
             
-            Assert.True(remoteServiceCalled);
-            Assert.Equal(0, serverErrorCount);
+            Assert.True(_remoteServiceCalled);
+            Assert.Equal(0, _serverErrorCount);
         }
         
         [Fact]
         public void Call_on_Proxy_should_be_invoked_on_remote_service_without_MessageEncryption()
         {
-            bool remoteServiceCalled = false;
-
-            var testService =
-                new TestService()
-                {
-                    TestMethodFake = arg =>
-                    {
-                        remoteServiceCalled = true;
-                        return arg;
-                    }
-                };
+            _serverFixture.Server.Config.MessageEncryption = false;
             
-            var serverConfig =
-                new ServerConfig()
-                {
-                    MessageEncryption = false,
-                    NetworkPort = 9094,
-                    RegisterServicesAction = container =>
-                        container.RegisterService<ITestService>(
-                            factoryDelegate: () => testService,
-                            lifetime: ServiceLifetime.Singleton)
-                };
-
-            int serverErrorCount = 0;
-            
-            using var server = new RemotingServer(serverConfig);
-            server.Error += (_, _) => serverErrorCount++;
-            server.Start();
-
             void ClientAction()
             {
                 try
@@ -157,7 +117,7 @@ namespace CoreRemoting.Tests
                     using var client = new RemotingClient(new ClientConfig()
                     {
                         ConnectionTimeout = 0, 
-                        ServerPort = 9094,
+                        ServerPort = _serverFixture.Server.Config.NetworkPort,
                         MessageEncryption = false
                     });
 
@@ -206,32 +166,16 @@ namespace CoreRemoting.Tests
             clientThread.Start();
             clientThread.Join();
             
-            Assert.True(remoteServiceCalled);
-            Assert.Equal(0, serverErrorCount);
+            _serverFixture.Server.Config.MessageEncryption = true;
+            
+            Assert.True(_remoteServiceCalled);
+            Assert.Equal(0, _serverErrorCount);
         }
 
         [Fact]
         public void Delegate_invoked_on_server_should_callback_client()
         {
             string argumentFromServer = null;
-
-            var testService = new TestService();
-            
-            var serverConfig =
-                new ServerConfig()
-                {
-                    NetworkPort = 9095,
-                    RegisterServicesAction = container =>
-                        container.RegisterService<ITestService>(
-                            factoryDelegate: () => testService,
-                            lifetime: ServiceLifetime.Singleton)
-                };
-
-            int serverErrorCount = 0;
-            
-            using var server = new RemotingServer(serverConfig);
-            server.Error += (_, _) => serverErrorCount++;
-            server.Start();
 
             void ClientAction()
             {
@@ -241,7 +185,7 @@ namespace CoreRemoting.Tests
                         new ClientConfig()
                         {
                             ConnectionTimeout = 0, 
-                            ServerPort = 9095,
+                            ServerPort = _serverFixture.Server.Config.NetworkPort,
                         });
 
                     client.Connect();
@@ -261,36 +205,19 @@ namespace CoreRemoting.Tests
             clientThread.Join();
                 
             Assert.Equal("test", argumentFromServer);
-            Assert.Equal(0, serverErrorCount);
+            Assert.Equal(0, _serverErrorCount);
         }
         
         [Fact]
         public void Events_should_work_remotly()
         {
-            var testService = new TestService();
-            
-            var serverConfig =
-                new ServerConfig()
-                {
-                    NetworkPort = 9096,
-                    RegisterServicesAction = container =>
-                        container.RegisterService<ITestService>(
-                            factoryDelegate: () => testService,
-                            lifetime: ServiceLifetime.Singleton)
-                };
-
-            int serverErrorCount = 0;
             bool serviceEventCalled = false;
-            
-            using var server = new RemotingServer(serverConfig);
-            server.Error += (_, _) => serverErrorCount++;
-            server.Start();
-            
+         
             using var client = new RemotingClient(
                 new ClientConfig()
                 {
                     ConnectionTimeout = 0, 
-                    ServerPort = 9096
+                    ServerPort = _serverFixture.Server.Config.NetworkPort
                 });
 
             client.Connect();
@@ -303,40 +230,19 @@ namespace CoreRemoting.Tests
             proxy.FireServiceEvent();
 
             Assert.True(serviceEventCalled);
-            Assert.Equal(0, serverErrorCount);
+            Assert.Equal(0, _serverErrorCount);
         }
         
         [Fact]
         public void External_types_should_work_as_remote_service_parameters()
         {
-            bool remoteServiceCalled = false;
             DataClass parameterValue = null;
 
-            var testService =
-                new TestService()
-                {
-                    TestExternalTypeParameterFake = arg =>
-                    {
-                        remoteServiceCalled = true;
-                        parameterValue = arg;
-                    }
-                };
-            
-            var serverConfig =
-                new ServerConfig()
-                {
-                    NetworkPort = 9097,
-                    RegisterServicesAction = container =>
-                        container.RegisterService<ITestService>(
-                            factoryDelegate: () => testService,
-                            lifetime: ServiceLifetime.Singleton)
-                };
-
-            int serverErrorCount = 0;
-            
-            using var server = new RemotingServer(serverConfig);
-            server.Error += (_, _) => serverErrorCount++;
-            server.Start();
+            _serverFixture.TestService.TestExternalTypeParameterFake = arg =>
+            {
+                _remoteServiceCalled = true;
+                parameterValue = arg;
+            };
 
             void ClientAction()
             {
@@ -345,7 +251,7 @@ namespace CoreRemoting.Tests
                     using var client = new RemotingClient(new ClientConfig()
                     {
                         ConnectionTimeout = 0, 
-                        ServerPort = 9097
+                        ServerPort = _serverFixture.Server.Config.NetworkPort
                     });
 
                     client.Connect();
@@ -366,46 +272,17 @@ namespace CoreRemoting.Tests
             clientThread.Start();
             clientThread.Join();
             
-            Assert.True(remoteServiceCalled);
-            Assert.Equal(0, serverErrorCount);
+            Assert.True(_remoteServiceCalled);
+            Assert.Equal(0, _serverErrorCount);
         }
-        
-        #region Service with generic method
-        
-        public interface IGenericEchoService
-        {
-            T Echo<T>(T value);
-        }
-
-        public class GenericEchoService : IGenericEchoService
-        {
-            public T Echo<T>(T value)
-            {
-                return value;
-            }
-        }
-
-        #endregion
         
         [Fact]
         public void Generic_methods_should_be_called_correctly()
         {
-            var serverConfig =
-                new ServerConfig()
-                {
-                    NetworkPort = 9197,
-                    RegisterServicesAction = container =>
-                        container.RegisterService<IGenericEchoService, GenericEchoService>(
-                            lifetime: ServiceLifetime.Singleton)
-                };
-
-            using var server = new RemotingServer(serverConfig);
-            server.Start();
-
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0, 
-                ServerPort = 9197
+                ServerPort = _serverFixture.Server.Config.NetworkPort
             });
 
             client.Connect();
@@ -416,48 +293,13 @@ namespace CoreRemoting.Tests
             Assert.Equal("Yay", result);
         }
         
-        #region Service with enum as operation argument
-
-        public enum TestEnum
-        {
-            First = 1,
-            Second = 2
-        }
-
-        public interface IEnumTestService
-        {
-            TestEnum Echo(TestEnum inputValue);
-        }
-
-        public class EnumTestService : IEnumTestService
-        {
-            public TestEnum Echo(TestEnum inputValue)
-            {
-                return inputValue;
-            }
-        }
-
-        #endregion
-        
         [Fact]
         public void Enum_arguments_should_be_passed_correctly()
         {
-            var serverConfig =
-                new ServerConfig()
-                {
-                    NetworkPort = 9198,
-                    RegisterServicesAction = container =>
-                        container.RegisterService<IEnumTestService, EnumTestService>(
-                            lifetime: ServiceLifetime.Singleton)
-                };
-
-            using var server = new RemotingServer(serverConfig);
-            server.Start();
-
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0, 
-                ServerPort = 9198
+                ServerPort = _serverFixture.Server.Config.NetworkPort
             });
 
             client.Connect();

@@ -7,32 +7,33 @@ using CoreRemoting.Authentication;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace CoreRemoting.Tests
 {
     [SuppressMessage("ReSharper", "AccessToDisposedClosure")]
     [SuppressMessage("ReSharper", "CoVariantArrayConversion")]
-    public class SessionTests
+    public class SessionTests : IClassFixture<ServerFixture>
     {
+        private ServerFixture _serverFixture;
+        private readonly ITestOutputHelper _testOutputHelper;
+        private int _serverErrorCount;
+
+        public SessionTests(ServerFixture serverFixture, ITestOutputHelper testOutputHelper)
+        {
+            _serverFixture = serverFixture;
+            _testOutputHelper = testOutputHelper;
+            
+            _serverFixture.Server.Error += (s , e)  =>
+            {
+                _testOutputHelper.WriteLine($"server.Error: {e}");
+                _serverErrorCount++;
+            };
+        }
+        
         [Fact]
         public void Client_Connect_should_create_new_session_AND_Disconnect_should_close_session()
         {
-            var testService =
-                new TestService();
-
-            var serverConfig =
-                new ServerConfig()
-                {
-                    NetworkPort = 9091,
-                    RegisterServicesAction = container =>
-                        container.RegisterService<ITestService>(
-                            factoryDelegate: () => testService,
-                            lifetime: ServiceLifetime.Singleton)
-                };
-
-            using var server = new RemotingServer(serverConfig);
-            server.Start();
-
             var connectedWaitHandles = new[]
             {
                 new AutoResetEvent(false),
@@ -47,7 +48,7 @@ namespace CoreRemoting.Tests
                     new RemotingClient(new ClientConfig()
                     {
                         ConnectionTimeout = 0,
-                        ServerPort = 9091
+                        ServerPort = _serverFixture.Server.Config.NetworkPort
                     });
 
                 Assert.False(client.HasSession);
@@ -65,7 +66,7 @@ namespace CoreRemoting.Tests
             var clientThread1 = new Thread(() => clientAction(0));
             var clientThread2 = new Thread(() => clientAction(1));
 
-            Assert.Empty(server.SessionRepository.Sessions);
+            Assert.Empty(_serverFixture.Server.SessionRepository.Sessions);
 
             // Start two clients to create two sessions
             clientThread1.Start();
@@ -74,7 +75,7 @@ namespace CoreRemoting.Tests
             // Wait for connection of both clients
             WaitHandle.WaitAll(connectedWaitHandles);
 
-            Assert.Equal(2, server.SessionRepository.Sessions.Count());
+            Assert.Equal(2, _serverFixture.Server.SessionRepository.Sessions.Count());
 
             quitWaitHandle.Set();
 
@@ -82,44 +83,33 @@ namespace CoreRemoting.Tests
             clientThread2.Join();
 
             // There should be no sessions left, after both clients disconnedted
-            Assert.Empty(server.SessionRepository.Sessions);
+            Assert.Empty(_serverFixture.Server.SessionRepository.Sessions);
         }
 
         [Fact]
         public void Client_Connect_should_throw_exception_on_invalid_auth_credentials()
         {
-            var testService = new TestService();
+            _serverFixture.Server.Stop();
+
             var authProvider =
                 new FakeAuthProvider()
                 {
                     AuthenticateFake = credentials => credentials[1].Value == "secret"
                 };
-
-            var serverConfig =
-                new ServerConfig()
-                {
-                    AuthenticationProvider = authProvider,
-                    AuthenticationRequired = true,
-                    NetworkPort = 9092,
-                    RegisterServicesAction = container =>
-                        container.RegisterService<ITestService>(
-                            factoryDelegate: () => testService,
-                            lifetime: ServiceLifetime.Singleton)
-                };
-
-            int serverErrorCount = 0;
             
-            using var server = new RemotingServer(serverConfig);
-            server.Error += (_, _) => serverErrorCount++;
-            server.Start();
+            var serverConfig = _serverFixture.Server.Config;
+            serverConfig.AuthenticationProvider = authProvider;
+            serverConfig.AuthenticationRequired = true;
 
+            _serverFixture.Server.Start();
+            
             var clientAction = new Action<string, bool>((password, shouldThrow) =>
             {
                 using var client = 
                     new RemotingClient(new ClientConfig()
                     {
                         ConnectionTimeout = 0,
-                        ServerPort = 9092,
+                        ServerPort = _serverFixture.Server.Config.NetworkPort,
                         Credentials = new []
                         {
                             new Credential() { Name = "User", Value = "tester" },
@@ -141,7 +131,7 @@ namespace CoreRemoting.Tests
             clientThread2.Start();
             clientThread2.Join();
 
-            Assert.Equal(0, serverErrorCount);
+            Assert.Equal(0, _serverErrorCount);
         }
     }
 }

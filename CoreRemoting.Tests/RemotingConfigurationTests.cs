@@ -11,13 +11,18 @@ using Xunit;
 
 namespace CoreRemoting.Tests
 {
-    public class RemotingConfigurationTests
+    public class RemotingConfigurationTests : IClassFixture<ServerFixture>
     {
+        private ServerFixture _serverFixture;
+
+        public RemotingConfigurationTests(ServerFixture serverFixture)
+        {
+            _serverFixture = serverFixture;
+        }
+        
         [Fact]
         public void RegisterWellKnownServiceType_should_register_type_resolved_at_runtime()
         {
-            using var server = new RemotingServer(new ServerConfig { UniqueServerInstanceName = "Server1" });
-            
             RemotingConfiguration.RegisterWellKnownServiceType(
                 interfaceType: typeof(ITestService),
                 implementationType: typeof(TestService),
@@ -25,7 +30,7 @@ namespace CoreRemoting.Tests
                 serviceName: "Service1",
                 uniqueServerInstanceName: "Server1");
 
-            var service = server.ServiceRegistry.GetService("Service1");
+            var service = _serverFixture.Server.ServiceRegistry.GetService("Service1");
             
             Assert.NotNull(service);
             Assert.Equal(typeof(TestService), service.GetType());
@@ -36,16 +41,11 @@ namespace CoreRemoting.Tests
         [Fact]
         public void RemotingServer_should_register_on_construction_AND_unregister_on_Dispose()
         {
-            using var server = new RemotingServer(new ServerConfig()
-            {
-                UniqueServerInstanceName = "TestServer"
-            });
+            Assert.NotNull(RemotingConfiguration.GetRegisteredServer("Server1"));
             
-            Assert.NotNull(RemotingConfiguration.GetRegisteredServer("TestServer"));
+            _serverFixture.Server.Dispose();
             
-            server.Dispose();
-            
-            Assert.Null(RemotingConfiguration.GetRegisteredServer("TestServer"));
+            Assert.Null(RemotingConfiguration.GetRegisteredServer("Server1"));
         }
 
         [Fact]

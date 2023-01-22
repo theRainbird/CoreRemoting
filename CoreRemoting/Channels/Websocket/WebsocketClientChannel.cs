@@ -73,8 +73,8 @@ namespace CoreRemoting.Channels.Websocket
         /// <summary>
         /// Event procedure: Called when a error occurs on the websocket layer.
         /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
+        /// <param name="sender">Event sender</param>
+        /// <param name="e">Event arguments</param>
         private void OnError(object sender, ErrorEventArgs e)
         {
             LastException = new NetworkException(e.Message, e.Exception);

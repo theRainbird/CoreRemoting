@@ -71,7 +71,7 @@ namespace CoreRemoting.RemoteDelegates
 			    throw new ArgumentNullException(nameof(interceptor));
 		    
 		    if (!typeof(Delegate).IsAssignableFrom(delegateType))
-			    throw new ArgumentException("Specified type must be a delegate type.", nameof(delegateType));
+			    throw new ArgumentException($"Specified type ({delegateType?.FullName}) must be a delegate type.", nameof(delegateType));
 		    
 		    var interceptorObjectType = interceptor.GetType();
 		    var invokeMethod = delegateType.GetMethod("Invoke");

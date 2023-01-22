@@ -3,64 +3,27 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using CoreRemoting.DependencyInjection;
+using CoreRemoting.Tests.Tools;
 using Xunit;
 
 namespace CoreRemoting.Tests
 {
-    public class LinqExpressionTests
+    public class LinqExpressionTests : IClassFixture<ServerFixture>
     {
-        #region Service with method using expressions
+        private ServerFixture _serverFixture;
 
-        public class Hobbit
+        public LinqExpressionTests(ServerFixture serverFixture)
         {
-            public string FirstName { get; set; }
-            public string LastName { get; set; }
+            _serverFixture = serverFixture;
         }
-
-        public interface IHobbitService
-        {
-            Hobbit QueryHobbits(Expression<Func<Hobbit, bool>> criteriaExpression);
-        }
-
-        public class HobbitService : IHobbitService
-        {
-            private List<Hobbit> _hobbits =
-                new List<Hobbit>
-                {
-                    new Hobbit {FirstName = "Bilbo", LastName = "Baggins"},
-                    new Hobbit {FirstName = "Frodo", LastName = "Baggins"},
-                    new Hobbit {FirstName = "Peregrin", LastName = "Tuck"}
-                };
-            
-            public Hobbit QueryHobbits(Expression<Func<Hobbit, bool>> criteriaExpression)
-            {
-                var criteria = criteriaExpression.Compile();
-
-                return _hobbits.FirstOrDefault(criteria);
-            }
-        }
-
-        #endregion
         
         [Fact]
         public void LinqExpression_should_be_serialized_and_deserialized()
         {
-            var serverConfig =
-                new ServerConfig()
-                {
-                    NetworkPort = 9198,
-                    RegisterServicesAction = container =>
-                        container.RegisterService<IHobbitService, HobbitService>(
-                            lifetime: ServiceLifetime.Singleton)
-                };
-
-            using var server = new RemotingServer(serverConfig);
-            server.Start();
-
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0, 
-                ServerPort = 9198
+                ServerPort = _serverFixture.Server.Config.NetworkPort
             });
 
             client.Connect();
