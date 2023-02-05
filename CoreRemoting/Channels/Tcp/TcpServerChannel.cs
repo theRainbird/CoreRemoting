@@ -79,7 +79,7 @@ public class TcpServerChannel : IServerChannel
     /// Gets whether the channel is listening or not.
     /// </summary>
     public bool IsListening => 
-        _tcpServer == null ? false : _tcpServer.IsListening;
+        _tcpServer?.IsListening ?? false;
     
     /// <summary>
     /// Stops listening and frees managed resources.

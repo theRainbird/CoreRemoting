@@ -11,6 +11,7 @@ using Xunit.Abstractions;
 
 namespace CoreRemoting.Tests
 {
+    [Collection("CoreRemoting")]
     [SuppressMessage("ReSharper", "AccessToDisposedClosure")]
     [SuppressMessage("ReSharper", "CoVariantArrayConversion")]
     public class SessionTests : IClassFixture<ServerFixture>

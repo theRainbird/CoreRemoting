@@ -5,6 +5,7 @@ using Xunit;
 
 namespace CoreRemoting.Tests
 {
+    [Collection("CoreRemoting")]
     public class CallContextTests : IClassFixture<ServerFixture>
     {
         private ServerFixture _serverFixture;

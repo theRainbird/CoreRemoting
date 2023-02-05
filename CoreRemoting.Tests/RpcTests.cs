@@ -8,6 +8,7 @@ using Xunit.Abstractions;
 
 namespace CoreRemoting.Tests
 {
+    [Collection("CoreRemoting")]
     public class RpcTests : IClassFixture<ServerFixture>
     {
         private ServerFixture _serverFixture;

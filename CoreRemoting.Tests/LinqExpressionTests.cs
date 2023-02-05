@@ -8,6 +8,7 @@ using Xunit;
 
 namespace CoreRemoting.Tests
 {
+    [Collection("CoreRemoting")]
     public class LinqExpressionTests : IClassFixture<ServerFixture>
     {
         private ServerFixture _serverFixture;

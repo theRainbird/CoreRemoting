@@ -1,13 +1,9 @@
-using System;
-using System.IO;
-using System.Text;
-using System.Threading.Tasks;
-using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
 using Xunit;
 
 namespace CoreRemoting.Tests
 {
+    [Collection("CoreRemoting")]
     public class AsyncTests : IClassFixture<ServerFixture>
     {
         private ServerFixture _serverFixture;

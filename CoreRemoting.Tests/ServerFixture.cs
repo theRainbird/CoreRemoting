@@ -1,6 +1,7 @@
 using System;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
+using Xunit;
 
 namespace CoreRemoting.Tests;
 
@@ -13,7 +14,7 @@ public class ServerFixture : IDisposable
         var serverConfig =
             new ServerConfig()
             {
-                UniqueServerInstanceName = "Server1",
+                UniqueServerInstanceName = "DefaultServer",
                 IsDefault = true,
                 MessageEncryption = false,
                 NetworkPort = 9094,
@@ -58,4 +59,9 @@ public class ServerFixture : IDisposable
         if (Server != null)
             Server.Dispose();
     }
+}
+
+[CollectionDefinition("CoreRemoting")]
+public class ServerCollection : ICollectionFixture<ServerFixture>
+{
 }

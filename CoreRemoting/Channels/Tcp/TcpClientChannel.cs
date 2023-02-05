@@ -101,7 +101,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <summary>
     /// Gets whether the connection is established or not.
     /// </summary>
-    public bool IsConnected => _tcpClient == null ? false : _tcpClient.Connected;
+    public bool IsConnected => _tcpClient?.Connected ?? false;
 
     /// <summary>
     /// Gets the raw message transport component for this connection.

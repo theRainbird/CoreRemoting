@@ -11,7 +11,7 @@ public class TcpConnection : IRawMessageTransport
 {
     private readonly ClientMetadata _clientMetadata;
     private readonly WatsonTcpServer _tcpServer;
-    private IRemotingServer _server;
+    private readonly IRemotingServer _server;
     private RemotingSession _session;
 
     /// <summary>
@@ -71,8 +71,11 @@ public class TcpConnection : IRawMessageTransport
                 {
                     var shakeHands = ((System.Text.Json.JsonElement)metadata["ShakeHands"]).GetString();
 
-                    clientPublicKey =
-                        Convert.FromBase64String(shakeHands);
+                    if (shakeHands != null)
+                    {
+                        clientPublicKey =
+                            Convert.FromBase64String(shakeHands);
+                    }
                 }
             }
 

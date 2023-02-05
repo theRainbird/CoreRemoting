@@ -9,6 +9,7 @@ using Xunit.Abstractions;
 
 namespace CoreRemoting.Tests
 {
+    [Collection("CoreRemoting")]
     public class ReturnAsProxyTests : IClassFixture<ServerFixture>
     {
         private ServerFixture _serverFixture;
