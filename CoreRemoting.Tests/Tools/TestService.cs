@@ -15,6 +15,8 @@ namespace CoreRemoting.Tests.Tools
         
         public event Action ServiceEvent; 
         
+        public event ServerEventHandler CustomDelegateEvent;
+        
         public object TestMethod(object arg)
         {
             return TestMethodFake?.Invoke(arg);
@@ -29,7 +31,12 @@ namespace CoreRemoting.Tests.Tools
         {
             ServiceEvent?.Invoke();
         }
-        
+
+        public void FireCustomDelegateEvent()
+        {
+            CustomDelegateEvent?.Invoke(null);
+        }
+
         public void OneWayMethod()
         {
             OneWayMethodFake?.Invoke();

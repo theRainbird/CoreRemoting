@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
+using CoreRemoting.Serialization.Binary;
 using CoreRemoting.Tests.ExternalTypes;
 using CoreRemoting.Tests.Tools;
 using Xunit;
@@ -14,19 +15,12 @@ namespace CoreRemoting.Tests
         private ServerFixture _serverFixture;
         private readonly ITestOutputHelper _testOutputHelper;
         private bool _remoteServiceCalled = false;
-        private int _serverErrorCount;
-
+        
         public RpcTests(ServerFixture serverFixture, ITestOutputHelper testOutputHelper)
         {
             _serverFixture = serverFixture;
             _testOutputHelper = testOutputHelper;
-            
-            _serverFixture.Server.Error += (s , e)  =>
-            {
-                _testOutputHelper.WriteLine($"server.Error: {e.Message}{Environment.NewLine}{e.StackTrace}");
-                _serverErrorCount++;
-            };
-            
+        
             _serverFixture.TestService.TestMethodFake = arg =>
             {
                 _remoteServiceCalled = true;
@@ -100,7 +94,7 @@ namespace CoreRemoting.Tests
             clientThread.Join();
             
             Assert.True(_remoteServiceCalled);
-            Assert.Equal(0, _serverErrorCount);
+            Assert.Equal(0,  _serverFixture.ServerErrorCount);
         }
         
         [Fact]
@@ -170,7 +164,7 @@ namespace CoreRemoting.Tests
             _serverFixture.Server.Config.MessageEncryption = true;
             
             Assert.True(_remoteServiceCalled);
-            Assert.Equal(0, _serverErrorCount);
+            Assert.Equal(0, _serverFixture.ServerErrorCount);
         }
 
         [Fact]
@@ -206,19 +200,21 @@ namespace CoreRemoting.Tests
             clientThread.Join();
                 
             Assert.Equal("test", argumentFromServer);
-            Assert.Equal(0, _serverErrorCount);
+            Assert.Equal(0, _serverFixture.ServerErrorCount);
         }
         
         [Fact]
         public void Events_should_work_remotly()
         {
             bool serviceEventCalled = false;
+            bool customDelegateEventCalled = false;
          
             using var client = new RemotingClient(
                 new ClientConfig()
                 {
                     ConnectionTimeout = 0, 
-                    ServerPort = _serverFixture.Server.Config.NetworkPort
+                    SendTimeout = 0,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort,
                 });
 
             client.Connect();
@@ -227,11 +223,16 @@ namespace CoreRemoting.Tests
             
             proxy.ServiceEvent += () => 
                 serviceEventCalled = true;
-            
+
+            proxy.CustomDelegateEvent += s =>
+                customDelegateEventCalled = true;
+
             proxy.FireServiceEvent();
+            proxy.FireCustomDelegateEvent();
 
             Assert.True(serviceEventCalled);
-            Assert.Equal(0, _serverErrorCount);
+            Assert.True(customDelegateEventCalled);
+            Assert.Equal(0, _serverFixture.ServerErrorCount);
         }
         
         [Fact]
@@ -252,7 +253,7 @@ namespace CoreRemoting.Tests
                     using var client = new RemotingClient(new ClientConfig()
                     {
                         ConnectionTimeout = 0, 
-                        ServerPort = _serverFixture.Server.Config.NetworkPort
+                        ServerPort = _serverFixture.Server.Config.NetworkPort,
                     });
 
                     client.Connect();
@@ -274,7 +275,7 @@ namespace CoreRemoting.Tests
             clientThread.Join();
             
             Assert.True(_remoteServiceCalled);
-            Assert.Equal(0, _serverErrorCount);
+            Assert.Equal(0, _serverFixture.ServerErrorCount);
         }
         
         [Fact]
@@ -283,7 +284,7 @@ namespace CoreRemoting.Tests
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0, 
-                ServerPort = _serverFixture.Server.Config.NetworkPort
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
             });
 
             client.Connect();

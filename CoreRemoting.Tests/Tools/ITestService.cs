@@ -3,16 +3,22 @@ using CoreRemoting.Tests.ExternalTypes;
 
 namespace CoreRemoting.Tests.Tools
 {
+    public delegate void ServerEventHandler(object sender);
+    
     [ReturnAsProxy]
     public interface ITestService
     {
         event Action ServiceEvent;
+
+        event ServerEventHandler CustomDelegateEvent;
         
         object TestMethod(object arg);
 
         void TestMethodWithDelegateArg(Action<string> callback);
 
         void FireServiceEvent();
+
+        void FireCustomDelegateEvent();
 
         [OneWay]
         void OneWayMethod();

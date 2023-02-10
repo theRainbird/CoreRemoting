@@ -18,18 +18,11 @@ namespace CoreRemoting.Tests
     {
         private ServerFixture _serverFixture;
         private readonly ITestOutputHelper _testOutputHelper;
-        private int _serverErrorCount;
-
+        
         public SessionTests(ServerFixture serverFixture, ITestOutputHelper testOutputHelper)
         {
             _serverFixture = serverFixture;
             _testOutputHelper = testOutputHelper;
-            
-            _serverFixture.Server.Error += (s , e)  =>
-            {
-                _testOutputHelper.WriteLine($"server.Error: {e}");
-                _serverErrorCount++;
-            };
         }
         
         [Fact]
@@ -132,7 +125,7 @@ namespace CoreRemoting.Tests
             clientThread2.Start();
             clientThread2.Join();
 
-            Assert.Equal(0, _serverErrorCount);
+            Assert.Equal(0, _serverFixture.ServerErrorCount);
         }
     }
 }

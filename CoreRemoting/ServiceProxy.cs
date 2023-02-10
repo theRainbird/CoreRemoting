@@ -243,7 +243,7 @@ namespace CoreRemoting
             var remoteDelegateInfo =
                 new RemoteDelegateInfo(
                     handlerKey: _client.ClientDelegateRegistry.RegisterClientDelegate((Delegate)argument, this),
-                    delegateTypeName: argumentType.FullName);
+                    delegateTypeName: argumentType.FullName + ", " + argumentType.Assembly.GetName().Name);
 
             mappedArgument = remoteDelegateInfo;
             return true;
