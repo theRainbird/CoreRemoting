@@ -24,6 +24,7 @@ namespace CoreRemoting.Tests
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0, 
+                MessageEncryption = false,
                 ServerPort = _serverFixture.Server.Config.NetworkPort
             });
 

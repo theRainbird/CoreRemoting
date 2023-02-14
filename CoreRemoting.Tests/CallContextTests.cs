@@ -33,6 +33,7 @@ namespace CoreRemoting.Tests
                         new RemotingClient(new ClientConfig()
                         {
                             ServerPort = _serverFixture.Server.Config.NetworkPort,
+                            MessageEncryption = false,
                             ConnectionTimeout = 0
                         });
 

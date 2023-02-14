@@ -5,7 +5,6 @@ using System.Diagnostics.CodeAnalysis;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
 using CoreRemoting.Channels.Tcp;
-using CoreRemoting.Channels.Websocket;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.RemoteDelegates;

@@ -41,6 +41,7 @@ namespace CoreRemoting.Tests
                     using var client = new RemotingClient(new ClientConfig()
                     {
                         ConnectionTimeout = 0, 
+                        MessageEncryption = false,
                         ServerPort = _serverFixture.Server.Config.NetworkPort
                     });
 
@@ -98,9 +99,9 @@ namespace CoreRemoting.Tests
         }
         
         [Fact]
-        public void Call_on_Proxy_should_be_invoked_on_remote_service_without_MessageEncryption()
+        public void Call_on_Proxy_should_be_invoked_on_remote_service_with_MessageEncryption()
         {
-            _serverFixture.Server.Config.MessageEncryption = false;
+            _serverFixture.Server.Config.MessageEncryption = true;
             
             void ClientAction()
             {
@@ -113,7 +114,7 @@ namespace CoreRemoting.Tests
                     {
                         ConnectionTimeout = 0, 
                         ServerPort = _serverFixture.Server.Config.NetworkPort,
-                        MessageEncryption = false
+                        MessageEncryption = true
                     });
 
                     stopWatch.Stop();
@@ -180,6 +181,7 @@ namespace CoreRemoting.Tests
                         new ClientConfig()
                         {
                             ConnectionTimeout = 0, 
+                            MessageEncryption = false,
                             ServerPort = _serverFixture.Server.Config.NetworkPort,
                         });
 
@@ -214,22 +216,35 @@ namespace CoreRemoting.Tests
                 {
                     ConnectionTimeout = 0, 
                     SendTimeout = 0,
+                    MessageEncryption = false,
                     ServerPort = _serverFixture.Server.Config.NetworkPort,
                 });
 
             client.Connect();
 
             var proxy = client.CreateProxy<ITestService>();
-            
-            proxy.ServiceEvent += () => 
+
+            var serviceEventResetEvent = new ManualResetEventSlim(initialState: false);
+            var customDelegateEventResetEvent = new ManualResetEventSlim(initialState: false);
+
+            proxy.ServiceEvent += () =>
+            {
                 serviceEventCalled = true;
+                serviceEventResetEvent.Set();
+            };
 
             proxy.CustomDelegateEvent += s =>
+            {
                 customDelegateEventCalled = true;
-
+                customDelegateEventResetEvent.Set();
+            };
+             
             proxy.FireServiceEvent();
             proxy.FireCustomDelegateEvent();
 
+            serviceEventResetEvent.Wait(1000);
+            customDelegateEventResetEvent.Wait(1000);
+            
             Assert.True(serviceEventCalled);
             Assert.True(customDelegateEventCalled);
             Assert.Equal(0, _serverFixture.ServerErrorCount);
@@ -253,6 +268,7 @@ namespace CoreRemoting.Tests
                     using var client = new RemotingClient(new ClientConfig()
                     {
                         ConnectionTimeout = 0, 
+                        MessageEncryption = false,
                         ServerPort = _serverFixture.Server.Config.NetworkPort,
                     });
 
@@ -284,6 +300,7 @@ namespace CoreRemoting.Tests
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0, 
+                MessageEncryption = false,
                 ServerPort = _serverFixture.Server.Config.NetworkPort,
             });
 
@@ -301,6 +318,7 @@ namespace CoreRemoting.Tests
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0, 
+                MessageEncryption = false,
                 ServerPort = _serverFixture.Server.Config.NetworkPort
             });
 

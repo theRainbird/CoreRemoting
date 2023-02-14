@@ -28,6 +28,7 @@ namespace CoreRemoting.Tests
             var client = new RemotingClient(
                 new ClientConfig()
                 {
+                    MessageEncryption = false,
                     ServerPort = 9199,
                     ServerHostName = "localhost"
                 });
@@ -84,7 +85,7 @@ namespace CoreRemoting.Tests
             var clientThread = new Thread(() =>
             {
                 // ReSharper disable once ObjectCreationAsStatement
-                new RemotingClient(new ClientConfig {ServerPort = 9199, IsDefault = true});
+                new RemotingClient(new ClientConfig {ServerPort = 9199, MessageEncryption = false, IsDefault = true});
                 
                 var proxy = 
                     RemotingServices.Connect(

@@ -12,7 +12,6 @@ using Castle.DynamicProxy;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
 using CoreRemoting.Channels.Tcp;
-using CoreRemoting.Channels.Websocket;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Encryption;
@@ -158,7 +157,7 @@ namespace CoreRemoting
         /// <summary>
         /// Gets the public key of this CoreRemoting client instance.
         /// </summary>
-        public byte[] PublicKey => _keyPair.PublicKey;
+        public byte[] PublicKey => _keyPair?.PublicKey;
 
         /// <summary>
         /// Gets whether the connection to the server is established or not.
@@ -357,26 +356,29 @@ namespace CoreRemoting
         /// <param name="rawMessage">Raw message data</param>
         private void OnMessage(byte[] rawMessage)
         {
-            var message = Serializer.Deserialize<WireMessage>(rawMessage);
-            
-            switch (message.MessageType.ToLower())
+            Task.Run(() =>
             {
-                case "complete_handshake":
-                    ProcessCompleteHandshakeMessage(message);
-                    break;
-                case "auth_response":
-                    ProcessAuthenticationResponseMessage(message);
-                    break;
-                case "rpc_result":
-                    ProcessRpcResultMessage(message);
-                    break;
-                case "invoke":
-                    ProcessRemoteDelegateInvocationMessage(message);
-                    break;
-                case "goodbye":
-                    _goodbyeCompletedWaitHandle.Set();
-                    break;
-            }
+                var message = Serializer.Deserialize<WireMessage>(rawMessage);
+
+                switch (message.MessageType.ToLower())
+                {
+                    case "complete_handshake":
+                        ProcessCompleteHandshakeMessage(message);
+                        break;
+                    case "auth_response":
+                        ProcessAuthenticationResponseMessage(message);
+                        break;
+                    case "rpc_result":
+                        ProcessRpcResultMessage(message);
+                        break;
+                    case "invoke":
+                        ProcessRemoteDelegateInvocationMessage(message);
+                        break;
+                    case "goodbye":
+                        _goodbyeCompletedWaitHandle.Set();
+                        break;
+                }
+            });
         }
 
         /// <summary>

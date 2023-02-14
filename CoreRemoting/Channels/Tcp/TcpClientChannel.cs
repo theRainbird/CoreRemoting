@@ -50,11 +50,11 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
             
         if (_tcpClient.Connected)
             return;
-        
+
         _tcpClient.Events.ExceptionEncountered += OnError;
         _tcpClient.Events.MessageReceived += OnMessage;
         _tcpClient.Connect();
-        
+
         _tcpClient.Send(new byte[1] { 0x0 }, _handshakeMetadata);
     }
 
@@ -87,13 +87,21 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     {
         if (_tcpClient == null)
             return;
-            
+
         _tcpClient.Events.MessageReceived -= OnMessage;
         _tcpClient.Events.ExceptionEncountered -= OnError;
-            
+
         if (_tcpClient.Connected)
-            _tcpClient.Disconnect();
-        
+        {
+            try
+            {
+                _tcpClient.Disconnect();
+            }
+            catch ()
+            {
+            }
+        }
+
         _tcpClient.Dispose();
         _tcpClient = null;
     }

@@ -20,6 +20,7 @@ namespace CoreRemoting.Tests
             {
                 ConnectionTimeout = 0,
                 InvocationTimeout = 0,
+                MessageEncryption = false,
                 ServerPort = _serverFixture.Server.Config.NetworkPort
             });
 
@@ -41,6 +42,7 @@ namespace CoreRemoting.Tests
             {
                 ConnectionTimeout = 0,
                 InvocationTimeout = 0,
+                MessageEncryption = false,
                 ServerPort = _serverFixture.Server.Config.NetworkPort
             });
 

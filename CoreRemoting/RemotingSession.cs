@@ -228,38 +228,41 @@ namespace CoreRemoting
         /// <param name="rawMessage">Raw message data that has been received</param>
         private void OnReceiveMessage(byte[] rawMessage)
         {
-            _lastActivityTimestamp = DateTime.Now;
+            Task.Run(() =>
+            {
+                _lastActivityTimestamp = DateTime.Now;
             
-            if (rawMessage == null)
-                return;
+                if (rawMessage == null)
+                    return;
             
-            if (rawMessage.Length == 0)
-                return;
+                if (rawMessage.Length == 0)
+                    return;
             
-            var message = _server.Serializer.Deserialize<WireMessage>(rawMessage);
+                var message = _server.Serializer.Deserialize<WireMessage>(rawMessage);
 
-            try
-            {
-                switch (message.MessageType.ToLower())
+                try
                 {
-                    case "auth":
-                        ProcessAuthenticationRequestMessage(message);
-                        break;
-                    case "rpc":
-                        ProcessRpcMessage(message);
-                        break;
-                    case "goodbye":
-                        ProcessGoodbyeMessage(message);
-                        break;
-                    default:
-                        OnErrorOccured("Invalid message type " + message.MessageType + ".", ex: null);
-                        break;
+                    switch (message.MessageType.ToLower())
+                    {
+                        case "auth":
+                            ProcessAuthenticationRequestMessage(message);
+                            break;
+                        case "rpc":
+                            ProcessRpcMessage(message);
+                            break;
+                        case "goodbye":
+                            ProcessGoodbyeMessage(message);
+                            break;
+                        default:
+                            OnErrorOccured("Invalid message type " + message.MessageType + ".", ex: null);
+                            break;
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                OnErrorOccured("Error processing message.", ex);
-            }
+                catch (Exception ex)
+                {
+                    OnErrorOccured("Error processing message.", ex);
+                }
+            });
         }
 
         /// <summary>

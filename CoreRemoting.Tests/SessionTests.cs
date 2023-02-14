@@ -42,6 +42,7 @@ namespace CoreRemoting.Tests
                     new RemotingClient(new ClientConfig()
                     {
                         ConnectionTimeout = 0,
+                        MessageEncryption = false,
                         ServerPort = _serverFixture.Server.Config.NetworkPort
                     });
 
@@ -83,49 +84,60 @@ namespace CoreRemoting.Tests
         [Fact]
         public void Client_Connect_should_throw_exception_on_invalid_auth_credentials()
         {
-            _serverFixture.Server.Stop();
-
-            var authProvider =
-                new FakeAuthProvider()
+            var serverConfig =
+                new ServerConfig()
                 {
-                    AuthenticateFake = credentials => credentials[1].Value == "secret"
+                    UniqueServerInstanceName = "AuthServer",
+                    IsDefault = false,
+                    MessageEncryption = false,
+                    NetworkPort = 9095,
+                    AuthenticationRequired = true,
+                    AuthenticationProvider = new FakeAuthProvider()
+                    {
+                        AuthenticateFake = credentials => credentials[1].Value == "secret"
+                    }
                 };
             
-            var serverConfig = _serverFixture.Server.Config;
-            serverConfig.AuthenticationProvider = authProvider;
-            serverConfig.AuthenticationRequired = true;
+            var server = new RemotingServer(serverConfig);
+            server.Start();
 
-            _serverFixture.Server.Start();
-            
-            var clientAction = new Action<string, bool>((password, shouldThrow) =>
+            try
             {
-                using var client = 
-                    new RemotingClient(new ClientConfig()
-                    {
-                        ConnectionTimeout = 0,
-                        ServerPort = _serverFixture.Server.Config.NetworkPort,
-                        Credentials = new []
+                var clientAction = new Action<string, bool>((password, shouldThrow) =>
+                {
+                    using var client = 
+                        new RemotingClient(new ClientConfig()
                         {
-                            new Credential() { Name = "User", Value = "tester" },
-                            new Credential() {Name = "Password", Value = password }
-                        }
-                    });
+                            ConnectionTimeout = 0,
+                            ServerPort = server.Config.NetworkPort,
+                            MessageEncryption = false,
+                            Credentials = new []
+                            {
+                                new Credential() { Name = "User", Value = "tester" },
+                                new Credential() {Name = "Password", Value = password }
+                            }
+                        });
                 
-                if (shouldThrow)
-                    Assert.Throws<SecurityException>(() => client.Connect());
-                else
-                    client.Connect();
-            });
+                    if (shouldThrow)
+                        Assert.Throws<SecurityException>(() => client.Connect());
+                    else
+                        client.Connect();
+                });
 
-            var clientThread1 = new Thread(() => clientAction("wrong", true));
-            clientThread1.Start();
-            clientThread1.Join();
+                var clientThread1 = new Thread(() => clientAction("wrong", true));
+                clientThread1.Start();
+                clientThread1.Join();
             
-            var clientThread2 = new Thread(() => clientAction("secret", false));
-            clientThread2.Start();
-            clientThread2.Join();
+                var clientThread2 = new Thread(() => clientAction("secret", false));
+                clientThread2.Start();
+                clientThread2.Join();
 
-            Assert.Equal(0, _serverFixture.ServerErrorCount);
+                Assert.Equal(0, _serverFixture.ServerErrorCount);
+            }
+            finally
+            {
+                server.Stop();
+            }
         }
     }
 }

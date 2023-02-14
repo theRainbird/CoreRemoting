@@ -102,8 +102,6 @@ namespace CoreRemoting.Encryption
             
             cryptoStream.CopyTo(decryptedStream);
             byte[] decryptedBytes = decryptedStream.ToArray();
-
-            //cryptoStream.Read(decryptedBytes, 0, decryptedBytes.Length);
             
             cryptoStream.Close();
             memoryStream.Close();
