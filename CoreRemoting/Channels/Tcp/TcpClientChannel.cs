@@ -97,7 +97,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
             {
                 _tcpClient.Disconnect();
             }
-            catch ()
+            catch 
             {
             }
         }
