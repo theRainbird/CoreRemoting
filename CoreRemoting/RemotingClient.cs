@@ -631,6 +631,17 @@ namespace CoreRemoting
         }
 
         /// <summary>
+        /// Creates a proxy object to provide access to a remote service.
+        /// </summary>
+        /// <param name="serviceReference">Reference to remote service registration (This is not an object reference!)</param>
+        /// <returns>Proxy object</returns>
+        public object CreateProxy(ServiceReference serviceReference)
+        {
+            var serviceInterfaceType = Type.GetType(serviceReference.ServiceInterfaceTypeName);
+            return CreateProxy(serviceInterfaceType, serviceReference.ServiceName);
+        }
+
+        /// <summary>
         /// Shuts a specified service proxy down and frees resources.
         /// </summary>
         /// <param name="serviceProxy">Proxy object that should be shut down</param>

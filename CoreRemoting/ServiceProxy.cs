@@ -155,10 +155,7 @@ namespace CoreRemoting
 
             // Create a proxy to remote service, if return type is a service reference  
             if (returnValue is ServiceReference serviceReference)
-            {
-                var serviceInterfaceType = Type.GetType(serviceReference.ServiceInterfaceTypeName);
-                returnValue = _client.CreateProxy(serviceInterfaceType, serviceReference.ServiceName);
-            }
+                returnValue = _client.CreateProxy(serviceReference);
 
             invocation.ReturnValue = returnValue;
                 
