@@ -485,14 +485,8 @@ namespace CoreRemoting
 
                         if (!isRegisteredService)
                         {
-                            // Registers the result object as Singleton service, if it's not already registered
-                            RemotingServices.Marshal(
-                                serviceInstance: result,
-                                serviceName: null,
-                                interfaceType: returnType,
-                                uniqueServerInstanceName: _server.UniqueServerInstanceName);
-
-                            isRegisteredService = true;
+                            throw new InvalidOperationException(
+                                $"Type '{returnType?.AssemblyQualifiedName}' is not a registered service.");
                         }
 
                         result = new ServiceReference(
