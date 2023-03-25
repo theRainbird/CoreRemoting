@@ -101,5 +101,11 @@ namespace CoreRemoting
         /// Gets or set whether this is the default server.
         /// </summary>
         public bool IsDefault { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets the time in milliseconds that Dispose should wait for currently processed messages to finish.
+        /// Set -1 to wait forever (default).
+        /// </summary>
+        public int WaitTimeForCurrentlyProcessedMessagesOnDispose { get; set; } = -1;
     }
 }

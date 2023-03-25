@@ -48,6 +48,11 @@ namespace CoreRemoting
             new ConcurrentDictionary<string, IRemotingClient>();
         
         private static WeakReference<IRemotingClient> _defaultRemotingClientRef;
+
+        /// <summary>
+        /// Event: Fires after client was disconnected.
+        /// </summary>
+        public event Action AfterDisconnect;
         
         #endregion
         
@@ -210,7 +215,8 @@ namespace CoreRemoting
         /// <summary>
         /// Disconnects from the server. The server is actively notified about disconnection.
         /// </summary>
-        public void Disconnect()
+        /// <param name="quiet">When set to true, no goodbye message is sent to the server</param>
+        public void Disconnect(bool quiet = false)
         {
             if (_channel != null && HasSession)
             {
@@ -226,33 +232,39 @@ namespace CoreRemoting
                         ? _sessionId.ToByteArray()
                         : null;
 
-                var goodbyeMessage =
-                    new GoodbyeMessage()
-                    {
-                        SessionId = _sessionId
-                    };
+                if (!quiet)
+                {
+                    var goodbyeMessage =
+                        new GoodbyeMessage()
+                        {
+                            SessionId = _sessionId
+                        };
 
-                var wireMessage =
-                    MessageEncryptionManager.CreateWireMessage(
-                        messageType: "goodbye",
-                        serializer: Serializer,
-                        serializedMessage: Serializer.Serialize(goodbyeMessage),
-                        keyPair: _keyPair,
-                        sharedSecret: sharedSecret);
+                    var wireMessage =
+                        MessageEncryptionManager.CreateWireMessage(
+                            messageType: "goodbye",
+                            serializer: Serializer,
+                            serializedMessage: Serializer.Serialize(goodbyeMessage),
+                            keyPair: _keyPair,
+                            sharedSecret: sharedSecret);
 
-                byte[] rawData = Serializer.Serialize(wireMessage);
+                    byte[] rawData = Serializer.Serialize(wireMessage);
+
+                    _goodbyeCompletedWaitHandle.Reset();
+
+                    _channel.RawMessageTransport.SendMessage(rawData);
                 
-                _goodbyeCompletedWaitHandle.Reset();
-                
-                _channel.RawMessageTransport.SendMessage(rawData);
-
-                _goodbyeCompletedWaitHandle.Wait(10000);
+                    _goodbyeCompletedWaitHandle.Wait(10000);
+                }
             }
 
             _channel?.Disconnect();
             _handshakeCompletedWaitHandle?.Reset();
             _authenticationCompletedWaitHandle?.Reset();
             Identity = null;
+            _sessionId = Guid.Empty;
+            
+            AfterDisconnect?.Invoke();
         }
 
         /// <summary>
@@ -376,6 +388,9 @@ namespace CoreRemoting
                         break;
                     case "goodbye":
                         _goodbyeCompletedWaitHandle.Set();
+                        break;
+                    case "session_closed":
+                        Disconnect(quiet: true);
                         break;
                 }
             });

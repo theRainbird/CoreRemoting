@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Security;
 using System.Threading;
+using System.Threading.Tasks;
 using CoreRemoting.Authentication;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
@@ -138,6 +139,42 @@ namespace CoreRemoting.Tests
             {
                 server.Stop();
             }
+        }
+
+        [Fact]
+        public void RemotingSession_Dispose_should_disconnect_client()
+        {
+            _serverFixture.TestService.TestMethodFake = arg =>
+            {
+                RemotingSession.Current.Close();
+                return null;
+            };
+
+            var client =
+                new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 0,
+                    MessageEncryption = false,
+                    SendTimeout = 0,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort
+                });
+
+            var waitForDisconnect = new ManualResetEventSlim(initialState: false);
+
+            client.AfterDisconnect += () =>
+            {
+                waitForDisconnect.Set();
+            };
+            
+            client.Connect();
+            var proxy = client.CreateProxy<ITestService>();
+
+            proxy.TestMethod(null);
+
+            waitForDisconnect.Wait();
+            Assert.False(client.IsConnected);
+            
+            client.Dispose();
         }
     }
 }

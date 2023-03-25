@@ -4,11 +4,10 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
-using CoreRemoting.ClassicRemotingApi;
-using CoreRemoting.DependencyInjection;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Encryption;
@@ -21,7 +20,7 @@ namespace CoreRemoting
     /// Implements a CoreRemoting session, which controls the CoreRemoting protocol on application layer at server side.
     /// This is doing the RPC magic of CoreRemoting at server side.
     /// </summary>
-    public class RemotingSession : IDisposable
+    public sealed class RemotingSession : IDisposable
     {
         #region Fields
 
@@ -34,7 +33,10 @@ namespace CoreRemoting
         private IDelegateProxyFactory _delegateProxyFactory;
         private ConcurrentDictionary<Guid, IDelegateProxy> _delegateProxyCache;
         private bool _isAuthenticated;
+        private bool _isDisposing;
         private DateTime _lastActivityTimestamp;
+        private readonly CountdownEvent _currentlyProcessedMessagesCounter;
+        private static readonly AsyncLocal<RemotingSession> CurrentSession = new();
 
         /// <summary>
         /// Event: Fired before the session is disposed to do some clean up.
@@ -55,6 +57,8 @@ namespace CoreRemoting
         internal RemotingSession(int keySize, byte[] clientPublicKey, IRemotingServer server,
             IRawMessageTransport rawMessageTransport)
         {
+            _isDisposing = false;
+            _currentlyProcessedMessagesCounter = new CountdownEvent(initialCount: 1);
             _sessionId = Guid.NewGuid();
             _lastActivityTimestamp = DateTime.Now;
             _isAuthenticated = false;
@@ -237,7 +241,9 @@ namespace CoreRemoting
             
                 if (rawMessage.Length == 0)
                     return;
-            
+                
+                _currentlyProcessedMessagesCounter.AddCount(1);
+                
                 var message = _server.Serializer.Deserialize<WireMessage>(rawMessage);
 
                 try
@@ -261,6 +267,10 @@ namespace CoreRemoting
                 catch (Exception ex)
                 {
                     OnErrorOccured("Error processing message.", ex);
+                }
+                finally
+                {
+                    _currentlyProcessedMessagesCounter.Signal();
                 }
             });
         }
@@ -448,15 +458,17 @@ namespace CoreRemoting
                 throw new NetworkException("Session is not authenticated.");
 
             object result = null;
-            
+
             try
             {
-                ((RemotingServer) _server).OnBeforeCall(serverRpcContext);
+                CurrentSession.Value = this;
+
+                ((RemotingServer)_server).OnBeforeCall(serverRpcContext);
 
                 result = method.Invoke(service, parameterValues);
 
                 var returnType = method.ReturnType;
-                
+
                 if (result != null)
                 {
                     // Wait for result value if result is a Task
@@ -464,7 +476,7 @@ namespace CoreRemoting
                     {
                         var resultTask = (Task)result;
                         resultTask.Wait();
-                        
+
                         if (returnType.IsGenericType)
                         {
                             result = returnType.GetProperty("Result")?.GetValue(resultTask);
@@ -480,35 +492,39 @@ namespace CoreRemoting
                             returnType.IsInterface &&
                             _server.ServiceRegistry
                                 .GetAllRegisteredTypes().Any(s =>
-                                    returnType.AssemblyQualifiedName != null && 
+                                    returnType.AssemblyQualifiedName != null &&
                                     returnType.AssemblyQualifiedName.Equals(s.AssemblyQualifiedName));
 
                         if (!isRegisteredService)
                         {
                             throw new InvalidOperationException(
-                                $"Type '{returnType?.AssemblyQualifiedName}' is not a registered service.");
+                                $"Type '{returnType.AssemblyQualifiedName}' is not a registered service.");
                         }
 
                         result = new ServiceReference(
-                            serviceInterfaceTypeName: returnType.FullName + ", " + returnType.Assembly.GetName().Name, 
+                            serviceInterfaceTypeName: returnType.FullName + ", " + returnType.Assembly.GetName().Name,
                             serviceName: returnType.FullName);
                     }
                 }
             }
             catch (Exception ex)
             {
-                serverRpcContext.Exception = 
+                serverRpcContext.Exception =
                     new RemoteInvocationException(
                         message: ex.Message,
                         innerEx: ex.GetType().IsSerializable ? ex : null);
 
-                ((RemotingServer) _server).OnAfterCall(serverRpcContext);
+                ((RemotingServer)_server).OnAfterCall(serverRpcContext);
 
                 if (oneWay)
                     return;
 
                 serializedResult =
                     _server.Serializer.Serialize(serverRpcContext.Exception);
+            }
+            finally
+            {
+                CurrentSession.Value = null;
             }
 
             if (serverRpcContext.Exception == null)
@@ -547,6 +563,8 @@ namespace CoreRemoting
 
             _rawMessageTransport.SendMessage(
                 _server.Serializer.Serialize(methodResultMessage));
+
+            CurrentSession.Value = null;
         }
 
         /// <summary>
@@ -640,6 +658,21 @@ namespace CoreRemoting
         
         #endregion
 
+        #region Close session
+
+        /// <summary>
+        /// Closes the session gracefully and disconnect the client.
+        /// </summary>
+        public void Close()
+        {
+            if (_isDisposing)
+                return;
+
+            Task.Run(() => _server?.SessionRepository.RemoveSession(_sessionId));
+        }
+
+        #endregion
+        
         #region IDisposable implementation
 
         /// <summary>
@@ -647,6 +680,33 @@ namespace CoreRemoting
         /// </summary>
         public void Dispose()
         {
+            if (_isDisposing)
+                return;
+
+            _isDisposing = true;
+            
+            _rawMessageTransport.ReceiveMessage -= OnReceiveMessage;
+            _rawMessageTransport.ErrorOccured -= OnErrorOccured;
+            
+            _currentlyProcessedMessagesCounter.Signal();
+            _currentlyProcessedMessagesCounter.Wait(_server.Config.WaitTimeForCurrentlyProcessedMessagesOnDispose);
+            
+            var sharedSecret =
+                MessageEncryption
+                    ? _sessionId.ToByteArray()
+                    : null;
+            
+            var wireMessage =
+                _server.MessageEncryptionManager.CreateWireMessage(
+                    serializedMessage: Array.Empty<byte>(),
+                    serializer: _server.Serializer,
+                    sharedSecret: sharedSecret,
+                    keyPair: _keyPair,
+                    messageType: "session_closed");
+
+            _rawMessageTransport.SendMessage(
+                _server.Serializer.Serialize(wireMessage));
+            
             BeforeDispose?.Invoke();
             
             _keyPair?.Dispose();
@@ -654,7 +714,17 @@ namespace CoreRemoting
             _delegateProxyCache.Clear();
             _delegateProxyCache = null;
             _rawMessageTransport = null;
+            _currentlyProcessedMessagesCounter.Dispose();
         }
+
+        #endregion
+        
+        #region Retrieving current session
+
+        /// <summary>
+        /// Gets the current CoreRemoting server session.
+        /// </summary>
+        public static RemotingSession Current => CurrentSession.Value;
 
         #endregion
     }
