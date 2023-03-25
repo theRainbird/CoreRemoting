@@ -8,6 +8,11 @@ namespace CoreRemoting
     public interface IRemotingClient : IDisposable
     {
         /// <summary>
+        /// Event: Fires after client was disconnected.
+        /// </summary>
+        event Action AfterDisconnect;
+        
+        /// <summary>
         /// Gets the configuration settings used by the CoreRemoting client instance.
         /// </summary>
         ClientConfig Config { get; }
