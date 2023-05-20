@@ -506,7 +506,7 @@ namespace CoreRemoting
                     ? Guid.Empty 
                     : new Guid(message.UniqueCallKey);
             
-            if (!_activeCalls.TryGetValue(unqiueCallKey, out ClientRpcContext clientRpcContext))
+            if (!_activeCalls.TryRemove(unqiueCallKey, out ClientRpcContext clientRpcContext))
                 throw new KeyNotFoundException("Received a result for a unknown call.");
             
             clientRpcContext.Error = message.Error;
