@@ -6,7 +6,7 @@ namespace CoreRemoting.Tests.Tools
     public delegate void ServerEventHandler(object sender);
     
     [ReturnAsProxy]
-    public interface ITestService
+    public interface ITestService : IBaseService
     {
         event Action ServiceEvent;
 

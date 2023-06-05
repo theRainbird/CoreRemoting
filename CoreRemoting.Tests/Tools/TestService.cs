@@ -57,5 +57,10 @@ namespace CoreRemoting.Tests.Tools
             _counter++;
             counter = _counter;
         }
+
+        public bool BaseMethod()
+        {
+            return true;
+        }
     }
 }
