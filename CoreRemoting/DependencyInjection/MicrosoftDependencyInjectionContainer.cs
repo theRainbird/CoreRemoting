@@ -115,7 +115,7 @@ namespace CoreRemoting.DependencyInjection
             var serviceInterfaceType = typeof(TServiceInterface);
             
             if (string.IsNullOrWhiteSpace(serviceName))
-                serviceName = serviceInterfaceType.Name;
+                serviceName = serviceInterfaceType.FullName;
             
             if (_serviceNameRegistry.ContainsKey(serviceName))
                 return;
@@ -125,10 +125,10 @@ namespace CoreRemoting.DependencyInjection
             switch (lifetime)
             {
                 case ServiceLifetime.Singleton:
-                    _container.AddSingleton(serviceInterfaceType, factoryDelegate);
+                    _container.AddSingleton(serviceInterfaceType, provider => factoryDelegate());
                     break;
                 case ServiceLifetime.SingleCall:
-                    _container.AddTransient(serviceInterfaceType,provider => factoryDelegate());
+                    _container.AddTransient(serviceInterfaceType, provider => factoryDelegate());
                     break;
             }
             
@@ -157,7 +157,6 @@ namespace CoreRemoting.DependencyInjection
             
             if (!string.IsNullOrEmpty(serviceName))
                 ThrowExceptionIfCustomServiceName(serviceName, serviceInterfaceType);
-
             
             return _container.Any(descriptor => descriptor.ServiceType == serviceInterfaceType);
         }
@@ -172,7 +171,8 @@ namespace CoreRemoting.DependencyInjection
 
             foreach (var serviceDescriptor in _container)
             {
-                typeList.Add(serviceDescriptor.ImplementationType);
+                if (serviceDescriptor.ImplementationType != null) // null for factory register
+                    typeList.Add(serviceDescriptor.ImplementationType);
                 typeList.Add(serviceDescriptor.ServiceType);
             }
 
