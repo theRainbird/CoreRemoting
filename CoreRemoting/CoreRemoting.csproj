@@ -45,6 +45,7 @@
       <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
       <PackageReference Include="WatsonTcp" Version="5.1.0" />
       <PackageReference Include="websocketsharp.core" Version="1.0.0" />
+      <PackageReference Include="NetCoreServer" Version="2.0.5" />
     </ItemGroup>
     
     <ItemGroup>
