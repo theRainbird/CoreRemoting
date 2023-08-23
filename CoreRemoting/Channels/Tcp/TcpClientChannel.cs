@@ -29,6 +29,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     public void Init(IRemotingClient client)
     {
         _tcpClient = new WatsonTcpClient(client.Config.ServerHostName, client.Config.ServerPort);
+        _tcpClient.Settings.NoDelay = true;
 
         _handshakeMetadata = 
             new Dictionary<string, object>
