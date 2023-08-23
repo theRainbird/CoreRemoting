@@ -313,6 +313,24 @@ namespace CoreRemoting.Tests
         }
         
         [Fact]
+        public void Inherited_methods_should_be_called_correctly()
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0, 
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            client.Connect();
+            var proxy = client.CreateProxy<ITestService>();
+
+            var result = proxy.BaseMethod();
+            
+            Assert.True(result);
+        }
+        
+        [Fact]
         public void Enum_arguments_should_be_passed_correctly()
         {
             using var client = new RemotingClient(new ClientConfig()

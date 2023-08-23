@@ -422,7 +422,13 @@ namespace CoreRemoting
             
             if (callMessage.GenericArgumentTypeNames != null && callMessage.GenericArgumentTypeNames.Length > 0)
             {
-                var methods = serviceInterfaceType.GetMethods();
+                var methods = 
+                    serviceInterfaceType.GetMethods().ToList();
+
+                foreach (var inheritedInterface in serviceInterfaceType.GetInterfaces())
+                {
+                    methods.AddRange(inheritedInterface.GetMethods());
+                }
                 
                 method = 
                     methods.SingleOrDefault(m => 
@@ -444,7 +450,21 @@ namespace CoreRemoting
                 method =
                     serviceInterfaceType.GetMethod(
                         name: callMessage.MethodName,
-                        types: parameterTypes);    
+                        types: parameterTypes);
+
+                if (method == null)
+                {
+                    foreach (var inheritedInterface in serviceInterfaceType.GetInterfaces())
+                    {
+                        method =
+                            inheritedInterface.GetMethod(
+                                name: callMessage.MethodName,
+                                types: parameterTypes);
+                        
+                        if (method != null)
+                            break;
+                    }
+                }
             }
 
             if (method == null)
