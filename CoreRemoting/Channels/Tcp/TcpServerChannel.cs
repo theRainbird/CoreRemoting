@@ -30,6 +30,7 @@ public class TcpServerChannel : IServerChannel
         _remotingServer = server ?? throw new ArgumentNullException(nameof(server));
 
         _tcpServer = new WatsonTcpServer(null, _remotingServer.Config.NetworkPort);
+        _tcpServer.Settings.NoDelay = true;
         _tcpServer.Events.ClientConnected += OnClientConnected;
         _tcpServer.Events.ClientDisconnected += OnClientDisconnected;
         _tcpServer.Events.MessageReceived += OnTcpMessageReceived;
