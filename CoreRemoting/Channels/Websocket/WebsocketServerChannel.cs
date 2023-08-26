@@ -1,4 +1,6 @@
 using System;
+using System.Net.Sockets;
+using System.Reflection;
 using WebSocketSharp.Server;
 
 namespace CoreRemoting.Channels.Websocket
@@ -20,10 +22,30 @@ namespace CoreRemoting.Channels.Websocket
             _server = server ?? throw new ArgumentNullException(nameof(server));
             
             _webSocketServer = new WebSocketServer(_server.Config.NetworkPort, secure: false);
-            
+
+            TryToSetNoDelayFlagOnUnderlyingTcpListener();
+
             _webSocketServer.AddWebSocketService(
                 path: "/rpc",
                 initializer: () => new RpcWebsocketSharpBehavior(_server));
+        }
+
+        /// <summary>
+        /// Try to set NoDelay flag on the underlying TcpListener to enhance performance on Linux.
+        /// </summary>
+        private void TryToSetNoDelayFlagOnUnderlyingTcpListener()
+        {
+            var webSocketServerType = _webSocketServer.GetType();
+            var listenerPrivateField =
+                webSocketServerType.GetField(
+                    name: "_listener",
+                    bindingAttr: BindingFlags.NonPublic | BindingFlags.GetField);
+
+            if (listenerPrivateField != null)
+            {
+                if (listenerPrivateField.GetValue(_webSocketServer) is TcpListener tcpListener)
+                    tcpListener.Server.NoDelay = true;
+            }
         }
 
         /// <summary>
