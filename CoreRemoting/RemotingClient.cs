@@ -121,7 +121,7 @@ namespace CoreRemoting
             foreach (var activeCall in _activeCalls)
             {
                 activeCall.Value.Error = true;
-                activeCall.Value.RemoteException = new RemoteInvocationException("ServerDisconnected");
+                activeCall.Value.RemoteException = new RemoteInvocationException("Server Disconnected");
                 activeCall.Value.WaitHandle.Set();
             }
         }
