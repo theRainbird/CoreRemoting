@@ -22,7 +22,10 @@ namespace CoreRemoting.Channels.Websocket
         /// Event: Fires when an error is occurred.
         /// </summary>
         public event Action<string, Exception> ErrorOccured;
-        
+
+        /// <inheritdoc />
+        public event Action Disconnected;
+
         /// <summary>
         /// Initializes the channel.
         /// </summary>
@@ -87,9 +90,15 @@ namespace CoreRemoting.Channels.Websocket
             
             _webSocket.OnMessage += OnMessage;
             _webSocket.OnError += OnError;
+            _webSocket.OnClose += OnDisconnected;
 
             _webSocket.Connect();
             _webSocket.Send(string.Empty);
+        }
+
+        private void OnDisconnected(object o, CloseEventArgs closeEventArgs)
+        {
+            Disconnected.Invoke();
         }
 
         /// <summary>

@@ -90,6 +90,7 @@ namespace CoreRemoting
             _channel = config.Channel ?? new TcpClientChannel();
             
             _channel.Init(this);
+            _channel.Disconnected += OnDisconnected;
             _rawMessageTransport = _channel.RawMessageTransport;
             _rawMessageTransport.ReceiveMessage += OnMessage;
             _rawMessageTransport.ErrorOccured += (s, exception) =>
@@ -113,6 +114,16 @@ namespace CoreRemoting
                 return;
             
             RemotingClient.DefaultRemotingClient ??= this;
+        }
+
+        private void OnDisconnected()
+        {
+            foreach (var activeCall in _activeCalls)
+            {
+                activeCall.Value.Error = true;
+                activeCall.Value.RemoteException = new RemoteInvocationException("Server Disconnected");
+                activeCall.Value.WaitHandle.Set();
+            }
         }
 
         #endregion

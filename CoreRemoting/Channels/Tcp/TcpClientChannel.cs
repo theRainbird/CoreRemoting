@@ -22,6 +22,9 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// </summary>
     public event Action<string, Exception> ErrorOccured;
 
+    /// <inheritdoc />
+    public event Action Disconnected;
+
     /// <summary>
     /// Initializes the channel.
     /// </summary>
@@ -54,9 +57,15 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
 
         _tcpClient.Events.ExceptionEncountered += OnError;
         _tcpClient.Events.MessageReceived += OnMessage;
+        _tcpClient.Events.ServerDisconnected += OnDisconnected;
         _tcpClient.Connect();
 
         _tcpClient.Send(new byte[1] { 0x0 }, _handshakeMetadata);
+    }
+
+    private void OnDisconnected(object o, DisconnectionEventArgs disconnectionEventArgs)
+    {
+        Disconnected.Invoke();
     }
 
     /// <summary>

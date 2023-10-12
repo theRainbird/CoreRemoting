@@ -32,5 +32,10 @@ namespace CoreRemoting.Channels
         /// Gets the raw message transport component for this connection.
         /// </summary>
         IRawMessageTransport RawMessageTransport { get; }
+
+        /// <summary>
+        /// Event: Fires when the server disconnects.
+        /// </summary>
+        event Action Disconnected;
     }
 }
