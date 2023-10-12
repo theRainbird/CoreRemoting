@@ -1,7 +1,6 @@
 ﻿using System;
 using CoreRemoting;
 using CoreRemoting.Serialization.Binary;
-using CoreRemoting.Serialization.Bson;
 using HelloWorld.Shared;
 
 namespace HelloWorld.Client

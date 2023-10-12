@@ -9,15 +9,16 @@
         <Copyright>2023 Hagen Siegel</Copyright>
         <PackageTags>Remoting RPC Network</PackageTags>
         <Company>Hagen Siegel</Company>
-        <AssemblyVersion>1.1.15</AssemblyVersion>
+        <AssemblyVersion>1.1.16</AssemblyVersion>
         <TargetFramework>netstandard2.0</TargetFramework>
         <PackageProjectUrl>https://github.com/theRainbird/CoreRemoting</PackageProjectUrl>
         <PackageLicenseUrl></PackageLicenseUrl>
         <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageVersion>1.1.15</PackageVersion>
-        <PackageReleaseNotes>- Fixed memory leaks
-- Fixed calling inherited interface methods</PackageReleaseNotes>
+        <PackageVersion>1.1.16</PackageVersion>
+        <PackageReleaseNotes>- Fixed client freeze on server disconnect
+- Updated dependencies (Castle.Windsor, WatsonTCP, ...)
+</PackageReleaseNotes>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -29,13 +30,13 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Castle.Windsor" Version="5.1.2" />
-      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.0" />
-      <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+      <PackageReference Include="Castle.Windsor" Version="6.0.0" />
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="7.0.0" />
+      <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
       <PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.2" />
       <PackageReference Include="Serialize.Linq" Version="2.0.0" />
       <PackageReference Include="stakx.DynamicProxy.AsyncInterceptor" Version="0.1.0" />
-      <PackageReference Include="System.Configuration.ConfigurationManager" Version="6.0.1" />
+      <PackageReference Include="System.Configuration.ConfigurationManager" Version="7.0.0" />
       <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
       <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.7.0" />
       <PackageReference Include="System.Runtime.Serialization.Formatters" Version="4.3.0" />
@@ -43,7 +44,7 @@
       <PackageReference Include="System.Security.Cryptography.Cng" Version="5.0.0" />
       <PackageReference Include="System.Security.Cryptography.OpenSsl" Version="5.0.0" />
       <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
-      <PackageReference Include="WatsonTcp" Version="5.1.0" />
+      <PackageReference Include="WatsonTcp" Version="5.1.7" />
       <PackageReference Include="websocketsharp.core" Version="1.0.0" />
     </ItemGroup>
     

@@ -1,9 +1,7 @@
 using Xunit;
-using CoreRemoting;
 using System;
 using System.Threading;
 using CoreRemoting.ClassicRemotingApi;
-using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
 using Xunit.Abstractions;
 

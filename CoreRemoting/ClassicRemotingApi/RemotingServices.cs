@@ -61,7 +61,7 @@ namespace CoreRemoting.ClassicRemotingApi
             var genericFunc = typeof(Func<>);
             var factoryFunc = genericFunc.MakeGenericType(interfaceType);
             var factoryFuncProxy =
-                new DelegateProxy(factoryFunc, delegateArgs => serviceInstance);
+                new DelegateProxy(factoryFunc, _ => serviceInstance);
             
             registerServiceMethod.Invoke(container, new object[]
             {

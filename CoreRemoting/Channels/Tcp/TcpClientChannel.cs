@@ -60,12 +60,12 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
         _tcpClient.Events.ServerDisconnected += OnDisconnected;
         _tcpClient.Connect();
 
-        _tcpClient.Send(new byte[1] { 0x0 }, _handshakeMetadata);
+        _tcpClient.Send(new byte[] { 0x0 }, _handshakeMetadata);
     }
 
     private void OnDisconnected(object o, DisconnectionEventArgs disconnectionEventArgs)
     {
-        Disconnected.Invoke();
+        Disconnected?.Invoke();
     }
 
     /// <summary>
@@ -107,8 +107,9 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
             {
                 _tcpClient.Disconnect();
             }
-            catch 
+            catch
             {
+                // ignored
             }
         }
 

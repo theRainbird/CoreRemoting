@@ -98,7 +98,7 @@ namespace CoreRemoting.Channels.Websocket
 
         private void OnDisconnected(object o, CloseEventArgs closeEventArgs)
         {
-            Disconnected.Invoke();
+            Disconnected?.Invoke();
         }
 
         /// <summary>

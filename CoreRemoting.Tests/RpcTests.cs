@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
-using CoreRemoting.Serialization.Binary;
 using CoreRemoting.Tests.ExternalTypes;
 using CoreRemoting.Tests.Tools;
 using Xunit;
@@ -12,9 +11,9 @@ namespace CoreRemoting.Tests
     [Collection("CoreRemoting")]
     public class RpcTests : IClassFixture<ServerFixture>
     {
-        private ServerFixture _serverFixture;
+        private readonly ServerFixture _serverFixture;
         private readonly ITestOutputHelper _testOutputHelper;
-        private bool _remoteServiceCalled = false;
+        private bool _remoteServiceCalled;
         
         public RpcTests(ServerFixture serverFixture, ITestOutputHelper testOutputHelper)
         {
@@ -233,7 +232,7 @@ namespace CoreRemoting.Tests
                 serviceEventResetEvent.Set();
             };
 
-            proxy.CustomDelegateEvent += s =>
+            proxy.CustomDelegateEvent += _ =>
             {
                 customDelegateEventCalled = true;
                 customDelegateEventResetEvent.Set();

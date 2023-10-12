@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Runtime.InteropServices;
 using CoreRemoting;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Serialization.Binary;
-using CoreRemoting.Serialization.Bson;
 using HelloWorld.Shared;
 
 namespace HelloWorld.Server

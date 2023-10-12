@@ -1,5 +1,4 @@
 using System.Threading;
-using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
 using Xunit;
 

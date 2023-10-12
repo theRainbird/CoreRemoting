@@ -1,9 +1,7 @@
 using System;
 using CoreRemoting.DependencyInjection;
-using CoreRemoting.Serialization.Binary;
 using CoreRemoting.Tests.Tools;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace CoreRemoting.Tests;
 
@@ -53,7 +51,7 @@ public class ServerFixture : IDisposable
             
         Server = new RemotingServer(serverConfig);
         
-        Server.Error += (s , e)  =>
+        Server.Error += (_ , _)  =>
         {
             ServerErrorCount++;
         };

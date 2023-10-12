@@ -44,8 +44,8 @@ namespace CoreRemoting
             
             _serverInstances.AddOrUpdate(
                 key: _config.UniqueServerInstanceName,
-                addValueFactory: uniqueInstanceName => this,
-                updateValueFactory: (uniqueInstanceName, oldServer) =>
+                addValueFactory: _ => this,
+                updateValueFactory: (_, oldServer) =>
                 {
                     oldServer?.Dispose();
                     return this;

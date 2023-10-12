@@ -125,10 +125,10 @@ namespace CoreRemoting.DependencyInjection
             switch (lifetime)
             {
                 case ServiceLifetime.Singleton:
-                    _container.AddSingleton(serviceInterfaceType, provider => factoryDelegate());
+                    _container.AddSingleton(serviceInterfaceType, _ => factoryDelegate());
                     break;
                 case ServiceLifetime.SingleCall:
-                    _container.AddTransient(serviceInterfaceType, provider => factoryDelegate());
+                    _container.AddTransient(serviceInterfaceType, _ => factoryDelegate());
                     break;
             }
             

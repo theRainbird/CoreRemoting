@@ -50,7 +50,8 @@ namespace CoreRemoting.Encryption
             var hash = sha256.ComputeHash(rawData);
             
             // Import the sender's public key
-            using var sendersPublicKey = new RSACryptoServiceProvider(keySize) { PersistKeyInCsp = false };
+            using var sendersPublicKey = new RSACryptoServiceProvider(keySize);
+            sendersPublicKey.PersistKeyInCsp = false;
             sendersPublicKey.ImportCspBlob(sendersPublicKeyBlob);
 
             // Create an RSAPKCS1SignatureDeformatter object and pass it the RSA instance to transfer the public key.

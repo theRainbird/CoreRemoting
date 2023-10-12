@@ -120,7 +120,7 @@ namespace CoreRemoting
             }
 
             _remoteDelegateInvocationEventAggregator.RemoteDelegateInvocationNeeded +=
-                (delegateType, uniqueCallKey, handlerKey, arguments) =>
+                (_, uniqueCallKey, handlerKey, arguments) =>
                 {
                     var sharedSecret =
                         MessageEncryption
@@ -628,9 +628,9 @@ namespace CoreRemoting
                 return false;
             }
 
-            if (_delegateProxyCache.ContainsKey(remoteDelegateInfo.HandlerKey))
+            if (_delegateProxyCache.TryGetValue(remoteDelegateInfo.HandlerKey, out var value))
             {
-                mappedArgument = _delegateProxyCache[remoteDelegateInfo.HandlerKey].ProxiedDelegate;
+                mappedArgument = value.ProxiedDelegate;
                 return true;
             }
 

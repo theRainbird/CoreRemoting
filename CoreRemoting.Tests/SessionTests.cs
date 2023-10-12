@@ -3,12 +3,9 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Security;
 using System.Threading;
-using System.Threading.Tasks;
 using CoreRemoting.Authentication;
-using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace CoreRemoting.Tests
 {
@@ -17,13 +14,11 @@ namespace CoreRemoting.Tests
     [SuppressMessage("ReSharper", "CoVariantArrayConversion")]
     public class SessionTests : IClassFixture<ServerFixture>
     {
-        private ServerFixture _serverFixture;
-        private readonly ITestOutputHelper _testOutputHelper;
-        
-        public SessionTests(ServerFixture serverFixture, ITestOutputHelper testOutputHelper)
+        private readonly ServerFixture _serverFixture;
+
+        public SessionTests(ServerFixture serverFixture)
         {
             _serverFixture = serverFixture;
-            _testOutputHelper = testOutputHelper;
         }
         
         [Fact]
@@ -144,7 +139,7 @@ namespace CoreRemoting.Tests
         [Fact]
         public void RemotingSession_Dispose_should_disconnect_client()
         {
-            _serverFixture.TestService.TestMethodFake = arg =>
+            _serverFixture.TestService.TestMethodFake = _ =>
             {
                 RemotingSession.Current.Close();
                 return null;

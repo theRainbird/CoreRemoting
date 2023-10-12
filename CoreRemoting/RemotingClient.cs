@@ -103,8 +103,8 @@ namespace CoreRemoting
 
             _clientInstances.AddOrUpdate(
                 key: config.UniqueClientInstanceName,
-                addValueFactory: uniqueInstanceName => this,
-                updateValueFactory: (uniqueInstanceName, oldClient) =>
+                addValueFactory: _ => this,
+                updateValueFactory: (_, oldClient) =>
                 {
                     oldClient?.Dispose();
                     return this;

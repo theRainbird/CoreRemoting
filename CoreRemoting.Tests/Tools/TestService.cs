@@ -5,7 +5,7 @@ namespace CoreRemoting.Tests.Tools
 {
     public class TestService : ITestService
     {
-        private int _counter = 0;
+        private int _counter;
         
         public Func<object, object> TestMethodFake { get; set; }
 

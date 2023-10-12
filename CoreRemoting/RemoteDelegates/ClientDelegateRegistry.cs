@@ -76,7 +76,7 @@ namespace CoreRemoting.RemoteDelegates
         /// <returns>Client delegate</returns>
         public Delegate GetDelegateByHandlerKey(Guid handlerKey)
         {
-            return _registry.ContainsKey(handlerKey) ? _registry[handlerKey].ClientDelegate : null;
+            return _registry.TryGetValue(handlerKey, out var value) ? value.ClientDelegate : null;
         }
 
         /// <summary>
