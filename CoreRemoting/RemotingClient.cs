@@ -575,7 +575,7 @@ namespace CoreRemoting
         internal Task<ClientRpcContext> InvokeRemoteMethod(MethodCallMessage methodCallMessage, bool oneWay = false)
         {
             var sendTask =
-                new Task<ClientRpcContext>(() =>
+                Task.Run(() =>
                 {
                     byte[] sharedSecret =
                         MessageEncryption
@@ -616,8 +616,6 @@ namespace CoreRemoting
                     return clientRpcContext;
                 });
 
-            sendTask.Start();
-            
             return sendTask;
         }
         
