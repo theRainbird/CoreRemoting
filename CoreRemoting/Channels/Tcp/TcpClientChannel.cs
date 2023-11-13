@@ -133,7 +133,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <param name="rawMessage">Raw message data</param>
     public void SendMessage(byte[] rawMessage)
     {
-        _tcpClient.Send(rawMessage);
+        _tcpClient?.Send(rawMessage);
     }
     
     /// <summary>
