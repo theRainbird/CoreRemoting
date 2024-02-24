@@ -132,7 +132,7 @@ namespace CoreRemoting.ClassicRemotingApi
         /// </summary>
         /// <param name="interfaceType">Service interface type</param>
         /// <param name="implementationType">Service implementation type</param>
-        /// <param name="lifetime">LIfetime (SingleCall / Singleton)</param>
+        /// <param name="lifetime">Lifetime (SingleCall / Singleton)</param>
         /// <param name="serviceName">Unique name of the service (Full name of interface type is used, if left blank)</param>
         /// <param name="uniqueServerInstanceName">Unique instance name of the CoreRemoting server that should used for hosting this service</param>
         public static void RegisterWellKnownServiceType(
@@ -152,7 +152,7 @@ namespace CoreRemoting.ClassicRemotingApi
             var registerServiceMethod =
                 container.GetRegisterServiceMethodForWellknownServiceType(interfaceType, implementationType);
 
-            registerServiceMethod.Invoke(container, new object[]{ lifetime, serviceName });
+            registerServiceMethod.Invoke(container, new object[]{ lifetime, serviceName, false });
         }
 
         /// <summary>

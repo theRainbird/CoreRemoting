@@ -68,7 +68,16 @@ namespace HelloWorld.Server
             // Start server
             server.Start();
             
-            Console.WriteLine("Server is running.");
+            Console.WriteLine("\nRegistered services");
+            Console.WriteLine("-------------------");
+            
+            // List registered services
+            foreach (var registration in server.ServiceRegistry.GetServiceRegistrations())
+            {
+                Console.WriteLine($"ServiceName = '{registration.ServiceName}', InterfaceType = {registration.InterfaceType.FullName}, UsesFactory = {registration.UsesFactory}, Lifetime = {registration.ServiceLifetime}");
+            }
+            
+            Console.WriteLine("\nServer is running.");
             Console.ReadLine();
         }
     }

@@ -64,7 +64,8 @@ namespace CoreRemoting
             MessageEncryptionManager = new MessageEncryptionManager();
             
             _container.RegisterService<IDelegateProxyFactory, DelegateProxyFactory>(
-                lifetime: ServiceLifetime.Singleton);
+                lifetime: ServiceLifetime.Singleton,
+                asHiddenSystemService: true);
             
             _config.RegisterServicesAction?.Invoke(_container);
 

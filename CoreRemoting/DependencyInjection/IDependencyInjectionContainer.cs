@@ -29,11 +29,13 @@ namespace CoreRemoting.DependencyInjection
         /// </summary>
         /// <param name="lifetime">Service lifetime (Singleton / SingleCall)</param>
         /// <param name="serviceName">Optional unique service name</param>
+        /// <param name="asHiddenSystemService">Specifies if the service should be registered as hidden system service</param>
         /// <typeparam name="TServiceInterface">Service interface type</typeparam>
         /// <typeparam name="TServiceImpl">Service implementation type</typeparam>
         void RegisterService<TServiceInterface, TServiceImpl>(
             ServiceLifetime lifetime, 
-            string serviceName = "")
+            string serviceName = "",
+            bool asHiddenSystemService = false)
             where TServiceInterface : class
             where  TServiceImpl : class, TServiceInterface;
 
@@ -43,11 +45,13 @@ namespace CoreRemoting.DependencyInjection
         /// <param name="factoryDelegate">Factory delegate, which is called to create service instances</param>
         /// <param name="lifetime">Service lifetime (Singleton / SingleCall)</param>
         /// <param name="serviceName">Optional unique service name</param>
+        /// <param name="asHiddenSystemService">Specifies if the service should be registered as hidden system service</param>
         /// <typeparam name="TServiceInterface">Service interface type</typeparam>
         void RegisterService<TServiceInterface>(
             Func<TServiceInterface> factoryDelegate, 
             ServiceLifetime lifetime, 
-            string serviceName = "")
+            string serviceName = "",
+            bool asHiddenSystemService = false)
             where TServiceInterface : class;
 
         /// <summary>
@@ -58,7 +62,7 @@ namespace CoreRemoting.DependencyInjection
         Type GetServiceInterfaceType(string serviceName);
 
         /// <summary>
-        /// Gets all registered types.
+        /// Gets all registered types (includes non-service types).
         /// </summary>
         /// <returns>Enumerable list of registered types</returns>
         IEnumerable<Type> GetAllRegisteredTypes();
@@ -70,5 +74,19 @@ namespace CoreRemoting.DependencyInjection
         /// <typeparam name="TServiceInterface">Service interface type</typeparam>
         /// <returns>True, if the service is registered, otherwise false</returns>
         bool IsRegistered<TServiceInterface>(string serviceName = "") where TServiceInterface : class;
+
+        /// <summary>
+        /// Gets registration information about all registered services.
+        /// </summary>
+        /// <param name="includeHiddenSystemServices">Specifies if hidden system services should be included in the result list</param>
+        /// <returns>Enumerable list of service registrations</returns>
+        IEnumerable<ServiceRegistration> GetServiceRegistrations(bool includeHiddenSystemServices = false);
+
+        /// <summary>
+        /// Returns a service registration by unique service name.
+        /// </summary>
+        /// <param name="serviceName">Unique service name</param>
+        /// <returns>Service registration</returns>
+        ServiceRegistration GetServiceRegistration(string serviceName);
     }
 }

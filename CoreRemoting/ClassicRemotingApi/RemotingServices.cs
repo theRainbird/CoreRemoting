@@ -53,7 +53,7 @@ namespace CoreRemoting.ClassicRemotingApi
             var container = server.ServiceRegistry;
             
             var registerServiceMethod =
-                container.GetRegisterServiceMethodForServiceInstance(interfaceType, serviceInstance);
+                container.GetRegisterServiceMethodForServiceInstance(interfaceType);
 
             if (string.IsNullOrWhiteSpace(serviceName))
                 serviceName = interfaceType.FullName;
@@ -67,7 +67,8 @@ namespace CoreRemoting.ClassicRemotingApi
             {
                 factoryFuncProxy.ProxiedDelegate,
                 ServiceLifetime.Singleton, 
-                serviceName
+                serviceName,
+                false
             });
 
             return serviceName;

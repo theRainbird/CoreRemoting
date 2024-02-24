@@ -39,7 +39,7 @@ namespace CoreRemoting.DependencyInjection
                         Args = m.GetGenericArguments()
                     })
                     .Where(x =>
-                        x.Params.Length == 2 &&
+                        x.Params.Length == 3 &&
                         x.Args.Length == 2)
                     .Select(x => x.Method)
                     .First()
@@ -47,19 +47,17 @@ namespace CoreRemoting.DependencyInjection
 
             return registerServiceMethod;
         }
-        
+
         /// <summary>
         /// Gets the method info of the RegisterService method to register an object as service..
         /// </summary>
         /// <param name="container">DI container</param>
         /// <param name="interfaceType">Service interface type</param>
-        /// <param name="serviceInstance">Service instance</param>
         /// <returns>Method info of the RegisterService method</returns>
         /// <exception cref="ArgumentNullException">Thrown if container is set to null</exception>
         public static MethodInfo GetRegisterServiceMethodForServiceInstance(
             this IDependencyInjectionContainer container,
-            Type interfaceType,
-            object serviceInstance)
+            Type interfaceType)
         {
             if (container == null)
                 throw new ArgumentNullException(nameof(container));
@@ -78,7 +76,7 @@ namespace CoreRemoting.DependencyInjection
                         Args = m.GetGenericArguments()
                     })
                     .Where(x =>
-                        x.Params.Length == 3 &&
+                        x.Params.Length == 4 &&
                         x.Args.Length == 1)
                     .Select(x => x.Method)
                     .First()
