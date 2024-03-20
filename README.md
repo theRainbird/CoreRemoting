@@ -17,6 +17,7 @@ Documentation: https://github.com/theRainbird/CoreRemoting/wiki
 - To create server applications that needs to run on several cluster nodes
 
 ## Facts & features
+- Support for cross framework serialization (since version 1.2.0.0)
 - Creates proxy objects for remote services at runtime (uses Castle.DynamicProxy under the hood)
 - Services can have `SingleCall` or `Singeton` lifetime
 - Uses websockets for TCP duplex network communication by default (based on webshocket-sharp)
