@@ -5,7 +5,5 @@ namespace CoreRemoting
     /// to a client.
     /// </summary>
     [System.AttributeUsage(System.AttributeTargets.Interface)]
-    public class ReturnAsProxyAttribute : System.Attribute
-    {
-    }
+    public class ReturnAsProxyAttribute : System.Attribute;
 }

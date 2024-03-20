@@ -1,4 +1,5 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.DirectoryServices.AccountManagement;
 
@@ -59,14 +60,14 @@ namespace CoreRemoting.Authentication
                 identityName = domain + "\\" + userName;                
             }
             
-            var isAuthenticated = principalContext.ValidateCredentials(userName, password);
+            var isAuthenticated = principalContext.ValidateCredentials(userName ?? string.Empty, password ?? string.Empty);
 
             if (isAuthenticated)
             {
                 var principal = UserPrincipal.FindByIdentity(principalContext, identityName ?? string.Empty);
                 var userIsMemberOf = 
                     principal == null
-                        ? new string[0]
+                        ? Array.Empty<string>()
                         : principal.GetAuthorizationGroups().Select(group => group.Name);
 
                 authenticatedIdentity =

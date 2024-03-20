@@ -6,7 +6,5 @@ namespace CoreRemoting
     /// One way methods are treated a fire-and-forget.
     /// </summary>
     [System.AttributeUsage(System.AttributeTargets.Method)]  
-    public class OneWayAttribute : System.Attribute  
-    {
-    }
+    public class OneWayAttribute : System.Attribute;
 }

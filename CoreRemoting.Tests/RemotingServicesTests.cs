@@ -104,8 +104,6 @@ namespace CoreRemoting.Tests
             
             clientThread.Start();
             clientThread.Join();
-            
-            server.Dispose();
         }
     }
 }
