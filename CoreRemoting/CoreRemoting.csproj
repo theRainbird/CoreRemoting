@@ -17,7 +17,7 @@
         <RepositoryType>git</RepositoryType>
         <PackageVersion>1.2.0.0</PackageVersion>
         <PackageReleaseNotes>- Added support for cross framework serialization
-- Fixed possible thread dedlocks
+- Fixed possible thread deadlocks
 - Improved service registration and methods for getting service registration metadata.
 </PackageReleaseNotes>
     </PropertyGroup>
