@@ -61,7 +61,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         /// <summary>
         /// Gets or sets the type of the server channel which should be used for communication.
         /// </summary>
-        [ConfigurationProperty("channel", IsRequired = false, DefaultValue = "ws")]
+        [ConfigurationProperty("channel", IsRequired = false, DefaultValue = "tcp")]
         public string Channel
         {
             get => (string)base["channel"];
