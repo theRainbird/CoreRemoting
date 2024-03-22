@@ -21,11 +21,11 @@ namespace CoreRemoting.Channels
         /// Gets or sets the last exception.
         /// </summary>
         NetworkException LastException { get; set; }
-        
+
         /// <summary>
         /// Sends a message to the server.
         /// </summary>
         /// <param name="rawMessage">Raw message data</param>
-        void SendMessage(byte[] rawMessage);
+        bool SendMessage(byte[] rawMessage);
     }
 }

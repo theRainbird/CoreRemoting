@@ -104,8 +104,8 @@ public class TcpConnection : IRawMessageTransport
     /// Sends a message to the server.
     /// </summary>
     /// <param name="rawMessage">Raw message data</param>
-    public void SendMessage(byte[] rawMessage)
+    public bool SendMessage(byte[] rawMessage)
     {
-        _tcpServer.Send(_clientMetadata.Guid, rawMessage);
+        return _tcpServer.Send(_clientMetadata.Guid, rawMessage);
     }
 }
