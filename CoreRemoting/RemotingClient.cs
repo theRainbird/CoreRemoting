@@ -434,32 +434,29 @@ namespace CoreRemoting
         /// <param name="rawMessage">Raw message data</param>
         private void OnMessage(byte[] rawMessage)
         {
-            Task.Run(() =>
-            {
-                var message = Serializer.Deserialize<WireMessage>(rawMessage);
+            var message = Serializer.Deserialize<WireMessage>(rawMessage);
 
-                switch (message.MessageType.ToLower())
-                {
-                    case "complete_handshake":
-                        ProcessCompleteHandshakeMessage(message);
-                        break;
-                    case "auth_response":
-                        ProcessAuthenticationResponseMessage(message);
-                        break;
-                    case "rpc_result":
-                        ProcessRpcResultMessage(message);
-                        break;
-                    case "invoke":
-                        ProcessRemoteDelegateInvocationMessage(message);
-                        break;
-                    case "goodbye":
-                        _goodbyeCompletedWaitHandle.Set();
-                        break;
-                    case "session_closed":
-                        Disconnect(quiet: true);
-                        break;
-                }
-            });
+            switch (message.MessageType.ToLower())
+            {
+                case "complete_handshake":
+                    ProcessCompleteHandshakeMessage(message);
+                    break;
+                case "auth_response":
+                    ProcessAuthenticationResponseMessage(message);
+                    break;
+                case "rpc_result":
+                    ProcessRpcResultMessage(message);
+                    break;
+                case "invoke":
+                    ProcessRemoteDelegateInvocationMessage(message);
+                    break;
+                case "goodbye":
+                    _goodbyeCompletedWaitHandle.Set();
+                    break;
+                case "session_closed":
+                    Disconnect(quiet: true);
+                    break;
+            }
         }
 
         /// <summary>
