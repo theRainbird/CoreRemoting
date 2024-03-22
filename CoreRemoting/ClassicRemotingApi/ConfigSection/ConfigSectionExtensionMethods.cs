@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
+using CoreRemoting.Channels.Tcp;
 using CoreRemoting.Channels.Websocket;
 using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Binary;
@@ -128,8 +129,14 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             var websocketServerChannelShortcuts = 
                 new[] {"ws", "websocket"};
 
+            var tcpServerChannelShortcuts = 
+                new[] {"ws", "websocket"};
+
             if (websocketServerChannelShortcuts.Contains(channelTypeName.ToLower()))
                 return new WebsocketServerChannel();
+
+            if (tcpServerChannelShortcuts.Contains(channelTypeName.ToLower()))
+                return new TcpServerChannel();
 
             var channelType = GetTypeFromConfigString(channelTypeName);
             
@@ -143,11 +150,17 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         /// <returns>Client channel</returns>
         private static IClientChannel CreateClientChannelFromConfigName(string channelTypeName)
         {
-            var websocketServerChannelShortcuts = 
+            var websocketClientChannelShortcuts = 
                 new[] {"ws", "websocket"};
 
-            if (websocketServerChannelShortcuts.Contains(channelTypeName.ToLower()))
+            var tcpClientChannelShortcuts = 
+                new[] {"tcp"};
+
+            if (websocketClientChannelShortcuts.Contains(channelTypeName.ToLower()))
                 return new WebsocketClientChannel();
+
+            if (tcpClientChannelShortcuts.Contains(channelTypeName.ToLower()))
+                return new TcpClientChannel();
 
             var channelType = GetTypeFromConfigString(channelTypeName);
             
