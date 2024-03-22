@@ -779,6 +779,7 @@ namespace CoreRemoting
             Disconnect();
             
             _cancellationTokenSource.Cancel();
+            _cancellationTokenSource.Dispose();
             _delegateRegistry.Clear();
 
             if (_rawMessageTransport != null)
