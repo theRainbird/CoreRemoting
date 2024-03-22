@@ -169,7 +169,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
                     "binaryserializer"
                 };
 
-            var bsonSerializerShortcusts =
+            var bsonSerializerShortcuts =
                 new[]
                 {
                     "bson", 
@@ -180,7 +180,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             if (binarySerializerShortcuts.Contains(serializerName.ToLower()))
                 return new BinarySerializerAdapter();
 
-            if (bsonSerializerShortcusts.Contains(serializerName.ToLower()))
+            if (bsonSerializerShortcuts.Contains(serializerName.ToLower()))
                 return new BsonSerializerAdapter();
             
             var serializerAdapterType = GetTypeFromConfigString(serializerName);
