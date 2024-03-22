@@ -51,7 +51,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         /// <summary>
         /// Gets or sets the name of the serializer which should be used by the server instance.
         /// </summary>
-        [ConfigurationProperty("serializer", IsRequired = false, DefaultValue = "binary")]
+        [ConfigurationProperty("serializer", IsRequired = false, DefaultValue = "bson")]
         public string Serializer
         {
             get => (string)base["serializer"];
