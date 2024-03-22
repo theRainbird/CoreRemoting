@@ -90,7 +90,7 @@ namespace CoreRemoting
                 var rawContent = _server.Serializer.Serialize(encryptedSessionId);
 
                 var signedMessageData =
-                    new SignedMessageData()
+                    new SignedMessageData
                     {
                         MessageRawData = rawContent,
                         Signature =

@@ -44,7 +44,7 @@ namespace CoreRemoting.RpcMessaging
             if (keyPair != null && sharedSecret != null)
             {
                 var signedMessageData =
-                    new SignedMessageData()
+                    new SignedMessageData
                     {
                         MessageRawData = serializedMessage,
                         Signature =
@@ -70,7 +70,7 @@ namespace CoreRemoting.RpcMessaging
                         iv: iv);
             
             return 
-                new WireMessage()
+                new WireMessage
                 {
                     MessageType = messageType,
                     Data = messageContent,

@@ -167,7 +167,7 @@ namespace CoreRemoting.ClassicRemotingApi
                 string.IsNullOrWhiteSpace(fileName)
                     ? ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None)
                     : ConfigurationManager.OpenMappedExeConfiguration(
-                        fileMap: new ExeConfigurationFileMap() {ExeConfigFilename = fileName},
+                        fileMap: new ExeConfigurationFileMap {ExeConfigFilename = fileName},
                         userLevel: ConfigurationUserLevel.None);
 
             var configSection = (CoreRemotingConfigSection) 

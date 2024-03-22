@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using WatsonTcp;
 
 namespace CoreRemoting.Channels.Tcp;
@@ -38,7 +39,15 @@ public class TcpServerChannel : IServerChannel
 
     private void OnClientConnected(object sender, ConnectionEventArgs e)
     {
-        _connections.TryAdd(e.Client.Guid, new TcpConnection(e.Client, _tcpServer, _remotingServer));
+        if(_connections.TryAdd(e.Client.Guid, new TcpConnection(e.Client, _tcpServer, _remotingServer)))
+        {
+            var metadata = new Dictionary<string, object>
+            {
+                { "ServerAcceptConnection", true }
+            };
+        
+            _tcpServer.Send(e.Client.Guid, new byte[]{ 0x02 }, metadata);
+        }
     }
     
     private void OnClientDisconnected(object sender, DisconnectionEventArgs e)

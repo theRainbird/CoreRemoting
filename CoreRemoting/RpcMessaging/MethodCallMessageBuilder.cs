@@ -39,7 +39,7 @@ namespace CoreRemoting.RpcMessaging
                     .Select(arg => arg.FullName + "," + arg.Assembly.GetName().Name)
                     .ToArray();
             
-            var message = new MethodCallMessage()
+            var message = new MethodCallMessage
             {
                 ServiceName = remoteServiceName,
                 MethodName = targetMethod.Name,
@@ -98,7 +98,7 @@ namespace CoreRemoting.RpcMessaging
                             : arg;
                 
                 yield return
-                    new MethodCallParameterMessage()
+                    new MethodCallParameterMessage
                     {
                         IsOut = parameterInfo.IsOut,
                         ParameterName = parameterInfo.Name,
@@ -132,7 +132,7 @@ namespace CoreRemoting.RpcMessaging
             
             var parameterInfos = method.GetParameters();
 
-            var message = new MethodCallResultMessage()
+            var message = new MethodCallResultMessage
             { 
                 IsReturnValueNull = isReturnValueNull,
                 ReturnValue = 
@@ -163,7 +163,7 @@ namespace CoreRemoting.RpcMessaging
                             : arg);
                 
                 outParameters.Add(
-                    new MethodCallOutParameterMessage()
+                    new MethodCallOutParameterMessage
                     {
                         ParameterName = parameterInfo.Name,
                         OutValue = serializedArgValue,
