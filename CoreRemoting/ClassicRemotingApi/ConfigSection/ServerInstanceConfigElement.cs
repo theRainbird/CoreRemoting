@@ -51,7 +51,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         /// <summary>
         /// Gets or sets the name of the serializer which should be used by the server instance.
         /// </summary>
-        [ConfigurationProperty("serializer", IsRequired = false, DefaultValue = "binary")]
+        [ConfigurationProperty("serializer", IsRequired = false, DefaultValue = "bson")]
         public string Serializer
         {
             get => (string)base["serializer"];
@@ -61,7 +61,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         /// <summary>
         /// Gets or sets the type of the server channel which should be used for communication.
         /// </summary>
-        [ConfigurationProperty("channel", IsRequired = false, DefaultValue = "ws")]
+        [ConfigurationProperty("channel", IsRequired = false, DefaultValue = "tcp")]
         public string Channel
         {
             get => (string)base["channel"];
