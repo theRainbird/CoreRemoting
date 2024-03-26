@@ -153,14 +153,10 @@ namespace CoreRemoting.RpcMessaging
                 
                 var isArgNull = arg == null;
 
-                var serializedArgValue = 
-                    serializer.Serialize(
-                        serializer.EnvelopeNeededForParameterSerialization
-                            ? typeof(Envelope)
-                            : parameterInfo.ParameterType, 
-                        serializer.EnvelopeNeededForParameterSerialization
-                            ? new Envelope(arg)
-                            : arg);
+                var serializedArgValue =
+                    serializer.EnvelopeNeededForParameterSerialization && arg is not Envelope
+                        ? serializer.Serialize(typeof(Envelope), new Envelope(arg))
+                        : serializer.Serialize(parameterInfo.ParameterType, arg);
                 
                 outParameters.Add(
                     new MethodCallOutParameterMessage()
