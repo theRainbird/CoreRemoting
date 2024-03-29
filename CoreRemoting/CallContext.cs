@@ -43,7 +43,7 @@ namespace CoreRemoting
                 var entry = stateSnaphsot[i];
                 
                 result[i] =
-                    new CallContextEntry()
+                    new CallContextEntry
                     {
                         Name = entry.Key,
                         Value = entry.Value.Value

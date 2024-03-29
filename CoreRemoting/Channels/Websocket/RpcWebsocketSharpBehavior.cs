@@ -35,9 +35,10 @@ namespace CoreRemoting.Channels.Websocket
         /// Sends a message over the websocket.
         /// </summary>
         /// <param name="rawMessage">Raw data of the message</param>
-        public void SendMessage(byte[] rawMessage)
+        public bool SendMessage(byte[] rawMessage)
         {
             Send(rawMessage);
+            return true;
         }
         
         /// <summary>

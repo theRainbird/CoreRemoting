@@ -80,7 +80,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             if (configElement == null)
                 throw new ArgumentNullException(nameof(configElement));
 
-            var clientConfig = new ClientConfig()
+            var clientConfig = new ClientConfig
             {
                 Channel = CreateClientChannelFromConfigName(configElement.Channel),
                 Serializer = CreateSerializerAdapterFromConfigName(configElement.Serializer),
