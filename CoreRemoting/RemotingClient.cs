@@ -573,8 +573,10 @@ namespace CoreRemoting
                 if (_activeCalls == null)
                     return;
 
-                if (!_activeCalls.Remove(unqiueCallKey, out clientRpcContext))
+                if (!_activeCalls.ContainsKey(unqiueCallKey))
                     throw new KeyNotFoundException("Received a result for a unknown call.");
+
+                clientRpcContext = _activeCalls[unqiueCallKey];
             }
 
             clientRpcContext.Error = message.Error;
@@ -646,10 +648,14 @@ namespace CoreRemoting
                     
                     lock (_syncObject)
                     {
-                        if (!_activeCalls.TryAdd(clientRpcContext.UniqueCallKey, clientRpcContext))
+                        if (_activeCalls.ContainsKey(clientRpcContext.UniqueCallKey))
                         {
                             clientRpcContext.Dispose();
                             throw new ApplicationException("Duplicate unique call key.");
+                        }
+                        else
+                        {
+                            _activeCalls.Add(clientRpcContext.UniqueCallKey, clientRpcContext);
                         }
                     }
 
