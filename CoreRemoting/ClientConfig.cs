@@ -37,7 +37,7 @@ namespace CoreRemoting
         /// <summary>
         /// Gets or sets the invocation timeout in seconds (0 means infinite).
         /// </summary>
-        public int InvocationTimeout { get; set; } = 0;
+        public int InvocationTimeout { get; set; }
 
         /// <summary>
         /// Gets or sets the send timeout in seconds (0 means infinite).

@@ -12,8 +12,8 @@ public static class CrossFrameworkSerialization
     /// Redirects all loading attempts from a specified assembly name to another assembly name.
     /// </summary>
     /// <param name="assemblyShortName">Name of the assembly that should be redirected</param>
-    /// <param name="replacmentAssemblyShortName">Name of the assembly that should be used as replacement</param>
-    public static void RedirectAssembly(string assemblyShortName, string replacmentAssemblyShortName)
+    /// <param name="replacementAssemblyShortName">Name of the assembly that should be used as replacement</param>
+    public static void RedirectAssembly(string assemblyShortName, string replacementAssemblyShortName)
     {
         Assembly HandleAssemblyResolve(object _, ResolveEventArgs args)
         {
@@ -23,8 +23,8 @@ public static class CrossFrameworkSerialization
             {
                 try
                 {
-                    var replacmentAssembly = Assembly.Load(replacmentAssemblyShortName);
-                    return replacmentAssembly;
+                    var replacementAssembly = Assembly.Load(replacementAssemblyShortName);
+                    return replacementAssembly;
                 }
                 catch (Exception)
                 {

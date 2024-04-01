@@ -120,7 +120,7 @@ namespace CoreRemoting
 
         private void OnDisconnected()
         {
-            Dictionary<Guid, ClientRpcContext> activeCalls = null;
+            Dictionary<Guid, ClientRpcContext> activeCalls;
             lock (_syncObject)
             {
                 if (_activeCalls == null)
@@ -204,7 +204,7 @@ namespace CoreRemoting
                 lock(_syncObject)
                 {
                     return _sessionId != Guid.Empty;
-                };
+                }
             }
         }
 

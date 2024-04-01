@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
+using CoreRemoting.Channels.Tcp;
 using CoreRemoting.Channels.Websocket;
 using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Binary;
@@ -127,10 +128,13 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         {
             var websocketServerChannelShortcuts = 
                 new[] {"ws", "websocket"};
-
+            
             if (websocketServerChannelShortcuts.Contains(channelTypeName.ToLower()))
                 return new WebsocketServerChannel();
 
+            if (channelTypeName == "tcp")
+                return new TcpServerChannel();
+            
             var channelType = GetTypeFromConfigString(channelTypeName);
             
             return (IServerChannel) Activator.CreateInstance(channelType);
@@ -148,6 +152,9 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
 
             if (websocketServerChannelShortcuts.Contains(channelTypeName.ToLower()))
                 return new WebsocketClientChannel();
+            
+            if (channelTypeName == "tcp")
+                return new TcpClientChannel();
 
             var channelType = GetTypeFromConfigString(channelTypeName);
             
@@ -169,7 +176,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
                     "binaryserializer"
                 };
 
-            var bsonSerializerShortcusts =
+            var bsonSerializerShortcuts =
                 new[]
                 {
                     "bson", 
@@ -180,7 +187,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             if (binarySerializerShortcuts.Contains(serializerName.ToLower()))
                 return new BinarySerializerAdapter();
 
-            if (bsonSerializerShortcusts.Contains(serializerName.ToLower()))
+            if (bsonSerializerShortcuts.Contains(serializerName.ToLower()))
                 return new BsonSerializerAdapter();
             
             var serializerAdapterType = GetTypeFromConfigString(serializerName);
