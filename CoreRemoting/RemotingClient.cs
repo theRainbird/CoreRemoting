@@ -577,6 +577,8 @@ namespace CoreRemoting
                     throw new KeyNotFoundException("Received a result for a unknown call.");
 
                 clientRpcContext = _activeCalls[unqiueCallKey];
+
+                _activeCalls.Remove(unqiueCallKey);
             }
 
             clientRpcContext.Error = message.Error;

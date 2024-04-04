@@ -36,11 +36,13 @@ namespace CoreRemoting.Serialization.Bson
         /// <summary>
         /// Gets the type of the wrapped value.
         /// </summary>
+        [JsonIgnore]
         public Type Type => _type;
 
         /// <summary>
         /// Gets the wrapped value.
         /// </summary>
+        [JsonIgnore]
         public object Value
         {
             get
