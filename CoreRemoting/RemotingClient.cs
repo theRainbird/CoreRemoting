@@ -616,8 +616,10 @@ namespace CoreRemoting
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e);
-                    throw;
+                    clientRpcContext.Error = true;
+                    clientRpcContext.RemoteException = new RemoteInvocationException(
+                        message: e.Message,
+                        innerEx: e.GetType().IsSerializable ? e : null);
                 }
             }
             clientRpcContext.WaitHandle.Set();
