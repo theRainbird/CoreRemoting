@@ -147,12 +147,12 @@ namespace CoreRemoting
         /// <summary>
         /// Gets the proxy generator instance.
         /// </summary>
-        private static readonly ProxyGenerator ProxyGenerator = new ProxyGenerator();       
+        private static readonly ProxyGenerator ProxyGenerator = new ProxyGenerator();
         
         /// <summary>
         /// Gets a utility object for building remoting messages.
         /// </summary>
-        internal IMethodCallMessageBuilder MethodCallMessageBuilder { get; }
+        internal IMethodCallMessageBuilder MethodCallMessageBuilder { get; set; }
 
         /// <summary>
         /// Gets a utility object to provide encryption of remoting messages.

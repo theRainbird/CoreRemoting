@@ -51,7 +51,7 @@ namespace CoreRemoting.Tests
             var testService = new TestService();
 
             using var server = new RemotingServer();
-            server.Start();            
+            server.Start();
             
             string serviceName =
                 RemotingServices.Marshal(testService, "test", typeof(ITestService), server.UniqueServerInstanceName);
