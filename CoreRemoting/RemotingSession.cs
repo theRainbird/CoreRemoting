@@ -402,82 +402,38 @@ namespace CoreRemoting
                     Session = this
                 };
 
-            var serializedResult = new byte[] { };
-
-            var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
-            var serviceInterfaceType =
-                _server.ServiceRegistry.GetServiceInterfaceType(callMessage.ServiceName);
-
-            CallContext.RestoreFromSnapshot(callMessage.CallContextSnapshot);
-
-            serverRpcContext.ServiceInstance = service;
-
-            callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
-                out var parameterValues,
-                out var parameterTypes);
-
-            parameterValues = MapArguments(parameterValues, parameterTypes);
-
-            var method = GetMethodInfo(callMessage, serviceInterfaceType, parameterTypes);
-            if (method == null)
-                throw new MissingMethodException(
-                    className: callMessage.ServiceName,
-                    methodName: callMessage.MethodName);
-
-            var oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
-        
-            if (_server.Config.AuthenticationRequired && !_isAuthenticated)
-                throw new NetworkException("Session is not authenticated.");
-
-            object result = null;
+            var serializedResult = Array.Empty<byte>();
+            var method = default(MethodInfo);
+            var parameterValues = Array.Empty<object>();
+            var parameterTypes = Array.Empty<Type>();
+            var oneWay = false;
 
             try
             {
-                CurrentSession.Value = this;
+                var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
+                var serviceInterfaceType =
+                    _server.ServiceRegistry.GetServiceInterfaceType(callMessage.ServiceName);
 
-                ((RemotingServer)_server).OnBeforeCall(serverRpcContext);
+                CallContext.RestoreFromSnapshot(callMessage.CallContextSnapshot);
 
-                result = method.Invoke(service, parameterValues);
+                serverRpcContext.ServiceInstance = service;
 
-                var returnType = method.ReturnType;
+                callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
+                    out parameterValues,
+                    out parameterTypes);
 
-                if (result != null)
-                {
-                    // Wait for result value if result is a Task
-                    if (typeof(Task).IsAssignableFrom(returnType))
-                    {
-                        var resultTask = (Task)result;
-                        resultTask.Wait();
+                parameterValues = MapArguments(parameterValues, parameterTypes);
 
-                        if (returnType.IsGenericType)
-                        {
-                            result = returnType.GetProperty("Result")?.GetValue(resultTask);
-                        }
-                        else // ordinary non-generic task
-                        {
-                            result = null;
-                        }
-                    }
-                    else if (returnType.GetCustomAttribute<ReturnAsProxyAttribute>() != null)
-                    {
-                        var isRegisteredService =
-                            returnType.IsInterface &&
-                            _server.ServiceRegistry
-                                .GetAllRegisteredTypes().Any(s =>
-                                    returnType.AssemblyQualifiedName != null &&
-                                    returnType.AssemblyQualifiedName.Equals(s.AssemblyQualifiedName));
+                method = GetMethodInfo(callMessage, serviceInterfaceType, parameterTypes);
+                if (method == null)
+                    throw new MissingMethodException(
+                        className: callMessage.ServiceName,
+                        methodName: callMessage.MethodName);
 
-                        if (!isRegisteredService)
-                        {
-                            throw new InvalidOperationException(
-                                $"Type '{returnType.AssemblyQualifiedName}' is not a registered service.");
-                        }
+                oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
 
-                        result = new ServiceReference(
-                            serviceInterfaceTypeName: returnType.FullName + ", " + returnType.Assembly.GetName().Name,
-                            serviceName: returnType.FullName);
-                    }
-                }
+                if (_server.Config.AuthenticationRequired && !_isAuthenticated)
+                    throw new NetworkException("Session is not authenticated.");
             }
             catch (Exception ex)
             {
@@ -486,21 +442,85 @@ namespace CoreRemoting
                         message: ex.Message,
                         innerEx: ex.GetType().IsSerializable ? ex : null);
 
-                ((RemotingServer)_server).OnAfterCall(serverRpcContext);
-
                 if (oneWay)
                     return;
 
                 serializedResult =
                     _server.Serializer.Serialize(serverRpcContext.Exception);
             }
-            finally
-            {
-                CurrentSession.Value = null;
-            }
+
+            object result = null;
 
             if (serverRpcContext.Exception == null)
             {
+                try
+                {
+                    CurrentSession.Value = this;
+
+                    ((RemotingServer)_server).OnBeforeCall(serverRpcContext);
+
+                    result = method.Invoke(serverRpcContext.ServiceInstance, parameterValues);
+
+                    var returnType = method.ReturnType;
+
+                    if (result != null)
+                    {
+                        // Wait for result value if result is a Task
+                        if (typeof(Task).IsAssignableFrom(returnType))
+                        {
+                            var resultTask = (Task)result;
+                            resultTask.Wait();
+
+                            if (returnType.IsGenericType)
+                            {
+                                result = returnType.GetProperty("Result")?.GetValue(resultTask);
+                            }
+                            else // ordinary non-generic task
+                            {
+                                result = null;
+                            }
+                        }
+                        else if (returnType.GetCustomAttribute<ReturnAsProxyAttribute>() != null)
+                        {
+                            var isRegisteredService =
+                                returnType.IsInterface &&
+                                _server.ServiceRegistry
+                                    .GetAllRegisteredTypes().Any(s =>
+                                        returnType.AssemblyQualifiedName != null &&
+                                        returnType.AssemblyQualifiedName.Equals(s.AssemblyQualifiedName));
+
+                            if (!isRegisteredService)
+                            {
+                                throw new InvalidOperationException(
+                                    $"Type '{returnType.AssemblyQualifiedName}' is not a registered service.");
+                            }
+
+                            result = new ServiceReference(
+                                serviceInterfaceTypeName: returnType.FullName + ", " + returnType.Assembly.GetName().Name,
+                                serviceName: returnType.FullName);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    serverRpcContext.Exception =
+                        new RemoteInvocationException(
+                            message: ex.Message,
+                            innerEx: ex.GetType().IsSerializable ? ex : null);
+
+                    ((RemotingServer)_server).OnAfterCall(serverRpcContext);
+
+                    if (oneWay)
+                        return;
+
+                    serializedResult =
+                        _server.Serializer.Serialize(serverRpcContext.Exception);
+                }
+                finally
+                {
+                    CurrentSession.Value = null;
+                }
+
                 if (!oneWay)
                 {
                     serverRpcContext.MethodCallResultMessage =

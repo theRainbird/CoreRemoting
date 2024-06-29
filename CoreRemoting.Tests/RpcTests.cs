@@ -350,12 +350,13 @@ namespace CoreRemoting.Tests
         }
 
         [Fact]
-        public void Missing_method_throws_MissingMethodException()
+        public void Missing_method_throws_RemoteInvocationException()
         {
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0,
                 InvocationTimeout = 0,
+                SendTimeout = 0,
                 MessageEncryption = false,
                 ServerPort = _serverFixture.Server.Config.NetworkPort
             });
@@ -376,8 +377,33 @@ namespace CoreRemoting.Tests
             client.Connect();
 
             var proxy = client.CreateProxy<ITestService>();
-            //var result = proxy.TestMethod(null);
-            //Assert.Fail();
+            var ex = Assert.Throws<RemoteInvocationException>(() => proxy.TestMethod(null));
+
+            // a localized message similar to "Method 'Missing method' not found"
+            Assert.NotNull(ex);
+            Assert.Contains("Missing Method", ex.Message);
+        }
+
+        [Fact]
+        public void Missing_service_throws_RemoteInvocationException()
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort
+            });
+
+            client.Connect();
+
+            var proxy = client.CreateProxy<IDisposable>();
+            var ex = Assert.Throws<RemoteInvocationException>(() => proxy.Dispose());
+
+            // a localized message similar to "Service 'System.IDisposable' is not registered"
+            Assert.NotNull(ex);
+            Assert.Contains("IDisposable", ex.Message);
         }
     }
 }
