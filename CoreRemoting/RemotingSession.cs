@@ -385,15 +385,15 @@ namespace CoreRemoting
                     sharedSecret: sharedSecret,
                     sendersPublicKeyBlob: _clientPublicKeyBlob,
                     sendersPublicKeySize: _keyPair?.KeySize ?? 0);
-            
+
             var callMessage =
                 _server.Serializer
                     .Deserialize<MethodCallMessage>(decryptedRawMessage);
 
-            ServerRpcContext serverRpcContext = 
+            ServerRpcContext serverRpcContext =
                 new ServerRpcContext
                 {
-                    UniqueCallKey = 
+                    UniqueCallKey =
                         request.UniqueCallKey == null
                             ? Guid.Empty
                             : new Guid(request.UniqueCallKey),
@@ -403,7 +403,7 @@ namespace CoreRemoting
                 };
 
             var serializedResult = new byte[] { };
-            
+
             var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
             var serviceInterfaceType =
                 _server.ServiceRegistry.GetServiceInterfaceType(callMessage.ServiceName);
@@ -411,62 +411,14 @@ namespace CoreRemoting
             CallContext.RestoreFromSnapshot(callMessage.CallContextSnapshot);
 
             serverRpcContext.ServiceInstance = service;
-            
+
             callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
-                out var parameterValues, 
+                out var parameterValues,
                 out var parameterTypes);
 
             parameterValues = MapArguments(parameterValues, parameterTypes);
 
-            MethodInfo method;
-
-            if (callMessage.GenericArgumentTypeNames != null && callMessage.GenericArgumentTypeNames.Length > 0)
-            {
-                var methods = 
-                    serviceInterfaceType.GetMethods().ToList();
-
-                foreach (var inheritedInterface in serviceInterfaceType.GetInterfaces())
-                {
-                    methods.AddRange(inheritedInterface.GetMethods());
-                }
-                
-                method = 
-                    methods.SingleOrDefault(m => 
-                        m.IsGenericMethod && 
-                        m.Name.Equals(callMessage.MethodName, StringComparison.Ordinal));
-
-                if (method != null)
-                {
-                    Type[] genericArguments =
-                        callMessage.GenericArgumentTypeNames
-                            .Select(typeName => Type.GetType(typeName))
-                            .ToArray();
-                    
-                    method = method.MakeGenericMethod(genericArguments);
-                }
-            }
-            else
-            {
-                method =
-                    serviceInterfaceType.GetMethod(
-                        name: callMessage.MethodName,
-                        types: parameterTypes);
-
-                if (method == null)
-                {
-                    foreach (var inheritedInterface in serviceInterfaceType.GetInterfaces())
-                    {
-                        method =
-                            inheritedInterface.GetMethod(
-                                name: callMessage.MethodName,
-                                types: parameterTypes);
-                        
-                        if (method != null)
-                            break;
-                    }
-                }
-            }
-
+            var method = GetMethodInfo(callMessage, serviceInterfaceType, parameterTypes);
             if (method == null)
                 throw new MissingMethodException(
                     className: callMessage.ServiceName,
@@ -585,6 +537,60 @@ namespace CoreRemoting
                 _server.Serializer.Serialize(methodResultMessage));
 
             CurrentSession.Value = null;
+        }
+
+        private MethodInfo GetMethodInfo(MethodCallMessage callMessage, Type serviceInterfaceType, Type[] parameterTypes)
+        {
+            MethodInfo method;
+
+            if (callMessage.GenericArgumentTypeNames != null && callMessage.GenericArgumentTypeNames.Length > 0)
+            {
+                var methods =
+                    serviceInterfaceType.GetMethods().ToList();
+
+                foreach (var inheritedInterface in serviceInterfaceType.GetInterfaces())
+                {
+                    methods.AddRange(inheritedInterface.GetMethods());
+                }
+
+                method =
+                    methods.SingleOrDefault(m =>
+                    m.IsGenericMethod &&
+                        m.Name.Equals(callMessage.MethodName, StringComparison.Ordinal));
+
+                if (method != null)
+                {
+                    Type[] genericArguments =
+                        callMessage.GenericArgumentTypeNames
+                            .Select(typeName => Type.GetType(typeName))
+                            .ToArray();
+
+                    method = method.MakeGenericMethod(genericArguments);
+                }
+            }
+            else
+            {
+                method =
+                    serviceInterfaceType.GetMethod(
+                        name: callMessage.MethodName,
+                        types: parameterTypes);
+
+                if (method == null)
+                {
+                    foreach (var inheritedInterface in serviceInterfaceType.GetInterfaces())
+                    {
+                        method =
+                            inheritedInterface.GetMethod(
+                                name: callMessage.MethodName,
+                                types: parameterTypes);
+
+                        if (method != null)
+                            break;
+                    }
+                }
+            }
+
+            return method;
         }
 
         /// <summary>

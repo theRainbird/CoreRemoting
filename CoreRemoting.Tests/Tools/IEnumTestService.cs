@@ -9,9 +9,4 @@ public enum TestEnum
 public interface IEnumTestService
 {
     TestEnum Echo(TestEnum inputValue);
-
-    TestEnum Echo2(TestEnum input)
-    {
-        return input;
-    }
 }
