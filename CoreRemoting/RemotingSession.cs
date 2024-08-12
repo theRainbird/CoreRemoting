@@ -750,9 +750,16 @@ namespace CoreRemoting
                     keyPair: _keyPair,
                     messageType: "session_closed");
 
-            _rawMessageTransport.SendMessage(
-                _server.Serializer.Serialize(wireMessage));
-            
+            try
+            {
+                _rawMessageTransport.SendMessage(
+                    _server.Serializer.Serialize(wireMessage));
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+
             BeforeDispose?.Invoke();
             
             _keyPair?.Dispose();
