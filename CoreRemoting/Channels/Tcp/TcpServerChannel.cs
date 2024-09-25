@@ -46,7 +46,7 @@ public class TcpServerChannel : IServerChannel
                 { "ServerAcceptConnection", true }
             };
         
-            _tcpServer.Send(e.Client.Guid, new byte[]{ 0x02 }, metadata);
+            _tcpServer.SendAsync(e.Client.Guid, new byte[]{ 0x02 }, metadata);
         }
     }
     

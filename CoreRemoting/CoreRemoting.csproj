@@ -45,12 +45,12 @@
       <PackageReference Include="System.Security.Cryptography.Cng" Version="5.0.0" />
       <PackageReference Include="System.Security.Cryptography.OpenSsl" Version="5.0.0" />
       <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
-      <PackageReference Include="WatsonTcp" Version="5.1.7" />
+      <PackageReference Include="WatsonTcp" Version="6.0.5" />
       <PackageReference Include="websocketsharp.core" Version="1.0.0" />
     </ItemGroup>
     
     <ItemGroup>
       <Protobuf Include="**/*.proto" />
     </ItemGroup>
-
+    
 </Project>
