@@ -21,7 +21,7 @@ namespace CoreRemoting.Encryption
             using var receiversPublicKey = new RSACryptoServiceProvider(dwKeySize: keySize);
             receiversPublicKey.ImportCspBlob(receiversPublicKeyBlob);
             
-            using Aes aes = new AesCryptoServiceProvider();
+            using Aes aes = Aes.Create();
 
             // Encrypt the session key
             var keyFormatter = new RSAPKCS1KeyExchangeFormatter(receiversPublicKey);
@@ -53,7 +53,7 @@ namespace CoreRemoting.Encryption
             using var receiversPrivateKey = new RSACryptoServiceProvider(dwKeySize: keySize);
             receiversPrivateKey.ImportCspBlob(receiversPrivateKeyBlob);
 
-            using Aes aes = new AesCryptoServiceProvider();
+            using Aes aes = Aes.Create();
             aes.IV = encryptedSecret.Iv;
 
             // Decrypt the session key
