@@ -310,7 +310,7 @@ namespace CoreRemoting
             
             _rawMessageTransport.SendMessage(_server.Serializer.Serialize(resultMessage));
             
-            _server.SessionRepository.RemoveSession(_sessionId);
+            Task.Run(() => _server.SessionRepository.RemoveSession(_sessionId));
         }
 
         /// <summary>
