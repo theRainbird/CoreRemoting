@@ -97,15 +97,15 @@ public class TcpConnection : IRawMessageTransport
     private void BeforeDisposeSession()
     {
         _session = null;
-        _tcpServer.DisconnectClient(_clientMetadata.Guid, MessageStatus.Shutdown);
+        _tcpServer.DisconnectClientAsync(_clientMetadata.Guid, MessageStatus.Shutdown);
     }
 
     /// <summary>
     /// Sends a message to the server.
     /// </summary>
     /// <param name="rawMessage">Raw message data</param>
-    public void SendMessage(byte[] rawMessage)
+    public bool SendMessage(byte[] rawMessage)
     {
-        _tcpServer.Send(_clientMetadata.Guid, rawMessage);
+        return _tcpServer.SendAsync(_clientMetadata.Guid, rawMessage).Result;
     }
 }

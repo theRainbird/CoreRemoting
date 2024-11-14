@@ -39,7 +39,7 @@ namespace CoreRemoting.RpcMessaging
                     .Select(arg => arg.FullName + "," + arg.Assembly.GetName().Name)
                     .ToArray();
             
-            var message = new MethodCallMessage()
+            var message = new MethodCallMessage
             {
                 ServiceName = remoteServiceName,
                 MethodName = targetMethod.Name,
@@ -98,7 +98,7 @@ namespace CoreRemoting.RpcMessaging
                             : arg;
                 
                 yield return
-                    new MethodCallParameterMessage()
+                    new MethodCallParameterMessage
                     {
                         IsOut = parameterInfo.IsOut,
                         ParameterName = parameterInfo.Name,
@@ -132,7 +132,7 @@ namespace CoreRemoting.RpcMessaging
             
             var parameterInfos = method.GetParameters();
 
-            var message = new MethodCallResultMessage()
+            var message = new MethodCallResultMessage
             { 
                 IsReturnValueNull = isReturnValueNull,
                 ReturnValue = 
@@ -153,17 +153,13 @@ namespace CoreRemoting.RpcMessaging
                 
                 var isArgNull = arg == null;
 
-                var serializedArgValue = 
-                    serializer.Serialize(
-                        serializer.EnvelopeNeededForParameterSerialization
-                            ? typeof(Envelope)
-                            : parameterInfo.ParameterType, 
-                        serializer.EnvelopeNeededForParameterSerialization
-                            ? new Envelope(arg)
-                            : arg);
+                var serializedArgValue =
+                    serializer.EnvelopeNeededForParameterSerialization && arg is not Envelope
+                        ? serializer.Serialize(typeof(Envelope), new Envelope(arg))
+                        : serializer.Serialize(parameterInfo.ParameterType, arg);
                 
                 outParameters.Add(
-                    new MethodCallOutParameterMessage()
+                    new MethodCallOutParameterMessage
                     {
                         ParameterName = parameterInfo.Name,
                         OutValue = serializedArgValue,

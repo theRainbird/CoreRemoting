@@ -81,7 +81,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             if (configElement == null)
                 throw new ArgumentNullException(nameof(configElement));
 
-            var clientConfig = new ClientConfig()
+            var clientConfig = new ClientConfig
             {
                 Channel = CreateClientChannelFromConfigName(configElement.Channel),
                 Serializer = CreateSerializerAdapterFromConfigName(configElement.Serializer),
@@ -130,7 +130,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
                 new[] {"ws", "websocket"};
 
             var tcpServerChannelShortcuts = 
-                new[] {"ws", "websocket"};
+                new[] {"tcp"};
 
             if (websocketServerChannelShortcuts.Contains(channelTypeName.ToLower()))
                 return new WebsocketServerChannel();
@@ -158,7 +158,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
 
             if (websocketClientChannelShortcuts.Contains(channelTypeName.ToLower()))
                 return new WebsocketClientChannel();
-
+            
             if (tcpClientChannelShortcuts.Contains(channelTypeName.ToLower()))
                 return new TcpClientChannel();
 

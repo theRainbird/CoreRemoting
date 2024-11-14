@@ -59,10 +59,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
         _tcpClient.Events.MessageReceived += OnMessage;
         _tcpClient.Events.ServerDisconnected += OnDisconnected;
         _tcpClient.Connect();
-
-        _tcpClient.Send(new byte[] { 0x0 }, _handshakeMetadata);
     }
-
     private void OnDisconnected(object o, DisconnectionEventArgs disconnectionEventArgs)
     {
         Disconnected?.Invoke();
@@ -87,7 +84,15 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <param name="e">Event arguments containing the message content</param>
     private void OnMessage(object sender, MessageReceivedEventArgs e)
     {
-        ReceiveMessage?.Invoke(e.Data);
+        if (e.Metadata != null && e.Metadata.ContainsKey("ServerAcceptConnection"))
+        {
+            if (!_tcpClient.SendAsync(new byte[1] { 0x0 }, _handshakeMetadata).Result && !_tcpClient.Connected)
+                _tcpClient = null;
+        }
+        else
+        {
+            ReceiveMessage?.Invoke(e.Data);
+        }
     }
 
     /// <summary>
@@ -131,9 +136,18 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// Sends a message to the server.
     /// </summary>
     /// <param name="rawMessage">Raw message data</param>
-    public void SendMessage(byte[] rawMessage)
+    public bool SendMessage(byte[] rawMessage)
     {
-        _tcpClient.Send(rawMessage);
+        if (_tcpClient != null)
+        {
+            if (_tcpClient.SendAsync(rawMessage).Result)
+                return true;
+            if (!_tcpClient.Connected)
+                _tcpClient = null;
+            return false;
+        }
+        else
+            throw new NetworkException("Channel disconnected");
     }
     
     /// <summary>

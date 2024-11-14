@@ -18,7 +18,7 @@ namespace CoreRemoting.Serialization.Bson
         /// <param name="config">Optional configuration settings</param>
         public BsonSerializerAdapter(BsonSerializerConfig config = null)
         {
-            var settings = new JsonSerializerSettings()
+            var settings = new JsonSerializerSettings
             {
                 TypeNameHandling = TypeNameHandling.All,
                 TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Full,
