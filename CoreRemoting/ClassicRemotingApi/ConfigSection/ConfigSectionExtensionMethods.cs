@@ -128,13 +128,16 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         {
             var websocketServerChannelShortcuts = 
                 new[] {"ws", "websocket"};
-            
+
+            var tcpServerChannelShortcuts = 
+                new[] {"tcp"};
+
             if (websocketServerChannelShortcuts.Contains(channelTypeName.ToLower()))
                 return new WebsocketServerChannel();
 
-            if (channelTypeName == "tcp")
+            if (tcpServerChannelShortcuts.Contains(channelTypeName.ToLower()))
                 return new TcpServerChannel();
-            
+
             var channelType = GetTypeFromConfigString(channelTypeName);
             
             return (IServerChannel) Activator.CreateInstance(channelType);
@@ -147,13 +150,16 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         /// <returns>Client channel</returns>
         private static IClientChannel CreateClientChannelFromConfigName(string channelTypeName)
         {
-            var websocketServerChannelShortcuts = 
+            var websocketClientChannelShortcuts = 
                 new[] {"ws", "websocket"};
 
-            if (websocketServerChannelShortcuts.Contains(channelTypeName.ToLower()))
+            var tcpClientChannelShortcuts = 
+                new[] {"tcp"};
+
+            if (websocketClientChannelShortcuts.Contains(channelTypeName.ToLower()))
                 return new WebsocketClientChannel();
             
-            if (channelTypeName == "tcp")
+            if (tcpClientChannelShortcuts.Contains(channelTypeName.ToLower()))
                 return new TcpClientChannel();
 
             var channelType = GetTypeFromConfigString(channelTypeName);

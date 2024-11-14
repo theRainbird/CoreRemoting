@@ -18,7 +18,7 @@ public static class CrossFrameworkSerialization
         Assembly HandleAssemblyResolve(object _, ResolveEventArgs args)
         {
             var requestedAssembly = new AssemblyName(args.Name);
-            
+
             if (requestedAssembly.Name == assemblyShortName)
             {
                 try
@@ -45,7 +45,7 @@ public static class CrossFrameworkSerialization
     {
         RedirectAssembly("System.Private.CoreLib", "mscorlib");
     }
-    
+
     /// <summary>
     /// Redirects assembly "mscorlib" to "System.Private.CoreLib".
     /// </summary>

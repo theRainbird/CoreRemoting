@@ -205,7 +205,7 @@ namespace CoreRemoting.Tests
         }
 
         [Fact]
-        public void Events_should_work_remotly()
+        public void Events_should_work_remotely()
         {
             bool serviceEventCalled = false;
             bool customDelegateEventCalled = false;
