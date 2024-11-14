@@ -758,6 +758,7 @@ namespace CoreRemoting
             catch (Exception)
             {
                 // ignored
+                // TODO: dispatch the exception
             }
 
             BeforeDispose?.Invoke();
