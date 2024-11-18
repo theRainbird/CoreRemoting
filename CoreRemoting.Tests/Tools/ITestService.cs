@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using CoreRemoting.Tests.ExternalTypes;
 
 namespace CoreRemoting.Tests.Tools
@@ -28,5 +29,9 @@ namespace CoreRemoting.Tests.Tools
         string Echo(string text);
 
         void MethodWithOutParameter(out int counter);
+
+        void Error(string text);
+
+        Task ErrorAsync(string text);
     }
 }

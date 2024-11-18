@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
+using System.Threading.Tasks;
 using CoreRemoting.Tests.ExternalTypes;
 using CoreRemoting.Tests.Tools;
 using Xunit;
@@ -404,6 +405,65 @@ namespace CoreRemoting.Tests
             // a localized message similar to "Service 'System.IDisposable' is not registered"
             Assert.NotNull(ex);
             Assert.Contains("IDisposable", ex.Message);
+        }
+
+        [Fact]
+        public void Error_method_throws_Exception()
+        {
+            try
+            {
+                using var client = new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 5,
+                    InvocationTimeout = 5,
+                    SendTimeout = 5,
+                    MessageEncryption = false,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort
+                });
+
+                client.Connect();
+
+                var proxy = client.CreateProxy<ITestService>();
+                var ex = Assert.Throws<Exception>(() => proxy.Error(nameof(Error_method_throws_Exception)));
+
+                Assert.NotNull(ex);
+                Assert.Equal(nameof(Error_method_throws_Exception), ex.Message);
+            }
+            finally
+            {
+                // reset the error counter for other tests
+                _serverFixture.ServerErrorCount = 0;
+            }
+        }
+
+        [Fact]
+        public async Task ErrorAsync_method_throws_Exception()
+        {
+            try
+            {
+                using var client = new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 5,
+                    InvocationTimeout = 5,
+                    SendTimeout = 5,
+                    MessageEncryption = false,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort
+                });
+
+                client.Connect();
+
+                var proxy = client.CreateProxy<ITestService>();
+                var ex = await Assert.ThrowsAsync<Exception>(async () =>
+                    await proxy.ErrorAsync(nameof(ErrorAsync_method_throws_Exception)));
+
+                Assert.NotNull(ex);
+                Assert.Equal(nameof(ErrorAsync_method_throws_Exception), ex.Message);
+            }
+            finally
+            {
+                // reset the error counter for other tests
+                _serverFixture.ServerErrorCount = 0;
+            }
         }
     }
 }

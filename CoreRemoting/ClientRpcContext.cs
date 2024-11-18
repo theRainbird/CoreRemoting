@@ -41,7 +41,7 @@ namespace CoreRemoting
         /// <summary>
         /// Gets a wait handle that is set, when the response of this RPC call is received from server.
         /// </summary>
-        public EventWaitHandle WaitHandle { get; }
+        public EventWaitHandle WaitHandle { get; } // TODO: replace with a Task?
         
         /// <summary>
         /// Frees managed resources.

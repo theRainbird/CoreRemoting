@@ -645,7 +645,7 @@ namespace CoreRemoting
                     lock (_syncObject)
                     {
                         if (_activeCalls == null)
-                            throw new RemoteInvocationException("ServerDisconnected");                        
+                            throw new RemoteInvocationException("ServerDisconnected");
                     }
                     
                     var clientRpcContext = new ClientRpcContext();
@@ -686,7 +686,8 @@ namespace CoreRemoting
 
                     if (oneWay || clientRpcContext.ResultMessage != null) 
                         return clientRpcContext;
-                
+
+                    // TODO: replace with a Task to avoid freezing the current thread?
                     if (_config.InvocationTimeout <= 0)
                         clientRpcContext.WaitHandle.WaitOne();
                     else
