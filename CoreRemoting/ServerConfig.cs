@@ -53,7 +53,7 @@ namespace CoreRemoting
         /// Gets or sets the dependency injection container to be used for service registration.
         /// Castle Windsor Container is used, if set to null.
         /// </summary>
-        public IDependencyInjectionContainer DependencyInjectionContainer { get; set; }
+        public virtual IDependencyInjectionContainer DependencyInjectionContainer { get; set; }
 
         /// <summary>
         /// Gets or sets an optional action which should be called on server startup to register services.

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using CoreRemoting.Tests.ExternalTypes;
 
 namespace CoreRemoting.Tests.Tools
@@ -61,6 +62,17 @@ namespace CoreRemoting.Tests.Tools
         public bool BaseMethod()
         {
             return true;
+        }
+
+        public void Error(string text)
+        {
+            throw new Exception(text);
+        }
+
+        public async Task ErrorAsync(string text)
+        {
+            await Task.Delay(1);
+            Error(text);
         }
     }
 }
