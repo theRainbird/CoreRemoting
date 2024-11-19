@@ -20,7 +20,7 @@ namespace CoreRemoting
         {
             UniqueServerInstanceName = Guid.NewGuid().ToString();
         }
-        
+
         /// <summary>
         /// Gets or sets the host name.
         /// </summary>
@@ -37,13 +37,13 @@ namespace CoreRemoting
         /// </summary>
         [SuppressMessage("ReSharper", "AutoPropertyCanBeMadeGetOnly.Global")] 
         public int KeySize { get; set; } = 4096;
-        
+
         /// <summary>
         /// Gets or sets whether messages should be encrypted or not.
         /// </summary>
         [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")] 
         public bool MessageEncryption { get; set; } = true;
-        
+
         /// <summary>
         /// Gets or sets the serializer to be used (Bson serializer is used, if set to null).
         /// </summary>
@@ -59,29 +59,29 @@ namespace CoreRemoting
         /// Gets or sets an optional action which should be called on server startup to register services.
         /// </summary>
         public Action<IDependencyInjectionContainer> RegisterServicesAction { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the session repository to be used to manage sessions.
         /// </summary>
         [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")] 
         public ISessionRepository SessionRepository { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the server channel to be used for transport of messages over the wire (WebsocketServerChannel is used, if set to null).
         /// </summary>
         [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")] 
         public IServerChannel Channel { get; set; }
-        
+
         /// <summary>
         /// Gets or sets whether authentication is required in order to establish a new session.
         /// </summary>
         public bool AuthenticationRequired { get; set; } = false;
-        
+
         /// <summary>
         /// Gets or sets the authentication provider that should be used to handle authentication requests.
         /// </summary>
         public IAuthenticationProvider AuthenticationProvider { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the unique name of this server instance.
         /// </summary>
@@ -96,7 +96,7 @@ namespace CoreRemoting
         /// Gets or sets the maximum session inactivity time in minutes.
         /// </summary>
         public int MaximumSessionInactivityTime { get; set; } = 30;
-        
+
         /// <summary>
         /// Gets or set whether this is the default server.
         /// </summary>

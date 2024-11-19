@@ -18,17 +18,17 @@ namespace CoreRemoting
         {
             UniqueClientInstanceName = Guid.NewGuid().ToString();
         }
-        
+
         /// <summary>
         /// Gets or sets the unique name of the configured client instance.
         /// </summary>
         public string UniqueClientInstanceName { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the connection timeout in seconds (0 means infinite).
         /// </summary>
         public int ConnectionTimeout { get; set; } = 120;
-        
+
         /// <summary>
         /// Gets or sets the authentication timeout in seconds (0 means infinite).
         /// </summary>
@@ -43,7 +43,7 @@ namespace CoreRemoting
         /// Gets or sets the send timeout in seconds (0 means infinite).
         /// </summary>
         public int SendTimeout { get; set; } = 30;
-        
+
         /// <summary>
         /// Gets or sets the host name of the CoreRemoting server to be connected to.
         /// </summary>
@@ -53,7 +53,7 @@ namespace CoreRemoting
         /// Gets or sets the network port of the CoreRemoting server to be connected to.
         /// </summary>
         public int ServerPort { get; set; } = 9090;
-        
+
         /// <summary>
         /// Gets or sets the serializer to be used (Bson serializer is used, if set to null).
         /// </summary>
@@ -68,13 +68,13 @@ namespace CoreRemoting
         /// Gets or sets whether messages should be encrypted or not.
         /// </summary>
         public bool MessageEncryption { get; set; } = true;
-        
+
         /// <summary>
         /// Gets or sets the client channel to be used for transport of messages over the wire (WebsocketClientChannel is used, if set to null).
         /// </summary>
         [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
         public IClientChannel Channel { get; set; }
-        
+
         /// <summary>
         /// Gets or sets an array of credentials for authentication (depends on the authentication provider used on server side). 
         /// </summary>
