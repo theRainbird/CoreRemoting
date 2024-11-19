@@ -424,7 +424,9 @@ namespace CoreRemoting.Tests
                 client.Connect();
 
                 var proxy = client.CreateProxy<ITestService>();
-                var ex = Assert.Throws<Exception>(() => proxy.Error(nameof(Error_method_throws_Exception)));
+                var ex = Assert.Throws<RemoteInvocationException>(() =>
+                    proxy.Error(nameof(Error_method_throws_Exception)))
+                        .GetInnermostException();
 
                 Assert.NotNull(ex);
                 Assert.Equal(nameof(Error_method_throws_Exception), ex.Message);
@@ -453,10 +455,11 @@ namespace CoreRemoting.Tests
                 client.Connect();
 
                 var proxy = client.CreateProxy<ITestService>();
-                var ex = await Assert.ThrowsAsync<Exception>(async () =>
-                    await proxy.ErrorAsync(nameof(ErrorAsync_method_throws_Exception)));
+                var ex = (await Assert.ThrowsAsync<RemoteInvocationException>(async () =>
+                    await proxy.ErrorAsync(nameof(ErrorAsync_method_throws_Exception))))
+                        .GetInnermostException();
 
-                Assert.NotNull(ex);
+                Assert.NotNull(ex); 
                 Assert.Equal(nameof(ErrorAsync_method_throws_Exception), ex.Message);
             }
             finally

@@ -539,8 +539,12 @@ namespace CoreRemoting
                 if (oneWay)
                     return;
 
-                serializedResult =
-                    _server.Serializer.Serialize(serverRpcContext.MethodCallResultMessage);
+                // don't overwrite the serialized exception
+                if (ReferenceEquals(serializedResult, Array.Empty<byte>()))
+                {
+                    serializedResult =
+                        _server.Serializer.Serialize(serverRpcContext.MethodCallResultMessage);
+                }
             }
 
             var methodResultMessage =
