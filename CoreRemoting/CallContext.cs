@@ -12,7 +12,7 @@ namespace CoreRemoting
     {
         private static readonly ConcurrentDictionary<string, AsyncLocal<object>> State = 
             new ConcurrentDictionary<string, AsyncLocal<object>>();
-        
+
         /// <summary>
         /// Stores a given object and associates it with the specified name.
         /// </summary>
@@ -67,7 +67,7 @@ namespace CoreRemoting
                 }
                 return;
             }
-            
+
             foreach (var entry in entries)
             {
                 CallContext.SetData(entry.Name, entry.Value);
