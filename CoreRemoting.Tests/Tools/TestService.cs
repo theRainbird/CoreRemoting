@@ -74,5 +74,23 @@ namespace CoreRemoting.Tests.Tools
             await Task.Delay(1);
             Error(text);
         }
+
+        private class NonSerializable : Exception
+        {
+            public NonSerializable(string message)
+                : base(message)
+            {
+            }
+        }
+
+        public void NonSerializableError(string text, params object[] data)
+        {
+            var ex = new NonSerializable(text);
+
+            foreach (var item in data)
+                ex.Data[item] = item;
+
+            throw ex;
+        }
     }
 }

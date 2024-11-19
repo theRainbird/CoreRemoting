@@ -33,5 +33,7 @@ namespace CoreRemoting.Tests.Tools
         void Error(string text);
 
         Task ErrorAsync(string text);
+
+        void NonSerializableError(string text, params object[] data);
     }
 }

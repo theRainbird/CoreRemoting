@@ -506,7 +506,7 @@ namespace CoreRemoting
                     serverRpcContext.Exception =
                         new RemoteInvocationException(
                             message: ex.Message,
-                            innerEx: ex.GetType().IsSerializable ? ex : null);
+                            innerEx: ex.ToSerializable());
 
                     ((RemotingServer)_server).OnAfterCall(serverRpcContext);
 

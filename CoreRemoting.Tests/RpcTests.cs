@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.Serialization;
 using CoreRemoting.Tests.ExternalTypes;
 using CoreRemoting.Tests.Tools;
 using Xunit;
@@ -461,6 +462,46 @@ namespace CoreRemoting.Tests
 
                 Assert.NotNull(ex); 
                 Assert.Equal(nameof(ErrorAsync_method_throws_Exception), ex.Message);
+            }
+            finally
+            {
+                // reset the error counter for other tests
+                _serverFixture.ServerErrorCount = 0;
+            }
+        }
+
+        [Fact]
+        public void NonSerializableError_method_throws_Exception()
+        {
+            try
+            {
+                using var client = new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 5,
+                    InvocationTimeout = 5,
+                    SendTimeout = 5,
+                    MessageEncryption = false,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort
+                });
+
+                client.Connect();
+
+                var proxy = client.CreateProxy<ITestService>();
+                var ex = Assert.Throws<RemoteInvocationException>(() =>
+                    proxy.NonSerializableError("Hello", "Serializable", "World"))
+                        .GetInnermostException();
+
+                Assert.NotNull(ex);
+                Assert.IsType<SerializableException>(ex);
+
+                if (ex is SerializableException sx)
+                {
+                    Assert.Equal("NonSerializable", sx.SourceTypeName);
+                    Assert.Equal("Hello", ex.Message);
+                    Assert.Equal("Serializable", ex.Data["Serializable"]);
+                    Assert.Equal("World", ex.Data["World"]);
+                    Assert.NotNull(ex.StackTrace);
+                }
             }
             finally
             {
