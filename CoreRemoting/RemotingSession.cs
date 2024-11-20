@@ -244,10 +244,10 @@ namespace CoreRemoting
                 
                 _currentlyProcessedMessagesCounter.AddCount(1);
                 
-                var message = _server.Serializer.Deserialize<WireMessage>(rawMessage);
-
                 try
                 {
+                    var message = _server.Serializer.Deserialize<WireMessage>(rawMessage);
+                    
                     switch (message.MessageType.ToLower())
                     {
                         case "auth":
