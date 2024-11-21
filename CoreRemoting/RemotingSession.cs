@@ -134,7 +134,7 @@ namespace CoreRemoting
                             HandlerKey = handlerKey,
                             DelegateArguments = arguments
                         };
-                    
+
                     var remoteDelegateInvocationWebsocketMessage =
                         _server.MessageEncryptionManager
                             .CreateWireMessage(

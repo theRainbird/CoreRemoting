@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
 using Xunit;
@@ -65,7 +66,10 @@ public class ServerFixture : IDisposable
     public void Dispose()
     {
         if (Server != null)
+        {
+            Thread.Sleep(100); // work around WatsonTcp 6.0.2 bug
             Server.Dispose();
+        }
     }
 }
 

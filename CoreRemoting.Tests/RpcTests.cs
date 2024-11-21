@@ -1,7 +1,10 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.Channels.Websocket;
+using CoreRemoting.DependencyInjection;
 using CoreRemoting.Serialization;
 using CoreRemoting.Tests.ExternalTypes;
 using CoreRemoting.Tests.Tools;
@@ -163,7 +166,7 @@ namespace CoreRemoting.Tests
             clientThread.Start();
             clientThread.Join();
 
-            _serverFixture.Server.Config.MessageEncryption = true;
+            _serverFixture.Server.Config.MessageEncryption = false;
 
             Assert.True(_remoteServiceCalled);
             Assert.Equal(0, _serverFixture.ServerErrorCount);
@@ -508,6 +511,57 @@ namespace CoreRemoting.Tests
                 // reset the error counter for other tests
                 _serverFixture.ServerErrorCount = 0;
             }
+        }
+
+        [Fact]
+        public async Task Disposed_client_subscription_doesnt_break_other_clients()
+        {
+            async Task roundtrip(bool encryption)
+            {
+                var oldEncryption = _serverFixture.Server.Config.MessageEncryption;
+                _serverFixture.Server.Config.MessageEncryption = encryption;
+
+                try
+                {
+                    RemotingClient createClient() => new RemotingClient(new ClientConfig()
+                    {
+                        ServerPort = _serverFixture.Server.Config.NetworkPort,
+                        MessageEncryption = encryption,
+                    });
+
+                    using var client1 = createClient();
+                    using var client2 = createClient();
+
+                    client1.Connect();
+                    client2.Connect();
+
+                    var proxy1 = client1.CreateProxy<ITestService>();
+                    var fired1 = new TaskCompletionSource<bool>();
+                    proxy1.ServiceEvent += () => fired1.TrySetResult(true);
+
+                    var proxy2 = client2.CreateProxy<ITestService>();
+                    var fired2 = new TaskCompletionSource<bool>();
+                    proxy2.ServiceEvent += () => fired2.TrySetResult(true);
+
+                    // early disposal, proxy1 subscription isn't canceled
+                    client1.Disconnect();
+
+                    proxy2.FireServiceEvent();
+                    Assert.True(await fired2.Task);
+                    Assert.True(fired2.Task.IsCompleted);
+                    Assert.False(fired1.Task.IsCompleted);
+                }
+                finally
+                {
+                    _serverFixture.Server.Config.MessageEncryption = oldEncryption;
+                }
+            }
+
+            // works!
+            await roundtrip(encryption: false);
+
+            // fails!
+            await roundtrip(encryption: true);
         }
     }
 }
