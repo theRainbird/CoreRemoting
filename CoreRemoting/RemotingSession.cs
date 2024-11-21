@@ -122,6 +122,9 @@ namespace CoreRemoting
             _remoteDelegateInvocationEventAggregator.RemoteDelegateInvocationNeeded +=
                 (_, uniqueCallKey, handlerKey, arguments) =>
                 {
+                    if (_isDisposing)
+                        return null;
+
                     var sharedSecret =
                         MessageEncryption
                             ? _sessionId.ToByteArray()
