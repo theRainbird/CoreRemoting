@@ -42,7 +42,7 @@ namespace CoreRemoting
         /// Event: Fired before the session is disposed to do some clean up.
         /// </summary>
         public event Action BeforeDispose;
-        
+
         #endregion
 
         #region Construction
@@ -70,7 +70,7 @@ namespace CoreRemoting
             _delegateProxyCache = new ConcurrentDictionary<Guid, IDelegateProxy>();
             _rawMessageTransport = rawMessageTransport ?? throw new ArgumentNullException(nameof(rawMessageTransport));
             _clientPublicKeyBlob = clientPublicKey;
-            
+
             _rawMessageTransport.ReceiveMessage += OnReceiveMessage;
             _rawMessageTransport.ErrorOccured += OnErrorOccured;
 
@@ -122,6 +122,7 @@ namespace CoreRemoting
             _remoteDelegateInvocationEventAggregator.RemoteDelegateInvocationNeeded +=
                 (_, uniqueCallKey, handlerKey, arguments) =>
                 {
+                    // handle graceful client disconnection
                     if (_isDisposing)
                         return null;
 
@@ -147,9 +148,19 @@ namespace CoreRemoting
                                 keyPair: _keyPair,
                                 messageType: "invoke");
 
-                    // Invoke remote delegate on client
-                    _rawMessageTransport?.SendMessage(
-                        _server.Serializer.Serialize(remoteDelegateInvocationWebsocketMessage));
+                    try
+                    {
+                        // Invoke remote delegate on client
+                        _rawMessageTransport?.SendMessage(
+                            _server.Serializer.Serialize(remoteDelegateInvocationWebsocketMessage));
+                    }
+                    catch (Exception ex)
+                    {
+                        // handle unexpected client disconnection
+                        OnErrorOccured("Failed to dispatch the remote event. " +
+                            $"Session: {SessionId}, Unique call key: {uniqueCallKey}, " +
+                            $"Handler key: {handlerKey}", ex);
+                    }
 
                     return null;
                 };
@@ -165,7 +176,7 @@ namespace CoreRemoting
         private void OnErrorOccured(string errorMessage, Exception ex)
         {
             var exception = new RemotingException(errorMessage, innerEx: ex); 
-            
+
             ((RemotingServer)_server).OnError(exception);
         }
 
@@ -708,7 +719,7 @@ namespace CoreRemoting
             
             return true;
         }
-        
+
         #endregion
 
         #region Close session
