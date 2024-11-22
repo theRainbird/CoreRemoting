@@ -38,9 +38,7 @@ namespace CoreRemoting.Channels.Websocket
                 Convert.ToString(client.Config.ServerPort) + 
                 "/rpc";
             
-            _webSocket = new WebSocket(url);
-
-            TryToSetNoDelayFlagOnUnderlyingTcpClient();
+            _webSocket = new WebSocket(url) { NoDelay = true };
             
             _webSocket.SetCookie(new Cookie(
                 name: "MessageEncryption",
@@ -56,25 +54,7 @@ namespace CoreRemoting.Channels.Websocket
             _webSocket.Log.Output = (timestamp, text) => Console.WriteLine("{0}: {1}", timestamp, text);
             _webSocket.Log.Level = LogLevel.Debug;
         }
-
-        /// <summary>
-        /// Try to set NoDelay flag on the underlying TcpClient to enhance performance on Linux.
-        /// </summary>
-        private void TryToSetNoDelayFlagOnUnderlyingTcpClient()
-        {
-            var webSocketType = _webSocket.GetType();
-            var tcpClientPrivateField =
-                webSocketType.GetField(
-                    name: "_tcpClient",
-                    bindingAttr: BindingFlags.NonPublic | BindingFlags.GetField);
-
-            if (tcpClientPrivateField != null)
-            {
-                if (tcpClientPrivateField.GetValue(_webSocket) is TcpClient tcpClient)
-                    tcpClient.NoDelay = true;
-            }
-        }
-        
+       
         /// <summary>
         /// Establish a websocket connection with the server.
         /// </summary>
