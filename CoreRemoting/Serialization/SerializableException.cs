@@ -42,7 +42,7 @@ public class SerializableException : Exception
         : base(message)
     {
         SourceTypeName = typeName;
-        stackTrace = newStackTrace;
+        _stackTrace = newStackTrace;
     }
 
     /// <summary>
@@ -56,7 +56,7 @@ public class SerializableException : Exception
         : base(message, innerException)
     {
         SourceTypeName = typeName;
-        stackTrace = newStackTrace;
+        _stackTrace = newStackTrace;
     }
 
     /// <summary>
@@ -67,7 +67,7 @@ public class SerializableException : Exception
     protected SerializableException(SerializationInfo info, StreamingContext context)
         : base(info, context)
     {
-        stackTrace = info.GetString("MyStackTrace");
+        _stackTrace = info.GetString("MyStackTrace");
         SourceTypeName = info.GetString("SourceTypeName");
     }
 
@@ -81,11 +81,11 @@ public class SerializableException : Exception
     public override void GetObjectData(SerializationInfo info, StreamingContext context)
     {
         base.GetObjectData(info, context);
-        info.AddValue("MyStackTrace", stackTrace);
+        info.AddValue("MyStackTrace", _stackTrace);
         info.AddValue("SourceTypeName", SourceTypeName);
     }
 
-    private string stackTrace;
+    private string _stackTrace;
 
     /// <summary>
     /// Gets a string representation of the immediate frames on the call stack.
@@ -94,7 +94,7 @@ public class SerializableException : Exception
     /// <PermissionSet>
     ///   <IPermission class="System.Security.Permissions.FileIOPermission, mscorlib, Version=2.0.3600.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" version="1" PathDiscovery="*AllFiles*"/>
     /// </PermissionSet>
-    public override string StackTrace => stackTrace ?? base.StackTrace;
+    public override string StackTrace => _stackTrace ?? base.StackTrace;
 
     /// <summary>
     /// Gets the type name of source exception.

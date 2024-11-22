@@ -1,10 +1,7 @@
 using System;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using CoreRemoting.Channels.Websocket;
-using CoreRemoting.DependencyInjection;
 using CoreRemoting.Serialization;
 using CoreRemoting.Tests.ExternalTypes;
 using CoreRemoting.Tests.Tools;
@@ -516,21 +513,21 @@ namespace CoreRemoting.Tests
         [Fact]
         public async Task Disposed_client_subscription_doesnt_break_other_clients()
         {
-            async Task roundtrip(bool encryption)
+            async Task Roundtrip(bool encryption)
             {
                 var oldEncryption = _serverFixture.Server.Config.MessageEncryption;
                 _serverFixture.Server.Config.MessageEncryption = encryption;
 
                 try
                 {
-                    RemotingClient createClient() => new RemotingClient(new ClientConfig()
+                    RemotingClient CreateClient() => new RemotingClient(new ClientConfig()
                     {
                         ServerPort = _serverFixture.Server.Config.NetworkPort,
                         MessageEncryption = encryption,
                     });
 
-                    using var client1 = createClient();
-                    using var client2 = createClient();
+                    using var client1 = CreateClient();
+                    using var client2 = CreateClient();
 
                     client1.Connect();
                     client2.Connect();
@@ -558,10 +555,10 @@ namespace CoreRemoting.Tests
             }
 
             // works!
-            await roundtrip(encryption: false);
+            await Roundtrip(encryption: false);
 
             // fails!
-            await roundtrip(encryption: true);
+            await Roundtrip(encryption: true);
         }
     }
 }

@@ -419,6 +419,7 @@ namespace CoreRemoting
             var serializedResult = Array.Empty<byte>();
             var method = default(MethodInfo);
             var parameterValues = Array.Empty<object>();
+            // ReSharper disable once RedundantAssignment
             var parameterTypes = Array.Empty<Type>();
             var oneWay = false;
 

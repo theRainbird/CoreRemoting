@@ -86,7 +86,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     {
         if (e.Metadata != null && e.Metadata.ContainsKey("ServerAcceptConnection"))
         {
-            if (!_tcpClient.SendAsync(new byte[1] { 0x0 }, _handshakeMetadata).Result && !_tcpClient.Connected)
+            if (!_tcpClient.SendAsync(new byte[] { 0x0 }, _handshakeMetadata).Result && !_tcpClient.Connected)
                 _tcpClient = null;
         }
         else

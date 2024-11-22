@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization;
@@ -16,11 +17,13 @@ namespace CoreRemoting.Tests.Tools
             Builder = new MethodCallMessageBuilder();
         }
 
-        public Action<MethodCallMessage> ProcessMethodCallMessage { get; set; } = m => { };
+        public Action<MethodCallMessage> ProcessMethodCallMessage { get; set; } = _ => { };
 
-        public Action<IEnumerable<MethodCallParameterMessage>> ProcessMethodParameterInfos { get; set; } = m => { };
+        // ReSharper disable once MemberCanBePrivate.Global
+        public Action<IEnumerable<MethodCallParameterMessage>> ProcessMethodParameterInfos { get; set; } = _ => { };
 
-        public Action<MethodCallResultMessage> ProcessMethodCallResultMessage { get; set; } = m => { };
+        // ReSharper disable once MemberCanBePrivate.Global
+        public Action<MethodCallResultMessage> ProcessMethodCallResultMessage { get; set; } = _ => { };
 
         private MethodCallMessageBuilder Builder { get; set; }
 
@@ -34,8 +37,9 @@ namespace CoreRemoting.Tests.Tools
         public IEnumerable<MethodCallParameterMessage> BuildMethodParameterInfos(ISerializerAdapter serializer, MethodInfo targetMethod, object[] args)
         {
             var m = Builder.BuildMethodParameterInfos(serializer, targetMethod, args);
-            ProcessMethodParameterInfos(m);
-            return m;
+            var methodCallParameterMessages = m as MethodCallParameterMessage[] ?? m.ToArray();
+            ProcessMethodParameterInfos(methodCallParameterMessages);
+            return methodCallParameterMessages;
         }
 
         public MethodCallResultMessage BuildMethodCallResultMessage(ISerializerAdapter serializer, Guid uniqueCallKey, MethodInfo method, object[] args, object returnValue)
