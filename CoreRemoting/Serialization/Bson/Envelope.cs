@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using CoreRemoting.Serialization.Bson.DataSetDiffGramSupport;
 using Newtonsoft.Json;
 
 namespace CoreRemoting.Serialization.Bson
@@ -60,6 +61,13 @@ namespace CoreRemoting.Serialization.Bson
                     // Special handling for enum values, because BSON serializes every integer as Int64!
                     if (_type.IsEnum && valueType != _type)
                         return Enum.ToObject(_type, _value);
+                    
+                    // Special handling for serializes DiffGrams
+                    if (_value.GetType() == typeof(SerializedDiffGram))
+                    {
+                        var serializedDiffGram = (SerializedDiffGram)_value;
+                        return serializedDiffGram.ToDataObject(_type);
+                    }
 
                     return Convert.ChangeType(_value, _type);
                 }

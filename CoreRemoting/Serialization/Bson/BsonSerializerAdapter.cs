@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using CoreRemoting.Serialization.Bson.DataSetDiffGramSupport;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Bson;
 
@@ -35,8 +38,21 @@ namespace CoreRemoting.Serialization.Bson
                 FloatParseHandling = FloatParseHandling.Double
             };
 
+            // Add support for DataSet DiffGram serialization
+            var converters = 
+                new List<JsonConverter>
+                {
+                    new DataSetDiffGramJsonConverter()
+                };
+
             if (config != null)
-                settings.Converters = config.JsonConverters;
+            {
+                converters.AddRange(
+                    config.JsonConverters.Where(converter =>
+                        converter.GetType() != typeof(DataSetDiffGramJsonConverter))); // Ensure DataSetDiffGramJsonConverter not added twice
+            }
+
+            settings.Converters = converters;
             
             _serializer = JsonSerializer.Create(settings);
         }

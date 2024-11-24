@@ -1,4 +1,5 @@
 using System;
+using System.Data;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization.Bson;
 using CoreRemoting.Tests.Tools;
@@ -191,6 +192,42 @@ namespace CoreRemoting.Tests
 
             Assert.Equal(envelope.Value, deserializedValue.Value);
             Assert.IsType<Int32>(envelope.Value);
+        }
+
+        [Fact]
+        public void BsonSerializerAdapter_should_serialize_DataSet_as_Diffgram()
+        {
+            var originalTable = new DataTable("TestTable");
+            originalTable.Columns.Add("UserName", typeof(string));
+            originalTable.Columns.Add("Age", typeof(short));
+            var originalDataSet = new DataSet("TestDataSet");
+            originalDataSet.Tables.Add(originalTable);
+
+            var originalRow = originalTable.NewRow();
+            originalRow["UserName"] = "Tester";
+            originalRow["Age"] = 44;
+            originalTable.Rows.Add(originalRow);
+        
+            originalTable.AcceptChanges();
+
+            originalRow["Age"] = 43;
+
+            var envelope = new Envelope(originalDataSet);
+            
+            var serializer = new BsonSerializerAdapter();
+            var raw = serializer.Serialize(envelope);
+            var deserializedEnvelope = serializer.Deserialize<Envelope>(raw);
+
+            var deserializedDataSet = (DataSet)deserializedEnvelope.Value;
+            var deserializedTable = deserializedDataSet.Tables["TestTable"];
+            var deserializedRow = deserializedTable!.Rows[0];
+        
+            Assert.Equal(originalDataSet.DataSetName, deserializedDataSet.DataSetName);
+            Assert.Equal(originalTable.TableName, deserializedTable.TableName);
+            Assert.Equal(originalRow.RowState, deserializedRow.RowState);
+            Assert.Equal(originalRow["Age", DataRowVersion.Original], deserializedRow["Age", DataRowVersion.Original]);
+            Assert.Equal(originalRow["Age", DataRowVersion.Current], deserializedRow["Age", DataRowVersion.Current]);
+            Assert.Equal(originalRow["UserName", DataRowVersion.Current], deserializedRow["UserName", DataRowVersion.Current]);
         }
     }
 }
