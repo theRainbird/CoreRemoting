@@ -67,7 +67,6 @@ public class DataSetDiffGramJsonConverter : JsonConverter
 
         var wrapper = new SerializedDiffGram()
         {
-            TypeName = type!.FullName!,
             XmlSchema = xmlSchema,
             DiffGram = diffGram
         };
@@ -87,6 +86,6 @@ public class DataSetDiffGramJsonConverter : JsonConverter
     {
         var wrapper = serializer.Deserialize<SerializedDiffGram>(reader);
 
-        return wrapper.ToDataObject(objectType);
+        return wrapper.Restore(objectType);
     }
 }

@@ -5,15 +5,27 @@ using System.Text;
 
 namespace CoreRemoting.Serialization.Bson.DataSetDiffGramSupport;
 
+/// <summary>
+/// Representation of serialized DataSet/DataTable DiffGram.
+/// </summary>
 public class SerializedDiffGram
 {
-    public string TypeName { get; set; }
-    
+    /// <summary>
+    /// Gets or sets the serialized XML Schema.
+    /// </summary>
     public string XmlSchema { get; set; }
     
+    /// <summary>
+    /// Gets or sets the serialized DiffGram data.
+    /// </summary>
     public string DiffGram { get; set; }
 
-    public object ToDataObject(Type objectType)
+    /// <summary>
+    /// Restores the DataSet/DataTable.
+    /// </summary>
+    /// <param name="objectType">Type of the DataSet / DataTable</param>
+    /// <returns>DataSet / DataTable instance created from serialized DiffGram</returns>
+    public object Restore(Type objectType)
     {
         var xmlSchema = 
             Encoding.UTF8.GetString(

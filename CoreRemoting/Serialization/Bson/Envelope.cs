@@ -66,7 +66,7 @@ namespace CoreRemoting.Serialization.Bson
                     if (_value.GetType() == typeof(SerializedDiffGram))
                     {
                         var serializedDiffGram = (SerializedDiffGram)_value;
-                        return serializedDiffGram.ToDataObject(_type);
+                        return serializedDiffGram.Restore(_type);
                     }
 
                     return Convert.ChangeType(_value, _type);
