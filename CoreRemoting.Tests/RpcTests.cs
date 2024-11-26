@@ -1,4 +1,5 @@
 using System;
+using System.Data;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -559,6 +560,31 @@ namespace CoreRemoting.Tests
 
             // fails!
             await Roundtrip(encryption: true);
+        }
+
+        [Fact]
+        public void DataTable_roundtrip_works_issue60()
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            client.Connect();
+            var proxy = client.CreateProxy<ITestService>();
+
+            var dt = new DataTable();
+            dt.TableName = "Issue60";
+            dt.Columns.Add("CODE");
+            dt.Rows.Add(dt.NewRow());
+            dt.AcceptChanges();
+
+            var dt2 = proxy.TestDt(dt, 1);
+            Assert.NotNull(dt2);
         }
     }
 }

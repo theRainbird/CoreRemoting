@@ -1,4 +1,5 @@
 using System;
+using System.Data;
 using System.Threading.Tasks;
 using CoreRemoting.Tests.ExternalTypes;
 
@@ -91,6 +92,12 @@ namespace CoreRemoting.Tests.Tools
                 ex.Data[item] = item;
 
             throw ex;
+        }
+
+        public DataTable TestDt(DataTable dt, long num)
+        {
+            dt.Rows.Clear();
+            return dt;
         }
     }
 }
