@@ -11,6 +11,7 @@ namespace CoreRemoting.Tests
         public AsyncTests(ServerFixture serverFixture)
         {
             _serverFixture = serverFixture;
+            _serverFixture.Start();
         }
         
         [Fact]

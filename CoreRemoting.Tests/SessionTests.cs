@@ -19,6 +19,7 @@ namespace CoreRemoting.Tests
         public SessionTests(ServerFixture serverFixture)
         {
             _serverFixture = serverFixture;
+            _serverFixture.Start();
         }
         
         [Fact]

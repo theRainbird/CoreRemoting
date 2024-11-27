@@ -12,6 +12,7 @@ namespace CoreRemoting.Tests
         public CallContextTests(ServerFixture serverFixture)
         {
             _serverFixture = serverFixture;
+            _serverFixture.Start();
         }
         
         [Fact]
