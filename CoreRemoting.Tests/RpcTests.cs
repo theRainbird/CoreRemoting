@@ -3,6 +3,7 @@ using System.Data;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.Channels;
 using CoreRemoting.Serialization;
 using CoreRemoting.Tests.ExternalTypes;
 using CoreRemoting.Tests.Tools;
@@ -18,6 +19,10 @@ namespace CoreRemoting.Tests
         private readonly ITestOutputHelper _testOutputHelper;
         private bool _remoteServiceCalled;
 
+        protected virtual IServerChannel ServerChannel => null;
+
+        protected virtual IClientChannel ClientChannel => null;
+
         public RpcTests(ServerFixture serverFixture, ITestOutputHelper testOutputHelper)
         {
             _serverFixture = serverFixture;
@@ -28,6 +33,8 @@ namespace CoreRemoting.Tests
                 _remoteServiceCalled = true;
                 return arg;
             };
+
+            _serverFixture.Start(ServerChannel);
         }
 
         [Fact]
@@ -44,7 +51,8 @@ namespace CoreRemoting.Tests
                     {
                         ConnectionTimeout = 0,
                         MessageEncryption = false,
-                        ServerPort = _serverFixture.Server.Config.NetworkPort
+                        Channel = ClientChannel,
+                        ServerPort = _serverFixture.Server.Config.NetworkPort,
                     });
 
                     stopWatch.Stop();
@@ -115,8 +123,9 @@ namespace CoreRemoting.Tests
                     using var client = new RemotingClient(new ClientConfig()
                     {
                         ConnectionTimeout = 0,
+                        Channel = ClientChannel,
                         ServerPort = _serverFixture.Server.Config.NetworkPort,
-                        MessageEncryption = true
+                        MessageEncryption = true,
                     });
 
                     stopWatch.Stop();
@@ -183,6 +192,7 @@ namespace CoreRemoting.Tests
                         new ClientConfig()
                         {
                             ConnectionTimeout = 0,
+                            Channel = ClientChannel,
                             MessageEncryption = false,
                             ServerPort = _serverFixture.Server.Config.NetworkPort,
                         });
@@ -218,6 +228,7 @@ namespace CoreRemoting.Tests
                 {
                     ConnectionTimeout = 0,
                     SendTimeout = 0,
+                    Channel = ClientChannel,
                     MessageEncryption = false,
                     ServerPort = _serverFixture.Server.Config.NetworkPort,
                 });
@@ -270,6 +281,7 @@ namespace CoreRemoting.Tests
                     using var client = new RemotingClient(new ClientConfig()
                     {
                         ConnectionTimeout = 0,
+                        Channel = ClientChannel,
                         MessageEncryption = false,
                         ServerPort = _serverFixture.Server.Config.NetworkPort,
                     });
@@ -302,6 +314,7 @@ namespace CoreRemoting.Tests
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0,
+                Channel = ClientChannel,
                 MessageEncryption = false,
                 ServerPort = _serverFixture.Server.Config.NetworkPort,
             });
@@ -320,6 +333,7 @@ namespace CoreRemoting.Tests
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0,
+                Channel = ClientChannel,
                 MessageEncryption = false,
                 ServerPort = _serverFixture.Server.Config.NetworkPort,
             });
@@ -338,6 +352,7 @@ namespace CoreRemoting.Tests
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0,
+                Channel = ClientChannel,
                 MessageEncryption = false,
                 ServerPort = _serverFixture.Server.Config.NetworkPort
             });
@@ -360,6 +375,7 @@ namespace CoreRemoting.Tests
                 ConnectionTimeout = 0,
                 InvocationTimeout = 0,
                 SendTimeout = 0,
+                Channel = ClientChannel,
                 MessageEncryption = false,
                 ServerPort = _serverFixture.Server.Config.NetworkPort
             });
@@ -395,6 +411,7 @@ namespace CoreRemoting.Tests
                 ConnectionTimeout = 0,
                 InvocationTimeout = 0,
                 SendTimeout = 0,
+                Channel = ClientChannel,
                 MessageEncryption = false,
                 ServerPort = _serverFixture.Server.Config.NetworkPort
             });
@@ -419,6 +436,7 @@ namespace CoreRemoting.Tests
                     ConnectionTimeout = 5,
                     InvocationTimeout = 5,
                     SendTimeout = 5,
+                    Channel = ClientChannel,
                     MessageEncryption = false,
                     ServerPort = _serverFixture.Server.Config.NetworkPort
                 });
@@ -450,6 +468,7 @@ namespace CoreRemoting.Tests
                     ConnectionTimeout = 5,
                     InvocationTimeout = 5,
                     SendTimeout = 5,
+                    Channel = ClientChannel,
                     MessageEncryption = false,
                     ServerPort = _serverFixture.Server.Config.NetworkPort
                 });
@@ -481,6 +500,7 @@ namespace CoreRemoting.Tests
                     ConnectionTimeout = 5,
                     InvocationTimeout = 5,
                     SendTimeout = 5,
+                    Channel = ClientChannel,
                     MessageEncryption = false,
                     ServerPort = _serverFixture.Server.Config.NetworkPort
                 });
@@ -523,6 +543,7 @@ namespace CoreRemoting.Tests
                 {
                     RemotingClient CreateClient() => new RemotingClient(new ClientConfig()
                     {
+                        Channel = ClientChannel,
                         ServerPort = _serverFixture.Server.Config.NetworkPort,
                         MessageEncryption = encryption,
                     });
@@ -570,6 +591,7 @@ namespace CoreRemoting.Tests
                 ConnectionTimeout = 0,
                 InvocationTimeout = 0,
                 SendTimeout = 0,
+                Channel = ClientChannel,
                 MessageEncryption = false,
                 ServerPort = _serverFixture.Server.Config.NetworkPort,
             });

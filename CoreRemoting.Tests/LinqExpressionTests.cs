@@ -11,6 +11,7 @@ namespace CoreRemoting.Tests
         public LinqExpressionTests(ServerFixture serverFixture)
         {
             _serverFixture = serverFixture;
+            _serverFixture.Start();
         }
         
         [Fact]

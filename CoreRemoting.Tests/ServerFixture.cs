@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using CoreRemoting.Channels;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Tests.Tools;
 using Xunit;
@@ -14,7 +15,7 @@ public class ServerFixture : IDisposable
     {
         TestService = new TestService();
         
-        var serverConfig =
+        ServerConfig =
             new ServerConfig()
             {
                 UniqueServerInstanceName = "DefaultServer",
@@ -49,20 +50,31 @@ public class ServerFixture : IDisposable
                         lifetime: ServiceLifetime.Singleton);
                 }
             };
-            
-        Server = new RemotingServer(serverConfig);
-        
-        Server.Error += (_ , _)  =>
+    }
+
+    public void Start(IServerChannel channel = null)
+    {
+        if (Server != null)
+            return;
+
+        if (channel != null)
+            ServerConfig.Channel = channel;
+
+        Server = new RemotingServer(ServerConfig);
+        Server.Error += (_, _) =>
         {
             ServerErrorCount++;
         };
-        
+
         Server.Start();
     }
-    
-    public RemotingServer Server { get; }
+
+    public RemotingServer Server { get; private set;  }
+
+    public ServerConfig ServerConfig { get; set; }
+
     public TestService TestService { get; }
-    
+
     public void Dispose()
     {
         if (Server != null)

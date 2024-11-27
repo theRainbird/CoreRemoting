@@ -12,7 +12,12 @@ using Xunit;
 namespace CoreRemoting.Tests
 {
     public class RemotingConfigurationTests : IClassFixture<ServerFixture>
-    {   
+    {
+        public RemotingConfigurationTests(ServerFixture serverFixture)
+        {
+            serverFixture.Start();
+        }
+
         [Fact]
         public void RegisterWellKnownServiceType_should_register_type_resolved_at_runtime()
         {

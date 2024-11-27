@@ -17,6 +17,7 @@ namespace CoreRemoting.Tests
         {
             _serverFixture = serverFixture;
             _testOutputHelper = testOutputHelper;
+            _serverFixture.Start();
         }
         
         [Fact]
