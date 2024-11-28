@@ -6,9 +6,9 @@ using WebSocketSharp.Server;
 namespace CoreRemoting.Channels.Websocket
 {
     /// <summary>
-    /// Server side websocket channel implementation.
+    /// Server side websocket channel implementation based on websocket-sharp.
     /// </summary>
-    public class WebsocketServerChannel : IServerChannel
+    public class WebsocketSharpServerChannel : IServerChannel
     {
         private WebSocketServer _webSocketServer;
         private IRemotingServer _server;
@@ -20,7 +20,7 @@ namespace CoreRemoting.Channels.Websocket
         public void Init(IRemotingServer server)
         {
             _server = server ?? throw new ArgumentNullException(nameof(server));
-            
+
             _webSocketServer = new WebSocketServer(_server.Config.NetworkPort, secure: false)
             {
                 NoDelay = true
@@ -38,7 +38,7 @@ namespace CoreRemoting.Channels.Websocket
         {
             if (_webSocketServer == null)
                 throw new InvalidOperationException("Channel is not initialized.");
-            
+
             _webSocketServer.Start();
         }
 
@@ -49,7 +49,7 @@ namespace CoreRemoting.Channels.Websocket
         {
             if (_webSocketServer == null)
                 throw new InvalidOperationException("Channel is not initialized.");
-            
+
             if (_webSocketServer.IsListening)
                 _webSocketServer.Stop();
         }
