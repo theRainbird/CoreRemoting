@@ -4,7 +4,7 @@ using System.Reflection;
 using WebSocketSharp;
 using WebSocketSharp.Net;
 
-namespace CoreRemoting.Channels.Websocket
+namespace CoreRemoting.Channels.WebsocketSharp
 {
     /// <summary>
     /// Client side websocket channel implementation based on websocket-sharp.

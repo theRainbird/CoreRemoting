@@ -2,7 +2,7 @@ using System;
 using WebSocketSharp;
 using WebSocketSharp.Server;
 
-namespace CoreRemoting.Channels.Websocket
+namespace CoreRemoting.Channels.WebsocketSharp
 {
     /// <summary>
     /// Executes RPC calls from clients.
@@ -11,17 +11,17 @@ namespace CoreRemoting.Channels.Websocket
     {
         private IRemotingServer _server;
         private RemotingSession _session;
-        
+
         /// <summary>
         /// Event: Fired when a message is received via websocket.
         /// </summary>
         public event Action<byte[]> ReceiveMessage;
-        
+
         /// <summary>
         /// Event: Fires when an error is occurred.
         /// </summary>
         public event Action<string, Exception> ErrorOccured;
-        
+
         /// <summary>
         /// Initializes the RPC service instance.
         /// </summary>
@@ -40,7 +40,7 @@ namespace CoreRemoting.Channels.Websocket
             Send(rawMessage);
             return true;
         }
-        
+
         /// <summary>
         /// Called when a message from a client is received.
         /// </summary>
@@ -50,7 +50,7 @@ namespace CoreRemoting.Channels.Websocket
             if (_session == null)
             {
                 byte[] clientPublicKey = null;
-            
+
                 var messageEncryptionCookie = Context.CookieCollection["MessageEncryption"];
 
                 if (messageEncryptionCookie?.Value == "1")
@@ -61,13 +61,13 @@ namespace CoreRemoting.Channels.Websocket
                         Convert.FromBase64String(
                             shakeHandsCookie.Value);
                 }
-            
-                _session = 
+
+                _session =
                     _server.SessionRepository.CreateSession(
                         clientPublicKey,
                         _server,
                         this);
-                
+
                 _session.BeforeDispose += BeforeDisposeSession;
             }
             else
@@ -90,7 +90,7 @@ namespace CoreRemoting.Channels.Websocket
         protected override void OnError(ErrorEventArgs e)
         {
             LastException = new NetworkException(e.Message, e.Exception);
-            
+
             ErrorOccured?.Invoke(e.Message, e.Exception);
         }
 

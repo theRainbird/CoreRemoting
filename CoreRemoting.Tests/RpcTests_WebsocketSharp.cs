@@ -1,5 +1,5 @@
 using CoreRemoting.Channels;
-using CoreRemoting.Channels.Websocket;
+using CoreRemoting.Channels.WebsocketSharp;
 using Xunit;
 using Xunit.Abstractions;
 
