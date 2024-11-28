@@ -60,8 +60,8 @@ public class WebsocketServerChannel : IServerChannel
         var connection = new WebsocketConnection(websocketContext, websocket, Server);
 
         // handle incoming websocket messages
-        Connections[connection.Guid] = connection;
-        connection.StartListening();
+        var sessionId = connection.StartListening();
+        Connections[sessionId] = connection;
     }
 
     /// <inheritdoc/>

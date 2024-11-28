@@ -144,6 +144,7 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
             LastException = ex as NetworkException ??
                 new NetworkException(ex.Message, ex);
 
+            ErrorOccured?.Invoke(ex.Message, ex);
             Disconnected?.Invoke();
         }
         finally
@@ -169,6 +170,8 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
         {
             LastException = ex as NetworkException ??
                 new NetworkException(ex.Message, ex);
+
+            ErrorOccured?.Invoke(ex.Message, ex);
             return false;
         }
     }
