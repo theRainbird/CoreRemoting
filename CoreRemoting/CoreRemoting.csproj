@@ -58,7 +58,7 @@
       <PackageReference Include="WatsonTcp" Version="6.0.6" />
       <PackageReference Include="websocketsharp.core" Version="1.0.1" />
     </ItemGroup>
-    
+
     <ItemGroup>
       <Protobuf Include="**/*.proto" />
     </ItemGroup>

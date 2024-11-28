@@ -24,8 +24,6 @@ public class WebsocketConnection : IRawMessageTransport
         RemotingServer = remotingServer ?? throw new ArgumentNullException(nameof(remotingServer));
     }
 
-    public Guid Guid { get; } = Guid.NewGuid();
-
     private HttpListenerWebSocketContext WebSocketContext { get; set; }
 
     private WebSocket WebSocket { get; set; }
@@ -74,16 +72,17 @@ public class WebsocketConnection : IRawMessageTransport
     /// <summary>
     /// Starts listening to the incoming messages.
     /// </summary>
-    public void StartListening()
+    public Guid StartListening()
     {
-        CreateRemotingSession();
+        var sessionId = CreateRemotingSession();
         _ = ReadIncomingMessages();
+        return sessionId;
     }
 
     /// <summary>
     /// Creates <see cref="RemotingSession"/> for the incoming websocket connection.
     /// </summary>
-    private void CreateRemotingSession()
+    private Guid CreateRemotingSession()
     {
         byte[] clientPublicKey = null;
 
@@ -98,6 +97,8 @@ public class WebsocketConnection : IRawMessageTransport
 
         Session = RemotingServer.SessionRepository.CreateSession(
             clientPublicKey, RemotingServer, this);
+
+        return Session.SessionId;
     }
 
     private async Task ReadIncomingMessages()
