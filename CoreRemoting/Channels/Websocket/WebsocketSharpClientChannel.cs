@@ -7,17 +7,17 @@ using WebSocketSharp.Net;
 namespace CoreRemoting.Channels.Websocket
 {
     /// <summary>
-    /// Client side websocket channel implementation.
+    /// Client side websocket channel implementation based on websocket-sharp.
     /// </summary>
-    public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
+    public class WebsocketSharpClientChannel : IClientChannel, IRawMessageTransport
     {
         private WebSocket _webSocket;
-        
+
         /// <summary>
         /// Event: Fires when a message is received from server.
         /// </summary>
         public event Action<byte[]> ReceiveMessage;
-        
+
         /// <summary>
         /// Event: Fires when an error is occurred.
         /// </summary>
@@ -32,14 +32,14 @@ namespace CoreRemoting.Channels.Websocket
         /// <param name="client">CoreRemoting client</param>
         public void Init(IRemotingClient client)
         {
-            string url = 
-                "ws://" + 
-                client.Config.ServerHostName + ":" + 
-                Convert.ToString(client.Config.ServerPort) + 
+            string url =
+                "ws://" +
+                client.Config.ServerHostName + ":" +
+                Convert.ToString(client.Config.ServerPort) +
                 "/rpc";
-            
+
             _webSocket = new WebSocket(url) { NoDelay = true };
-            
+
             _webSocket.SetCookie(new Cookie(
                 name: "MessageEncryption",
                 value: client.MessageEncryption ? "1" : "0"));
@@ -54,7 +54,7 @@ namespace CoreRemoting.Channels.Websocket
             _webSocket.Log.Output = (timestamp, text) => Console.WriteLine("{0}: {1}", timestamp, text);
             _webSocket.Log.Level = LogLevel.Debug;
         }
-       
+
         /// <summary>
         /// Establish a websocket connection with the server.
         /// </summary>
@@ -62,12 +62,12 @@ namespace CoreRemoting.Channels.Websocket
         {
             if (_webSocket == null)
                 throw new InvalidOperationException("Channel is not initialized.");
-            
+
             if (_webSocket.IsAlive)
                 return;
 
             LastException = null;
-            
+
             _webSocket.OnMessage += OnMessage;
             _webSocket.OnError += OnError;
             _webSocket.OnClose += OnDisconnected;
@@ -89,7 +89,7 @@ namespace CoreRemoting.Channels.Websocket
         private void OnError(object sender, ErrorEventArgs e)
         {
             LastException = new NetworkException(e.Message, e.Exception);
-            
+
             ErrorOccured?.Invoke(e.Message, e.Exception);
         }
 
@@ -100,10 +100,10 @@ namespace CoreRemoting.Channels.Websocket
         {
             if (_webSocket == null)
                 return;
-            
+
             _webSocket.OnMessage -= OnMessage;
             _webSocket.OnError -= OnError;
-            
+
             _webSocket.Close(CloseStatusCode.Normal);
         }
 
@@ -125,7 +125,7 @@ namespace CoreRemoting.Channels.Websocket
         /// Gets the raw message transport component for this connection.
         /// </summary>
         public IRawMessageTransport RawMessageTransport => this;
-        
+
         /// <summary>
         /// Disconnect and free manages resources.
         /// </summary>
@@ -144,7 +144,7 @@ namespace CoreRemoting.Channels.Websocket
         {
             ReceiveMessage?.Invoke(e.RawData);
         }
-        
+
         /// <summary>
         /// Sends a message to the server.
         /// </summary>
