@@ -2,7 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using WebSocketSharp;
 
 namespace CoreRemoting.DependencyInjection;
 
@@ -94,7 +93,7 @@ public abstract class DependencyInjectionContainerBase : IDependencyInjectionCon
     public TServiceInterface GetService<TServiceInterface>(string serviceName = "")
         where TServiceInterface : class
     {
-        if (serviceName.IsNullOrEmpty())
+        if (string.IsNullOrEmpty(serviceName))
             serviceName = typeof(TServiceInterface).FullName;
         
         var registration = GetServiceRegistration(serviceName);
