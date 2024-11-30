@@ -99,5 +99,24 @@ namespace CoreRemoting.Tests.Tools
             dt.Rows.Clear();
             return dt;
         }
+
+        public (T, int) Duplicate<T>(T sample) where T : class
+        {
+            return sample switch
+            {
+                byte[] arr => (Dup(arr) as T, arr.Length * 2),
+                int[] iarr => (Dup(iarr) as T, iarr.Length * 2 * sizeof(int)),
+                string str => ((str + str) as T, str.Length * 2 * sizeof(char)),
+                _ => throw new ArgumentOutOfRangeException(),
+            };
+
+            TItem[] Dup<TItem>(TItem[] arr)
+            {
+                var length = arr.Length;
+                Array.Resize(ref arr, length * 2);
+                Array.Copy(arr, 0, arr, length, length);
+                return arr;
+            }
+        }
     }
 }
