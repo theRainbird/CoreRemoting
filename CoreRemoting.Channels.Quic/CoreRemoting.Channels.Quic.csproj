@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0.0</TargetFramework>
+	<RootNamespace>CoreRemoting.Channels.Quic</RootNamespace>
+	<AssemblyName>CoreRemoting.Channels.Quic</AssemblyName>
+	<PackageVersion>1.2.1</PackageVersion>
+	<Authors>Alexey Yakovlev</Authors>
+	<Description>Quic channels for CoreRemoting</Description>
+	<Copyright>2024 Alexey Yakovlev</Copyright>
+	<PackageProjectUrl>https://github.com/theRainbird/CoreRemoting</PackageProjectUrl>
+	<PackageLicenseUrl></PackageLicenseUrl>
+	<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+	<Title>CoreRemoting.Channels.Quic</Title>
+	<RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
+	<RepositoryType>git</RepositoryType>
+	<AssemblyVersion>1.2.1</AssemblyVersion>
+	<LangVersion>10</LangVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <NoWarn>1701;1702;CA1416</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <NoWarn>1701;1702;1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CoreRemoting\CoreRemoting.csproj" />
+  </ItemGroup>
+
+</Project>
