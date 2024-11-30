@@ -38,5 +38,7 @@ namespace CoreRemoting.Tests.Tools
         void NonSerializableError(string text, params object[] data);
 
         DataTable TestDt(DataTable dt, long num);
+
+        (T duplicate, int size) Duplicate<T>(T sample) where T : class;
     }
 }

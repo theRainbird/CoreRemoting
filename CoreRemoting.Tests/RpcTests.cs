@@ -608,5 +608,54 @@ namespace CoreRemoting.Tests
             var dt2 = proxy.TestDt(dt, 1);
             Assert.NotNull(dt2);
         }
+
+        [Fact]
+        public void Large_messages_are_sent_and_received()
+        {
+            // max payload size, in bytes
+            var maxSize = 2 * 1024 * 1024 + 1;
+
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            client.Connect();
+            var proxy = client.CreateProxy<ITestService>();
+
+            // shouldn't throw exceptions
+            Roundtrip("Payload", maxSize);
+            Roundtrip(new byte[] { 1, 2, 3, 4, 5 }, maxSize);
+            Roundtrip(new int[] { 12345, 67890 }, maxSize);
+
+            void Roundtrip<T>(T payload, int maxSize) where T : class
+            {
+                var lastSize = 0;
+                try
+                {
+                    while (true)
+                    {
+                        // a -> aa -> aaaa ...
+                        var dup = proxy.Duplicate(payload);
+                        if (dup.size >= maxSize)
+                            break;
+
+                        // save the size for error reporting
+                        lastSize = dup.size;
+                        payload = dup.duplicate;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException($"Failed to handle " +
+                        $"payload larger than {lastSize}: {ex.Message}", ex);
+                }
+            }
+        }
     }
 }
