@@ -532,6 +532,27 @@ namespace CoreRemoting.Tests
         }
 
         [Fact]
+        public void Failing_component_constructor_throws_RemoteInvocationException()
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 3,
+                InvocationTimeout = 3,
+                SendTimeout = 3,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            client.Connect();
+
+            var proxy = client.CreateProxy<IFailingService>();
+            var ex = Assert.Throws<RemoteInvocationException>(() => proxy.Hello());
+
+            Assert.NotNull(ex);
+            Assert.Contains(ex.Message, "IFailingService");
+        }
+
+        [Fact]
         public async Task Disposed_client_subscription_doesnt_break_other_clients()
         {
             async Task Roundtrip(bool encryption)

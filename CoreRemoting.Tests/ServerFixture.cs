@@ -48,6 +48,10 @@ public class ServerFixture : IDisposable
                     // Service for enum tests
                     container.RegisterService<IEnumTestService, EnumTestService>(
                         lifetime: ServiceLifetime.Singleton);
+
+                    // Service for session tests
+                    container.RegisterService<IFailingService, FailingService>(
+                        lifetime: ServiceLifetime.SingleCall);
                 }
             };
     }
