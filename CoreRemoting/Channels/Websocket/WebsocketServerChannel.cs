@@ -14,8 +14,8 @@ public class WebsocketServerChannel : IServerChannel
 
     private IRemotingServer Server { get; set; }
 
-    private ConcurrentDictionary<Guid, WebsocketConnection> Connections { get; } =
-        new ConcurrentDictionary<Guid, WebsocketConnection>();
+    private ConcurrentDictionary<Guid, WebsocketServerConnection> Connections { get; } =
+        new ConcurrentDictionary<Guid, WebsocketServerConnection>();
 
     /// <inheritdoc/>
     public bool IsListening => HttpListener.IsListening;
@@ -57,7 +57,7 @@ public class WebsocketServerChannel : IServerChannel
         // accept websocket request and start a new session
         var websocketContext = await context.AcceptWebSocketAsync(null);
         var websocket = websocketContext.WebSocket;
-        var connection = new WebsocketConnection(websocketContext, websocket, Server);
+        var connection = new WebsocketServerConnection(websocketContext, websocket, Server);
 
         // handle incoming websocket messages
         var sessionId = connection.StartListening();

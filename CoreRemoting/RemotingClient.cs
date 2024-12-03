@@ -434,7 +434,7 @@ namespace CoreRemoting
         /// <param name="rawMessage">Raw message data</param>
         private void OnMessage(byte[] rawMessage)
         {
-            var message = Serializer.Deserialize<WireMessage>(rawMessage);
+            var message = TryDeserialize(rawMessage);
 
             switch (message.MessageType.ToLower())
             {
@@ -456,6 +456,29 @@ namespace CoreRemoting
                 case "session_closed":
                     Disconnect(quiet: true);
                     break;
+                default:
+                    // TODO: how do we handle invalid wire messages received by the client?
+                    // A wire message could have been tampered with and couldn't be deserialized
+                    break;
+            }
+        }
+
+        private WireMessage TryDeserialize(byte[] rawMessage)
+        {
+            try
+            {
+                return Serializer.Deserialize<WireMessage>(rawMessage);
+            }
+            catch // TODO: dispatch message deserialization exception?
+            {
+                return new WireMessage
+                {
+                    Data = rawMessage,
+                    Error = true,
+                    Iv = Array.Empty<byte>(),
+                    MessageType = "invalid",
+                    UniqueCallKey = Array.Empty<byte>(),
+                };
             }
         }
 
@@ -585,16 +608,27 @@ namespace CoreRemoting
 
             if (message.Error)
             {
-                var remoteException =
-                    Serializer.Deserialize<RemoteInvocationException>(
-                        MessageEncryptionManager.GetDecryptedMessageData(
-                            message: message,
-                            serializer: Serializer,
-                            sharedSecret: sharedSecret,
-                            sendersPublicKeyBlob: _serverPublicKeyBlob,
-                            sendersPublicKeySize: _keyPair?.KeySize ?? 0));
+                try
+                {
+                    var remoteException =
+                        Serializer.Deserialize<RemoteInvocationException>(
+                            MessageEncryptionManager.GetDecryptedMessageData(
+                                message: message,
+                                serializer: Serializer,
+                                sharedSecret: sharedSecret,
+                                sendersPublicKeyBlob: _serverPublicKeyBlob,
+                                sendersPublicKeySize: _keyPair?.KeySize ?? 0));
 
-                clientRpcContext.RemoteException = remoteException;
+                    clientRpcContext.RemoteException = remoteException;
+                }
+                catch (Exception deserializationException)
+                {
+                    var remoteException = new RemoteInvocationException(
+                        "Remote exception couldn't be deserialized",
+                            deserializationException);
+
+                    clientRpcContext.RemoteException = remoteException;
+                }
             }
             else
             {
