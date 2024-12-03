@@ -539,6 +539,7 @@ namespace CoreRemoting.Tests
                 ConnectionTimeout = 3,
                 InvocationTimeout = 3,
                 SendTimeout = 3,
+                Channel = ClientChannel,
                 MessageEncryption = false,
                 ServerPort = _serverFixture.Server.Config.NetworkPort,
             });
@@ -549,7 +550,7 @@ namespace CoreRemoting.Tests
             var ex = Assert.Throws<RemoteInvocationException>(() => proxy.Hello());
 
             Assert.NotNull(ex);
-            Assert.Contains(ex.Message, "IFailingService");
+            Assert.Contains("FailingService", ex.Message);
         }
 
         [Fact]
