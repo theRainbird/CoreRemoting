@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Castle.MicroKernel.ComponentActivator;
+using System;
 using System.Linq;
 
 namespace CoreRemoting.Serialization;
@@ -19,6 +20,9 @@ public static class ExceptionExtensions
             agg.InnerExceptions.All(ix => ix.IsSerializable()) &&
                 agg.InnerException.IsSerializable() &&
                 agg.GetType().IsSerializable,
+
+        // pesky exception that looks like serializable but really isn't
+        ComponentActivatorException cax => false,
 
         _ => ex.GetType().IsSerializable &&
             ex.InnerException.IsSerializable()
