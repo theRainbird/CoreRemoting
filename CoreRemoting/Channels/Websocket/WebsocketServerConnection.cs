@@ -9,15 +9,15 @@ namespace CoreRemoting.Channels.Websocket;
 /// <summary>
 /// Websocket connection.
 /// </summary>
-public class WebsocketConnection : IRawMessageTransport
+public class WebsocketServerConnection : IRawMessageTransport
 {
     // note: LOH threshold is ~85 kilobytes
     private const int BufferSize = 16 * 1024;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="WebsocketConnection"/> class.
+    /// Initializes a new instance of the <see cref="WebsocketServerConnection"/> class.
     /// </summary>
-    public WebsocketConnection(HttpListenerWebSocketContext websocketContext, WebSocket websocket, IRemotingServer remotingServer)
+    public WebsocketServerConnection(HttpListenerWebSocketContext websocketContext, WebSocket websocket, IRemotingServer remotingServer)
     {
         WebSocketContext = websocketContext ?? throw new ArgumentNullException(nameof(websocketContext));
         WebSocket = websocket ?? throw new ArgumentNullException(nameof(websocket));
