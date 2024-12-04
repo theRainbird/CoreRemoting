@@ -425,6 +425,8 @@ namespace CoreRemoting
 
             try
             {
+                CurrentSession.Value = this;
+
                 var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
                 var serviceInterfaceType =
                     _server.ServiceRegistry.GetServiceInterfaceType(callMessage.ServiceName);
@@ -462,6 +464,10 @@ namespace CoreRemoting
 
                 serializedResult =
                     _server.Serializer.Serialize(serverRpcContext.Exception);
+            }
+            finally
+            {
+                CurrentSession.Value = null;
             }
 
             object result = null;
