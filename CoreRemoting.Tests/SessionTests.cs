@@ -21,7 +21,7 @@ namespace CoreRemoting.Tests
             _serverFixture = serverFixture;
             _serverFixture.Start();
         }
-
+        
         [Fact]
         public void Client_Connect_should_create_new_session_AND_Disconnect_should_close_session()
         {
@@ -54,7 +54,7 @@ namespace CoreRemoting.Tests
 
                 client.Dispose();
             });
-
+            
             var clientThread1 = new Thread(() => clientAction(0));
             var clientThread2 = new Thread(() => clientAction(1));
 
@@ -94,7 +94,7 @@ namespace CoreRemoting.Tests
                         AuthenticateFake = credentials => credentials[1].Value == "secret"
                     }
                 };
-
+            
             var server = new RemotingServer(serverConfig);
             server.Start();
 
@@ -102,7 +102,7 @@ namespace CoreRemoting.Tests
             {
                 var clientAction = new Action<string, bool>((password, shouldThrow) =>
                 {
-                    using var client =
+                    using var client = 
                         new RemotingClient(new ClientConfig()
                         {
                             ConnectionTimeout = 0,
@@ -114,7 +114,7 @@ namespace CoreRemoting.Tests
                                 new Credential() {Name = "Password", Value = password }
                             }
                         });
-
+                
                     if (shouldThrow)
                         Assert.Throws<SecurityException>(() => client.Connect());
                     else
@@ -124,7 +124,7 @@ namespace CoreRemoting.Tests
                 var clientThread1 = new Thread(() => clientAction("wrong", true));
                 clientThread1.Start();
                 clientThread1.Join();
-
+            
                 var clientThread2 = new Thread(() => clientAction("secret", false));
                 clientThread2.Start();
                 clientThread2.Join();
@@ -161,7 +161,7 @@ namespace CoreRemoting.Tests
             {
                 waitForDisconnect.Set();
             };
-
+            
             client.Connect();
             var proxy = client.CreateProxy<ITestService>();
 
@@ -169,8 +169,29 @@ namespace CoreRemoting.Tests
 
             waitForDisconnect.Wait();
             Assert.False(client.IsConnected);
-
+            
             client.Dispose();
+        }
+
+        [Fact]
+        public void RemotingSession_should_be_accessible_to_the_component_constructor()
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            client.Connect();
+
+            // RemotingSession.Current should be accessible to the component constructor
+            var proxy = client.CreateProxy<ISessionAwareService>();
+
+            // RemotingSession should be the same as in the constructor
+            Assert.True(proxy.HasSameSessionInstance);
         }
     }
 }
