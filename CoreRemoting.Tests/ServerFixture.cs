@@ -49,8 +49,12 @@ public class ServerFixture : IDisposable
                     container.RegisterService<IEnumTestService, EnumTestService>(
                         lifetime: ServiceLifetime.Singleton);
 
-                    // Service for session tests
+                    // Failing constructor service
                     container.RegisterService<IFailingService, FailingService>(
+                        lifetime: ServiceLifetime.SingleCall);
+
+                    // Service for session tests
+                    container.RegisterService<ISessionAwareService, SessionAwareService>(
                         lifetime: ServiceLifetime.SingleCall);
                 }
             };
