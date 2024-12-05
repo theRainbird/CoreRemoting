@@ -679,5 +679,35 @@ namespace CoreRemoting.Tests
                 }
             }
         }
+
+        [Fact]
+        public void Authentication_is_taken_into_account()
+        {
+            _serverFixture.Server.Config.AuthenticationRequired = true;
+            try
+            {
+                using var client = new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 0,
+                    InvocationTimeout = 0,
+                    SendTimeout = 0,
+                    Channel = ClientChannel,
+                    MessageEncryption = false,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort,
+                });
+
+                client.Connect();
+
+                var proxy = client.CreateProxy<IFailingService>();
+                var ex = Assert.Throws<RemoteInvocationException>(() => proxy.Hello());
+
+                // Session is not authenticated
+                Assert.Contains("authenticated", ex.Message);
+            }
+            finally
+            {
+                _serverFixture.Server.Config.AuthenticationRequired = false;
+            }
+        }
     }
 }
