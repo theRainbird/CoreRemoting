@@ -427,6 +427,9 @@ namespace CoreRemoting
             {
                 CurrentSession.Value = this;
 
+                if (_server.Config.AuthenticationRequired && !_isAuthenticated)
+                    throw new NetworkException("Session is not authenticated.");
+
                 var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
                 var serviceInterfaceType =
                     _server.ServiceRegistry.GetServiceInterfaceType(callMessage.ServiceName);
@@ -448,9 +451,6 @@ namespace CoreRemoting
                         methodName: callMessage.MethodName);
 
                 oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
-
-                if (_server.Config.AuthenticationRequired && !_isAuthenticated)
-                    throw new NetworkException("Session is not authenticated.");
             }
             catch (Exception ex)
             {
