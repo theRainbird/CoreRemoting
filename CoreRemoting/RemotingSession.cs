@@ -555,7 +555,8 @@ namespace CoreRemoting
                                 returnValue: result);
                 }
 
-                ((RemotingServer)_server).OnAfterCall(serverRpcContext);
+                if (serverRpcContext.Exception == null)
+                    ((RemotingServer)_server).OnAfterCall(serverRpcContext);
 
                 if (oneWay)
                     return;
