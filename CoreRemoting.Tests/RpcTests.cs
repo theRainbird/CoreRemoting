@@ -3,6 +3,7 @@ using System.Data;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
 using CoreRemoting.Serialization;
 using CoreRemoting.Tests.ExternalTypes;
@@ -832,8 +833,10 @@ namespace CoreRemoting.Tests
             void RejectCall(object sender, ServerRpcContext e) =>
                 rejectedMethod = e.MethodCallMessage.MethodName;
 
-            _serverFixture.Server.Config.AuthenticationRequired = true;
-            _serverFixture.Server.RejectCall += RejectCall;
+            var server = _serverFixture.Server;
+            server.RejectCall += RejectCall;
+            server.Config.AuthenticationRequired = true;
+
             try
             {
                 using var client = new RemotingClient(new ClientConfig()
@@ -859,8 +862,44 @@ namespace CoreRemoting.Tests
             }
             finally
             {
-                _serverFixture.Server.Config.AuthenticationRequired = false;
-                _serverFixture.Server.RejectCall -= RejectCall;
+                server.Config.AuthenticationRequired = false;
+                server.RejectCall -= RejectCall;
+            }
+        }
+
+        [Fact]
+        public void Authentication_handler_has_access_to_the_current_session()
+        {
+            var server = _serverFixture.Server;
+            var authProvider = server.Config.AuthenticationProvider;
+            server.Config.AuthenticationRequired = true;
+            server.Config.AuthenticationProvider = new FakeAuthProvider
+            {
+                AuthenticateFake = c => RemotingSession.Current != null
+            };
+
+            try
+            {
+                using var client = new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 0,
+                    InvocationTimeout = 0,
+                    SendTimeout = 0,
+                    Channel = ClientChannel,
+                    MessageEncryption = false,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort,
+                    Credentials = [new Credential()],
+                });
+
+                client.Connect();
+
+                var proxy = client.CreateProxy<ITestService>();
+                Assert.Equal("123", proxy.Reverse("321"));
+            }
+            finally
+            {
+                server.Config.AuthenticationProvider = authProvider;
+                server.Config.AuthenticationRequired = false;
             }
         }
     }
