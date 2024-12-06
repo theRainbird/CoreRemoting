@@ -681,6 +681,93 @@ namespace CoreRemoting.Tests
         }
 
         [Fact]
+        public void BeforeCall_and_AfterCall_events_are_triggered_on_success()
+        {
+            var beforeCallFired = 0;
+            void BeforeCall(object sender, ServerRpcContext e) =>
+                Interlocked.Increment(ref beforeCallFired);
+
+            var afterCallFired = 0;
+            void AfterCall(object sender, ServerRpcContext e) =>
+                Interlocked.Increment(ref afterCallFired);
+
+            _serverFixture.Server.BeforeCall += BeforeCall;
+            _serverFixture.Server.AfterCall += AfterCall;
+
+            try
+            {
+                using var client = new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 0,
+                    InvocationTimeout = 0,
+                    SendTimeout = 0,
+                    Channel = ClientChannel,
+                    MessageEncryption = false,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort,
+                });
+
+                client.Connect();
+
+                // test one-way method
+                var proxy = client.CreateProxy<ITestService>();
+                proxy.OneWayMethod();
+
+                // test normal method
+                Assert.Equal("Hello", proxy.Echo("Hello"));
+
+                Assert.Equal(2, beforeCallFired);
+                Assert.Equal(2, afterCallFired);
+            }
+            finally
+            {
+                _serverFixture.Server.AfterCall -= AfterCall;
+                _serverFixture.Server.BeforeCall -= BeforeCall;
+            }
+        }
+
+        [Fact]
+        public void BeforeCall_and_AfterCall_events_are_triggered_on_failures()
+        {
+            var beforeCallFired = 0;
+            void BeforeCall(object sender, ServerRpcContext e) =>
+                Interlocked.Increment(ref beforeCallFired);
+
+            var afterCallFired = 0;
+            void AfterCall(object sender, ServerRpcContext e) =>
+                Interlocked.Increment(ref afterCallFired);
+
+            _serverFixture.Server.BeforeCall += BeforeCall;
+            _serverFixture.Server.AfterCall += AfterCall;
+
+            try
+            {
+                using var client = new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 0,
+                    InvocationTimeout = 0,
+                    SendTimeout = 0,
+                    Channel = ClientChannel,
+                    MessageEncryption = false,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort,
+                });
+
+                client.Connect();
+
+                // test failing method
+                var proxy = client.CreateProxy<ITestService>();
+                Assert.Throws<RemoteInvocationException>(() => proxy.Error("Bang"));
+
+                Assert.Equal(1, beforeCallFired);
+                Assert.Equal(1, afterCallFired);
+            }
+            finally
+            {
+                _serverFixture.Server.AfterCall -= AfterCall;
+                _serverFixture.Server.BeforeCall -= BeforeCall;
+            }
+        }
+
+        [Fact]
         public void Authentication_is_taken_into_account()
         {
             _serverFixture.Server.Config.AuthenticationRequired = true;
