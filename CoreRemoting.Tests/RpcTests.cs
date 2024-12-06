@@ -768,9 +768,72 @@ namespace CoreRemoting.Tests
         }
 
         [Fact]
-        public void Authentication_is_taken_into_account()
+        public void BeginCall_event_handler_can_intercept_and_cancel_method_calls()
         {
+            var counter = 0;
+
+            void InterceptMethodCalls(object sender, ServerRpcContext e)
+            {
+                Interlocked.Increment(ref counter);
+
+                // swap Echo and Reverse methods
+                e.MethodCallMessage.MethodName = e.MethodCallMessage.MethodName switch
+                {
+                    "Echo" => "Reverse",
+                    "Reverse" => "Echo",
+                    var others => others
+                };
+
+                // disable IHobbitService
+                if (e.MethodCallMessage.ServiceName.Contains("IHobbitService"))
+                {
+                    e.Cancel = true;
+                }
+            }
+
+            _serverFixture.Server.BeginCall += InterceptMethodCalls;
+            try
+            {
+                using var client = new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 0,
+                    InvocationTimeout = 0,
+                    SendTimeout = 0,
+                    Channel = ClientChannel,
+                    MessageEncryption = false,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort,
+                });
+
+                client.Connect();
+
+                // try swapped methods
+                var proxy = client.CreateProxy<ITestService>();
+                Assert.Equal("321", proxy.Echo("123"));
+                Assert.Equal("Hello", proxy.Reverse("Hello"));
+
+                // try disabled service
+                var hobbit = client.CreateProxy<IHobbitService>();
+                Assert.Throws<RemoteInvocationException>(() =>
+                    hobbit.QueryHobbits(h => h.LastName != ""));
+
+                // check interception counter
+                Assert.Equal(3, counter);
+            }
+            finally
+            {
+                _serverFixture.Server.BeginCall -= InterceptMethodCalls;
+            }
+        }
+
+        [Fact]
+        public void Authentication_is_taken_into_account_and_RejectCall_event_is_fired()
+        {
+            var rejectedMethod = string.Empty;
+            void RejectCall(object sender, ServerRpcContext e) =>
+                rejectedMethod = e.MethodCallMessage.MethodName;
+
             _serverFixture.Server.Config.AuthenticationRequired = true;
+            _serverFixture.Server.RejectCall += RejectCall;
             try
             {
                 using var client = new RemotingClient(new ClientConfig()
@@ -790,10 +853,14 @@ namespace CoreRemoting.Tests
 
                 // Session is not authenticated
                 Assert.Contains("authenticated", ex.Message);
+
+                // Method call was rejected
+                Assert.Equal("Hello", rejectedMethod);
             }
             finally
             {
                 _serverFixture.Server.Config.AuthenticationRequired = false;
+                _serverFixture.Server.RejectCall -= RejectCall;
             }
         }
     }
