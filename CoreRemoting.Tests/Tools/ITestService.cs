@@ -29,6 +29,8 @@ namespace CoreRemoting.Tests.Tools
 
         string Echo(string text);
 
+        string Reverse(string text);
+
         void MethodWithOutParameter(out int counter);
 
         void Error(string text);

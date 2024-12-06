@@ -11,6 +11,7 @@ using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Bson;
 using ServiceLifetime = CoreRemoting.DependencyInjection.ServiceLifetime;
+using System.Runtime.ExceptionServices;
 
 namespace CoreRemoting
 {
@@ -91,7 +92,17 @@ namespace CoreRemoting
         /// Event: Fires if an error occurs.
         /// </summary>
         public event EventHandler<Exception> Error;
-        
+
+        /// <summary>
+        /// Event: Fires when an RPC call is rejected before BeforeCall event.
+        /// </summary>
+        public event EventHandler<ServerRpcContext> RejectCall;
+
+        /// <summary>
+        /// Event: Fires when an RPC call is prepared and can be canceled.
+        /// </summary>
+        public event EventHandler<ServerRpcContext> BeginCall;
+
         /// <summary>
         /// Gets the dependency injection container that is used a service registry.
         /// </summary>
@@ -134,7 +145,7 @@ namespace CoreRemoting
         public IServerChannel Channel { get; private set; }
 
         /// <summary>
-        /// Fires the OnBeforeCall event.
+        /// Fires the <see cref="BeforeCall"/> event.
         /// </summary>
         /// <param name="serverRpcContext">Server side RPC call context</param>
         internal void OnBeforeCall(ServerRpcContext serverRpcContext)
@@ -143,7 +154,7 @@ namespace CoreRemoting
         }
 
         /// <summary>
-        /// Fires the OnAfterCall event.
+        /// Fires the <see cref="AfterCall"/> event.
         /// </summary>
         /// <param name="serverRpcContext">Server side RPC call context</param>
         internal void OnAfterCall(ServerRpcContext serverRpcContext)
@@ -152,14 +163,43 @@ namespace CoreRemoting
         }
 
         /// <summary>
-        /// Fires the OnError event.
+        /// Fires the <see cref="Error"/> event.
         /// </summary>
         /// <param name="ex">Exception that describes the occurred error</param>
         internal void OnError(Exception ex)
         {
             Error?.Invoke(this, ex);
         }
-        
+
+        /// <summary>
+        /// Fires the <see cref="RejectCall"/> event.
+        /// </summary>
+        /// <param name="serverRpcContext">Server side RPC call context</param>
+        internal void OnRejectCall(ServerRpcContext serverRpcContext)
+        {
+            RejectCall?.Invoke(this, serverRpcContext);
+        }
+
+        /// <summary>
+        /// Fires the <see cref="BeginCall"/> event.
+        /// </summary>
+        /// <param name="serverRpcContext">Server side RPC call context</param>
+        internal void OnBeginCall(ServerRpcContext serverRpcContext)
+        {
+            BeginCall?.Invoke(this, serverRpcContext);
+
+            if (serverRpcContext.Cancel)
+            {
+                var cancelEx = serverRpcContext.Exception ??
+                    new RemoteInvocationException($"Invocation canceled: {
+                        serverRpcContext.MethodCallMessage.ServiceName}.{
+                        serverRpcContext.MethodCallMessage.MethodName}");
+
+                // rethrow the exception keeping the original stack trace
+                ExceptionDispatchInfo.Capture(cancelEx).Throw();
+            }
+        }
+
         /// <summary>
         /// Starts listening for client requests.
         /// </summary>

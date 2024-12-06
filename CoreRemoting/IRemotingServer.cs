@@ -12,12 +12,17 @@ namespace CoreRemoting
     public interface IRemotingServer : IDisposable
     {
         /// <summary>
-        /// Event: Fires before an RPC call is invoked.
+        /// Event: Fires when an RPC call is prepared and can be canceled.
+        /// </summary>
+        event EventHandler<ServerRpcContext> BeginCall;
+
+        /// <summary>
+        /// Event: Fires just before an RPC call is invoked.
         /// </summary>
         event EventHandler<ServerRpcContext> BeforeCall;
-        
+
         /// <summary>
-        /// Event: Fires after an RPC call is invoked.
+        /// Event: Fires after an RPC call is invoked, both on success or failure.
         /// </summary>
         event EventHandler<ServerRpcContext> AfterCall;
 
@@ -25,47 +30,52 @@ namespace CoreRemoting
         /// Event: Fires if an error occurs.
         /// </summary>
         event EventHandler<Exception> Error;
-        
+
+        /// <summary>
+        /// Event: Fires when an RPC call is rejected before BeginCall event. .
+        /// </summary>
+        event EventHandler<ServerRpcContext> RejectCall;
+
         /// <summary>
         /// Gets the unique name of this server instance.
         /// </summary>
         string UniqueServerInstanceName { get; }
-        
+
         /// <summary>
         /// Gets the dependency injection container that is used a service registry.
         /// </summary>
         IDependencyInjectionContainer ServiceRegistry { get; }
-        
+
         /// <summary>
         /// Gets the configured serializer.
         /// </summary>
         ISerializerAdapter Serializer { get; }
-        
+
         /// <summary>
         /// Gets the component for easy building of method call messages.
         /// </summary>
         MethodCallMessageBuilder MethodCallMessageBuilder { get; }
-        
+
         /// <summary>
         /// Gets the component for encryption and decryption of messages.
         /// </summary>
         IMessageEncryptionManager MessageEncryptionManager { get; }
-        
+
         /// <summary>
         /// Gets the session repository to perform session management tasks.
         /// </summary>
         ISessionRepository SessionRepository { get; }
-        
+
         /// <summary>
         /// Gets the configuration settings.
         /// </summary>
         ServerConfig Config { get; }
-        
+
         /// <summary>
         /// Starts listening for client requests.
         /// </summary>
         void Start();
-        
+
         /// <summary>
         /// Stops listening for client requests and close all open client connections.
         /// </summary>

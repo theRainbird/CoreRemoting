@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Linq;
 using System.Threading.Tasks;
 using CoreRemoting.Tests.ExternalTypes;
 
@@ -52,6 +53,11 @@ namespace CoreRemoting.Tests.Tools
         public string Echo(string text)
         {
             return text;
+        }
+
+        public string Reverse(string text)
+        {
+            return new string(text.Reverse().ToArray());
         }
 
         public void MethodWithOutParameter(out int counter)
