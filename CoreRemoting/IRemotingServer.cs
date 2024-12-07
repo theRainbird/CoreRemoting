@@ -27,14 +27,14 @@ namespace CoreRemoting
         event EventHandler<ServerRpcContext> AfterCall;
 
         /// <summary>
-        /// Event: Fires if an error occurs.
-        /// </summary>
-        event EventHandler<Exception> Error;
-
-        /// <summary>
         /// Event: Fires when an RPC call is rejected before BeginCall event. .
         /// </summary>
         event EventHandler<ServerRpcContext> RejectCall;
+
+        /// <summary>
+        /// Event: Fires if an error occurs.
+        /// </summary>
+        event EventHandler<Exception> Error;
 
         /// <summary>
         /// Gets the unique name of this server instance.

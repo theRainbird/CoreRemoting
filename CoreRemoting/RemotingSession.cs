@@ -13,6 +13,7 @@ using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Encryption;
 using CoreRemoting.Serialization;
 using Serialize.Linq.Nodes;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting
 {
@@ -258,6 +259,8 @@ namespace CoreRemoting
 
                 _currentlyProcessedMessagesCounter.AddCount(1);
 
+                CurrentSession.Value = this;
+
                 try
                 {
                     var message = _server.Serializer.Deserialize<WireMessage>(rawMessage);
@@ -285,6 +288,8 @@ namespace CoreRemoting
                 finally
                 {
                     _currentlyProcessedMessagesCounter.Signal();
+
+                    CurrentSession.Value = null;
                 }
             });
         }
@@ -424,8 +429,6 @@ namespace CoreRemoting
 
             try
             {
-                CurrentSession.Value = this;
-
                 if (_server.Config.AuthenticationRequired && !_isAuthenticated)
                     throw new NetworkException("Session is not authenticated.");
 
@@ -470,10 +473,6 @@ namespace CoreRemoting
                 serializedResult =
                     _server.Serializer.Serialize(serverRpcContext.Exception);
             }
-            finally
-            {
-                CurrentSession.Value = null;
-            }
 
             object result = null;
 
@@ -481,8 +480,6 @@ namespace CoreRemoting
             {
                 try
                 {
-                    CurrentSession.Value = this;
-
                     ((RemotingServer)_server).OnBeforeCall(serverRpcContext);
 
                     result = method.Invoke(serverRpcContext.ServiceInstance,
@@ -543,10 +540,6 @@ namespace CoreRemoting
                     serializedResult =
                         _server.Serializer.Serialize(serverRpcContext.Exception);
                 }
-                finally
-                {
-                    CurrentSession.Value = null;
-                }
 
                 if (!oneWay)
                 {
@@ -587,8 +580,6 @@ namespace CoreRemoting
 
             _rawMessageTransport.SendMessage(
                 _server.Serializer.Serialize(methodResultMessage));
-
-            CurrentSession.Value = null;
         }
 
         private MethodInfo GetMethodInfo(MethodCallMessage callMessage, Type serviceInterfaceType, Type[] parameterTypes)
