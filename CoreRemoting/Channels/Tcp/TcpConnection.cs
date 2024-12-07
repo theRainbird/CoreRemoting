@@ -82,6 +82,7 @@ public class TcpConnection : IRawMessageTransport
             _session = 
                 _server.SessionRepository.CreateSession(
                     clientPublicKey,
+                    _clientMetadata.IpPort,
                     _server,
                     this);
                 

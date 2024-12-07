@@ -902,5 +902,70 @@ namespace CoreRemoting.Tests
                 server.Config.AuthenticationRequired = false;
             }
         }
+
+        [Fact]
+        public void Authentication_handler_can_check_client_address()
+        {
+            var server = _serverFixture.Server;
+            var authProvider = server.Config.AuthenticationProvider;
+            server.Config.AuthenticationRequired = true;
+            server.Config.AuthenticationProvider = new FakeAuthProvider
+            {
+                AuthenticateFake = c =>
+                {
+                    var address = RemotingSession.Current.ClientAddress ??
+                        throw new ArgumentNullException();
+
+                    // allow only localhost connections
+                    return address.Contains("127.0.0.1") || // ipv4
+                        address.Contains("[::1]"); // ipv6
+                }
+            };
+
+            try
+            {
+                using var client = new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 0,
+                    InvocationTimeout = 0,
+                    SendTimeout = 0,
+                    Channel = ClientChannel,
+                    MessageEncryption = false,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort,
+                    Credentials = [new Credential()],
+                });
+
+                client.Connect();
+
+                var proxy = client.CreateProxy<ITestService>();
+                Assert.Equal("123", proxy.Reverse("321"));
+            }
+            finally
+            {
+                server.Config.AuthenticationProvider = authProvider;
+                server.Config.AuthenticationRequired = false;
+            }
+        }
+
+        [Fact]
+        public void ServerComponent_can_track_client_network_address()
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                MessageEncryption = false,
+                Channel = ClientChannel,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            client.Connect();
+
+            var proxy = client.CreateProxy<ISessionAwareService>();
+
+            // what's my address as seen by remote server?
+            Assert.NotNull(proxy.ClientAddress);
+        }
     }
 }

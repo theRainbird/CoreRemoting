@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,12 +18,14 @@ public class WebsocketServerConnection : IRawMessageTransport
     /// <summary>
     /// Initializes a new instance of the <see cref="WebsocketServerConnection"/> class.
     /// </summary>
-    public WebsocketServerConnection(HttpListenerWebSocketContext websocketContext, WebSocket websocket, IRemotingServer remotingServer)
+    public WebsocketServerConnection(string clientAddress, HttpListenerWebSocketContext websocketContext, WebSocket websocket, IRemotingServer remotingServer)
     {
+        ClientAddress = clientAddress ?? throw new ArgumentNullException(nameof(clientAddress));
         WebSocketContext = websocketContext ?? throw new ArgumentNullException(nameof(websocketContext));
         WebSocket = websocket ?? throw new ArgumentNullException(nameof(websocket));
         RemotingServer = remotingServer ?? throw new ArgumentNullException(nameof(remotingServer));
     }
+    public string ClientAddress { get; private set; }
 
     private HttpListenerWebSocketContext WebSocketContext { get; set; }
 
@@ -96,7 +99,7 @@ public class WebsocketServerConnection : IRawMessageTransport
         }
 
         Session = RemotingServer.SessionRepository.CreateSession(
-            clientPublicKey, RemotingServer, this);
+            clientPublicKey, ClientAddress, RemotingServer, this);
 
         return Session.SessionId;
     }
