@@ -65,6 +65,7 @@ namespace CoreRemoting.Channels.WebsocketSharp
                 _session =
                     _server.SessionRepository.CreateSession(
                         clientPublicKey,
+                        Context.UserEndPoint.ToString(),
                         _server,
                         this);
 

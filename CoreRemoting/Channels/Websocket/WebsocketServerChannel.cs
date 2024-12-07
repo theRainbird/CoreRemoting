@@ -57,7 +57,9 @@ public class WebsocketServerChannel : IServerChannel
         // accept websocket request and start a new session
         var websocketContext = await context.AcceptWebSocketAsync(null);
         var websocket = websocketContext.WebSocket;
-        var connection = new WebsocketServerConnection(websocketContext, websocket, Server);
+        var connection = new WebsocketServerConnection(
+            context.Request.RemoteEndPoint.ToString(),
+            websocketContext, websocket, Server);
 
         // handle incoming websocket messages
         var sessionId = connection.StartListening();

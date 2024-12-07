@@ -30,6 +30,7 @@ namespace CoreRemoting
         private readonly RsaKeyPair _keyPair;
         private readonly Guid _sessionId;
         private readonly byte[] _clientPublicKeyBlob;
+        private readonly string _clientAddress;
         private readonly RemoteDelegateInvocationEventAggregator _remoteDelegateInvocationEventAggregator;
         private IDelegateProxyFactory _delegateProxyFactory;
         private ConcurrentDictionary<Guid, IDelegateProxy> _delegateProxyCache;
@@ -53,10 +54,11 @@ namespace CoreRemoting
         /// </summary>
         /// <param name="keySize">Key size of the RSA keys for asymmetric encryption</param>
         /// <param name="clientPublicKey">Public key of this session's client</param>
+        /// <param name="clientAddress">Client's network address</param>
         /// <param name="server">Server instance, that hosts this session</param>
         /// <param name="rawMessageTransport">Component, that does the raw message transport (send and receive)</param>
-        internal RemotingSession(int keySize, byte[] clientPublicKey, IRemotingServer server,
-            IRawMessageTransport rawMessageTransport)
+        internal RemotingSession(int keySize, byte[] clientPublicKey, string clientAddress,
+            IRemotingServer server, IRawMessageTransport rawMessageTransport)
         {
             _isDisposing = false;
             _currentlyProcessedMessagesCounter = new CountdownEvent(initialCount: 1);
@@ -71,6 +73,7 @@ namespace CoreRemoting
             _delegateProxyCache = new ConcurrentDictionary<Guid, IDelegateProxy>();
             _rawMessageTransport = rawMessageTransport ?? throw new ArgumentNullException(nameof(rawMessageTransport));
             _clientPublicKeyBlob = clientPublicKey;
+            _clientAddress = clientAddress;
 
             _rawMessageTransport.ReceiveMessage += OnReceiveMessage;
             _rawMessageTransport.ErrorOccured += OnErrorOccured;
@@ -194,6 +197,11 @@ namespace CoreRemoting
         /// Gets this session's unique session ID.
         /// </summary>
         public Guid SessionId => _sessionId;
+
+        /// <summary>
+        /// Gets this session's client network address.
+        /// </summary>
+        public string ClientAddress => _clientAddress;
 
         /// <summary>
         /// Gets whether message encryption is enabled for this session.

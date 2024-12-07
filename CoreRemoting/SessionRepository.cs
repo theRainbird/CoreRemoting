@@ -40,7 +40,7 @@ namespace CoreRemoting
         {
             if (inactiveSessionSweepInterval <= 0)
                 return;
-            
+
             _inactiveSessionSweepTimer =
                 new Timer(Convert.ToDouble(inactiveSessionSweepInterval * 1000));
 
@@ -49,7 +49,7 @@ namespace CoreRemoting
         }
 
         /// <summary>
-        /// Event procedure: Called when the inactive session sweep timer elapses. 
+        /// Event procedure: Called when the inactive session sweep timer elapses.
         /// </summary>
         /// <param name="sender">Event sender</param>
         /// <param name="e">Event arguments</param>
@@ -57,13 +57,13 @@ namespace CoreRemoting
         {
             if (_inactiveSessionSweepTimer == null)
                 return;
-            
+
             if (!_inactiveSessionSweepTimer.Enabled)
                 return;
-            
+
             var inactiveSessionIdList =
                 _sessions
-                    .Where(item => 
+                    .Where(item =>
                         DateTime.Now.Subtract(item.Value.LastActivityTimestamp).TotalMinutes > _maximumSessionInactivityTime)
                     .Select(item => item.Key);
 
@@ -82,25 +82,27 @@ namespace CoreRemoting
         /// Creates a new session.
         /// </summary>
         /// <param name="clientPublicKey">Client's public key</param>
+        /// <param name="clientAddress">Client's network address</param>
         /// <param name="server">Server instance</param>
         /// <param name="rawMessageTransport">Component that does the raw message transport</param>
         /// <returns>The newly created session</returns>
-        public RemotingSession CreateSession(byte[] clientPublicKey, IRemotingServer server, IRawMessageTransport rawMessageTransport)
+        public RemotingSession CreateSession(byte[] clientPublicKey, string clientAddress, IRemotingServer server, IRawMessageTransport rawMessageTransport)
         {
             if (server == null)
                 throw new ArgumentException(nameof(server));
-            
+
             if (rawMessageTransport == null)
                 throw new ArgumentNullException(nameof(rawMessageTransport));
-            
+
             var session = new RemotingSession(
-                KeySize, 
+                KeySize,
                 clientPublicKey,
+                clientAddress,
                 server,
                 rawMessageTransport);
-            
+
             _sessions.TryAdd(session.SessionId, session);
-            
+
             return session;
         }
 
@@ -114,7 +116,7 @@ namespace CoreRemoting
         {
             if (_sessions.TryGetValue(sessionId, out var session))
                 return session;
-            
+
             throw new KeyNotFoundException($"Session '{sessionId}' not found.");
         }
 
