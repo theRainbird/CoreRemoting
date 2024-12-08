@@ -25,7 +25,8 @@ public class WebsocketServerConnection : IRawMessageTransport
         WebSocket = websocket ?? throw new ArgumentNullException(nameof(websocket));
         RemotingServer = remotingServer ?? throw new ArgumentNullException(nameof(remotingServer));
     }
-    public string ClientAddress { get; private set; }
+
+    private string ClientAddress { get; set; }
 
     private HttpListenerWebSocketContext WebSocketContext { get; set; }
 
