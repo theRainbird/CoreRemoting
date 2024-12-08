@@ -37,6 +37,16 @@ namespace CoreRemoting
         event EventHandler<Exception> Error;
 
         /// <summary>
+        /// Event: Fires when a client logs on.
+        /// </summary>
+        event EventHandler Logon;
+
+        /// <summary>
+        /// Event: Fires when a client logs off.
+        /// </summary>
+        event EventHandler Logoff;
+
+        /// <summary>
         /// Gets the unique name of this server instance.
         /// </summary>
         string UniqueServerInstanceName { get; }

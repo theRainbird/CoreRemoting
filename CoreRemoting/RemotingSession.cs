@@ -13,7 +13,6 @@ using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Encryption;
 using CoreRemoting.Serialization;
 using Serialize.Linq.Nodes;
-using CoreRemoting.Toolbox;
 
 namespace CoreRemoting
 {
@@ -337,6 +336,8 @@ namespace CoreRemoting
 
             _rawMessageTransport.SendMessage(_server.Serializer.Serialize(resultMessage));
 
+            ((RemotingServer)_server).OnLogoff();
+
             Task.Run(() => _server.SessionRepository.RemoveSession(_sessionId));
         }
 
@@ -390,6 +391,8 @@ namespace CoreRemoting
 
             _rawMessageTransport.SendMessage(
                 _server.Serializer.Serialize(wireMessage));
+
+            ((RemotingServer)_server).OnLogon();
         }
 
         /// <summary>
