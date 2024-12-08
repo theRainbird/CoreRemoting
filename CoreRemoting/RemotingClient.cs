@@ -90,7 +90,7 @@ namespace CoreRemoting
                 _keyPair = new RsaKeyPair(config.KeySize);
             
             _channel = config.Channel ?? new TcpClientChannel();
-            
+
             _channel.Init(this);
             _channel.Disconnected += OnDisconnected;
             _rawMessageTransport = _channel.RawMessageTransport;

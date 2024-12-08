@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Diagnostics;
+using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Authentication;
@@ -326,6 +327,7 @@ namespace CoreRemoting.Tests
             var result = proxy.Echo("Yay");
 
             Assert.Equal("Yay", result);
+            Assert.Equal(0, _serverFixture.ServerErrorCount);
         }
 
         [Fact]
@@ -345,6 +347,7 @@ namespace CoreRemoting.Tests
             var result = proxy.BaseMethod();
 
             Assert.True(result);
+            Assert.Equal(0, _serverFixture.ServerErrorCount);
         }
 
         [Fact]
@@ -366,6 +369,7 @@ namespace CoreRemoting.Tests
 
             Assert.Equal(TestEnum.First, resultFirst);
             Assert.Equal(TestEnum.Second, resultSecond);
+            Assert.Equal(0, _serverFixture.ServerErrorCount);
         }
 
         [Fact]
@@ -402,6 +406,7 @@ namespace CoreRemoting.Tests
             // a localized message similar to "Method 'Missing method' not found"
             Assert.NotNull(ex);
             Assert.Contains("Missing Method", ex.Message);
+            Assert.Equal(0, _serverFixture.ServerErrorCount);
         }
 
         [Fact]
@@ -425,6 +430,7 @@ namespace CoreRemoting.Tests
             // a localized message similar to "Service 'System.IDisposable' is not registered"
             Assert.NotNull(ex);
             Assert.Contains("IDisposable", ex.Message);
+            Assert.Equal(0, _serverFixture.ServerErrorCount);
         }
 
         [Fact]
@@ -596,6 +602,9 @@ namespace CoreRemoting.Tests
                 finally
                 {
                     _serverFixture.Server.Config.MessageEncryption = oldEncryption;
+
+                    // reset the error counter for other tests
+                    _serverFixture.ServerErrorCount = 0;
                 }
             }
 
@@ -852,7 +861,7 @@ namespace CoreRemoting.Tests
                 client.Connect();
 
                 var proxy = client.CreateProxy<IFailingService>();
-                var ex = Assert.Throws<RemoteInvocationException>(() => proxy.Hello());
+                var ex = Assert.Throws<RemoteInvocationException>(proxy.Hello);
 
                 // Session is not authenticated
                 Assert.Contains("authenticated", ex.Message);
@@ -888,7 +897,7 @@ namespace CoreRemoting.Tests
                     Channel = ClientChannel,
                     MessageEncryption = false,
                     ServerPort = _serverFixture.Server.Config.NetworkPort,
-                    Credentials = [new Credential()],
+                    Credentials = [new()],
                 });
 
                 client.Connect();
@@ -904,6 +913,43 @@ namespace CoreRemoting.Tests
         }
 
         [Fact]
+        public void Broken_auhentication_handler_doesnt_break_the_server()
+        {
+            var server = _serverFixture.Server;
+            var authProvider = server.Config.AuthenticationProvider;
+            server.Config.AuthenticationRequired = true;
+            server.Config.AuthenticationProvider = new FakeAuthProvider
+            {
+                AuthenticateFake = c => throw new Exception("Broken")
+            };
+
+            try
+            {
+                using var client = new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 3,
+                    InvocationTimeout = 3,
+                    SendTimeout = 3,
+                    Channel = ClientChannel,
+                    MessageEncryption = false,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort,
+                    Credentials = [new()],
+                });
+
+                var ex = Assert.Throws<SecurityException>(client.Connect);
+
+                Assert.Contains("auth", ex.Message.ToLower());
+                Assert.Contains("failed", ex.Message);
+            }
+            finally
+            {
+                server.Config.AuthenticationProvider = authProvider;
+                server.Config.AuthenticationRequired = false;
+                _serverFixture.ServerErrorCount = 0;
+            }
+        }
+
+        [Fact]
         public void Authentication_handler_can_check_client_address()
         {
             var server = _serverFixture.Server;
@@ -913,8 +959,8 @@ namespace CoreRemoting.Tests
             {
                 AuthenticateFake = c =>
                 {
-                    var address = RemotingSession.Current.ClientAddress ??
-                        throw new ArgumentNullException();
+                    var address = RemotingSession.Current?.ClientAddress ??
+                        throw new ArgumentNullException("ClientAddress");
 
                     // allow only localhost connections
                     return address.Contains("127.0.0.1") || // ipv4
