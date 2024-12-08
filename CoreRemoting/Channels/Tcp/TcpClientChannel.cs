@@ -16,7 +16,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// Event: Fires when a message is received from server.
     /// </summary>
     public event Action<byte[]> ReceiveMessage;
-        
+
     /// <summary>
     /// Event: Fires when an error is occurred.
     /// </summary>
@@ -34,7 +34,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
         _tcpClient = new WatsonTcpClient(client.Config.ServerHostName, client.Config.ServerPort);
         _tcpClient.Settings.NoDelay = true;
 
-        _handshakeMetadata = 
+        _handshakeMetadata =
             new Dictionary<string, object>
             {
                 { "MessageEncryption", client.MessageEncryption }
@@ -51,7 +51,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     {
         if (_tcpClient == null)
             throw new InvalidOperationException("Channel is not initialized.");
-            
+
         if (_tcpClient.Connected)
             return;
 
@@ -60,6 +60,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
         _tcpClient.Events.ServerDisconnected += OnDisconnected;
         _tcpClient.Connect();
     }
+
     private void OnDisconnected(object o, DisconnectionEventArgs disconnectionEventArgs)
     {
         Disconnected?.Invoke();
@@ -73,7 +74,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     private void OnError(object sender, ExceptionEventArgs e)
     {
         LastException = new NetworkException(e.Exception.Message, e.Exception);
-            
+
         ErrorOccured?.Invoke(e.Exception.Message, e.Exception);
     }
 
@@ -131,7 +132,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// Gets the raw message transport component for this connection.
     /// </summary>
     public IRawMessageTransport RawMessageTransport => this;
-    
+
     /// <summary>
     /// Sends a message to the server.
     /// </summary>
@@ -149,12 +150,12 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
         else
             throw new NetworkException("Channel disconnected");
     }
-    
+
     /// <summary>
     /// Gets or sets the last exception.
     /// </summary>
     public NetworkException LastException { get; set; }
-    
+
     /// <summary>
     /// Disconnect and free manages resources.
     /// </summary>

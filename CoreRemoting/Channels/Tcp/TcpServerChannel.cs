@@ -21,7 +21,7 @@ public class TcpServerChannel : IServerChannel
     {
         _connections = new ConcurrentDictionary<Guid, TcpConnection>();
     }
-    
+
     /// <summary>
     /// Initializes the channel.
     /// </summary>
@@ -45,11 +45,11 @@ public class TcpServerChannel : IServerChannel
             {
                 { "ServerAcceptConnection", true }
             };
-        
+
             _tcpServer.SendAsync(e.Client.Guid, new byte[]{ 0x02 }, metadata);
         }
     }
-    
+
     private void OnClientDisconnected(object sender, DisconnectionEventArgs e)
     {
         _connections.TryRemove(e.Client.Guid, out _);
@@ -59,7 +59,7 @@ public class TcpServerChannel : IServerChannel
     {
         if (_connections.TryGetValue(e.Client.Guid, out TcpConnection connection))
         {
-            connection.FireReceiveMessage(e.Data, e.Metadata);   
+            connection.FireReceiveMessage(e.Data, e.Metadata);
         }
     }
 
@@ -70,7 +70,7 @@ public class TcpServerChannel : IServerChannel
     {
         if (_tcpServer == null)
             throw new InvalidOperationException("Channel is not initialized.");
-        
+
         _tcpServer.Start();
     }
 
@@ -81,16 +81,16 @@ public class TcpServerChannel : IServerChannel
     {
         if (_tcpServer == null)
             return;
-        
+
         _tcpServer.Stop();
     }
 
     /// <summary>
     /// Gets whether the channel is listening or not.
     /// </summary>
-    public bool IsListening => 
+    public bool IsListening =>
         _tcpServer?.IsListening ?? false;
-    
+
     /// <summary>
     /// Stops listening and frees managed resources.
     /// </summary>
