@@ -1013,5 +1013,72 @@ namespace CoreRemoting.Tests
             // what's my address as seen by remote server?
             Assert.NotNull(proxy.ClientAddress);
         }
+
+        [Fact]
+        public void Logon_and_logoff_events_are_triggered()
+        {
+            void CheckSession(string operation)
+            {
+                var rs = RemotingSession.Current;
+                Assert.NotNull(rs);
+                Assert.True(rs?.IsAuthenticated);
+                Assert.NotNull(rs?.ClientAddress);
+                Assert.NotNull(rs?.Identity);
+                Console.WriteLine($"Client {rs.Identity.Name} from {rs.ClientAddress} is {operation}");
+            }
+
+            var logon = false;
+            void Logon(object sender, EventArgs _)
+            {
+                logon = true;
+                CheckSession("logged on");
+            }
+
+            var logoff = false;
+            void Logoff(object sender, EventArgs _)
+            {
+                logoff = true;
+                CheckSession("logged off");
+            }
+
+            var server = _serverFixture.Server;
+            var authProvider = server.Config.AuthenticationProvider;
+            server.Config.AuthenticationProvider = new FakeAuthProvider();
+
+            server.Logon += Logon;
+            server.Logoff += Logoff;
+            server.Config.AuthenticationRequired = true;
+
+            try
+            {
+                using var client = new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 0,
+                    InvocationTimeout = 0,
+                    SendTimeout = 0,
+                    Channel = ClientChannel,
+                    MessageEncryption = false,
+                    Credentials = [new()],
+                    ServerPort = _serverFixture.Server.Config.NetworkPort,
+                });
+
+                client.Connect();
+
+                var proxy = client.CreateProxy<ITestService>();
+                Assert.Equal("Hello", proxy.Echo("Hello"));
+
+                client.Disconnect();
+
+                Assert.True(logon);
+                Assert.True(logoff);
+            }
+            finally
+            {
+                server.Config.AuthenticationProvider = authProvider;
+                server.Config.AuthenticationRequired = false;
+                server.Logoff -= Logoff;
+                server.Logon -= Logon;
+            }
+        }
     }
 }

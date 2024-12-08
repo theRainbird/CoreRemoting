@@ -9,7 +9,7 @@ namespace CoreRemoting.Tests.Tools
         
         public bool Authenticate(Credential[] credentials, out RemotingIdentity authenticatedIdentity)
         {
-            var success = AuthenticateFake(credentials);
+            var success = AuthenticateFake?.Invoke(credentials) ?? true;
 
             authenticatedIdentity =
                 new RemotingIdentity()
@@ -18,7 +18,7 @@ namespace CoreRemoting.Tests.Tools
                     Domain = "domain",
                     IsAuthenticated = success,
                     Name = credentials[0].Value,
-                    Roles = new[] {"Test"}
+                    Roles = ["Test"],
                 };
 
             return success;

@@ -79,6 +79,26 @@ namespace CoreRemoting
         }
 
         /// <summary>
+        /// Event: Fires when a client logs on.
+        /// </summary>
+        public event EventHandler Logon;
+
+        /// <summary>
+        /// Event: Fires when a client logs off.
+        /// </summary>
+        public event EventHandler Logoff;
+
+        /// <summary>
+        /// Event: Fires when an RPC call is prepared and can be canceled.
+        /// </summary>
+        public event EventHandler<ServerRpcContext> BeginCall;
+
+        /// <summary>
+        /// Event: Fires when an RPC call is rejected before BeforeCall event.
+        /// </summary>
+        public event EventHandler<ServerRpcContext> RejectCall;
+
+        /// <summary>
         /// Event: Fires before an RPC call is invoked.
         /// </summary>
         public event EventHandler<ServerRpcContext> BeforeCall;
@@ -92,16 +112,6 @@ namespace CoreRemoting
         /// Event: Fires if an error occurs.
         /// </summary>
         public event EventHandler<Exception> Error;
-
-        /// <summary>
-        /// Event: Fires when an RPC call is rejected before BeforeCall event.
-        /// </summary>
-        public event EventHandler<ServerRpcContext> RejectCall;
-
-        /// <summary>
-        /// Event: Fires when an RPC call is prepared and can be canceled.
-        /// </summary>
-        public event EventHandler<ServerRpcContext> BeginCall;
 
         /// <summary>
         /// Gets the dependency injection container that is used a service registry.
@@ -198,6 +208,22 @@ namespace CoreRemoting
                 // rethrow the exception keeping the original stack trace
                 ExceptionDispatchInfo.Capture(cancelEx).Throw();
             }
+        }
+
+        /// <summary>
+        /// Fires the <see cref="Logon"/> event.
+        /// </summary>
+        internal void OnLogon()
+        {
+            Logon?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Fires the <see cref="Logoff"/> event.
+        /// </summary>
+        internal void OnLogoff()
+        {
+            Logoff?.Invoke(this, EventArgs.Empty);
         }
 
         /// <summary>
