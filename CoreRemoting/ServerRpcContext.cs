@@ -20,6 +20,11 @@ namespace CoreRemoting
         public Exception Exception { get; set; }
 
         /// <summary>
+        /// Gets or sets a value whether the authentication is required.
+        /// </summary>
+        public bool AuthenticationRequired { get; set; }
+
+        /// <summary>
         /// Gets or sets a value whether the call is canceled by event handler.
         /// </summary>
         public bool Cancel { get; set; }
