@@ -1080,5 +1080,43 @@ namespace CoreRemoting.Tests
                 server.Logon -= Logon;
             }
         }
+
+        [Fact]
+        public void BeginCall_event_handler_can_bypass_authentication_for_chosen_method()
+        {
+            void BypassAuthorizationForEcho(object sender, ServerRpcContext e) =>
+                e.AuthenticationRequired =
+                    e.MethodCallMessage.MethodName != "Echo";
+
+            _serverFixture.Server.Config.AuthenticationRequired = true;
+            _serverFixture.Server.BeginCall += BypassAuthorizationForEcho;
+            try
+            {
+                using var client = new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 0,
+                    InvocationTimeout = 0,
+                    SendTimeout = 0,
+                    Channel = ClientChannel,
+                    MessageEncryption = false,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort,
+                });
+
+                client.Connect();
+
+                // try allowed method "Echo"
+                var proxy = client.CreateProxy<ITestService>();
+                Assert.Equal("This method is allowed", proxy.Echo("This method is allowed"));
+
+                // try disallowed method "Reverse"
+                var ex = Assert.Throws<RemoteInvocationException>(() => proxy.Reverse("This method is not allowed"));
+                Assert.Contains("auth", ex.Message);
+            }
+            finally
+            {
+                _serverFixture.Server.BeginCall -= BypassAuthorizationForEcho;
+                _serverFixture.Server.Config.AuthenticationRequired = false;
+            }
+        }
     }
 }

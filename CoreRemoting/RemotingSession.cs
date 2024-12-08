@@ -427,6 +427,7 @@ namespace CoreRemoting
                         request.UniqueCallKey == null
                             ? Guid.Empty
                             : new Guid(request.UniqueCallKey),
+                    AuthenticationRequired = _server.Config.AuthenticationRequired,
                     ServiceInstance = null,
                     MethodCallMessage = callMessage,
                     MethodCallParameterValues = [],
@@ -440,9 +441,6 @@ namespace CoreRemoting
 
             try
             {
-                if (_server.Config.AuthenticationRequired && !_isAuthenticated)
-                    throw new NetworkException("Session is not authenticated.");
-
                 CallContext.RestoreFromSnapshot(callMessage.CallContextSnapshot);
 
                 callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
@@ -454,6 +452,9 @@ namespace CoreRemoting
                 serverRpcContext.MethodCallParameterTypes = parameterTypes;
 
                 ((RemotingServer)_server).OnBeginCall(serverRpcContext);
+
+                if (serverRpcContext.AuthenticationRequired && !_isAuthenticated)
+                    throw new NetworkException("Session is not authenticated.");
 
                 var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
                 var serviceInterfaceType =
