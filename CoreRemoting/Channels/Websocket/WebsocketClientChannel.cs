@@ -14,6 +14,7 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
 {
     // note: LOH threshold is ~85 kilobytes
     private const int BufferSize = 16 * 1024;
+    private static ArraySegment<byte> EmptyMessage = new ArraySegment<byte>([]);
 
     /// <summary>
     /// Gets or sets the URL this channel is connected to.
@@ -83,17 +84,21 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
     {
         ConnectTask = ConnectTask ?? Task.Factory.StartNew(async () =>
         {
-            await WebSocket.ConnectAsync(new Uri(Url), CancellationToken.None);
+            await WebSocket.ConnectAsync(
+                new Uri(Url), CancellationToken.None)
+                    .ConfigureAwait(false);
+
             IsConnected = true;
             Connected?.Invoke();
 
-            await WebSocket.SendAsync(new ArraySegment<byte>(Array.Empty<byte>()), WebSocketMessageType.Binary, true, CancellationToken.None);
+            await WebSocket.SendAsync(EmptyMessage, 
+                WebSocketMessageType.Binary, true, CancellationToken.None)
+                    .ConfigureAwait(false);
+
             _ = StartListening();
         });
 
-        ConnectTask.ConfigureAwait(false)
-            .GetAwaiter()
-            .GetResult();
+        ConnectTask.GetAwaiter().GetResult();
     }
 
     private Task ConnectTask { get; set; }
@@ -111,13 +116,15 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
                 var ms = new SmallBlockMemoryStream();
                 while (true)
                 {
-                    var result = await webSocket.ReceiveAsync(segment,
-                        CancellationToken.None).ConfigureAwait(false);
+                    var result = await webSocket.ReceiveAsync(
+                        segment, CancellationToken.None)
+                            .ConfigureAwait(false);
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
                         await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure,
-                            string.Empty, CancellationToken.None).ConfigureAwait(false);
+                            string.Empty, CancellationToken.None)
+                                .ConfigureAwait(false);
 
                         Disconnected?.Invoke();
                     }
@@ -160,10 +167,9 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
         try
         {
             var segment = new ArraySegment<byte>(rawMessage);
-            WebSocket.SendAsync(segment, WebSocketMessageType.Binary, true, CancellationToken.None)
-                .ConfigureAwait(false)
-                .GetAwaiter()
-                .GetResult();
+            WebSocket.SendAsync(segment, 
+                WebSocketMessageType.Binary, true, CancellationToken.None)
+                    .GetAwaiter().GetResult();
 
             return true;
         }
@@ -184,7 +190,10 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
     {
         DisconnectTask = DisconnectTask ?? Task.Factory.StartNew(async () =>
         {
-            await WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Ok", CancellationToken.None);
+            await WebSocket.CloseAsync(
+                WebSocketCloseStatus.NormalClosure, "Ok", CancellationToken.None)
+                    .ConfigureAwait(false);
+
             IsConnected = false;
             Disconnected?.Invoke();
         });
@@ -201,8 +210,7 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
 
         var task = DisconnectTask;
         if (task != null)
-            task.ConfigureAwait(false)
-                .GetAwaiter()
+            task.GetAwaiter()
                 .GetResult();
 
         WebSocket.Dispose();

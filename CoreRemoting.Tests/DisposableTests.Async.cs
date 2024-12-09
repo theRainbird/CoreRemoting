@@ -4,22 +4,8 @@ using Xunit;
 
 namespace CoreRemoting.Tests
 {
-    public class DisposableTests
+    partial class DisposableTests
     {
-        [Fact]
-        public void Disposable_executes_action_on_Dispose()
-        {
-            var disposed = false;
-
-            void Dispose() =>
-                disposed = true;
-
-            using (Disposable.Create(Dispose))
-                Assert.False(disposed);
-
-            Assert.True(disposed);
-        }
-
         [Fact]
         public async Task AsyncDisposable_executes_action_on_DisposeAsync()
         {

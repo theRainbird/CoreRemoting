@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Net;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -56,10 +55,9 @@ public class WebsocketServerConnection : IRawMessageTransport
         try
         {
             var segment = new ArraySegment<byte>(rawMessage);
-            WebSocket.SendAsync(segment, WebSocketMessageType.Binary, true, CancellationToken.None)
-                .ConfigureAwait(false)
-                .GetAwaiter()
-                .GetResult();
+            WebSocket.SendAsync(segment, 
+                WebSocketMessageType.Binary, true, CancellationToken.None)
+                    .GetAwaiter().GetResult();
 
             return true;
         }
@@ -109,20 +107,21 @@ public class WebsocketServerConnection : IRawMessageTransport
     {
         var buffer = new byte[BufferSize];
         var segment = new ArraySegment<byte>(buffer);
+        var webSocket = WebSocket;
 
         try
         {
-            while (WebSocket.State == WebSocketState.Open)
+            while (webSocket.State == WebSocketState.Open)
             {
                 var ms = new SmallBlockMemoryStream();
                 while (true)
                 {
-                    var result = await WebSocket.ReceiveAsync(segment,
+                    var result = await webSocket.ReceiveAsync(segment,
                         CancellationToken.None).ConfigureAwait(false);
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        await WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure,
+                        await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure,
                             string.Empty, CancellationToken.None).ConfigureAwait(false);
 
                         Disconnected?.Invoke();
@@ -142,7 +141,7 @@ public class WebsocketServerConnection : IRawMessageTransport
                     var message = new byte[(int)ms.Length];
                     ms.Position = 0;
                     ms.Read(message, 0, message.Length);
-                    ReceiveMessage(message);
+                    ReceiveMessage?.Invoke(message);
                 }
             }
         }
@@ -156,7 +155,7 @@ public class WebsocketServerConnection : IRawMessageTransport
         }
         finally
         {
-            WebSocket?.Dispose();
+            webSocket?.Dispose();
         }
     }
 }
