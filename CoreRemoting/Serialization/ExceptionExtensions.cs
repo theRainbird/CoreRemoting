@@ -1,6 +1,7 @@
 ﻿using Castle.MicroKernel.ComponentActivator;
 using System;
 using System.Linq;
+using System.Reflection;
 
 namespace CoreRemoting.Serialization;
 
@@ -55,6 +56,21 @@ public static class ExceptionExtensions
 
         return ex;
     }
+
+    /// <summary>
+    /// Skips the uninformative target invocation exceptions.
+    /// </summary>
+    /// <param name="ex">The exception to process.</param>
+    public static Exception SkipTargetInvocationExceptions(this Exception ex)
+    {
+        while (ex is TargetInvocationException && ex.InnerException != null)
+        {
+            ex = ex.InnerException;
+        }
+
+        return ex;
+    }
+
 
     /// <summary>
     /// Returns the most inner exception.

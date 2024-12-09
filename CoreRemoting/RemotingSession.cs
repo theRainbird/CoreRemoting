@@ -472,6 +472,8 @@ namespace CoreRemoting
             }
             catch (Exception ex)
             {
+                ex = ex.SkipTargetInvocationExceptions();
+
                 serverRpcContext.Exception =
                     new RemoteInvocationException(
                         message: ex.Message,
@@ -539,6 +541,8 @@ namespace CoreRemoting
                 }
                 catch (Exception ex)
                 {
+                    ex = ex.SkipTargetInvocationExceptions();
+
                     serverRpcContext.Exception =
                         new RemoteInvocationException(
                             message: ex.Message,
