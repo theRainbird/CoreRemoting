@@ -9,6 +9,7 @@
     <!-- Exclude the unnecessary tests to save Github Actions time -->
     <!-- WatsonTcp is the default channel, WebSocketSharp is optional -->
     <ItemGroup>
+      <Compile Remove="DisposableTests.Async.cs" />
       <Compile Remove="RpcTests_WatsonTcp.cs" />
       <Compile Remove="RpcTests_WebsocketSharp.cs" />
       <Compile Remove="RpcTests_WsClientWsharpServer.cs" />

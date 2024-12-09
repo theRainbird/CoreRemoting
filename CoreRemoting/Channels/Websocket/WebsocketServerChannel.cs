@@ -46,7 +46,9 @@ public class WebsocketServerChannel : IServerChannel
     private async Task ReceiveConnection()
     {
         // check if it's a websocket request
-        var context = await HttpListener.GetContextAsync();
+        var context = await HttpListener.GetContextAsync()
+            .ConfigureAwait(false);
+
         if (!context.Request.IsWebSocketRequest)
         {
             context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
@@ -55,7 +57,9 @@ public class WebsocketServerChannel : IServerChannel
         }
 
         // accept websocket request and start a new session
-        var websocketContext = await context.AcceptWebSocketAsync(null);
+        var websocketContext = await context.AcceptWebSocketAsync(null)
+            .ConfigureAwait(false);
+
         var websocket = websocketContext.WebSocket;
         var connection = new WebsocketServerConnection(
             context.Request.RemoteEndPoint.ToString(),
