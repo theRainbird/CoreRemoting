@@ -18,6 +18,7 @@ using CoreRemoting.Encryption;
 using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Bson;
 using Timer = System.Timers.Timer;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting
 {
@@ -721,23 +722,11 @@ namespace CoreRemoting
             if (oneWay || clientRpcContext.ResultMessage != null)
                 return clientRpcContext;
 
-            if (_config.InvocationTimeout <= 0)
-                await clientRpcContext.Task;
-            else
-                await CheckTimeout(clientRpcContext.Task,
-                    _config.InvocationTimeout,
-                        $"Invocation timeout ({_config.InvocationTimeout}) exceeded.");
+            await clientRpcContext.Task.Timeout(
+                _config.InvocationTimeout,
+                $"Invocation timeout ({_config.InvocationTimeout}) exceeded.");
 
             return clientRpcContext;
-        }
-
-        private async Task CheckTimeout(Task task, int secTimeout, string msg)
-        {
-            var delay = Task.Delay(TimeSpan.FromSeconds(secTimeout));
-            var result = await Task.WhenAny(task, delay);
-
-            if (result != task)
-                throw new TimeoutException(msg);
         }
 
         #endregion
