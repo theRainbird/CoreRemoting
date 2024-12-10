@@ -36,7 +36,7 @@ namespace CoreRemoting
         /// <summary>
         /// Gets or sets an exception that describes an error that occurred on server side RPC invocation.
         /// </summary>
-        public RemoteInvocationException RemoteException { get; set; }
+        public Exception RemoteException { get; set; }
 
         /// <summary>
         /// Gets a wait handle that is set, when the response of this RPC call is received from server.

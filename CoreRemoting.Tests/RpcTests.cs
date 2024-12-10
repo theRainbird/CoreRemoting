@@ -565,14 +565,17 @@ namespace CoreRemoting.Tests
 
                 client.Connect();
 
+                var dbError = "23503: delete from table 'clients' violates " +
+                    "foreign key constraint 'order_client_fk' on table 'orders'";
+
                 // simulate a database error on the server-side
                 var proxy = client.CreateProxy<ITestService>();
-                var ex = Assert.Throws<RemoteInvocationException>(() =>
-                    proxy.Error("23503: delete from table 'clients' violates foreign key constraint 'order_client_fk' on table 'orders'"))
-                        .GetInnermostException();
+                var ex = Assert.Throws<Exception>(() => proxy.Error(dbError));
 
                 Assert.NotNull(ex);
                 Assert.Equal("Deleting clients is not allowed.", ex.Message);
+                Assert.NotNull(ex.InnerException);
+                Assert.Equal(dbError, ex.InnerException.Message);
             }
             finally
             {
