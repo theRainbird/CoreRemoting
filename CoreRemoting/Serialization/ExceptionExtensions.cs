@@ -1,7 +1,7 @@
-﻿using Castle.MicroKernel.ComponentActivator;
-using System;
+﻿using System;
 using System.Linq;
 using System.Reflection;
+using Castle.MicroKernel.ComponentActivator;
 
 namespace CoreRemoting.Serialization;
 
@@ -22,7 +22,7 @@ public static class ExceptionExtensions
                 agg.InnerException.IsSerializable() &&
                 agg.GetType().IsSerializable,
 
-        // pesky exception that looks like serializable but really isn't
+        // this exception is not deserializable
         ComponentActivatorException cax => false,
 
         _ => ex.GetType().IsSerializable &&
@@ -64,9 +64,7 @@ public static class ExceptionExtensions
     public static Exception SkipTargetInvocationExceptions(this Exception ex)
     {
         while (ex is TargetInvocationException && ex.InnerException != null)
-        {
             ex = ex.InnerException;
-        }
 
         return ex;
     }
