@@ -136,7 +136,7 @@ namespace CoreRemoting
             {
                 activeCall.Value.Error = true;
                 activeCall.Value.RemoteException = new RemoteInvocationException("Server Disconnected");
-                activeCall.Value.WaitHandle.Set();
+                activeCall.Value.TaskSource.TrySetResult(null);
             }
         }
 
@@ -582,7 +582,7 @@ namespace CoreRemoting
         /// <exception cref="KeyNotFoundException">Thrown, when the received result is of a unknown call</exception>
         private void ProcessRpcResultMessage(WireMessage message)
         {
-            byte[] sharedSecret = SharedSecret();
+            var sharedSecret = SharedSecret();
 
             Guid unqiueCallKey =
                 message.UniqueCallKey == null
@@ -659,7 +659,7 @@ namespace CoreRemoting
                 }
             }
 
-            clientRpcContext.WaitHandle.Set();
+            clientRpcContext.TaskSource.TrySetResult(null);
         }
 
         #endregion
@@ -672,68 +672,72 @@ namespace CoreRemoting
         /// <param name="methodCallMessage">Details of the remote method to be invoked</param>
         /// <param name="oneWay">Invoke method without waiting for or processing result.</param>
         /// <returns>Results of the remote method invocation</returns>
-        internal Task<ClientRpcContext> InvokeRemoteMethod(MethodCallMessage methodCallMessage, bool oneWay = false)
+        internal async Task<ClientRpcContext> InvokeRemoteMethod(MethodCallMessage methodCallMessage, bool oneWay = false)
         {
-            var sendTask =
-                Task.Run(() =>
+            byte[] sharedSecret = SharedSecret();
+
+            lock (_syncObject)
+            {
+                if (_activeCalls == null)
+                    throw new RemoteInvocationException("ServerDisconnected");
+            }
+
+            var clientRpcContext = new ClientRpcContext();
+
+            lock (_syncObject)
+            {
+                if (_activeCalls.ContainsKey(clientRpcContext.UniqueCallKey))
                 {
-                    byte[] sharedSecret = SharedSecret();
+                    clientRpcContext.Dispose();
+                    throw new ApplicationException("Duplicate unique call key.");
+                }
+                else
+                {
+                    _activeCalls.Add(clientRpcContext.UniqueCallKey, clientRpcContext);
+                }
+            }
 
-                    lock (_syncObject)
-                    {
-                        if (_activeCalls == null)
-                            throw new RemoteInvocationException("ServerDisconnected");
-                    }
+            var wireMessage =
+                MessageEncryptionManager.CreateWireMessage(
+                    messageType: "rpc",
+                    serializer: Serializer,
+                    serializedMessage: Serializer.Serialize(methodCallMessage),
+                    sharedSecret: sharedSecret,
+                    keyPair: _keyPair,
+                    uniqueCallKey: clientRpcContext.UniqueCallKey.ToByteArray());
 
-                    var clientRpcContext = new ClientRpcContext();
+            byte[] rawData = Serializer.Serialize(wireMessage);
 
-                    lock (_syncObject)
-                    {
-                        if (_activeCalls.ContainsKey(clientRpcContext.UniqueCallKey))
-                        {
-                            clientRpcContext.Dispose();
-                            throw new ApplicationException("Duplicate unique call key.");
-                        }
-                        else
-                        {
-                            _activeCalls.Add(clientRpcContext.UniqueCallKey, clientRpcContext);
-                        }
-                    }
+            _rawMessageTransport.LastException = null;
 
-                    var wireMessage =
-                        MessageEncryptionManager.CreateWireMessage(
-                            messageType: "rpc",
-                            serializer: Serializer,
-                            serializedMessage: Serializer.Serialize(methodCallMessage),
-                            sharedSecret: sharedSecret,
-                            keyPair: _keyPair,
-                            uniqueCallKey: clientRpcContext.UniqueCallKey.ToByteArray());
+            _rawMessageTransport.SendMessage(rawData);
 
-                    byte[] rawData = Serializer.Serialize(wireMessage);
+            if (_rawMessageTransport.LastException != null)
+            {
+                clientRpcContext.Dispose();
+                throw _rawMessageTransport.LastException;
+            }
 
-                    _rawMessageTransport.LastException = null;
+            if (oneWay || clientRpcContext.ResultMessage != null)
+                return clientRpcContext;
 
-                    _rawMessageTransport.SendMessage(rawData);
+            if (_config.InvocationTimeout <= 0)
+                await clientRpcContext.Task;
+            else
+                await CheckTimeout(clientRpcContext.Task,
+                    _config.InvocationTimeout,
+                        $"Invocation timeout ({_config.InvocationTimeout}) exceeded.");
 
-                    if (_rawMessageTransport.LastException != null)
-                    {
-                        clientRpcContext.Dispose();
-                        throw _rawMessageTransport.LastException;
-                    }
+            return clientRpcContext;
+        }
 
-                    if (oneWay || clientRpcContext.ResultMessage != null)
-                        return clientRpcContext;
+        private async Task CheckTimeout(Task task, int secTimeout, string msg)
+        {
+            var delay = Task.Delay(TimeSpan.FromSeconds(secTimeout));
+            var result = await Task.WhenAny(task, delay);
 
-                    // TODO: replace with a Task to avoid freezing the current thread?
-                    if (_config.InvocationTimeout <= 0)
-                        clientRpcContext.WaitHandle.WaitOne();
-                    else
-                        clientRpcContext.WaitHandle.WaitOne(_config.InvocationTimeout * 1000);
-
-                    return clientRpcContext;
-                });
-
-            return sendTask;
+            if (result != task)
+                throw new TimeoutException(msg);
         }
 
         #endregion
