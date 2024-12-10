@@ -539,6 +539,50 @@ namespace CoreRemoting.Tests
         }
 
         [Fact]
+        public void AfterCall_event_handler_can_translate_exceptions_to_improve_diagnostics()
+        {
+            // replace cryptic database error report with a user-friendly error message
+            void AfterCall(object sender, ServerRpcContext ctx)
+            {
+                var errorMsg = ctx.Exception?.Message ?? string.Empty;
+                if (errorMsg.StartsWith("23503:"))
+                    ctx.Exception = new Exception("Deleting clients is not allowed.",
+                        ctx.Exception);
+            }
+
+            _serverFixture.Server.AfterCall += AfterCall;
+            try
+            {
+                using var client = new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 5,
+                    InvocationTimeout = 5,
+                    SendTimeout = 5,
+                    Channel = ClientChannel,
+                    MessageEncryption = false,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort
+                });
+
+                client.Connect();
+
+                // simulate a database error on the server-side
+                var proxy = client.CreateProxy<ITestService>();
+                var ex = Assert.Throws<RemoteInvocationException>(() =>
+                    proxy.Error("23503: delete from table 'clients' violates foreign key constraint 'order_client_fk' on table 'orders'"))
+                        .GetInnermostException();
+
+                Assert.NotNull(ex);
+                Assert.Equal("Deleting clients is not allowed.", ex.Message);
+            }
+            finally
+            {
+                // reset the error counter for other tests
+                _serverFixture.ServerErrorCount = 0;
+                _serverFixture.Server.AfterCall -= AfterCall;
+            }
+        }
+
+        [Fact]
         public void Failing_component_constructor_throws_RemoteInvocationException()
         {
             using var client = new RemotingClient(new ClientConfig()
