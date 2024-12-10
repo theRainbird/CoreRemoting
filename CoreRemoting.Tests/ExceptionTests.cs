@@ -33,6 +33,26 @@ namespace CoreRemoting.Tests
         }
 
         [Fact]
+        public void Exception_can_be_turned_to_serializable()
+        {
+            var slotName = "SomeData";
+            var ex = new Exception("Bang!", new NonSerializableException("Zoom!"));
+            ex.Data[slotName] = DateTime.Now.ToString();
+            ex.InnerException.Data[slotName] = DateTime.Today.Ticks;
+            Assert.False(ex.IsSerializable());
+
+            var sx = ex.ToSerializable();
+            Assert.True(sx.IsSerializable());
+            Assert.NotSame(ex, sx);
+            Assert.NotSame(ex.InnerException, sx.InnerException);
+
+            Assert.Equal(ex.Message, sx.Message);
+            Assert.Equal(ex.Data[slotName], sx.Data[slotName]);
+            Assert.Equal(ex.InnerException.Message, sx.InnerException.Message);
+            Assert.Equal(ex.InnerException.Data[slotName], sx.InnerException.Data[slotName]);
+        }
+
+        [Fact]
         public void SkipTargetInvocationException_returns_the_first_meaningful_inner_exception()
         {
             // the first meaningful exception
