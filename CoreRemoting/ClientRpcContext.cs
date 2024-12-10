@@ -1,5 +1,5 @@
 using System;
-using System.Threading;
+using System.Threading.Tasks;
 using CoreRemoting.RpcMessaging;
 
 namespace CoreRemoting
@@ -15,7 +15,8 @@ namespace CoreRemoting
         internal ClientRpcContext()
         {
             UniqueCallKey = Guid.NewGuid();
-            WaitHandle = new EventWaitHandle(initialState: false, EventResetMode.ManualReset);
+            TaskSource = new TaskCompletionSource<object>();
+            Task = TaskSource.Task;
         }
 
         /// <summary>
@@ -39,16 +40,21 @@ namespace CoreRemoting
         public Exception RemoteException { get; set; }
 
         /// <summary>
-        /// Gets a wait handle that is set, when the response of this RPC call is received from server.
+        /// Task completion source for this RPC call result.
         /// </summary>
-        public EventWaitHandle WaitHandle { get; } // TODO: replace with a Task?
+        public TaskCompletionSource<object> TaskSource { get; }
+
+        /// <summary>
+        /// Gets a task containing the response of this RPC call received from server.
+        /// </summary>
+        public Task Task { get; }
 
         /// <summary>
         /// Frees managed resources.
         /// </summary>
         public void Dispose()
         {
-            WaitHandle?.Dispose();
+            Task?.Dispose();
         }
     }
 }
