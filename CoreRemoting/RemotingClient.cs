@@ -5,7 +5,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Security;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 using Castle.DynamicProxy;
@@ -17,8 +16,9 @@ using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Encryption;
 using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Bson;
-using Timer = System.Timers.Timer;
 using CoreRemoting.Toolbox;
+using CancellationTokenSource = System.Threading.CancellationTokenSource;
+using Timer = System.Timers.Timer;
 
 namespace CoreRemoting
 {
@@ -38,9 +38,9 @@ namespace CoreRemoting
         private Dictionary<Guid, ClientRpcContext> _activeCalls;
         private readonly object _syncObject;
         private Guid _sessionId;
-        private ManualResetEventSlim _handshakeCompletedWaitHandle;
-        private ManualResetEventSlim _authenticationCompletedWaitHandle;
-        private ManualResetEventSlim _goodbyeCompletedWaitHandle;
+        private TaskCompletionSource<bool> _handshakeCompletedTaskSource;
+        private TaskCompletionSource<bool> _authenticationCompletedTaskSource;
+        private TaskCompletionSource<bool> _goodbyeCompletedTaskSource;
         private bool _isAuthenticated;
         private Timer _keepSessionAliveTimer;
         private byte[] _serverPublicKeyBlob;
@@ -65,12 +65,12 @@ namespace CoreRemoting
             MethodCallMessageBuilder = new MethodCallMessageBuilder();
             MessageEncryptionManager = new MessageEncryptionManager();
             _activeCalls = null;
-            _syncObject = new object();
-            _cancellationTokenSource = new CancellationTokenSource();
-            _delegateRegistry = new ClientDelegateRegistry();
-            _handshakeCompletedWaitHandle = new ManualResetEventSlim(initialState: false);
-            _authenticationCompletedWaitHandle = new ManualResetEventSlim(initialState: false);
-            _goodbyeCompletedWaitHandle = new ManualResetEventSlim(initialState: false);
+            _syncObject = new();
+            _cancellationTokenSource = new();
+            _delegateRegistry = new();
+            _handshakeCompletedTaskSource = new();
+            _authenticationCompletedTaskSource = new();
+            _goodbyeCompletedTaskSource = new();
         }
 
         /// <summary>
@@ -131,7 +131,7 @@ namespace CoreRemoting
                 _activeCalls = null;
             }
 
-            _goodbyeCompletedWaitHandle.Set();
+            _goodbyeCompletedTaskSource.TrySetResult(true);
 
             foreach (var activeCall in activeCalls)
             {
@@ -225,12 +225,19 @@ namespace CoreRemoting
         /// </summary>
         /// <exception cref="RemotingException">Thrown, if no channel is configured.</exception>
         /// <exception cref="NetworkException">Thrown, if handshake with server failed.</exception>
-        public void Connect()
+        public void Connect() => ConnectAsync().JustWait();
+
+        /// <summary>
+        /// Connects this CoreRemoting client instance to the configured CoreRemoting server.
+        /// </summary>
+        /// <exception cref="RemotingException">Thrown, if no channel is configured.</exception>
+        /// <exception cref="NetworkException">Thrown, if handshake with server failed.</exception>
+        public async Task ConnectAsync()
         {
             if (_channel == null)
                 throw new RemotingException("No client channel configured.");
 
-            _goodbyeCompletedWaitHandle.Reset();
+            _goodbyeCompletedTaskSource = new();
             lock(_syncObject)
                 _activeCalls = new Dictionary<Guid, ClientRpcContext>();
 
@@ -239,15 +246,12 @@ namespace CoreRemoting
             if (_channel.RawMessageTransport.LastException != null)
                 throw _channel.RawMessageTransport.LastException;
 
-            if (_config.ConnectionTimeout == 0)
-                _handshakeCompletedWaitHandle.Wait();
-            else
-                _handshakeCompletedWaitHandle.Wait(_config.ConnectionTimeout * 1000);
+            await _handshakeCompletedTaskSource.Task.Timeout(
+                _config.ConnectionTimeout, () =>
+                    throw new NetworkException("Handshake with server failed."));
 
-            if (!_handshakeCompletedWaitHandle.IsSet)
-                throw new NetworkException("Handshake with server failed.");
-            else
-                Authenticate();
+            await AuthenticateAsync()
+                .ConfigureAwait(false);
 
             StartKeepSessionAliveTimer();
         }
@@ -302,8 +306,8 @@ namespace CoreRemoting
 
                 //_goodbyeCompletedWaitHandle.Reset();
 
-                if(_channel.RawMessageTransport.SendMessage(rawData))
-                    _goodbyeCompletedWaitHandle.Wait(10000);
+                if (_channel.RawMessageTransport.SendMessage(rawData))
+                    _goodbyeCompletedTaskSource.Task.Wait(10000);
             }
 
             lock (_syncObject)
@@ -312,8 +316,8 @@ namespace CoreRemoting
             }
 
             OnDisconnected();
-            _handshakeCompletedWaitHandle?.Reset();
-            _authenticationCompletedWaitHandle?.Reset();
+            _handshakeCompletedTaskSource = new();
+            _authenticationCompletedTaskSource = new();
             Identity = null;
 
             AfterDisconnect?.Invoke();
@@ -357,7 +361,7 @@ namespace CoreRemoting
             }
 
             // Send empty message to keep session alive
-            _rawMessageTransport.SendMessage(new byte[0]);
+            _rawMessageTransport.SendMessage([]);
         }
 
         private byte[] SharedSecret()
@@ -383,15 +387,15 @@ namespace CoreRemoting
         /// Authenticates this CoreRemoting client instance with the specified credentials.
         /// </summary>
         /// <exception cref="SecurityException">Thrown, if authentication failed or timed out</exception>
-        private void Authenticate()
+        private async Task AuthenticateAsync()
         {
             if (_config.Credentials == null || (_config.Credentials!=null && _config.Credentials.Length == 0))
                 return;
 
-            if (_authenticationCompletedWaitHandle.IsSet)
+            if (_authenticationCompletedTaskSource.Task.IsCompleted)
                 return;
 
-            byte[] sharedSecret = SharedSecret();
+            var sharedSecret = SharedSecret();
 
             var authRequestMessage =
                 new AuthenticationRequestMessage
@@ -407,7 +411,7 @@ namespace CoreRemoting
                     keyPair: _keyPair,
                     sharedSecret: sharedSecret);
 
-            byte[] rawData = Serializer.Serialize(wireMessage);
+            var rawData = Serializer.Serialize(wireMessage);
 
             _rawMessageTransport.LastException = null;
 
@@ -416,10 +420,9 @@ namespace CoreRemoting
             if (_rawMessageTransport.LastException != null)
                 throw _rawMessageTransport.LastException;
 
-            _authenticationCompletedWaitHandle.Wait(_config.AuthenticationTimeout * 1000);
-
-            if (!_authenticationCompletedWaitHandle.IsSet)
-                throw new SecurityException("Authentication timeout.");
+            await _authenticationCompletedTaskSource.Task.Timeout(
+                _config.AuthenticationTimeout, () =>
+                    throw new SecurityException("Authentication timeout."));
 
             if (!_isAuthenticated)
                 throw new SecurityException("Authentication failed. Please check credentials.");
@@ -452,7 +455,7 @@ namespace CoreRemoting
                     ProcessRemoteDelegateInvocationMessage(message);
                     break;
                 case "goodbye":
-                    _goodbyeCompletedWaitHandle.Set();
+                    _goodbyeCompletedTaskSource.TrySetResult(true);
                     break;
                 case "session_closed":
                     Disconnect(quiet: true);
@@ -523,7 +526,7 @@ namespace CoreRemoting
                     _sessionId = new Guid(message.Data);
             }
 
-            _handshakeCompletedWaitHandle.Set();
+            _handshakeCompletedTaskSource.TrySetResult(true);
         }
 
         /// <summary>
@@ -532,7 +535,7 @@ namespace CoreRemoting
         /// <param name="message">Deserialized WireMessage that contains a AuthenticationResponseMessage</param>
         private void ProcessAuthenticationResponseMessage(WireMessage message)
         {
-            byte[] sharedSecret = SharedSecret();
+            var sharedSecret = SharedSecret();
 
             var authResponseMessage =
                 Serializer
@@ -548,7 +551,7 @@ namespace CoreRemoting
 
             Identity = _isAuthenticated ? authResponseMessage.AuthenticatedIdentity : null;
 
-            _authenticationCompletedWaitHandle.Set();
+            _authenticationCompletedTaskSource.TrySetResult(true);
         }
 
         /// <summary>
@@ -836,24 +839,6 @@ namespace CoreRemoting
                     _channel.Dispose();
                     _channel = null;
                 }
-            }
-
-            if (_handshakeCompletedWaitHandle != null)
-            {
-                _handshakeCompletedWaitHandle.Dispose();
-                _handshakeCompletedWaitHandle = null;
-            }
-
-            if (_authenticationCompletedWaitHandle != null)
-            {
-                _authenticationCompletedWaitHandle.Dispose();
-                _authenticationCompletedWaitHandle = null;
-            }
-
-            if (_goodbyeCompletedWaitHandle != null)
-            {
-                _goodbyeCompletedWaitHandle.Dispose();
-                _goodbyeCompletedWaitHandle = null;
             }
 
             _keyPair?.Dispose();
