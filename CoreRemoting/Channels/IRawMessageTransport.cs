@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 
 namespace CoreRemoting.Channels
 {
@@ -16,7 +17,7 @@ namespace CoreRemoting.Channels
         /// Event: Fires when an error is occurred.
         /// </summary>
         event Action<string, Exception> ErrorOccured;
-        
+
         /// <summary>
         /// Gets or sets the last exception.
         /// </summary>
@@ -26,6 +27,6 @@ namespace CoreRemoting.Channels
         /// Sends a message to the server.
         /// </summary>
         /// <param name="rawMessage">Raw message data</param>
-        bool SendMessage(byte[] rawMessage);
+        Task<bool> SendMessageAsync(byte[] rawMessage);
     }
 }

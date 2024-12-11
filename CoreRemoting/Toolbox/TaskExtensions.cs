@@ -69,4 +69,25 @@ public static class TaskExtensions
     public static void JustWait(this Task task) =>
         task.GetAwaiter().GetResult();
 
+    /// <summary>
+    /// Waits for the task to complete, but doesn't wrap
+    /// the exception in an <see cref="AggregateException"/>.
+    /// </summary>
+    public static void JustWait<T>(this Task<T> task) =>
+        task.GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Waits for the task to complete, but doesn't wrap
+    /// the exception in an <see cref="AggregateException"/>.
+    /// </summary>
+    public static void JustWait(this ValueTask task) =>
+        task.GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Waits for the task to complete, but doesn't wrap
+    /// the exception in an <see cref="AggregateException"/>.
+    /// </summary>
+    public static void JustWait<T>(this ValueTask<T> task) =>
+        task.GetAwaiter().GetResult();
+
 }

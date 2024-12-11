@@ -13,6 +13,7 @@ using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Encryption;
 using CoreRemoting.Serialization;
 using Serialize.Linq.Nodes;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting
 {
@@ -154,8 +155,9 @@ namespace CoreRemoting
                     try
                     {
                         // Invoke remote delegate on client
-                        _rawMessageTransport?.SendMessage(
-                            _server.Serializer.Serialize(remoteDelegateInvocationWebsocketMessage));
+                        _rawMessageTransport?.SendMessageAsync(
+                            _server.Serializer.Serialize(remoteDelegateInvocationWebsocketMessage))
+                                .JustWait();
                     }
                     catch (Exception ex)
                     {
@@ -168,7 +170,9 @@ namespace CoreRemoting
                     return null;
                 };
 
-            _rawMessageTransport?.SendMessage(_server.Serializer.Serialize(completeHandshakeMessage));
+            _rawMessageTransport?.SendMessageAsync(
+                _server.Serializer.Serialize(completeHandshakeMessage))
+                    .JustWait();
         }
 
         /// <summary>
@@ -305,7 +309,7 @@ namespace CoreRemoting
         /// Processes a wire message that contains a goodbye message, which is sent from a client to close the session.
         /// </summary>
         /// <param name="request">Wire message from client</param>
-        private void ProcessGoodbyeMessage(WireMessage request)
+        private async Task ProcessGoodbyeMessage(WireMessage request)
         {
             var sharedSecret =
                 MessageEncryption
@@ -334,7 +338,9 @@ namespace CoreRemoting
                     sharedSecret: sharedSecret,
                     uniqueCallKey: request.UniqueCallKey);
 
-            _rawMessageTransport.SendMessage(_server.Serializer.Serialize(resultMessage));
+            await _rawMessageTransport.SendMessageAsync(
+                _server.Serializer.Serialize(resultMessage))
+                    .ConfigureAwait(false);
 
             ((RemotingServer)_server).OnLogoff();
 
@@ -345,7 +351,7 @@ namespace CoreRemoting
         /// Processes a wire message that contains a authentication request message, which is sent from a client to request authentication of a set of credentials.
         /// </summary>
         /// <param name="request">Wire message from client</param>
-        private void ProcessAuthenticationRequestMessage(WireMessage request)
+        private async Task ProcessAuthenticationRequestMessage(WireMessage request)
         {
             if (_isAuthenticated)
                 return;
@@ -389,8 +395,9 @@ namespace CoreRemoting
                     keyPair: _keyPair,
                     messageType: "auth_response");
 
-            _rawMessageTransport.SendMessage(
-                _server.Serializer.Serialize(wireMessage));
+            await _rawMessageTransport.SendMessageAsync(
+                _server.Serializer.Serialize(wireMessage))
+                    .ConfigureAwait(false);
 
             ((RemotingServer)_server).OnLogon();
         }
@@ -401,7 +408,7 @@ namespace CoreRemoting
         /// <param name="request">RPC message from client</param>
         /// <returns>Task which provides the serialized response message containing the method result asynchronously</returns>
         /// <exception cref="MissingMethodException">Thrown if specified method in request doesn't exist</exception>
-        private void ProcessRpcMessage(WireMessage request)
+        private async Task ProcessRpcMessage(WireMessage request)
         {
             var sharedSecret =
                 MessageEncryption
@@ -594,8 +601,9 @@ namespace CoreRemoting
                     messageType: "rpc_result",
                     uniqueCallKey: serverRpcContext.UniqueCallKey.ToByteArray());
 
-            _rawMessageTransport.SendMessage(
-                _server.Serializer.Serialize(methodResultMessage));
+            await _rawMessageTransport.SendMessageAsync(
+                _server.Serializer.Serialize(methodResultMessage))
+                    .ConfigureAwait(false);
         }
 
         private MethodInfo GetMethodInfo(MethodCallMessage callMessage, Type serviceInterfaceType, Type[] parameterTypes)
@@ -791,8 +799,9 @@ namespace CoreRemoting
 
             try
             {
-                _rawMessageTransport.SendMessage(
-                    _server.Serializer.Serialize(wireMessage));
+                _rawMessageTransport.SendMessageAsync(
+                    _server.Serializer.Serialize(wireMessage))
+                        .JustWait();
             }
             catch (Exception)
             {
