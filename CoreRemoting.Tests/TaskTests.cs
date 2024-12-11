@@ -96,8 +96,23 @@ namespace CoreRemoting.Tests
                 throw new NotImplementedException();
             }
 
-            var ax = Assert.Throws<AggregateException>(() => Throw().Wait());
-            var ex = Assert.Throws<NotImplementedException>(() => Throw().JustWait());
+            async ValueTask ThrowVt()
+            {
+                await Task.Yield();
+                throw new NotImplementedException();
+            }
+
+            async ValueTask<T> ThrowVtt<T>()
+            {
+                await Task.Yield();
+                throw new NotImplementedException();
+            }
+
+            Assert.Throws<AggregateException>(() => Throw().Wait());
+
+            Assert.Throws<NotImplementedException>(() => Throw().JustWait());
+            Assert.Throws<NotImplementedException>(() => ThrowVt().JustWait());
+            Assert.Throws<NotImplementedException>(() => ThrowVtt<int>().JustWait());
         }
     }
 }

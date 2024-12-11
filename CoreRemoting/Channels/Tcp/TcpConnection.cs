@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using WatsonTcp;
 
 namespace CoreRemoting.Channels.Tcp;
@@ -105,8 +106,7 @@ public class TcpConnection : IRawMessageTransport
     /// Sends a message to the server.
     /// </summary>
     /// <param name="rawMessage">Raw message data</param>
-    public bool SendMessage(byte[] rawMessage)
-    {
-        return _tcpServer.SendAsync(_clientMetadata.Guid, rawMessage).Result;
-    }
+    public async Task<bool> SendMessageAsync(byte[] rawMessage) =>
+        await _tcpServer.SendAsync(_clientMetadata.Guid, rawMessage)
+            .ConfigureAwait(false);
 }

@@ -225,7 +225,8 @@ namespace CoreRemoting
         /// </summary>
         /// <exception cref="RemotingException">Thrown, if no channel is configured.</exception>
         /// <exception cref="NetworkException">Thrown, if handshake with server failed.</exception>
-        public void Connect() => ConnectAsync().JustWait();
+        public void Connect() =>
+            ConnectAsync().JustWait();
 
         /// <summary>
         /// Connects this CoreRemoting client instance to the configured CoreRemoting server.
@@ -260,7 +261,14 @@ namespace CoreRemoting
         /// Disconnects from the server. The server is actively notified about disconnection.
         /// </summary>
         /// <param name="quiet">When set to true, no goodbye message is sent to the server</param>
-        public void Disconnect(bool quiet = false)
+        public void Disconnect(bool quiet = false) =>
+            DisconnectAsync(quiet).JustWait();
+
+        /// <summary>
+        /// Disconnects from the server. The server is actively notified about disconnection.
+        /// </summary>
+        /// <param name="quiet">When set to true, no goodbye message is sent to the server</param>
+        public async Task DisconnectAsync(bool quiet = false)
         {
             if (_channel == null)
                 return;
@@ -306,8 +314,8 @@ namespace CoreRemoting
 
                 //_goodbyeCompletedWaitHandle.Reset();
 
-                if (_channel.RawMessageTransport.SendMessage(rawData))
-                    _goodbyeCompletedTaskSource.Task.Wait(10000);
+                if (await _channel.RawMessageTransport.SendMessageAsync(rawData).ConfigureAwait(false))
+                    await _goodbyeCompletedTaskSource.Task.Timeout(10000);
             }
 
             lock (_syncObject)
@@ -361,7 +369,7 @@ namespace CoreRemoting
             }
 
             // Send empty message to keep session alive
-            _rawMessageTransport.SendMessage([]);
+            _rawMessageTransport.SendMessageAsync([]).JustWait();
         }
 
         private byte[] SharedSecret()
@@ -415,7 +423,8 @@ namespace CoreRemoting
 
             _rawMessageTransport.LastException = null;
 
-            _rawMessageTransport.SendMessage(rawData);
+            await _rawMessageTransport.SendMessageAsync(rawData)
+                .ConfigureAwait(false);
 
             if (_rawMessageTransport.LastException != null)
                 throw _rawMessageTransport.LastException;
@@ -714,7 +723,8 @@ namespace CoreRemoting
 
             _rawMessageTransport.LastException = null;
 
-            _rawMessageTransport.SendMessage(rawData);
+            await _rawMessageTransport.SendMessageAsync(rawData)
+                .ConfigureAwait(false);
 
             if (_rawMessageTransport.LastException != null)
             {

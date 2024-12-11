@@ -162,14 +162,14 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
     }
 
     /// <inheritdoc />
-    public bool SendMessage(byte[] rawMessage)
+    public async Task<bool> SendMessageAsync(byte[] rawMessage)
     {
         try
         {
-            var segment = new ArraySegment<byte>(rawMessage);
-            WebSocket.SendAsync(segment, 
-                WebSocketMessageType.Binary, true, CancellationToken.None)
-                    .GetAwaiter().GetResult();
+            await WebSocket.SendAsync(
+                new ArraySegment<byte>(rawMessage), 
+                    WebSocketMessageType.Binary, true, CancellationToken.None)
+                        .ConfigureAwait(false);
 
             return true;
         }

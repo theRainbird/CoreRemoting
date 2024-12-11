@@ -1,6 +1,7 @@
 using System;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Threading.Tasks;
 using WebSocketSharp;
 using WebSocketSharp.Net;
 
@@ -149,10 +150,10 @@ namespace CoreRemoting.Channels.WebsocketSharp
         /// Sends a message to the server.
         /// </summary>
         /// <param name="rawMessage">Raw message data</param>
-        public bool SendMessage(byte[] rawMessage)
+        public Task<bool> SendMessageAsync(byte[] rawMessage)
         {
             _webSocket.Send(rawMessage);
-            return true;
+            return Task.FromResult(true);
         }
 
         /// <summary>
