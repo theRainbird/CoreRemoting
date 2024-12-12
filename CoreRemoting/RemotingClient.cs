@@ -242,7 +242,7 @@ namespace CoreRemoting
             lock(_syncObject)
                 _activeCalls = new Dictionary<Guid, ClientRpcContext>();
 
-            _channel.Connect();
+            await _channel.ConnectAsync();
 
             if (_channel.RawMessageTransport.LastException != null)
                 throw _channel.RawMessageTransport.LastException;
@@ -315,13 +315,11 @@ namespace CoreRemoting
                 //_goodbyeCompletedWaitHandle.Reset();
 
                 if (await _channel.RawMessageTransport.SendMessageAsync(rawData).ConfigureAwait(false))
-                    await _goodbyeCompletedTaskSource.Task.Timeout(10000);
+                    await _goodbyeCompletedTaskSource.Task.Timeout(10);
             }
 
-            lock (_syncObject)
-            {
-                _channel?.Disconnect();
-            }
+            // lock (_syncObject) // TODO: why we are locking here?
+                await _channel?.DisconnectAsync();
 
             OnDisconnected();
             _handshakeCompletedTaskSource = new();

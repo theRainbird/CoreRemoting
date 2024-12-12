@@ -1,7 +1,6 @@
 using System;
-using System.Net.Sockets;
-using System.Reflection;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 using WebSocketSharp;
 using WebSocketSharp.Net;
 
@@ -59,13 +58,13 @@ namespace CoreRemoting.Channels.WebsocketSharp
         /// <summary>
         /// Establish a websocket connection with the server.
         /// </summary>
-        public void Connect()
+        public Task ConnectAsync()
         {
             if (_webSocket == null)
                 throw new InvalidOperationException("Channel is not initialized.");
 
             if (_webSocket.IsAlive)
-                return;
+                return Task.CompletedTask;
 
             LastException = null;
 
@@ -75,6 +74,7 @@ namespace CoreRemoting.Channels.WebsocketSharp
 
             _webSocket.Connect();
             _webSocket.Send(string.Empty);
+            return Task.CompletedTask;
         }
 
         private void OnDisconnected(object o, CloseEventArgs closeEventArgs)
@@ -97,15 +97,16 @@ namespace CoreRemoting.Channels.WebsocketSharp
         /// <summary>
         /// Closes the websocket connection.
         /// </summary>
-        public void Disconnect()
+        public Task DisconnectAsync()
         {
             if (_webSocket == null)
-                return;
+                return Task.CompletedTask;
 
             _webSocket.OnMessage -= OnMessage;
             _webSocket.OnError -= OnError;
 
             _webSocket.Close(CloseStatusCode.Normal);
+            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -132,7 +133,7 @@ namespace CoreRemoting.Channels.WebsocketSharp
         /// </summary>
         public void Dispose()
         {
-            Disconnect();
+            DisconnectAsync().JustWait();
             _webSocket = null;
         }
 
