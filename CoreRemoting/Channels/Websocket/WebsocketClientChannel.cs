@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
-using CoreRemoting.IO;
 using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
@@ -11,12 +10,8 @@ namespace CoreRemoting.Channels.Websocket;
 /// <summary>
 /// Client side websocket channel implementation based on System.Net.Websockets.
 /// </summary>
-public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
+public class WebsocketClientChannel : WebSocketTransport, IClientChannel
 {
-    // note: LOH threshold is ~85 kilobytes
-    private const int BufferSize = 16 * 1024;
-    private static ArraySegment<byte> EmptyMessage = new ArraySegment<byte>([]);
-
     /// <summary>
     /// Gets or sets the URL this channel is connected to.
     /// </summary>
@@ -24,30 +19,16 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
 
     private Uri Uri { get; set; }
 
-    private ClientWebSocket WebSocket { get; set; }
-
     /// <inheritdoc />
     public bool IsConnected { get; private set; }
 
     /// <inheritdoc />
     public IRawMessageTransport RawMessageTransport => this;
 
-    /// <inheritdoc />
-    public NetworkException LastException { get; set; }
-
-    /// <summary>
-    /// Event: fires when the channel is connected.
-    /// </summary>
-    public event Action Connected;
+    private ClientWebSocket ClientWebSocket { get; set; }
 
     /// <inheritdoc />
-    public event Action Disconnected;
-
-    /// <inheritdoc />
-    public event Action<byte[]> ReceiveMessage;
-
-    /// <inheritdoc />
-    public event Action<string, Exception> ErrorOccured;
+    protected override WebSocket WebSocket => ClientWebSocket;
 
     /// <inheritdoc />
     public void Init(IRemotingClient client)
@@ -62,18 +43,18 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
 
         // note: Nagle is disabled by default on NetCore, see
         // https://github.com/dotnet/runtime/discussions/81175
-        WebSocket = new ClientWebSocket();
-        WebSocket.Options.Cookies = new CookieContainer();
-        WebSocket.Options.Cookies.Add(new Cookie(
-            name: "MessageEncryption",
+        ClientWebSocket = new ClientWebSocket();
+        ClientWebSocket.Options.Cookies = new CookieContainer();
+        ClientWebSocket.Options.Cookies.Add(new Cookie(
+            name: MessageEncryptionCookie,
             value: client.MessageEncryption ? "1" : "0",
             path: Uri.LocalPath,
             domain: Uri.Host));
 
         if (client.MessageEncryption)
         {
-            WebSocket.Options.Cookies.Add(new Cookie(
-                name: "ShakeHands",
+            ClientWebSocket.Options.Cookies.Add(new Cookie(
+                name: ClientPublicKeyCookie,
                 value: Convert.ToBase64String(client.PublicKey),
                 path: Uri.LocalPath,
                 domain: Uri.Host));
@@ -83,98 +64,18 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
     /// <inheritdoc />
     public async Task ConnectAsync()
     {
-        await WebSocket.ConnectAsync(
+        await ClientWebSocket.ConnectAsync(
             new Uri(Url), CancellationToken.None)
                 .ConfigureAwait(false);
 
         IsConnected = true;
-        Connected?.Invoke();
+        OnConnected();
 
         await WebSocket.SendAsync(EmptyMessage, 
             WebSocketMessageType.Binary, true, CancellationToken.None)
                 .ConfigureAwait(false);
 
-        _ = StartListening();
-    }
-
-    private async Task StartListening()
-    {
-        var buffer = new byte[BufferSize];
-        var segment = new ArraySegment<byte>(buffer);
-        var webSocket = WebSocket;
-
-        try
-        {
-            while (webSocket.State == WebSocketState.Open)
-            {
-                var ms = new SmallBlockMemoryStream();
-                while (true)
-                {
-                    var result = await webSocket.ReceiveAsync(
-                        segment, CancellationToken.None)
-                            .ConfigureAwait(false);
-
-                    if (result.MessageType == WebSocketMessageType.Close)
-                    {
-                        await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure,
-                            string.Empty, CancellationToken.None)
-                                .ConfigureAwait(false);
-
-                        Disconnected?.Invoke();
-                    }
-                    else
-                    {
-                        ms.Write(buffer, 0, result.Count);
-                    }
-
-                    if (result.EndOfMessage)
-                        break;
-                }
-
-                if (ms.Length > 0)
-                {
-                    // flush received websocket message
-                    var message = new byte[(int)ms.Length];
-                    ms.Position = 0;
-                    ms.Read(message, 0, message.Length);
-                    ReceiveMessage?.Invoke(message);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            LastException = ex as NetworkException ??
-                new NetworkException(ex.Message, ex);
-
-            ErrorOccured?.Invoke(ex.Message, ex);
-            Disconnected?.Invoke();
-        }
-        finally
-        {
-            webSocket?.Dispose();
-        }
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> SendMessageAsync(byte[] rawMessage)
-    {
-        try
-        {
-            await WebSocket.SendAsync(
-                new ArraySegment<byte>(rawMessage), 
-                    WebSocketMessageType.Binary, true, CancellationToken.None)
-                        .ConfigureAwait(false);
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LastException = ex as NetworkException ??
-                new NetworkException(ex.Message, ex);
-
-            ErrorOccured?.Invoke(ex.Message, ex);
-            return false;
-        }
+        StartListening();
     }
 
     /// <inheritdoc />
@@ -187,7 +88,7 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
 
         try
         {
-            await WebSocket.CloseAsync(
+            await ClientWebSocket.CloseAsync(
                 WebSocketCloseStatus.NormalClosure, "Ok", CancellationToken.None)
                     .ConfigureAwait(false);
         }
@@ -196,20 +97,20 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
             // web socket already closed?
         }
 
-        Disconnected?.Invoke();
+        OnDisconnected();
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
-        if (WebSocket == null)
+        if (ClientWebSocket == null)
             return;
 
         if (IsConnected)
             DisconnectAsync()
                 .JustWait();
 
-        WebSocket.Dispose();
-        WebSocket = null;
+        ClientWebSocket.Dispose();
+        ClientWebSocket = null;
     }
 }
