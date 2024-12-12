@@ -6,6 +6,7 @@ using System.Net.Quic;
 using System.Net.Security;
 using System.Text;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Quic;
 
@@ -95,40 +96,31 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
     }
 
     /// <inheritdoc />
-    public void Connect()
+    public async Task ConnectAsync()
     {
-        ConnectTask = ConnectTask ?? Task.Factory.StartNew(async () =>
+        // connect and open duplex stream
+        Connection = await QuicConnection.ConnectAsync(Options);
+        ClientStream = await Connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional);
+        ClientReader = new BinaryReader(ClientStream, Encoding.UTF8, leaveOpen: true);
+        ClientWriter = new BinaryWriter(ClientStream, Encoding.UTF8, leaveOpen: true);
+
+        // prepare handshake message
+        var handshakeMessage = Array.Empty<byte>();
+        if (Client.MessageEncryption)
         {
-            // connect and open duplex stream
-            Connection = await QuicConnection.ConnectAsync(Options);
-            ClientStream = await Connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional);
-            ClientReader = new BinaryReader(ClientStream, Encoding.UTF8, leaveOpen: true);
-            ClientWriter = new BinaryWriter(ClientStream, Encoding.UTF8, leaveOpen: true);
+            handshakeMessage = Client.PublicKey;
+        }
 
-            // prepare handshake message
-            var handshakeMessage = Array.Empty<byte>();
-            if (Client.MessageEncryption)
-            {
-                handshakeMessage = Client.PublicKey;
-            }
+        // send handshake message
+        await SendMessageAsync(handshakeMessage);
+        IsConnected = true;
+        Connected?.Invoke();
 
-            // send handshake message
-            SendMessage(handshakeMessage);
-            IsConnected = true;
-            Connected?.Invoke();
-
-            // start listening for incoming messages
-            _ = Task.Factory.StartNew(() => StartListening());
-        });
-
-        ConnectTask.ConfigureAwait(false)
-            .GetAwaiter()
-            .GetResult();
+        // start listening for incoming messages
+        _ = Task.Run(() => ReadIncomingMessages());
     }
 
-    private Task ConnectTask { get; set; }
-
-    private void StartListening()
+    private void ReadIncomingMessages()
     {
         try
         {
@@ -136,10 +128,7 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
             {
                 var messageSize = ClientReader.Read7BitEncodedInt();
                 var message = ClientReader.ReadBytes(Math.Min(messageSize, MaxMessageSize));
-                if (message.Length > 0)
-                {
-                    ReceiveMessage(message);
-                }
+                ReceiveMessage(message);
             }
         }
         catch (Exception ex)
@@ -152,12 +141,12 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
         }
         finally
         {
-            Disconnect();
+            DisconnectAsync().JustWait();
         }
     }
 
     /// <inheritdoc />
-    public bool SendMessage(byte[] rawMessage)
+    public async Task<bool> SendMessageAsync(byte[] rawMessage)
     {
         try
         {
@@ -167,7 +156,7 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
 
             // message length + message body
             ClientWriter.Write7BitEncodedInt(rawMessage.Length);
-            ClientWriter.Write(rawMessage, 0, rawMessage.Length);
+            await ClientStream.WriteAsync(rawMessage, 0, rawMessage.Length);
             return true;
         }
         catch (Exception ex)
@@ -180,17 +169,12 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
         }
     }
 
-    private Task DisconnectTask { get; set; }
-
     /// <inheritdoc />
-    public void Disconnect()
+    public async Task DisconnectAsync()
     {
-        DisconnectTask = DisconnectTask ?? Task.Factory.StartNew(async () =>
-        {
-            await Connection.CloseAsync(0x0C);
-            IsConnected = false;
-            Disconnected?.Invoke();
-        });
+        await Connection.CloseAsync(0x0C);
+        IsConnected = false;
+        Disconnected?.Invoke();
     }
 
     /// <inheritdoc />
@@ -200,13 +184,8 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
             return;
 
         if (IsConnected)
-            Disconnect();
-
-        var task = DisconnectTask;
-        if (task != null)
-            task.ConfigureAwait(false)
-                .GetAwaiter()
-                .GetResult();
+            DisconnectAsync()
+                .JustWait();
 
         Connection.DisposeAsync()
             .ConfigureAwait(false)

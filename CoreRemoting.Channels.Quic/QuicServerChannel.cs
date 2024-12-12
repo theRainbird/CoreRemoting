@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Quic;
 
@@ -61,7 +62,7 @@ public class QuicServerChannel : IServerChannel
     /// <inheritdoc/>
     public void StartListening()
     {
-        _ = Task.Factory.StartNew(async () =>
+        _ = Task.Run(async () =>
         {
             // start the listener
             Listener = await QuicListener.ListenAsync(new QuicListenerOptions()
@@ -100,10 +101,7 @@ public class QuicServerChannel : IServerChannel
         if (Listener != null && IsListening)
         {
             IsListening = false;
-            Listener.DisposeAsync()
-                .ConfigureAwait(false)
-                .GetAwaiter()
-                .GetResult();
+            Listener.DisposeAsync().JustWait();
         }
     }
 
