@@ -32,8 +32,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CoreRemoting.Tests.External
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CoreRemoting.Channels.WebsocketSharp", "CoreRemoting.Channels.WebsocketSharp\CoreRemoting.Channels.WebsocketSharp.csproj", "{A2440A47-F1F2-4556-958B-5CA19BF17A59}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.Channels.Quic", "CoreRemoting.Channels.Quic\CoreRemoting.Channels.Quic.csproj", "{6CC666E2-A400-4409-A9CA-3583BE832A2C}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -80,10 +78,6 @@ Global
 		{A2440A47-F1F2-4556-958B-5CA19BF17A59}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A2440A47-F1F2-4556-958B-5CA19BF17A59}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A2440A47-F1F2-4556-958B-5CA19BF17A59}.Release|Any CPU.Build.0 = Release|Any CPU
-		{6CC666E2-A400-4409-A9CA-3583BE832A2C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{6CC666E2-A400-4409-A9CA-3583BE832A2C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{6CC666E2-A400-4409-A9CA-3583BE832A2C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{6CC666E2-A400-4409-A9CA-3583BE832A2C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
