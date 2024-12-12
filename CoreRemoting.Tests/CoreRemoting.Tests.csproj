@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
         <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
         <IsPackable>false</IsPackable>
         <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
@@ -11,7 +11,7 @@
     <!-- WatsonTcp is the default channel, WebSocketSharp is optional, Quic is .net9 only -->
     <ItemGroup>
       <Compile Remove="DisposableTests.Async.cs" />
-      <!--Compile Remove="RpcTests_Quic.cs" /-->
+      <Compile Remove="RpcTests_Quic.cs" />
       <Compile Remove="RpcTests_WatsonTcp.cs" />
       <Compile Remove="RpcTests_WebsocketSharp.cs" />
       <Compile Remove="RpcTests_WsClientWsharpServer.cs" />
@@ -34,9 +34,9 @@
         </PackageReference>
     </ItemGroup>
 
-    <ItemGroup>
+    <!--ItemGroup>
       <ProjectReference Include="..\CoreRemoting.Channels.Quic\CoreRemoting.Channels.Quic.csproj" />
-    </ItemGroup>
+    </ItemGroup-->
 
     <ItemGroup>
       <ProjectReference Include="..\CoreRemoting.Channels.WebsocketSharp\CoreRemoting.Channels.WebsocketSharp.csproj" />
