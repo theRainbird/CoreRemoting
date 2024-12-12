@@ -3,6 +3,7 @@ using System.IO;
 using System.Net.Quic;
 using System.Text;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Quic;
 
@@ -52,7 +53,7 @@ public class QuicServerConnection : IRawMessageTransport
     public event Action Disconnected;
 
     /// <inheritdoc/>
-    public bool SendMessage(byte[] rawMessage)
+    public async Task<bool> SendMessageAsync(byte[] rawMessage)
     {
         try
         {
@@ -62,7 +63,7 @@ public class QuicServerConnection : IRawMessageTransport
 
             // message length + message body
             ClientWriter.Write7BitEncodedInt(rawMessage.Length);
-            ClientWriter.Write(rawMessage, 0, rawMessage.Length);
+            await ClientStream.WriteAsync(rawMessage, 0, rawMessage.Length);
             return true;
         }
         catch (Exception ex)
@@ -81,7 +82,7 @@ public class QuicServerConnection : IRawMessageTransport
     public Guid StartListening()
     {
         var sessionId = CreateRemotingSession();
-        _ = Task.Factory.StartNew(() => ReadIncomingMessages());
+        _ = Task.Run(() => ReadIncomingMessages());
         return sessionId;
     }
 
@@ -117,11 +118,7 @@ public class QuicServerConnection : IRawMessageTransport
             while (true)
             {
                 var message = ReadIncomingMessage();
-                if (message != null && message.Length > 0)
-                {
-                    // flush received QUIC message
-                    ReceiveMessage(message);
-                }
+                ReceiveMessage(message ?? []);
             }
         }
         catch (Exception ex)
@@ -134,7 +131,7 @@ public class QuicServerConnection : IRawMessageTransport
         }
         finally
         {
-            Connection?.DisposeAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+            Connection?.DisposeAsync().JustWait();
             Connection = null;
         }
     }
