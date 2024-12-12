@@ -14,8 +14,7 @@ public class WebsocketServerChannel : IServerChannel
 
     private IRemotingServer Server { get; set; }
 
-    private ConcurrentDictionary<Guid, WebsocketServerConnection> Connections { get; } =
-        new ConcurrentDictionary<Guid, WebsocketServerConnection>();
+    private ConcurrentDictionary<Guid, WebsocketServerConnection> Connections { get; } = new();
 
     /// <inheritdoc/>
     public bool IsListening => HttpListener.IsListening;
@@ -23,21 +22,26 @@ public class WebsocketServerChannel : IServerChannel
     /// <inheritdoc/>
     public void Init(IRemotingServer server)
     {
+        if (!HttpListener.IsSupported)
+            throw new NotSupportedException("HttpListener not supported by this platform.");
+
         Server = server ?? throw new ArgumentNullException(nameof(server));
-        HttpListener = new HttpListener();
+        HttpListener = new();
 
         var prefix = "http://" +
             Server.Config.HostName + ":" +
             Server.Config.NetworkPort + "/";
+
         HttpListener.Prefixes.Add(prefix);
     }
 
     /// <inheritdoc/>
     public void StartListening()
     {
+        HttpListener.Start();
+
         _ = Task.Factory.StartNew(async () =>
         {
-            HttpListener.Start();
             while (IsListening)
                 await ReceiveConnection();
         });
@@ -82,5 +86,8 @@ public class WebsocketServerChannel : IServerChannel
     {
         StopListening();
         HttpListener = null;
+
+        foreach (var conn in Connections.Values)
+            conn.Dispose();
     }
 }
