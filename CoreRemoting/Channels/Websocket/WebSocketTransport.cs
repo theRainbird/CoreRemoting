@@ -113,14 +113,16 @@ namespace CoreRemoting.Channels.Websocket
                             break;
                     }
 
+                    var message = Array.Empty<byte>();
                     if (ms.Length > 0)
                     {
                         // flush received websocket message
-                        var message = new byte[(int)ms.Length];
+                        message = new byte[(int)ms.Length];
                         ms.Position = 0;
                         ms.Read(message, 0, message.Length);
-                        ReceiveMessage?.Invoke(message);
                     }
+
+                    ReceiveMessage?.Invoke(message);
                 }
             }
             catch (Exception ex)
