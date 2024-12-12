@@ -32,6 +32,10 @@
 - Try your best not to fail event dispatch even if the client had power failure</PackageReleaseNotes>
     </PropertyGroup>
 
+    <PropertyGroup>
+      <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
+    </PropertyGroup>
+
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
       <DocumentationFile>bin\Debug\CoreRemoting.xml</DocumentationFile>
     </PropertyGroup>

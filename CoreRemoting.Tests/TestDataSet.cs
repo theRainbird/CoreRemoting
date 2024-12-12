@@ -13,6 +13,7 @@
 //
 // Command line to generate:  xsd TestDataSet.xsd /dataset /language:CS
 //
+#pragma warning disable SYSLIB0051 // Type or member is obsolete
 namespace CoreRemoting.Tests;
 
 [System.Serializable()]
@@ -33,7 +34,7 @@ public class TestDataSet : System.Data.DataSet {
         this.Relations.CollectionChanged += schemaChangedHandler;
         this.EndInit();
     }
-    
+
     protected TestDataSet(System.Runtime.Serialization.SerializationInfo info, System.Runtime.Serialization.StreamingContext context) : 
             base(info, context) {
         if ((this.IsBinarySerialized(info, context) == true)) {
@@ -69,7 +70,7 @@ public class TestDataSet : System.Data.DataSet {
         this.Tables.CollectionChanged += schemaChangedHandler;
         this.Relations.CollectionChanged += schemaChangedHandler;
     }
-    
+
     [System.ComponentModel.Browsable(false)]
     [System.ComponentModel.DesignerSerializationVisibilityAttribute(System.ComponentModel.DesignerSerializationVisibility.Content)]
     public TestTableDataTable TestTable {
@@ -395,3 +396,4 @@ public class TestDataSet : System.Data.DataSet {
         }
     }
 }
+#pragma warning restore SYSLIB0051 // Type or member is obsolete
