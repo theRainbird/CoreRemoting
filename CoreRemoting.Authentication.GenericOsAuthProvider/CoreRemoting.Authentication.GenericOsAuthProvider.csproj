@@ -17,6 +17,7 @@
         <PackageTags>Remoting RPC Network Authentication Windows Linux</PackageTags>
         <AssemblyVersion>1.2.1</AssemblyVersion>
         <LangVersion>8</LangVersion>
+        <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>

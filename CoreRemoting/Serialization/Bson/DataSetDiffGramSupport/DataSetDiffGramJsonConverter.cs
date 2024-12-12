@@ -31,7 +31,7 @@ public class DataSetDiffGramJsonConverter : JsonConverter
     /// <param name="writer">JSON writer</param>
     /// <param name="value">DataSet/DataTable</param>
     /// <param name="serializer">JSON serializer</param>
-    public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
+    public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
     {
         if (value == null)
             throw new ArgumentNullException(nameof(value));
