@@ -3,8 +3,10 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Security;
 using System.Threading;
+using System.Threading.Tasks;
 using CoreRemoting.Authentication;
 using CoreRemoting.Tests.Tools;
+using CoreRemoting.Toolbox;
 using Xunit;
 
 namespace CoreRemoting.Tests
@@ -23,58 +25,48 @@ namespace CoreRemoting.Tests
         }
         
         [Fact]
-        public void Client_Connect_should_create_new_session_AND_Disconnect_should_close_session()
+        public async Task Client_Connect_should_create_new_session_AND_Disconnect_should_close_session()
         {
-            var connectedWaitHandles = new[]
-            {
-                new AutoResetEvent(false),
-                new AutoResetEvent(false)
-            };
+            var clientStarted1 = new TaskCompletionSource();
+            var clientStarted2 = new TaskCompletionSource();
+            var clientStopSignal = new TaskCompletionSource();
 
-            var quitWaitHandle = new ManualResetEventSlim();
-
-            var clientAction = new Action<int>(index =>
+            async Task ClientTask(TaskCompletionSource connected)
             {
-                var client =
-                    new RemotingClient(new ClientConfig()
-                    {
-                        ConnectionTimeout = 0,
-                        MessageEncryption = false,
-                        ServerPort = _serverFixture.Server.Config.NetworkPort
-                    });
+                var client = new RemotingClient(new ClientConfig()
+                {
+                    ConnectionTimeout = 0,
+                    MessageEncryption = false,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort
+                });
 
                 Assert.False(client.HasSession);
                 client.Connect();
 
-                connectedWaitHandles[index].Set();
-
+                connected.TrySetResult();
                 Assert.True(client.HasSession);
 
-                quitWaitHandle.Wait();
-
+                await clientStopSignal.Task;
                 client.Dispose();
-            });
-            
-            var clientThread1 = new Thread(() => clientAction(0));
-            var clientThread2 = new Thread(() => clientAction(1));
+            }
 
+            // There should be no sessions, before both clients connected
             Assert.Empty(_serverFixture.Server.SessionRepository.Sessions);
 
             // Start two clients to create two sessions
-            clientThread1.Start();
-            clientThread2.Start();
+            var client1 = ClientTask(clientStarted1);
+            var client2 = ClientTask(clientStarted2);
 
             // Wait for connection of both clients
-            WaitHandle.WaitAll(connectedWaitHandles);
+            await Task.WhenAll(clientStarted1.Task, clientStarted2.Task).Timeout(1);
 
             Assert.Equal(2, _serverFixture.Server.SessionRepository.Sessions.Count());
 
-            quitWaitHandle.Set();
+            clientStopSignal.TrySetResult();
 
-            clientThread1.Join();
-            clientThread2.Join();
+            await Task.WhenAll(client1, client2, Task.Delay(100)).Timeout(1);
 
-            // There should be no sessions left, after both clients disconnedted
+            // There should be no sessions left, after both clients disconnected
             Assert.Empty(_serverFixture.Server.SessionRepository.Sessions);
         }
 
