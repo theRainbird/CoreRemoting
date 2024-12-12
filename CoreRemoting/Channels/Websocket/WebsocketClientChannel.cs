@@ -4,6 +4,7 @@ using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.IO;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
 
@@ -80,28 +81,21 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
     }
 
     /// <inheritdoc />
-    public void Connect()
+    public async Task ConnectAsync()
     {
-        ConnectTask = ConnectTask ?? Task.Factory.StartNew(async () =>
-        {
-            await WebSocket.ConnectAsync(
-                new Uri(Url), CancellationToken.None)
-                    .ConfigureAwait(false);
+        await WebSocket.ConnectAsync(
+            new Uri(Url), CancellationToken.None)
+                .ConfigureAwait(false);
 
-            IsConnected = true;
-            Connected?.Invoke();
+        IsConnected = true;
+        Connected?.Invoke();
 
-            await WebSocket.SendAsync(EmptyMessage, 
-                WebSocketMessageType.Binary, true, CancellationToken.None)
-                    .ConfigureAwait(false);
+        await WebSocket.SendAsync(EmptyMessage, 
+            WebSocketMessageType.Binary, true, CancellationToken.None)
+                .ConfigureAwait(false);
 
-            _ = StartListening();
-        });
-
-        ConnectTask.GetAwaiter().GetResult();
+        _ = StartListening();
     }
-
-    private Task ConnectTask { get; set; }
 
     private async Task StartListening()
     {
@@ -183,20 +177,26 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
         }
     }
 
-    private Task DisconnectTask { get; set; }
-
     /// <inheritdoc />
-    public void Disconnect()
+    public async Task DisconnectAsync()
     {
-        DisconnectTask = DisconnectTask ?? Task.Factory.StartNew(async () =>
+        if (!IsConnected)
+            return;
+
+        IsConnected = false;
+
+        try
         {
             await WebSocket.CloseAsync(
                 WebSocketCloseStatus.NormalClosure, "Ok", CancellationToken.None)
                     .ConfigureAwait(false);
+        }
+        catch // (ObjectDisposedException)
+        {
+            // web socket already closed?
+        }
 
-            IsConnected = false;
-            Disconnected?.Invoke();
-        });
+        Disconnected?.Invoke();
     }
 
     /// <inheritdoc />
@@ -206,12 +206,8 @@ public class WebsocketClientChannel : IClientChannel, IRawMessageTransport
             return;
 
         if (IsConnected)
-            Disconnect();
-
-        var task = DisconnectTask;
-        if (task != null)
-            task.GetAwaiter()
-                .GetResult();
+            DisconnectAsync()
+                .JustWait();
 
         WebSocket.Dispose();
         WebSocket = null;

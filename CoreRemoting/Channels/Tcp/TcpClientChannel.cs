@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 using WatsonTcp;
 
 namespace CoreRemoting.Channels.Tcp;
@@ -48,18 +49,19 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <summary>
     /// Establish a connection with the server.
     /// </summary>
-    public void Connect()
+    public Task ConnectAsync()
     {
         if (_tcpClient == null)
             throw new InvalidOperationException("Channel is not initialized.");
 
         if (_tcpClient.Connected)
-            return;
+            return Task.CompletedTask;
 
         _tcpClient.Events.ExceptionEncountered += OnError;
         _tcpClient.Events.MessageReceived += OnMessage;
         _tcpClient.Events.ServerDisconnected += OnDisconnected;
         _tcpClient.Connect();
+        return Task.CompletedTask;
     }
 
     private void OnDisconnected(object o, DisconnectionEventArgs disconnectionEventArgs)
@@ -100,10 +102,10 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <summary>
     /// Closes the connection.
     /// </summary>
-    public void Disconnect()
+    public Task DisconnectAsync()
     {
         if (_tcpClient == null)
-            return;
+            return Task.CompletedTask;
 
         _tcpClient.Events.MessageReceived -= OnMessage;
         _tcpClient.Events.ExceptionEncountered -= OnError;
@@ -122,6 +124,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
 
         _tcpClient.Dispose();
         _tcpClient = null;
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -162,6 +165,6 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// </summary>
     public void Dispose()
     {
-        Disconnect();
+        DisconnectAsync().JustWait();
     }
 }

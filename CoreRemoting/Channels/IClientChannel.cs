@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 
 namespace CoreRemoting.Channels
 {
@@ -16,12 +17,12 @@ namespace CoreRemoting.Channels
         /// <summary>
         /// Establish a connection with the server.
         /// </summary>
-        void Connect();
+        Task ConnectAsync();
 
         /// <summary>
         /// Closes the connection.
         /// </summary>
-        void Disconnect();
+        Task DisconnectAsync();
         
         /// <summary>
         /// Gets whether the connection is established or not.

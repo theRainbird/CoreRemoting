@@ -256,53 +256,50 @@ namespace CoreRemoting
         /// Event procedure: Called when the ReceiveMessage event is fired on the raw message transport component.
         /// </summary>
         /// <param name="rawMessage">Raw message data that has been received</param>
-        private void OnReceiveMessage(byte[] rawMessage)
+        private async void OnReceiveMessage(byte[] rawMessage)
         {
-            Task.Run(() =>
+            _lastActivityTimestamp = DateTime.Now;
+
+            if (rawMessage == null)
+                return;
+
+            if (rawMessage.Length == 0)
+                return;
+
+            _currentlyProcessedMessagesCounter.AddCount(1);
+
+            CurrentSession.Value = this;
+
+            try
             {
-                _lastActivityTimestamp = DateTime.Now;
+                var message = _server.Serializer.Deserialize<WireMessage>(rawMessage);
 
-                if (rawMessage == null)
-                    return;
-
-                if (rawMessage.Length == 0)
-                    return;
-
-                _currentlyProcessedMessagesCounter.AddCount(1);
-
-                CurrentSession.Value = this;
-
-                try
+                switch (message.MessageType.ToLower())
                 {
-                    var message = _server.Serializer.Deserialize<WireMessage>(rawMessage);
+                    case "auth":
+                        await ProcessAuthenticationRequestMessage(message);
+                        break;
+                    case "rpc":
+                        await ProcessRpcMessage(message);
+                        break;
+                    case "goodbye":
+                        await ProcessGoodbyeMessage(message);
+                        break;
+                    default:
+                        OnErrorOccured("Invalid message type " + message.MessageType + ".", ex: null);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                OnErrorOccured("Error processing message.", ex);
+            }
+            finally
+            {
+                _currentlyProcessedMessagesCounter.Signal();
 
-                    switch (message.MessageType.ToLower())
-                    {
-                        case "auth":
-                            ProcessAuthenticationRequestMessage(message);
-                            break;
-                        case "rpc":
-                            ProcessRpcMessage(message);
-                            break;
-                        case "goodbye":
-                            ProcessGoodbyeMessage(message);
-                            break;
-                        default:
-                            OnErrorOccured("Invalid message type " + message.MessageType + ".", ex: null);
-                            break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    OnErrorOccured("Error processing message.", ex);
-                }
-                finally
-                {
-                    _currentlyProcessedMessagesCounter.Signal();
-
-                    CurrentSession.Value = null;
-                }
-            });
+                CurrentSession.Value = null;
+            }
         }
 
         /// <summary>
@@ -344,7 +341,7 @@ namespace CoreRemoting
 
             ((RemotingServer)_server).OnLogoff();
 
-            Task.Run(() => _server.SessionRepository.RemoveSession(_sessionId));
+            _ = Task.Run(() => _server.SessionRepository.RemoveSession(_sessionId));
         }
 
         /// <summary>
