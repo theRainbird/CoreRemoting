@@ -443,7 +443,7 @@ namespace CoreRemoting
         /// Called when a message is received from server.
         /// </summary>
         /// <param name="rawMessage">Raw message data</param>
-        private void OnMessage(byte[] rawMessage)
+        private void OnMessage(byte[] rawMessage) => Task.Run(() =>
         {
             var message = TryDeserialize(rawMessage);
 
@@ -472,7 +472,7 @@ namespace CoreRemoting
                     // A wire message could have been tampered with and couldn't be deserialized
                     break;
             }
-        }
+        });
 
         private WireMessage TryDeserialize(byte[] rawMessage)
         {
