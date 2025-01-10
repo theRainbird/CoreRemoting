@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,10 +41,20 @@ namespace CoreRemoting.Tests
         }
 
         [Fact]
+        public void ValidationSyncContext_is_installed()
+        {
+            using var ctx = ValidationSyncContext.Install();
+
+            Assert.IsType<ValidationSyncContext>(SynchronizationContext.Current);
+        }
+
+        [Fact]
         public void Call_on_Proxy_should_be_invoked_on_remote_service()
         {
             void ClientAction()
             {
+                using var ctx = ValidationSyncContext.Install();
+
                 try
                 {
                     var stopWatch = new Stopwatch();
@@ -117,6 +128,8 @@ namespace CoreRemoting.Tests
 
             void ClientAction()
             {
+                using var ctx = ValidationSyncContext.Install();
+
                 try
                 {
                     var stopWatch = new Stopwatch();
@@ -188,6 +201,8 @@ namespace CoreRemoting.Tests
 
             void ClientAction()
             {
+                using var ctx = ValidationSyncContext.Install();
+
                 try
                 {
                     using var client = new RemotingClient(
@@ -222,8 +237,10 @@ namespace CoreRemoting.Tests
         [Fact]
         public void Events_should_work_remotely()
         {
-            bool serviceEventCalled = false;
-            bool customDelegateEventCalled = false;
+            using var ctx = ValidationSyncContext.Install();
+
+            var serviceEventCalled = false;
+            var customDelegateEventCalled = false;
 
             using var client = new RemotingClient(
                 new ClientConfig()
@@ -278,6 +295,8 @@ namespace CoreRemoting.Tests
 
             void ClientAction()
             {
+                using var ctx = ValidationSyncContext.Install();
+
                 try
                 {
                     using var client = new RemotingClient(new ClientConfig()
@@ -313,6 +332,8 @@ namespace CoreRemoting.Tests
         [Fact]
         public void Generic_methods_should_be_called_correctly()
         {
+            using var ctx = ValidationSyncContext.Install();
+
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0,
@@ -333,6 +354,8 @@ namespace CoreRemoting.Tests
         [Fact]
         public void Inherited_methods_should_be_called_correctly()
         {
+            using var ctx = ValidationSyncContext.Install();
+
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0,
@@ -353,6 +376,8 @@ namespace CoreRemoting.Tests
         [Fact]
         public void Enum_arguments_should_be_passed_correctly()
         {
+            using var ctx = ValidationSyncContext.Install();
+
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0,
@@ -375,6 +400,8 @@ namespace CoreRemoting.Tests
         [Fact]
         public void Missing_method_throws_RemoteInvocationException()
         {
+            using var ctx = ValidationSyncContext.Install();
+
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0,
@@ -412,6 +439,8 @@ namespace CoreRemoting.Tests
         [Fact]
         public void Missing_service_throws_RemoteInvocationException()
         {
+            using var ctx = ValidationSyncContext.Install();
+
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0,
@@ -436,6 +465,8 @@ namespace CoreRemoting.Tests
         [Fact]
         public void Error_method_throws_Exception()
         {
+            using var ctx = ValidationSyncContext.Install();
+
             try
             {
                 using var client = new RemotingClient(new ClientConfig()
@@ -466,8 +497,11 @@ namespace CoreRemoting.Tests
         }
 
         [Fact]
+        [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
         public async Task ErrorAsync_method_throws_Exception()
         {
+            // using var ctx = ValidationSyncContext.Install(); // fails?
+
             try
             {
                 using var client = new RemotingClient(new ClientConfig()
@@ -484,8 +518,10 @@ namespace CoreRemoting.Tests
 
                 var proxy = client.CreateProxy<ITestService>();
                 var ex = (await Assert.ThrowsAsync<RemoteInvocationException>(async () =>
-                    await proxy.ErrorAsync(nameof(ErrorAsync_method_throws_Exception))))
-                        .GetInnermostException();
+                {
+                    await proxy.ErrorAsync(nameof(ErrorAsync_method_throws_Exception)).ConfigureAwait(false);
+                })
+                .ConfigureAwait(false)).GetInnermostException();
 
                 Assert.NotNull(ex); 
                 Assert.Equal(nameof(ErrorAsync_method_throws_Exception), ex.Message);
@@ -500,6 +536,8 @@ namespace CoreRemoting.Tests
         [Fact]
         public void NonSerializableError_method_throws_Exception()
         {
+            using var ctx = ValidationSyncContext.Install();
+
             try
             {
                 using var client = new RemotingClient(new ClientConfig()
@@ -550,7 +588,9 @@ namespace CoreRemoting.Tests
                         ctx.Exception);
             }
 
+            using var ctx = ValidationSyncContext.Install();
             _serverFixture.Server.AfterCall += AfterCall;
+
             try
             {
                 using var client = new RemotingClient(new ClientConfig()
@@ -588,6 +628,8 @@ namespace CoreRemoting.Tests
         [Fact]
         public void Failing_component_constructor_throws_RemoteInvocationException()
         {
+            using var ctx = ValidationSyncContext.Install();
+
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 3,
@@ -608,8 +650,11 @@ namespace CoreRemoting.Tests
         }
 
         [Fact]
+        [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
         public async Task Disposed_client_subscription_doesnt_break_other_clients()
         {
+            using var ctx = ValidationSyncContext.Install();
+
             async Task Roundtrip(bool encryption)
             {
                 var oldEncryption = _serverFixture.Server.Config.MessageEncryption;
@@ -642,7 +687,7 @@ namespace CoreRemoting.Tests
                     client1.Disconnect();
 
                     proxy2.FireServiceEvent();
-                    Assert.True(await fired2.Task);
+                    Assert.True(await fired2.Task.ConfigureAwait(false));
                     Assert.True(fired2.Task.IsCompleted);
                     Assert.False(fired1.Task.IsCompleted);
                 }
@@ -656,15 +701,17 @@ namespace CoreRemoting.Tests
             }
 
             // works!
-            await Roundtrip(encryption: false);
+            await Roundtrip(encryption: false).ConfigureAwait(false);
 
             // fails!
-            await Roundtrip(encryption: true);
+            await Roundtrip(encryption: true).ConfigureAwait(false);
         }
 
         [Fact]
         public void DataTable_roundtrip_works_issue60()
         {
+            using var ctx = ValidationSyncContext.Install();
+
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0,
@@ -693,6 +740,8 @@ namespace CoreRemoting.Tests
         {
             // max payload size, in bytes
             var maxSize = 2 * 1024 * 1024 + 1;
+
+            using var ctx = ValidationSyncContext.Install();
 
             using var client = new RemotingClient(new ClientConfig()
             {
@@ -748,6 +797,7 @@ namespace CoreRemoting.Tests
             void AfterCall(object sender, ServerRpcContext e) =>
                 Interlocked.Increment(ref afterCallFired);
 
+            using var ctx = ValidationSyncContext.Install();
             _serverFixture.Server.BeforeCall += BeforeCall;
             _serverFixture.Server.AfterCall += AfterCall;
 
@@ -793,6 +843,7 @@ namespace CoreRemoting.Tests
             void AfterCall(object sender, ServerRpcContext e) =>
                 Interlocked.Increment(ref afterCallFired);
 
+            using var ctx = ValidationSyncContext.Install();
             _serverFixture.Server.BeforeCall += BeforeCall;
             _serverFixture.Server.AfterCall += AfterCall;
 
@@ -848,7 +899,9 @@ namespace CoreRemoting.Tests
                 }
             }
 
+            using var ctx = ValidationSyncContext.Install();
             _serverFixture.Server.BeginCall += InterceptMethodCalls;
+
             try
             {
                 using var client = new RemotingClient(new ClientConfig()
@@ -893,6 +946,8 @@ namespace CoreRemoting.Tests
             server.RejectCall += RejectCall;
             server.Config.AuthenticationRequired = true;
 
+            using var ctx = ValidationSyncContext.Install();
+
             try
             {
                 using var client = new RemotingClient(new ClientConfig()
@@ -934,6 +989,8 @@ namespace CoreRemoting.Tests
                 AuthenticateFake = c => RemotingSession.Current != null
             };
 
+            using var ctx = ValidationSyncContext.Install();
+
             try
             {
                 using var client = new RemotingClient(new ClientConfig()
@@ -969,6 +1026,8 @@ namespace CoreRemoting.Tests
             {
                 AuthenticateFake = c => throw new Exception("Broken")
             };
+
+            using var ctx = ValidationSyncContext.Install();
 
             try
             {
@@ -1015,6 +1074,8 @@ namespace CoreRemoting.Tests
                 }
             };
 
+            using var ctx = ValidationSyncContext.Install();
+
             try
             {
                 using var client = new RemotingClient(new ClientConfig()
@@ -1043,6 +1104,8 @@ namespace CoreRemoting.Tests
         [Fact]
         public void ServerComponent_can_track_client_network_address()
         {
+            using var ctx = ValidationSyncContext.Install();
+
             using var client = new RemotingClient(new ClientConfig()
             {
                 ConnectionTimeout = 0,
@@ -1064,6 +1127,8 @@ namespace CoreRemoting.Tests
         [Fact]
         public void Logon_and_logoff_events_are_triggered()
         {
+            using var ctx = ValidationSyncContext.Install();
+
             void CheckSession(string operation)
             {
                 var rs = RemotingSession.Current;
@@ -1135,8 +1200,10 @@ namespace CoreRemoting.Tests
                 e.AuthenticationRequired =
                     e.MethodCallMessage.MethodName != "Echo";
 
+            using var ctx = ValidationSyncContext.Install();
             _serverFixture.Server.Config.AuthenticationRequired = true;
             _serverFixture.Server.BeginCall += BypassAuthorizationForEcho;
+
             try
             {
                 using var client = new RemotingClient(new ClientConfig()

@@ -238,14 +238,16 @@ namespace CoreRemoting
             lock(_syncObject)
                 _activeCalls = new Dictionary<Guid, ClientRpcContext>();
 
-            await _channel.ConnectAsync();
+            await _channel.ConnectAsync()
+                .ConfigureAwait(false);
 
             if (_channel.RawMessageTransport.LastException != null)
                 throw _channel.RawMessageTransport.LastException;
 
             await _handshakeCompletedTaskSource.Task.Timeout(
                 _config.ConnectionTimeout, () =>
-                    throw new NetworkException("Handshake with server failed."));
+                    throw new NetworkException("Handshake with server failed."))
+                .ConfigureAwait(false);
 
             await AuthenticateAsync()
                 .ConfigureAwait(false);
@@ -311,11 +313,15 @@ namespace CoreRemoting
                 //_goodbyeCompletedWaitHandle.Reset();
 
                 if (await _channel.RawMessageTransport.SendMessageAsync(rawData).ConfigureAwait(false))
-                    await _goodbyeCompletedTaskSource.Task.Timeout(10);
+                    await _goodbyeCompletedTaskSource.Task.Timeout(10).ConfigureAwait(false);
             }
 
             // lock (_syncObject) // TODO: why we are locking here?
-                await _channel?.DisconnectAsync();
+            {
+                var channel = _channel;
+                if (channel != null)
+                    await channel.DisconnectAsync().ConfigureAwait(false);
+            }
 
             OnDisconnected();
             _handshakeCompletedTaskSource = new();
@@ -425,7 +431,8 @@ namespace CoreRemoting
 
             await _authenticationCompletedTaskSource.Task.Timeout(
                 _config.AuthenticationTimeout, () =>
-                    throw new SecurityException("Authentication timeout."));
+                    throw new SecurityException("Authentication timeout."))
+                        .ConfigureAwait(false);
 
             if (!_isAuthenticated)
                 throw new SecurityException("Authentication failed. Please check credentials.");
@@ -468,7 +475,7 @@ namespace CoreRemoting
                     // A wire message could have been tampered with and couldn't be deserialized
                     break;
             }
-        });
+        }).ConfigureAwait(false);
 
         private WireMessage TryDeserialize(byte[] rawMessage)
         {
@@ -731,7 +738,8 @@ namespace CoreRemoting
 
             await clientRpcContext.Task.Timeout(
                 _config.InvocationTimeout,
-                $"Invocation timeout ({_config.InvocationTimeout}) exceeded.");
+                $"Invocation timeout ({_config.InvocationTimeout}) exceeded.")
+                .ConfigureAwait(false);
 
             return clientRpcContext;
         }

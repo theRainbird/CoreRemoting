@@ -277,13 +277,13 @@ namespace CoreRemoting
                 switch (message.MessageType.ToLower())
                 {
                     case "auth":
-                        await ProcessAuthenticationRequestMessage(message);
+                        await ProcessAuthenticationRequestMessage(message).ConfigureAwait(false);
                         break;
                     case "rpc":
-                        await ProcessRpcMessage(message);
+                        await ProcessRpcMessage(message).ConfigureAwait(false);
                         break;
                     case "goodbye":
-                        await ProcessGoodbyeMessage(message);
+                        await ProcessGoodbyeMessage(message).ConfigureAwait(false);
                         break;
                     default:
                         OnErrorOccured("Invalid message type " + message.MessageType + ".", ex: null);

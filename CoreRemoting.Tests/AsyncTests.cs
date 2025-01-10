@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using CoreRemoting.Tests.Tools;
 using Xunit;
 
@@ -13,8 +14,9 @@ namespace CoreRemoting.Tests
             _serverFixture = serverFixture;
             _serverFixture.Start();
         }
-        
+
         [Fact]
+        [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
         public async void AsyncMethods_should_work()
         {
             using var client = new RemotingClient(new ClientConfig()
@@ -34,9 +36,10 @@ namespace CoreRemoting.Tests
         }
 
         /// <summary>
-        /// Awaiting for ordinary non-generic task method should not hangs. 
+        /// Awaiting for ordinary non-generic task method should not hangs.
         /// </summary>
         [Fact(Timeout = 15000)]
+        [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
         public async void AwaitingNonGenericTask_should_not_hang_forever()
         {
             using var client = new RemotingClient(new ClientConfig()

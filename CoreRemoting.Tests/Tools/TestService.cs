@@ -78,7 +78,7 @@ namespace CoreRemoting.Tests.Tools
 
         public async Task ErrorAsync(string text)
         {
-            await Task.Delay(1);
+            await Task.Delay(1).ConfigureAwait(false);
             Error(text);
         }
 
