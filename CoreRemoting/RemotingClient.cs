@@ -121,17 +121,13 @@ namespace CoreRemoting
 
         private void OnDisconnected()
         {
-            Dictionary<Guid, ClientRpcContext> activeCalls;
-            lock (_syncObject)
-            {
-                if (_activeCalls == null)
-                    return;
-
-                activeCalls = _activeCalls;
-                _activeCalls = null;
-            }
+            var activeCalls = _activeCalls;
+            _activeCalls = null;
 
             _goodbyeCompletedTaskSource.TrySetResult(true);
+
+            if (activeCalls == null)
+                return;
 
             foreach (var activeCall in activeCalls)
             {
@@ -486,9 +482,9 @@ namespace CoreRemoting
                 {
                     Data = rawMessage,
                     Error = true,
-                    Iv = Array.Empty<byte>(),
+                    Iv = [],
                     MessageType = "invalid",
-                    UniqueCallKey = Array.Empty<byte>(),
+                    UniqueCallKey = [],
                 };
             }
         }
@@ -567,7 +563,7 @@ namespace CoreRemoting
         /// <param name="message">Deserialized WireMessage that contains a RemoteDelegateInvocationMessage</param>
         private void ProcessRemoteDelegateInvocationMessage(WireMessage message)
         {
-            byte[] sharedSecret = SharedSecret();
+            var sharedSecret = SharedSecret();
 
             var delegateInvocationMessage =
                 Serializer
@@ -685,7 +681,7 @@ namespace CoreRemoting
         /// <returns>Results of the remote method invocation</returns>
         internal async Task<ClientRpcContext> InvokeRemoteMethod(MethodCallMessage methodCallMessage, bool oneWay = false)
         {
-            byte[] sharedSecret = SharedSecret();
+            var sharedSecret = SharedSecret();
 
             lock (_syncObject)
             {
@@ -717,7 +713,7 @@ namespace CoreRemoting
                     keyPair: _keyPair,
                     uniqueCallKey: clientRpcContext.UniqueCallKey.ToByteArray());
 
-            byte[] rawData = Serializer.Serialize(wireMessage);
+            var rawData = Serializer.Serialize(wireMessage);
 
             _rawMessageTransport.LastException = null;
 
