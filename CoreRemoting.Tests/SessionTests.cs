@@ -100,11 +100,11 @@ namespace CoreRemoting.Tests
                             ConnectionTimeout = 0,
                             ServerPort = server.Config.NetworkPort,
                             MessageEncryption = false,
-                            Credentials = new []
-                            {
-                                new Credential() { Name = "User", Value = "tester" },
-                                new Credential() {Name = "Password", Value = password }
-                            }
+                            Credentials =
+                            [
+                                new() { Name = "User", Value = "tester" },
+                                new() { Name = "Password", Value = password }
+                            ]
                         });
                 
                     if (shouldThrow)
