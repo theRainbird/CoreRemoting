@@ -22,7 +22,7 @@ public static class TaskExtensions
     public static async Task<T> Timeout<T>(this Task<T> task, double secTimeout, Action throwAction)
     {
         if (secTimeout <= 0)
-            return await task;
+            return await task.ConfigureAwait(false);
 
         var delay = Task.Delay(TimeSpan.FromSeconds(secTimeout));
         var result = await Task.WhenAny(task, delay).ConfigureAwait(false);
@@ -46,7 +46,7 @@ public static class TaskExtensions
     {
         if (secTimeout <= 0)
         {
-            await task;
+            await task.ConfigureAwait(false);
             return;
         }
 
