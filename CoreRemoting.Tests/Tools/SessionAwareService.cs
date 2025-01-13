@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 
 namespace CoreRemoting.Tests.Tools
 {
@@ -22,5 +23,11 @@ namespace CoreRemoting.Tests.Tools
 
         public string ClientAddress =>
             CurrentSession.ClientAddress;
+
+        public void CloseSession()
+        {
+            RemotingSession.Current.Close();
+            Thread.Sleep(TimeSpan.FromSeconds(0.8));
+        }
     }
 }

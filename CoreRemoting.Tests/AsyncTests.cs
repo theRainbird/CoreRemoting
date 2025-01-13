@@ -2,58 +2,57 @@ using System.Diagnostics.CodeAnalysis;
 using CoreRemoting.Tests.Tools;
 using Xunit;
 
-namespace CoreRemoting.Tests
+namespace CoreRemoting.Tests;
+
+[Collection("CoreRemoting")]
+public class AsyncTests : IClassFixture<ServerFixture>
 {
-    [Collection("CoreRemoting")]
-    public class AsyncTests : IClassFixture<ServerFixture>
+    private ServerFixture _serverFixture;
+
+    public AsyncTests(ServerFixture serverFixture)
     {
-        private ServerFixture _serverFixture;
+        _serverFixture = serverFixture;
+        _serverFixture.Start();
+    }
 
-        public AsyncTests(ServerFixture serverFixture)
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async void AsyncMethods_should_work()
+    {
+        using var client = new RemotingClient(new ClientConfig()
         {
-            _serverFixture = serverFixture;
-            _serverFixture.Start();
-        }
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort
+        });
 
-        [Fact]
-        [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
-        public async void AsyncMethods_should_work()
+        client.Connect();
+        var proxy = client.CreateProxy<IAsyncService>();
+
+        var base64String = await proxy.ConvertToBase64Async("Yay");
+
+        Assert.Equal("WWF5", base64String);
+    }
+
+    /// <summary>
+    /// Awaiting for ordinary non-generic task method should not hangs.
+    /// </summary>
+    [Fact(Timeout = 15000)]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async void AwaitingNonGenericTask_should_not_hang_forever()
+    {
+        using var client = new RemotingClient(new ClientConfig()
         {
-            using var client = new RemotingClient(new ClientConfig()
-            {
-                ConnectionTimeout = 0,
-                InvocationTimeout = 0,
-                MessageEncryption = false,
-                ServerPort = _serverFixture.Server.Config.NetworkPort
-            });
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort
+        });
 
-            client.Connect();
-            var proxy = client.CreateProxy<IAsyncService>();
+        client.Connect();
+        var proxy = client.CreateProxy<IAsyncService>();
 
-            var base64String = await proxy.ConvertToBase64Async("Yay");
-
-            Assert.Equal("WWF5", base64String);
-        }
-
-        /// <summary>
-        /// Awaiting for ordinary non-generic task method should not hangs.
-        /// </summary>
-        [Fact(Timeout = 15000)]
-        [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
-        public async void AwaitingNonGenericTask_should_not_hang_forever()
-        {
-            using var client = new RemotingClient(new ClientConfig()
-            {
-                ConnectionTimeout = 0,
-                InvocationTimeout = 0,
-                MessageEncryption = false,
-                ServerPort = _serverFixture.Server.Config.NetworkPort
-            });
-
-            client.Connect();
-            var proxy = client.CreateProxy<IAsyncService>();
-
-            await proxy.NonGenericTask();
-        }
+        await proxy.NonGenericTask();
     }
 }

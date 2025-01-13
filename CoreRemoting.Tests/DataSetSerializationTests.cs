@@ -1,6 +1,4 @@
 using System.Data;
-using System.IO;
-using System.Reflection;
 using CoreRemoting.Serialization.Bson.DataSetDiffGramSupport;
 using Newtonsoft.Json;
 using Xunit;
