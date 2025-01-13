@@ -208,13 +208,13 @@ public class SessionTests : IClassFixture<ServerFixture>
         });
 
         var disconnected = new TaskCompletionSource<bool>();
-        client.Connect();
         client.AfterDisconnect += () => disconnected.TrySetResult(true);
+        client.Connect();
 
         // RemotingSession.Current should be accessible to the component constructor
         var proxy = client.CreateProxy<ISessionAwareService>();
 
-        // Wait(1s) should end after CloseSession(0.5s)
+        // Wait(1s) should finish after CloseSession(0.5s)
         var proxy_Wait = proxy.Wait(1);
 
         // CloseSession shouldn't throw exceptions
@@ -224,6 +224,6 @@ public class SessionTests : IClassFixture<ServerFixture>
         await proxy_Wait;
 
         // Disconnection event should occur
-        await disconnected.Task.Timeout(2).ConfigureAwait(false);
+        await disconnected.Task.Timeout(2);
     }
 }

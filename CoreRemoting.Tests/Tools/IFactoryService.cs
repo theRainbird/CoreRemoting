@@ -1,7 +1,6 @@
-namespace CoreRemoting.Tests.Tools
+namespace CoreRemoting.Tests.Tools;
+
+public interface IFactoryService
 {
-    public interface IFactoryService
-    {
-        ITestService GetTestService();
-    }
+    ITestService GetTestService();
 }
