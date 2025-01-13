@@ -424,7 +424,7 @@ namespace CoreRemoting
                 _server.Serializer
                     .Deserialize<MethodCallMessage>(decryptedRawMessage);
 
-            ServerRpcContext serverRpcContext =
+            var serverRpcContext =
                 new ServerRpcContext
                 {
                     UniqueCallKey =
