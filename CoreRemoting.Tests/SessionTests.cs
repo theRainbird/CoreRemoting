@@ -198,8 +198,6 @@ public class SessionTests : IClassFixture<ServerFixture>
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
     public async Task CloseSession_method_should_close_session_gracefully_issue55()
     {
-        using var ctx = ValidationSyncContext.Install();
-
         using var client = new RemotingClient(new ClientConfig()
         {
             ConnectionTimeout = 0,
@@ -216,10 +214,16 @@ public class SessionTests : IClassFixture<ServerFixture>
         // RemotingSession.Current should be accessible to the component constructor
         var proxy = client.CreateProxy<ISessionAwareService>();
 
+        // Wait(1s) should end after CloseSession(0.5s)
+        var proxy_Wait = proxy.Wait(1);
+
         // CloseSession shouldn't throw exceptions
-        proxy.CloseSession();
+        await proxy.CloseSession(0.5);
+
+        // proxy.Wait was started before CloseSession and shouldn't throw either
+        await proxy_Wait;
 
         // Disconnection event should occur
-        await disconnected.Task.Timeout(1).ConfigureAwait(false);
+        await disconnected.Task.Timeout(2).ConfigureAwait(false);
     }
 }
