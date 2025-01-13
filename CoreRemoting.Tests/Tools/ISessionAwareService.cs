@@ -5,5 +5,7 @@
         bool HasSameSessionInstance { get; }
 
         string ClientAddress { get; }
+
+        void CloseSession();
     }
 }
