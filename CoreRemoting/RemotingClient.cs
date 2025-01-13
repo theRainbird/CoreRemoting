@@ -46,8 +46,7 @@ namespace CoreRemoting
         private byte[] _serverPublicKeyBlob;
 
         // ReSharper disable once InconsistentNaming
-        private static readonly ConcurrentDictionary<string, IRemotingClient> _clientInstances =
-            new ConcurrentDictionary<string, IRemotingClient>();
+        private static readonly ConcurrentDictionary<string, IRemotingClient> _clientInstances = new();
 
         private static WeakReference<IRemotingClient> _defaultRemotingClientRef;
 
@@ -144,7 +143,7 @@ namespace CoreRemoting
         /// <summary>
         /// Gets the proxy generator instance.
         /// </summary>
-        private static readonly ProxyGenerator ProxyGenerator = new ProxyGenerator();
+        private static readonly ProxyGenerator ProxyGenerator = new();
 
         /// <summary>
         /// Gets a utility object for building remoting messages.
