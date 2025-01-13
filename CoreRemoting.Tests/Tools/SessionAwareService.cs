@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace CoreRemoting.Tests.Tools
 {
@@ -24,10 +25,13 @@ namespace CoreRemoting.Tests.Tools
         public string ClientAddress =>
             CurrentSession.ClientAddress;
 
-        public void CloseSession()
+        public async Task Wait(double seconds) =>
+            await Task.Delay(TimeSpan.FromSeconds(seconds));
+
+        public async Task CloseSession(double seconds)
         {
             RemotingSession.Current.Close();
-            Thread.Sleep(TimeSpan.FromSeconds(0.8));
+            await Wait(seconds);
         }
     }
 }

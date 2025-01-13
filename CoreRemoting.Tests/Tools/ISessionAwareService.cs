@@ -1,4 +1,7 @@
-﻿namespace CoreRemoting.Tests.Tools
+﻿using System.Threading.Tasks;
+using System;
+
+namespace CoreRemoting.Tests.Tools
 {
     public interface ISessionAwareService
     {
@@ -6,6 +9,8 @@
 
         string ClientAddress { get; }
 
-        void CloseSession();
+        Task Wait(double seconds);
+
+        Task CloseSession(double seconds);
     }
 }
