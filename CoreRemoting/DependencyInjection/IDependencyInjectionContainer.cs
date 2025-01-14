@@ -37,7 +37,7 @@ namespace CoreRemoting.DependencyInjection
             string serviceName = "",
             bool asHiddenSystemService = false)
             where TServiceInterface : class
-            where  TServiceImpl : class, TServiceInterface;
+            where TServiceImpl : class, TServiceInterface;
 
         /// <summary>
         /// Registers a service.
