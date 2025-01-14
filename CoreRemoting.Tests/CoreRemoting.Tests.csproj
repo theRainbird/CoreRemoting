@@ -45,6 +45,13 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Compile Remove="RpcTests_Websockets.cs" />
+      <Compile Include="RpcTests_Websockets.cs">
+        <DependentUpon>RpcTests.cs</DependentUpon>
+      </Compile>
+    </ItemGroup>
+    
+    <ItemGroup>
       <None Update="TestConfig.xml">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
