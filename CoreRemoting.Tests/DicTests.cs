@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -44,18 +45,21 @@ namespace CoreRemoting.Tests
         public async Task Register_multiple_services_thread_safety()
         {
             var c = Container;
-            var t = new HashSet<int>();
+            var t = new ConcurrentDictionary<int, int>();
+
+            void RegisterCurrentThread() =>
+                t.TryAdd(Thread.CurrentThread.ManagedThreadId, 0);
 
             void RegisterService()
             {
-                t.Add(Thread.CurrentThread.ManagedThreadId);
+                RegisterCurrentThread();
                 c.RegisterService<ITestService, TestService>(
                     ServiceLifetime.SingleCall, Guid.NewGuid().ToString());
             }
 
             void RegisterFactory()
             {
-                t.Add(Thread.CurrentThread.ManagedThreadId);
+                RegisterCurrentThread();
                 c.RegisterService<ITestService>(() => new TestService(),
                     ServiceLifetime.SingleCall, Guid.NewGuid().ToString());
             }
@@ -75,7 +79,7 @@ namespace CoreRemoting.Tests
             Assert.Equal(1000, regs.Count());
 
             // check if we actually used many threads
-            Console.WriteLine($"Registration threads: {t.Count}");
+            Console.WriteLine($"Registration threads: {t.Keys.Count}");
             Assert.True(t.Count > 1);
         }
     }
