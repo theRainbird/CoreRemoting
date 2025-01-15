@@ -14,7 +14,7 @@ namespace CoreRemoting.DependencyInjection
         private readonly IServiceCollection _container;
         private IServiceProvider _serviceProvider;
         private readonly bool _containerCreatedExternally;
-        
+
         /// <summary>
         /// Creates a new instance of the MicrosoftDependencyInjectionContainer class.
         /// </summary>
@@ -33,7 +33,7 @@ namespace CoreRemoting.DependencyInjection
             if (!string.IsNullOrWhiteSpace(serviceName) && serviceName != serviceInterfaceType.FullName)
                 throw new NotSupportedException("Microsoft Dependency Injection does not support named services.");
         }
-        
+
         /// <summary>
         /// Resolves a service from the dependency injection container.
         /// </summary>
@@ -55,10 +55,10 @@ namespace CoreRemoting.DependencyInjection
         {
             Type serviceInterfaceType = typeof(TServiceInterface);
             ThrowExceptionIfCustomServiceName(registration.ServiceName, serviceInterfaceType);
-            
+
             return _serviceProvider.GetRequiredService<TServiceInterface>();
         }
-        
+
         /// <summary>
         /// Registers a service.
         /// </summary>
@@ -67,11 +67,11 @@ namespace CoreRemoting.DependencyInjection
         /// <typeparam name="TServiceInterface">Service interface type</typeparam>
         /// <typeparam name="TServiceImpl">Service implementation type</typeparam>
         protected override void RegisterServiceInContainer<TServiceInterface, TServiceImpl>(
-            ServiceLifetime lifetime, 
+            ServiceLifetime lifetime,
             string serviceName = "")
-        {   
+        {
             ThrowExceptionIfCustomServiceName(serviceName, typeof(TServiceInterface));
-            
+
             switch (lifetime)
             {
                 case ServiceLifetime.Singleton:
@@ -84,7 +84,7 @@ namespace CoreRemoting.DependencyInjection
 
             _serviceProvider = _container.BuildServiceProvider();
         }
-        
+
         /// <summary>
         /// Registers a service.
         /// </summary>
@@ -93,12 +93,12 @@ namespace CoreRemoting.DependencyInjection
         /// <param name="serviceName">Optional unique service name</param>
         /// <typeparam name="TServiceInterface">Service interface type</typeparam>
         protected override void RegisterServiceInContainer<TServiceInterface>(
-            Func<TServiceInterface> factoryDelegate, 
-            ServiceLifetime lifetime, 
+            Func<TServiceInterface> factoryDelegate,
+            ServiceLifetime lifetime,
             string serviceName = "")
         {
             var serviceInterfaceType = typeof(TServiceInterface);
-            
+
             switch (lifetime)
             {
                 case ServiceLifetime.Singleton:
@@ -108,10 +108,10 @@ namespace CoreRemoting.DependencyInjection
                     _container.AddTransient(serviceInterfaceType, _ => factoryDelegate());
                     break;
             }
-            
+
             _serviceProvider = _container.BuildServiceProvider();
         }
-        
+
         /// <summary>
         /// Gets whether the specified service is registered or not.
         /// </summary>
@@ -121,10 +121,10 @@ namespace CoreRemoting.DependencyInjection
         public override bool IsRegistered<TServiceInterface>(string serviceName = "") where TServiceInterface: class
         {
             var serviceInterfaceType = typeof(TServiceInterface);
-            
+
             if (!string.IsNullOrEmpty(serviceName))
                 ThrowExceptionIfCustomServiceName(serviceName, serviceInterfaceType);
-            
+
             return _container.Any(descriptor => descriptor.ServiceType == serviceInterfaceType);
         }
 
@@ -152,7 +152,7 @@ namespace CoreRemoting.DependencyInjection
         public override void Dispose()
         {
             base.Dispose();
-            
+
             if (!_containerCreatedExternally)
                 _container.Clear();
         }
