@@ -19,6 +19,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <PackageReference Include="DryIoc.MefAttributedModel.dll" Version="7.0.2" />
         <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="7.0.0" />
         <PackageReference Include="System.Runtime.Serialization.Formatters" Version="9.0.0" Condition="'$(TargetFramework)' == 'net8.0'" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
@@ -45,6 +46,10 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Compile Remove="DicTests_DryIoc.cs" />
+      <Compile Include="DicTests_DryIoc.cs">
+        <DependentUpon>DicTests.cs</DependentUpon>
+      </Compile>
       <Compile Remove="DicTests_Microsoft.cs" />
       <Compile Include="DicTests_Microsoft.cs">
         <DependentUpon>DicTests.cs</DependentUpon>

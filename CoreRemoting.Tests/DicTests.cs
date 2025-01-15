@@ -56,27 +56,58 @@ public class DicTests
     public void Registered_service_is_resolved_as_scoped()
     {
         var c = Container;
-        c.RegisterService<IScopedService, ScopedService>(ServiceLifetime.Scoped);
         c.RegisterService<IAsyncService, AsyncService>(ServiceLifetime.Singleton);
+        c.RegisterService<IScopedService, ScopedService>(ServiceLifetime.Scoped);
+        c.RegisterService<IHobbitService>(() => new HobbitService(), ServiceLifetime.Singleton);
+        c.RegisterService<ITestService>(() => new TestService(), ServiceLifetime.Scoped);
         c.RegisterService<IServiceWithDeps, ServiceWithDeps>(ServiceLifetime.SingleCall);
 
-        using (c.CreateScope())
-        {
-            var svc = c.GetService<IScopedService>();
-            Assert.NotNull(svc);
-            Assert.IsType<ScopedService>(svc);
+        using var s = c.CreateScope();
+        var svc = c.GetService<IScopedService>();
+        Assert.NotNull(svc);
+        Assert.IsType<ScopedService>(svc);
 
-            var scv3 = c.GetService<IServiceWithDeps>();
-            Assert.NotNull(scv3);
-            Assert.IsType<ServiceWithDeps>(scv3);
+        var scv3 = c.GetService<IServiceWithDeps>();
+        Assert.NotNull(scv3);
+        Assert.IsType<ServiceWithDeps>(scv3);
 
-            var svcDeps = scv3 as ServiceWithDeps;
-            Assert.NotNull(svcDeps.AsyncService);
-            Assert.NotNull(svcDeps.ScopedService1);
-            Assert.NotNull(svcDeps.ScopedService2);
-            Assert.Same(svcDeps.ScopedService1, svcDeps.ScopedService2);
-            Assert.Same(svcDeps.ScopedService1, svc);
-        }
+        var svcDeps = scv3 as ServiceWithDeps;
+        Assert.NotNull(svcDeps.AsyncService);
+        Assert.NotNull(svcDeps.ScopedService1);
+        Assert.NotNull(svcDeps.ScopedService2);
+        Assert.NotNull(svcDeps.TestService);
+        Assert.NotNull(svcDeps.HobbitService);
+        Assert.Same(svcDeps.ScopedService1, svcDeps.ScopedService2);
+        Assert.Same(svcDeps.ScopedService1, svc);
+    }
+
+    [Fact]
+    public void Registered_factory_is_resolved_as_scoped()
+    {
+        var c = Container;
+        c.RegisterService<IAsyncService, AsyncService>(ServiceLifetime.Singleton);
+        c.RegisterService<IScopedService>(() => new ScopedService(), ServiceLifetime.Scoped);
+        c.RegisterService<IHobbitService>(() => new HobbitService(), ServiceLifetime.Singleton);
+        c.RegisterService<ITestService>(() => new TestService(), ServiceLifetime.Scoped);
+        c.RegisterService<IServiceWithDeps, ServiceWithDeps>(ServiceLifetime.SingleCall);
+
+        using var s = c.CreateScope();
+        var svc = c.GetService<IScopedService>();
+        Assert.NotNull(svc);
+        Assert.IsType<ScopedService>(svc);
+
+        var scv3 = c.GetService<IServiceWithDeps>();
+        Assert.NotNull(scv3);
+        Assert.IsType<ServiceWithDeps>(scv3);
+
+        var svcDeps = scv3 as ServiceWithDeps;
+        Assert.NotNull(svcDeps.AsyncService);
+        Assert.NotNull(svcDeps.ScopedService1);
+        Assert.NotNull(svcDeps.ScopedService2);
+        Assert.NotNull(svcDeps.TestService);
+        Assert.NotNull(svcDeps.HobbitService);
+        Assert.Same(svcDeps.ScopedService1, svcDeps.ScopedService2);
+        Assert.Same(svcDeps.ScopedService1, svc);
     }
 
     [Fact]
@@ -156,6 +187,13 @@ public class DicTests
         var regs = c.GetServiceRegistrations();
         Assert.NotNull(regs);
         Assert.Equal(1000, regs.Count());
+
+        // check if all registrations are resolvable
+        foreach (var reg in regs)
+        {
+            var svc = c.GetService(reg.ServiceName);
+            Assert.IsType<TestService>(svc);
+        }
 
         // check if we actually used many threads
         Console.WriteLine($"Registration threads: {t.Keys.Count}");
