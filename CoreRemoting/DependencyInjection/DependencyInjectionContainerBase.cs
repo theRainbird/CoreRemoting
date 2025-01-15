@@ -212,6 +212,9 @@ public abstract class DependencyInjectionContainerBase : IDependencyInjectionCon
     /// <returns>True, if the service is registered, otherwise false</returns>
     public abstract bool IsRegistered<TServiceInterface>(string serviceName = "") where TServiceInterface : class;
 
+    /// <inheritdoc/>
+    public abstract IDisposable CreateScope();
+
     /// <summary>
     /// Frees managed resources.
     /// </summary>

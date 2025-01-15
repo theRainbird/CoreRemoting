@@ -88,4 +88,9 @@ public interface IDependencyInjectionContainer : IDisposable
     /// <param name="serviceName">Unique service name</param>
     /// <returns>Service registration</returns>
     ServiceRegistration GetServiceRegistration(string serviceName);
+
+    /// <summary>
+    /// Creates the scope for scoped services resolution.
+    /// </summary>
+    IDisposable CreateScope();
 }
