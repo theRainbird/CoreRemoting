@@ -1,21 +1,30 @@
-﻿namespace CoreRemoting.Tests.Tools;
+﻿using System;
+
+namespace CoreRemoting.Tests.Tools;
 
 public class ServiceWithDeps : IServiceWithDeps
 {
-    public ServiceWithDeps(IAsyncService async, ITestService test1, ITestService test2)
+    public ServiceWithDeps(IAsyncService async, IScopedService scoped1, IScopedService scoped2)
     {
         AsyncService = async;
-        TestService1 = test1;
-        TestService2 = test2;
+        ScopedService1 = scoped1;
+        ScopedService2 = scoped2;
     }
 
     public IAsyncService AsyncService { get; }
 
-    public ITestService TestService1 { get; }
+    public IScopedService ScopedService1 { get; }
 
-    public ITestService TestService2 { get; }
+    public IScopedService ScopedService2 { get; }
 
-    public void Hello()
+    public Guid ScopedServiceInstanceId
     {
+        get
+        {
+            if (ScopedService1.InstanceId != ScopedService2.InstanceId)
+                return Guid.Empty;
+
+            return ScopedService1.InstanceId;
+        }
     }
 }

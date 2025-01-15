@@ -1125,6 +1125,35 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
+    public void Scoped_service_is_resolved_within_the_remote_call_scope()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            MessageEncryption = false,
+            Channel = ClientChannel,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        client.Connect();
+
+        var proxy = client.CreateProxy<IServiceWithDeps>();
+        var guid = proxy.ScopedServiceInstanceId;
+
+        // empty Guid means that ServiceWithDeps has got different ScopedService instances
+        // but it should get the same scoped service instances across the whore resolution graph
+        Assert.NotEqual(Guid.Empty, guid);
+
+        // every remote call should produce a new ScopedService instance
+        Assert.NotEqual(guid, proxy.ScopedServiceInstanceId);
+        Assert.NotEqual(proxy.ScopedServiceInstanceId, proxy.ScopedServiceInstanceId);
+    }
+
+    [Fact]
     public void Logon_and_logoff_events_are_triggered()
     {
         using var ctx = ValidationSyncContext.Install();
