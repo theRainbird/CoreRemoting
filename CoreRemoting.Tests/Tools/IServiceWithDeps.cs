@@ -1,6 +1,8 @@
-﻿namespace CoreRemoting.Tests.Tools;
+﻿using System;
+
+namespace CoreRemoting.Tests.Tools;
 
 public interface IServiceWithDeps
 {
-    void Hello();
+    Guid ScopedServiceInstanceId { get; }
 }

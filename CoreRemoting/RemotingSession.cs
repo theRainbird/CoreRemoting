@@ -439,6 +439,7 @@ namespace CoreRemoting
                     Session = this
                 };
 
+            using var scope = _server.ServiceRegistry.CreateScope();
             var serializedResult = Array.Empty<byte>();
             var method = default(MethodInfo);
             var oneWay = false;

@@ -10,11 +10,11 @@ namespace CoreRemoting.Tests;
 public class ServerFixture : IDisposable
 {
     public int ServerErrorCount;
-    
+
     public ServerFixture()
     {
         TestService = new TestService();
-        
+
         ServerConfig =
             new ServerConfig()
             {
@@ -36,15 +36,15 @@ public class ServerFixture : IDisposable
                     // Service for Linq expression tests
                     container.RegisterService<IHobbitService, HobbitService>(
                         lifetime: ServiceLifetime.Singleton);
-                    
+
                     // Service for testing return as proxy
                     container.RegisterService<IFactoryService, FactoryService>(
                         lifetime: ServiceLifetime.Singleton);
-                    
+
                     // Service for generic method tests
                     container.RegisterService<IGenericEchoService, GenericEchoService>(
                         lifetime: ServiceLifetime.Singleton);
-                    
+
                     // Service for enum tests
                     container.RegisterService<IEnumTestService, EnumTestService>(
                         lifetime: ServiceLifetime.Singleton);
@@ -55,6 +55,12 @@ public class ServerFixture : IDisposable
 
                     // Service for session tests
                     container.RegisterService<ISessionAwareService, SessionAwareService>(
+                        lifetime: ServiceLifetime.SingleCall);
+
+                    // Services for the remote call scope tests
+                    container.RegisterService<IScopedService, ScopedService>(
+                        lifetime: ServiceLifetime.Scoped);
+                    container.RegisterService<IServiceWithDeps, ServiceWithDeps>(
                         lifetime: ServiceLifetime.SingleCall);
                 }
             };

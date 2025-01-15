@@ -56,15 +56,15 @@ public class DicTests
     public void Registered_service_is_resolved_as_scoped()
     {
         var c = Container;
-        c.RegisterService<ITestService, TestService>(ServiceLifetime.Scoped);
+        c.RegisterService<IScopedService, ScopedService>(ServiceLifetime.Scoped);
         c.RegisterService<IAsyncService, AsyncService>(ServiceLifetime.Singleton);
         c.RegisterService<IServiceWithDeps, ServiceWithDeps>(ServiceLifetime.SingleCall);
 
         using (c.CreateScope())
         {
-            var svc = c.GetService<ITestService>();
+            var svc = c.GetService<IScopedService>();
             Assert.NotNull(svc);
-            Assert.IsType<TestService>(svc);
+            Assert.IsType<ScopedService>(svc);
 
             var scv3 = c.GetService<IServiceWithDeps>();
             Assert.NotNull(scv3);
@@ -72,9 +72,10 @@ public class DicTests
 
             var svcDeps = scv3 as ServiceWithDeps;
             Assert.NotNull(svcDeps.AsyncService);
-            Assert.NotNull(svcDeps.TestService1);
-            Assert.NotNull(svcDeps.TestService2);
-            Assert.Same(svcDeps.TestService1, svcDeps.TestService2);
+            Assert.NotNull(svcDeps.ScopedService1);
+            Assert.NotNull(svcDeps.ScopedService2);
+            Assert.Same(svcDeps.ScopedService1, svcDeps.ScopedService2);
+            Assert.Same(svcDeps.ScopedService1, svc);
         }
     }
 
