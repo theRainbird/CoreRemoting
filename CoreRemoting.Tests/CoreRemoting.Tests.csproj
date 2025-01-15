@@ -45,6 +45,10 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Compile Remove="DicTests_Microsoft.cs" />
+      <Compile Include="DicTests_Microsoft.cs">
+        <DependentUpon>DicTests.cs</DependentUpon>
+      </Compile>
       <Compile Remove="RpcTests_Websockets.cs" />
       <Compile Include="RpcTests_Websockets.cs">
         <DependentUpon>RpcTests.cs</DependentUpon>

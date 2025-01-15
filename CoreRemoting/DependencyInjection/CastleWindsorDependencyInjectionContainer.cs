@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Castle.MicroKernel.Lifestyle;
 using Castle.MicroKernel.Registration;
 using Castle.Windsor;
 
@@ -62,6 +63,7 @@ public class CastleWindsorDependencyInjectionContainer : DependencyInjectionCont
                         .Named(string.IsNullOrEmpty(serviceName) ? typeof(TServiceInterface).FullName : serviceName)
                         .LifestyleSingleton());
                 break;
+
             case ServiceLifetime.SingleCall:
                 _container.Register(
                     Component
@@ -70,7 +72,19 @@ public class CastleWindsorDependencyInjectionContainer : DependencyInjectionCont
                         .Named(string.IsNullOrEmpty(serviceName) ? typeof(TServiceInterface).FullName : serviceName)
                         .LifestyleTransient());
                 break;
-        }
+
+            case ServiceLifetime.Scoped:
+                _container.Register(
+                    Component
+                        .For<TServiceInterface>()
+                        .ImplementedBy<TServiceImpl>()
+                        .Named(string.IsNullOrEmpty(serviceName) ? typeof(TServiceInterface).FullName : serviceName)
+                        .LifestyleScoped());
+                break;
+
+            default:
+                throw new NotSupportedException("Lifetime not supported: " + lifetime);
+        };
     }
 
     /// <summary>
@@ -95,6 +109,7 @@ public class CastleWindsorDependencyInjectionContainer : DependencyInjectionCont
                         .Named(string.IsNullOrEmpty(serviceName) ? typeof(TServiceInterface).FullName : serviceName)
                         .LifestyleSingleton());
                 break;
+
             case ServiceLifetime.SingleCall:
                 _container.Register(
                     Component
@@ -103,7 +118,19 @@ public class CastleWindsorDependencyInjectionContainer : DependencyInjectionCont
                         .Named(string.IsNullOrEmpty(serviceName) ? typeof(TServiceInterface).FullName : serviceName)
                         .LifestyleTransient());
                 break;
-        }
+
+            case ServiceLifetime.Scoped:
+                _container.Register(
+                    Component
+                        .For<TServiceInterface>()
+                        .UsingFactoryMethod(factoryDelegate)
+                        .Named(string.IsNullOrEmpty(serviceName) ? typeof(TServiceInterface).FullName : serviceName)
+                        .LifestyleScoped());
+                break;
+
+            default:
+                throw new NotSupportedException("Lifetime not supported: " + lifetime);
+        };
     }
 
     /// <summary>
@@ -138,6 +165,10 @@ public class CastleWindsorDependencyInjectionContainer : DependencyInjectionCont
 
         return typeList;
     }
+
+    /// <inheritdoc/>
+    public override IDisposable CreateScope() =>
+        _container.BeginScope();
 
     /// <summary>
     /// Frees managed resources.

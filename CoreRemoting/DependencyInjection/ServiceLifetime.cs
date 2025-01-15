@@ -13,5 +13,10 @@ public enum ServiceLifetime
     /// <summary>
     /// Every call is served by its own service instance.
     /// </summary>
-    SingleCall = 2
+    SingleCall = 2,
+
+    /// <summary>
+    /// One service instance per scope.
+    /// </summary>
+    Scoped = 3,
 }
