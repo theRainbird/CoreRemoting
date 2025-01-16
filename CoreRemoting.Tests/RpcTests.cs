@@ -234,8 +234,14 @@ public class RpcTests : IClassFixture<ServerFixture>
         Assert.Equal(0, _serverFixture.ServerErrorCount);
     }
 
-    [Fact]
-    public void Events_should_work_remotely()
+    [Theory]
+    [InlineData("TestService_Singleton_Service")]
+    [InlineData("TestService_Singleton_Factory")]
+    [InlineData("TestService_SingleCall_Service")]
+    [InlineData("TestService_SingleCall_Factory")]
+    [InlineData("TestService_Scoped_Service")]
+    [InlineData("TestService_Scoped_Factory")]
+    public void Events_should_work_remotely(string serviceName)
     {
         using var ctx = ValidationSyncContext.Install();
 
@@ -254,7 +260,7 @@ public class RpcTests : IClassFixture<ServerFixture>
 
         client.Connect();
 
-        var proxy = client.CreateProxy<ITestService>();
+        var proxy = client.CreateProxy<ITestService>(serviceName);
 
         var serviceEventResetEvent = new ManualResetEventSlim(initialState: false);
         var customDelegateEventResetEvent = new ManualResetEventSlim(initialState: false);

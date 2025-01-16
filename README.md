@@ -19,7 +19,7 @@ Documentation: https://github.com/theRainbird/CoreRemoting/wiki
 ## Facts & features
 - Support for cross framework serialization (since version 1.2.0.0)
 - Creates proxy objects for remote services at runtime (uses Castle.DynamicProxy under the hood)
-- Services can have `SingleCall` or `Singeton` lifetime
+- Services can have `SingleCall`, `Singeton`, or `Scoped` lifetime
 - Uses duplex TCP network communication by default (based on WatsonTcp library)
 - Custom transport channels can be plugged in (Just implement `IServerChannel` and `IClientChannel`)
 - Used Bson serialization by default (via Json.NET)
