@@ -16,6 +16,8 @@ public interface ITestService : IBaseService
     
     object TestMethod(object arg);
 
+    object LongRunnigTestMethod(int timeout);
+
     void TestMethodWithDelegateArg(Action<string> callback);
 
     void FireServiceEvent();
