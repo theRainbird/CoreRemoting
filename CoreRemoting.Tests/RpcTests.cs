@@ -10,6 +10,7 @@ using CoreRemoting.Channels;
 using CoreRemoting.Serialization;
 using CoreRemoting.Tests.ExternalTypes;
 using CoreRemoting.Tests.Tools;
+using CoreRemoting.Toolbox;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -232,6 +233,49 @@ public class RpcTests : IClassFixture<ServerFixture>
 
         Assert.Equal("test", argumentFromServer);
         Assert.Equal(0, _serverFixture.ServerErrorCount);
+    }
+    
+    [Fact]
+    public async void Call_on_Proxy_should_be_executed_asynchronously()
+    {
+        bool longRunnigCalled = false;
+        void BeforeCall(object sender, ServerRpcContext e)
+        {
+            if (e.MethodCallMessage.MethodName == "LongRunnigTestMethod")
+                longRunnigCalled = true;
+        }
+        try
+        {
+            _serverFixture.Server.BeforeCall += BeforeCall;
+            using var client = new RemotingClient(
+                new ClientConfig()
+                {
+                    ConnectionTimeout = 0,
+                    Channel = ClientChannel,
+                    MessageEncryption = false,
+                    ServerPort = _serverFixture.Server.Config.NetworkPort,
+                });
+
+            client.Connect();
+
+            var proxy = client.CreateProxy<ITestService>();
+            _ = Task.Run(() => proxy.LongRunnigTestMethod(5000));
+            await Task.Run(() =>
+            {
+                while (!longRunnigCalled)
+                    Task.Delay(100);
+                proxy.TestMethod("x");
+            }).Timeout(1, "RPC timed out");
+        }
+        catch (Exception e)
+        {
+            _testOutputHelper.WriteLine(e.ToString());
+            throw;
+        }
+        finally
+        {
+            _serverFixture.Server.BeforeCall += BeforeCall;
+        }
     }
 
     [Fact]

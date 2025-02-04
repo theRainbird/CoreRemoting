@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Tests.ExternalTypes;
 
@@ -23,6 +24,12 @@ public class TestService : ITestService
     public object TestMethod(object arg)
     {
         return TestMethodFake?.Invoke(arg);
+    }
+
+    public object LongRunnigTestMethod(int timeout)
+    {
+        Thread.Sleep(timeout);
+        return TestMethodFake?.Invoke(timeout);
     }
 
     public void TestMethodWithDelegateArg(Action<string> callback)

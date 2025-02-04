@@ -256,7 +256,7 @@ namespace CoreRemoting
         /// Event procedure: Called when the ReceiveMessage event is fired on the raw message transport component.
         /// </summary>
         /// <param name="rawMessage">Raw message data that has been received</param>
-        private async void OnReceiveMessage(byte[] rawMessage)
+        private void OnReceiveMessage(byte[] rawMessage) => Task.Run(async () =>
         {
             _lastActivityTimestamp = DateTime.Now;
 
@@ -300,7 +300,7 @@ namespace CoreRemoting
 
                 CurrentSession.Value = null;
             }
-        }
+        }).ConfigureAwait(false);
 
         /// <summary>
         /// Processes a wire message that contains a goodbye message, which is sent from a client to close the session.
