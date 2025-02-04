@@ -54,7 +54,7 @@
       <PackageReference Include="System.Configuration.ConfigurationManager" Version="6.0.2" />
       <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
       <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.7.0" />
-      <PackageReference Include="System.Runtime.Serialization.Formatters" Version="4.3.0" />
+      <PackageReference Include="System.Runtime.Serialization.Formatters" Version="9.0.0-*" />
       <PackageReference Include="System.Security.Cryptography.Algorithms" Version="4.3.1" />
       <PackageReference Include="System.Security.Cryptography.Cng" Version="5.0.0" />
       <PackageReference Include="System.Security.Cryptography.OpenSsl" Version="5.0.0" />
