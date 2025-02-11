@@ -29,6 +29,29 @@ public class ServerFixture : IDisposable
                         factoryDelegate: () => TestService,
                         lifetime: ServiceLifetime.Singleton);
 
+                    // Services for event tests
+                    container.RegisterService<ITestService, TestService>(
+                        lifetime: ServiceLifetime.Singleton,
+                        serviceName: "TestService_Singleton_Service");
+                    container.RegisterService<ITestService, TestService>(
+                        lifetime: ServiceLifetime.SingleCall,
+                        serviceName: "TestService_SingleCall_Service");
+                    container.RegisterService<ITestService, TestService>(
+                        lifetime: ServiceLifetime.Scoped,
+                        serviceName: "TestService_Scoped_Service");
+                    container.RegisterService<ITestService>(
+                        factoryDelegate: () => new TestService(),
+                        lifetime: ServiceLifetime.Singleton,
+                        serviceName: "TestService_Singleton_Factory");
+                    container.RegisterService<ITestService>(
+                        factoryDelegate: () => new TestService(),
+                        lifetime: ServiceLifetime.SingleCall,
+                        serviceName: "TestService_SingleCall_Factory");
+                    container.RegisterService<ITestService>(
+                        factoryDelegate: () => new TestService(),
+                        lifetime: ServiceLifetime.Scoped,
+                        serviceName: "TestService_Scoped_Factory");
+
                     // Service for async tests
                     container.RegisterService<IAsyncService, AsyncService>(
                         lifetime: ServiceLifetime.Singleton);

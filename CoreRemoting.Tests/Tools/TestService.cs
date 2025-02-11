@@ -9,8 +9,9 @@ namespace CoreRemoting.Tests.Tools;
 
 public class TestService : ITestService
 {
+
     private int _counter;
-    
+
     public Func<object, object> TestMethodFake { get; set; }
 
     public Action OneWayMethodFake { get; set; }
@@ -131,4 +132,11 @@ public class TestService : ITestService
             return arr;
         }
     }
+
+    private static TestService LastInstance { get; set; }
+
+    public void SaveLastInstance() => LastInstance = this;
+
+    public bool CheckLastSavedInstance() => LastInstance == this;
+
 }

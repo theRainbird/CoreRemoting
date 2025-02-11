@@ -13,7 +13,7 @@ public interface ITestService : IBaseService
     event Action ServiceEvent;
 
     event ServerEventHandler CustomDelegateEvent;
-    
+
     object TestMethod(object arg);
 
     object LongRunnigTestMethod(int timeout);
@@ -44,4 +44,8 @@ public interface ITestService : IBaseService
     DataTable TestDt(DataTable dt, long num);
 
     (T duplicate, int size) Duplicate<T>(T sample) where T : class;
+
+    void SaveLastInstance();
+
+    bool CheckLastSavedInstance();
 }
