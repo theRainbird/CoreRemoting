@@ -234,9 +234,9 @@ public class RpcTests : IClassFixture<ServerFixture>
         Assert.Equal("test", argumentFromServer);
         Assert.Equal(0, _serverFixture.ServerErrorCount);
     }
-    
+
     [Fact]
-    public async void Call_on_Proxy_should_be_executed_asynchronously()
+    public async Task Call_on_Proxy_should_be_executed_asynchronously()
     {
         bool longRunnigCalled = false;
         void BeforeCall(object sender, ServerRpcContext e)
@@ -278,8 +278,46 @@ public class RpcTests : IClassFixture<ServerFixture>
         }
     }
 
-    [Fact]
-    public void Events_should_work_remotely()
+    [Theory]
+    [InlineData("TestService_Singleton_Service")]
+    [InlineData("TestService_Singleton_Factory")]
+    [InlineData("TestService_SingleCall_Service")]
+    [InlineData("TestService_SingleCall_Factory")]
+    [InlineData("TestService_Scoped_Service")]
+    [InlineData("TestService_Scoped_Factory")]
+    public void Component_lifetime_matches_the_expectation(string serviceName)
+    {
+        using var ctx = ValidationSyncContext.Install();
+        using var client = new RemotingClient(
+            new ClientConfig()
+            {
+                ConnectionTimeout = 0,
+                SendTimeout = 0,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+        client.Connect();
+
+        var proxy = client.CreateProxy<ITestService>(serviceName);
+
+        // check if service lifetime matches the expectations
+        proxy.SaveLastInstance();
+
+        // singleton component should have the same instance
+        var sameInstance = serviceName.Contains("Singleton");
+        Assert.Equal(sameInstance, proxy.CheckLastSavedInstance());
+    }
+
+    [Theory]
+    [InlineData("TestService_Singleton_Service")]
+    [InlineData("TestService_Singleton_Factory")]
+    [InlineData("TestService_SingleCall_Service")]
+    [InlineData("TestService_SingleCall_Factory")]
+    [InlineData("TestService_Scoped_Service")]
+    [InlineData("TestService_Scoped_Factory")]
+    public void Events_should_work_remotely(string serviceName)
     {
         using var ctx = ValidationSyncContext.Install();
 
@@ -298,7 +336,7 @@ public class RpcTests : IClassFixture<ServerFixture>
 
         client.Connect();
 
-        var proxy = client.CreateProxy<ITestService>();
+        var proxy = client.CreateProxy<ITestService>(serviceName);
 
         var serviceEventResetEvent = new ManualResetEventSlim(initialState: false);
         var customDelegateEventResetEvent = new ManualResetEventSlim(initialState: false);
