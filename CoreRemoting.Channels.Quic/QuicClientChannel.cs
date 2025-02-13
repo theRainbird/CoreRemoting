@@ -111,12 +111,17 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
             handshakeMessage = Client.PublicKey;
         }
 
+        // start listening for incoming messages
+        IsConnected = true;
+        StartListening();
+
         // send handshake message
         await SendMessageAsync(handshakeMessage);
-        IsConnected = true;
         Connected?.Invoke();
+    }
 
-        // start listening for incoming messages
+    public virtual void StartListening()
+    {
         _ = Task.Run(() => ReadIncomingMessages());
     }
 
