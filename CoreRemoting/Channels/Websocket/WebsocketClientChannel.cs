@@ -69,13 +69,13 @@ public class WebsocketClientChannel : WebSocketTransport, IClientChannel
                 .ConfigureAwait(false);
 
         IsConnected = true;
-        OnConnected();
+        StartListening();
 
-        await WebSocket.SendAsync(EmptyMessage, 
+        await WebSocket.SendAsync(EmptyMessage,
             WebSocketMessageType.Binary, true, CancellationToken.None)
                 .ConfigureAwait(false);
 
-        StartListening();
+        OnConnected();
     }
 
     /// <inheritdoc />
