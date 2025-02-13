@@ -158,7 +158,7 @@ public class DicTests
         var t = new ConcurrentDictionary<int, int>();
 
         void RegisterCurrentThread() =>
-            t.TryAdd(Thread.CurrentThread.ManagedThreadId, 0);
+            t.TryAdd(Environment.CurrentManagedThreadId, 0);
 
         void RegisterService()
         {

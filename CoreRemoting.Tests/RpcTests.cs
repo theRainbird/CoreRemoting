@@ -517,6 +517,8 @@ public class RpcTests : IClassFixture<ServerFixture>
         // a localized message similar to "Method 'Missing method' not found"
         Assert.NotNull(ex);
         Assert.Contains("Missing Method", ex.Message);
+
+        Console.WriteLine(_serverFixture.LastServerError);
         Assert.Equal(0, _serverFixture.ServerErrorCount);
     }
 

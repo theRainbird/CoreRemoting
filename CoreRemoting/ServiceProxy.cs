@@ -261,8 +261,9 @@ namespace CoreRemoting
                 argumentType is
                 {
                     IsGenericType: true,
-                    BaseType: { IsGenericType: true }
-                } && argumentType.BaseType.GetGenericTypeDefinition() == typeof(Expression<>);
+                    BaseType.IsGenericType: true
+                }
+                && argumentType.BaseType.GetGenericTypeDefinition() == typeof(Expression<>);
 
             if (!isLinqExpression)
             {

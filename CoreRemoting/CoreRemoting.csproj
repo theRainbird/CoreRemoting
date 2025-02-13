@@ -59,7 +59,7 @@
       <PackageReference Include="System.Security.Cryptography.Cng" Version="5.0.0" />
       <PackageReference Include="System.Security.Cryptography.OpenSsl" Version="5.0.0" />
       <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
-      <PackageReference Include="WatsonTcp" Version="6.0.8" />
+      <PackageReference Include="WatsonTcp" Version="6.0.9" />
     </ItemGroup>
 
     <ItemGroup>

@@ -195,7 +195,6 @@ public class SessionTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
-    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
     public async Task CloseSession_method_should_close_session_gracefully_issue55()
     {
         using var client = new RemotingClient(new ClientConfig()
