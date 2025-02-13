@@ -59,9 +59,13 @@ public class DryIocContainerAdapter : DependencyInjectionContainerBase, IDepende
     protected override void RegisterServiceInContainer<TServiceInterface>(Func<TServiceInterface> factoryDelegate, ServiceLifetime lifetime, string serviceName = "") =>
         RootContainer.RegisterDelegate(factoryDelegate, GetReuse(lifetime), serviceKey: GetKey<TServiceInterface>(serviceName));
 
-    protected override object ResolveServiceFromContainer(ServiceRegistration registration) =>
-        Container.Resolve(registration.InterfaceType ?? registration.ImplementationType,
+    protected override object ResolveServiceFromContainer(ServiceRegistration registration)
+    {
+        var service = Container.Resolve(registration.InterfaceType ?? registration.ImplementationType,
             serviceKey: GetKey(registration.InterfaceType ?? registration.ImplementationType, registration.ServiceName));
+        registration.EventStub.WireTo(service);
+        return service;
+    }
 
     protected override TServiceInterface ResolveServiceFromContainer<TServiceInterface>(ServiceRegistration registration) =>
         ResolveServiceFromContainer(registration) as TServiceInterface;

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.ComponentModel;
 using CoreRemoting.RemoteDelegates;
+using CoreRemoting.Toolbox;
 using Xunit;
 
 namespace CoreRemoting.Tests;
@@ -318,5 +319,27 @@ public class EventStubTests
 
         eventStub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), handler);
         Assert.Equal(1, sampleService.SimpleEventHandlerCount);
+    }
+
+    [Fact]
+    public void MethodInfo_can_represent_subscription_or_unsubscription()
+    {
+        var method = typeof(ISampleInterface).GetMethod("add_SimpleEvent");
+        Assert.NotNull(method);
+        Assert.True(method.IsEventAccessor(out var eventName, out var subscription));
+        Assert.Equal(nameof(ISampleInterface.SimpleEvent), eventName);
+        Assert.True(subscription);
+
+        method = typeof(ISampleInterface).GetMethod("remove_CancelEvent");
+        Assert.NotNull(method);
+        Assert.True(method.IsEventAccessor(out eventName, out subscription));
+        Assert.Equal(nameof(ISampleInterface.CancelEvent), eventName);
+        Assert.False(subscription);
+
+        method = typeof(ISampleInterface).GetMethod(nameof(ISampleInterface.FireHandlers));
+        Assert.NotNull(method);
+        Assert.False(method.IsEventAccessor(out eventName, out subscription));
+        Assert.Null(eventName);
+        Assert.False(subscription);
     }
 }

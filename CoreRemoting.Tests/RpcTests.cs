@@ -238,12 +238,13 @@ public class RpcTests : IClassFixture<ServerFixture>
     [Fact]
     public async Task Call_on_Proxy_should_be_executed_asynchronously()
     {
-        bool longRunnigCalled = false;
+        var longRunnigCalled = false;
         void BeforeCall(object sender, ServerRpcContext e)
         {
             if (e.MethodCallMessage.MethodName == "LongRunnigTestMethod")
                 longRunnigCalled = true;
         }
+
         try
         {
             _serverFixture.Server.BeforeCall += BeforeCall;
@@ -274,7 +275,8 @@ public class RpcTests : IClassFixture<ServerFixture>
         }
         finally
         {
-            _serverFixture.Server.BeforeCall += BeforeCall;
+            _serverFixture.Server.BeforeCall -= BeforeCall;
+            _serverFixture.ServerErrorCount = 0;
         }
     }
 
@@ -536,7 +538,7 @@ public class RpcTests : IClassFixture<ServerFixture>
         client.Connect();
 
         var proxy = client.CreateProxy<IDisposable>();
-        var ex = Assert.Throws<RemoteInvocationException>(() => proxy.Dispose());
+        var ex = Assert.Throws<RemoteInvocationException>(proxy.Dispose);
 
         // a localized message similar to "Service 'System.IDisposable' is not registered"
         Assert.NotNull(ex);

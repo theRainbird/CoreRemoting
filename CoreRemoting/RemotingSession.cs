@@ -461,11 +461,12 @@ namespace CoreRemoting
                 if (serverRpcContext.AuthenticationRequired && !_isAuthenticated)
                     throw new NetworkException("Session is not authenticated.");
 
+                var registration = _server.ServiceRegistry.GetServiceRegistration(callMessage.ServiceName);
                 var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
-                var serviceInterfaceType =
-                    _server.ServiceRegistry.GetServiceInterfaceType(callMessage.ServiceName);
+                var serviceInterfaceType = registration.InterfaceType;
 
                 serverRpcContext.ServiceInstance = service;
+                serverRpcContext.EventStub = registration.EventStub;
 
                 method = GetMethodInfo(callMessage, serviceInterfaceType, parameterTypes);
                 if (method == null)
@@ -501,8 +502,19 @@ namespace CoreRemoting
                 {
                     ((RemotingServer)_server).OnBeforeCall(serverRpcContext);
 
-                    result = method.Invoke(serverRpcContext.ServiceInstance,
-                        serverRpcContext.MethodCallParameterValues);
+                    if (method.IsEventAccessor(out var eventName, out var subscription))
+                    {
+                        // event accessor is called
+                        HandleEventSubscription(serverRpcContext.EventStub,
+                            eventName, subscription, serverRpcContext.MethodCallParameterValues);
+                        result = null;
+                    }
+                    else
+                    {
+                        // normal method is called
+                        result = method.Invoke(serverRpcContext.ServiceInstance,
+                            serverRpcContext.MethodCallParameterValues);
+                    }
 
                     var returnType = method.ReturnType;
 
@@ -602,6 +614,26 @@ namespace CoreRemoting
             await _rawMessageTransport.SendMessageAsync(
                 _server.Serializer.Serialize(methodResultMessage))
                     .ConfigureAwait(false);
+        }
+
+        private void HandleEventSubscription(EventStub eventStub, string eventName, bool subscription, object[] parameters)
+        {
+            if (parameters == null || parameters.Length != 1)
+            {
+                return;
+            }
+
+            var eventHandler = parameters[0] as Delegate;
+            if (eventHandler == null)
+            {
+                return;
+            }
+
+            Action<string, Delegate> eventAccessor = subscription ?
+                eventStub.AddHandler :
+                eventStub.RemoveHandler;
+
+            eventAccessor(eventName, eventHandler);
         }
 
         private MethodInfo GetMethodInfo(MethodCallMessage callMessage, Type serviceInterfaceType, Type[] parameterTypes)

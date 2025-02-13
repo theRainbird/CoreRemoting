@@ -42,7 +42,9 @@ public class MicrosoftDependencyInjectionContainer : DependencyInjectionContaine
     protected override object ResolveServiceFromContainer(ServiceRegistration registration)
     {
         ThrowExceptionIfCustomServiceName(registration.ServiceName, registration.InterfaceType);
-        return _serviceProvider.GetRequiredService(registration.InterfaceType);
+        var service = _serviceProvider.GetRequiredService(registration.InterfaceType);
+        registration.EventStub.WireTo(service);
+        return service;
     }
 
     /// <summary>
@@ -56,7 +58,9 @@ public class MicrosoftDependencyInjectionContainer : DependencyInjectionContaine
         Type serviceInterfaceType = typeof(TServiceInterface);
         ThrowExceptionIfCustomServiceName(registration.ServiceName, serviceInterfaceType);
 
-        return _serviceProvider.GetRequiredService<TServiceInterface>();
+        var service = _serviceProvider.GetRequiredService<TServiceInterface>();
+        registration.EventStub.WireTo(service);
+        return service;
     }
 
     /// <summary>
