@@ -28,7 +28,9 @@ public class CastleWindsorDependencyInjectionContainer : DependencyInjectionCont
     /// <returns>Resolved service instance</returns>
     protected override object ResolveServiceFromContainer(ServiceRegistration registration)
     {
-        return _container.Resolve(key: registration.ServiceName, service: registration.InterfaceType);
+        var service = _container.Resolve(key: registration.ServiceName, service: registration.InterfaceType);
+        registration.EventStub.WireTo(service);
+        return service;
     }
 
     /// <summary>
@@ -39,7 +41,9 @@ public class CastleWindsorDependencyInjectionContainer : DependencyInjectionCont
     /// <returns>Service instance</returns>
     protected override TServiceInterface ResolveServiceFromContainer<TServiceInterface>(ServiceRegistration registration)
     {
-        return _container.Resolve<TServiceInterface>(key: registration.ServiceName);
+        var service = _container.Resolve<TServiceInterface>(key: registration.ServiceName);
+        registration.EventStub.WireTo(service);
+        return service;
     }
 
     /// <summary>

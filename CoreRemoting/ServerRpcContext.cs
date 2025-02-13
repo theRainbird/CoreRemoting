@@ -1,5 +1,7 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using CoreRemoting.DependencyInjection;
+using CoreRemoting.RemoteDelegates;
 using CoreRemoting.RpcMessaging;
 
 namespace CoreRemoting
@@ -48,6 +50,11 @@ namespace CoreRemoting
         /// Gets or sets the message that contains the results of a remote method call.
         /// </summary>
         public MethodCallResultMessage MethodCallResultMessage { get; set; }
+
+        /// <summary>
+        /// Gets or sets service event stub.
+        /// </summary>
+        public EventStub EventStub { get; set; }
 
         /// <summary>
         /// Gets or sets the instance of the service, on which the method is called.

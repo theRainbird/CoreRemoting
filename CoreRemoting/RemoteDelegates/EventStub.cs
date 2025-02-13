@@ -315,7 +315,9 @@ public class EventStub
     /// <param name="instance">The instance.</param>
     public void WireTo(object instance)
     {
-        if (instance == null)
+        if (instance == null ||
+            EventProperties.Length +
+            DelegateProperties.Length == 0)
         {
             return;
         }
@@ -325,13 +327,11 @@ public class EventStub
             eventInfo.AddEventHandler(instance, this[eventInfo.Name]);
         }
 
-        var indexes = new object[0];
-
         foreach (var propInfo in DelegateProperties)
         {
-            var value = propInfo.GetValue(instance, indexes) as Delegate;
+            var value = propInfo.GetValue(instance, []) as Delegate;
             value = Delegate.Combine(value, this[propInfo.Name]);
-            propInfo.SetValue(instance, value, indexes);
+            propInfo.SetValue(instance, value, []);
         }
     }
 
@@ -341,7 +341,9 @@ public class EventStub
     /// <param name="instance">The instance.</param>
     public void UnwireFrom(object instance)
     {
-        if (instance == null)
+        if (instance == null ||
+            EventProperties.Length +
+            DelegateProperties.Length == 0)
         {
             return;
         }
@@ -351,13 +353,11 @@ public class EventStub
             eventInfo.RemoveEventHandler(instance, this[eventInfo.Name]);
         }
 
-        var indexes = new object[0];
-
         foreach (var propInfo in DelegateProperties)
         {
-            var value = propInfo.GetValue(instance, indexes) as Delegate;
+            var value = propInfo.GetValue(instance, []) as Delegate;
             value = Delegate.Remove(value, this[propInfo.Name]);
-            propInfo.SetValue(instance, value, indexes);
+            propInfo.SetValue(instance, value, []);
         }
     }
 

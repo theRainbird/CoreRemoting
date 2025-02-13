@@ -1,4 +1,5 @@
 using System;
+using CoreRemoting.RemoteDelegates;
 
 namespace CoreRemoting.DependencyInjection;
 
@@ -38,6 +39,7 @@ public class ServiceRegistration
         ServiceLifetime = serviceLifetime;
         Factory = factory;
         IsHiddenSystemService = isHiddenSystemService;
+        EventStub = new EventStub(interfaceType);
     }
 
     /// <summary>
@@ -74,4 +76,9 @@ public class ServiceRegistration
     /// Returns whether the registered service is a hidden system service or not.
     /// </summary>
     public bool IsHiddenSystemService { get; }
+
+    /// <summary>
+    /// Holds all remote event handlers for the component.
+    /// </summary>
+    public EventStub EventStub { get; }
 }
