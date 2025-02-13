@@ -25,8 +25,7 @@ namespace CoreRemoting
         private readonly string _uniqueServerInstanceName;
 
         // ReSharper disable once InconsistentNaming
-        private static readonly ConcurrentDictionary<string, IRemotingServer> _serverInstances =
-            new ConcurrentDictionary<string, IRemotingServer>();
+        private static readonly ConcurrentDictionary<string, IRemotingServer> _serverInstances = new();
 
         private static WeakReference<IRemotingServer> _defaultRemotingServerRef;
 

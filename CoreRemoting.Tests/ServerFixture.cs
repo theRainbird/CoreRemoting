@@ -11,6 +11,8 @@ public class ServerFixture : IDisposable
 {
     public int ServerErrorCount;
 
+    public Exception LastServerError;
+
     public ServerFixture()
     {
         TestService = new TestService();
@@ -98,8 +100,9 @@ public class ServerFixture : IDisposable
             ServerConfig.Channel = channel;
 
         Server = new RemotingServer(ServerConfig);
-        Server.Error += (_, _) =>
+        Server.Error += (s, ex) =>
         {
+            LastServerError = ex;
             ServerErrorCount++;
         };
 

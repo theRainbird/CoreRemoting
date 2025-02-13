@@ -277,7 +277,7 @@ public class EventStub
             set { TypedDelegate = (T)(object)value; }
         }
 
-        private object syncRoot = new object();
+        private object syncRoot = new();
 
         public void AddHandler(Delegate handler)
         {
@@ -396,9 +396,8 @@ public class EventStub
         foreach (var d in handler.GetInvocationList())
         {
             // check if it's a delegate holder
-            if (d.Target is IDelegateHolder)
+            if (d.Target is IDelegateHolder holder)
             {
-                var holder = (IDelegateHolder)d.Target;
                 count += holder.HandlerCount;
                 continue;
             }
