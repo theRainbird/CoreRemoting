@@ -43,7 +43,9 @@ namespace HelloWorld.Server
                 HostName = "localhost",
                 NetworkPort = 9090,
                 MessageEncryption = false,
-                Serializer = new BinarySerializerAdapter(),
+                Serializer = new BinarySerializerAdapter(), // IMPORTANT NOTE: building with .Net Core 8 and above requires 
+                                                            // <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
+                                                            // to be added in your .csproj file for proper work of BinarySerializerAdapter
                 RegisterServicesAction = container =>
                 {
                     container.RegisterService<ISayHelloService, SayHelloService>(ServiceLifetime.Singleton);
