@@ -19,9 +19,9 @@ namespace HelloWorld.Client
             using var client = new RemotingClient(new ClientConfig()
             {
                 ServerHostName = "localhost",
-                Serializer = new BinarySerializerAdapter(),
-                MessageEncryption = false,
-                ServerPort = 9090
+                Serializer = new BinarySerializerAdapter(), // IMPORTANT NOTE: building with .Net Core 8 and above requires 
+                MessageEncryption = false,                  // <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
+                ServerPort = 9090                           // to be added in your .csproj file for proper work of BinarySerializerAdapter
             });
             
             // Establish connection to server
