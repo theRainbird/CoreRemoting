@@ -609,7 +609,7 @@ public class RpcTests : IClassFixture<ServerFixture>
             })
             .ConfigureAwait(false)).GetInnermostException();
 
-            Assert.NotNull(ex); 
+            Assert.NotNull(ex);
             Assert.Equal(nameof(ErrorAsync_method_throws_Exception), ex.Message);
         }
         finally
@@ -1346,5 +1346,36 @@ public class RpcTests : IClassFixture<ServerFixture>
             _serverFixture.Server.BeginCall -= BypassAuthorizationForEcho;
             _serverFixture.Server.Config.AuthenticationRequired = false;
         }
+    }
+
+    [Fact]
+    public void CreateProxy_methods_should_produce_equivalent_results()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            Channel = ClientChannel,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        client.Connect();
+
+        var proxy1 = client.CreateProxy<IGenericEchoService>();
+        var result1 = proxy1.Echo("Yay");
+        Assert.Equal("Yay", result1);
+
+        var proxy2 = client.CreateProxy(typeof(IGenericEchoService)) as IGenericEchoService;
+        var result2 = proxy2.Echo("Yay");
+        Assert.Equal("Yay", result2);
+
+        var svcref = new ServiceReference(typeof(IGenericEchoService).AssemblyQualifiedName, "");
+        var proxy3 = client.CreateProxy(svcref) as IGenericEchoService;
+        var result3 = proxy3.Echo("Yay");
+        Assert.Equal("Yay", result3);
+
+        Assert.Equal(0, _serverFixture.ServerErrorCount);
     }
 }

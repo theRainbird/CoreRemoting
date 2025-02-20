@@ -770,12 +770,9 @@ namespace CoreRemoting
         /// <returns>Proxy object</returns>
         public object CreateProxy(Type serviceInterfaceType, string serviceName = "")
         {
-            var serviceProxyType = typeof(ServiceProxy<>).MakeGenericType(serviceInterfaceType);
-            var serviceProxy = Activator.CreateInstance(serviceProxyType, this, serviceName);
-
-            return ProxyGenerator.CreateInterfaceProxyWithoutTarget(
-                interfaceToProxy: serviceInterfaceType,
-                interceptor: (IInterceptor)serviceProxy);
+            var createMethodInfo = new Func<string, int>(CreateProxy<int>).Method.GetGenericMethodDefinition();
+            var createProxyFunc = createMethodInfo.MakeGenericMethod([serviceInterfaceType]);
+            return createProxyFunc.Invoke(this, [serviceName]);
         }
 
         /// <summary>
