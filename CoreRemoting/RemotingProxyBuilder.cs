@@ -19,12 +19,10 @@ public class RemotingProxyBuilder
     /// <param name="remotingClient"><see cref="IRemotingClient"/> instance to make remote calls</param>
     /// <param name="serviceName">Unique name of the remote service</param>
     /// <returns>Proxy object</returns>
-    public virtual T CreateProxy<T>(RemotingClient remotingClient, string serviceName = "")
-    {
-        return (T)ProxyGenerator.CreateInterfaceProxyWithoutTarget(
+    public virtual T CreateProxy<T>(RemotingClient remotingClient, string serviceName = "") =>
+        (T)ProxyGenerator.CreateInterfaceProxyWithoutTarget(
             interfaceToProxy: typeof(T),
             interceptor: new ServiceProxy<T>(
                 client: remotingClient,
                 serviceName: serviceName));
-    }
 }
