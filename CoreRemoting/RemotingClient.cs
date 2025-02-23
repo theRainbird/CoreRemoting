@@ -83,6 +83,7 @@ namespace CoreRemoting
 
             Serializer = config.Serializer ?? new BsonSerializerAdapter();
             MessageEncryption = config.MessageEncryption;
+            ProxyBuilder = config.ProxyBuilder ?? new RemotingProxyBuilder();
 
             _config = config;
 
@@ -141,9 +142,9 @@ namespace CoreRemoting
         #region Properties
 
         /// <summary>
-        /// Gets the proxy generator instance.
+        /// Gets or sets an utility class to create remoting proxies.
         /// </summary>
-        private static readonly ProxyGenerator ProxyGenerator = new();
+        internal RemotingProxyBuilder ProxyBuilder { get; set; }
 
         /// <summary>
         /// Gets a utility object for building remoting messages.
@@ -754,14 +755,8 @@ namespace CoreRemoting
         /// <typeparam name="T">Type of the shared interface of the remote service</typeparam>
         /// <param name="serviceName">Unique name of the remote service</param>
         /// <returns>Proxy object</returns>
-        public T CreateProxy<T>(string serviceName = "")
-        {
-            return (T) ProxyGenerator.CreateInterfaceProxyWithoutTarget(
-                interfaceToProxy: typeof(T),
-                interceptor: new ServiceProxy<T>(
-                    client: this,
-                    serviceName: serviceName));
-        }
+        public T CreateProxy<T>(string serviceName = "") =>
+            ProxyBuilder.CreateProxy<T>(this, serviceName);
 
         /// <summary>
         /// Creates a proxy object to provide access to a remote service.

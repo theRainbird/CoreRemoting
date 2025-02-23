@@ -1378,4 +1378,36 @@ public class RpcTests : IClassFixture<ServerFixture>
 
         Assert.Equal(0, _serverFixture.ServerErrorCount);
     }
+
+    [Fact]
+    public void Custom_proxy_builder_can_be_used_for_interception()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            Channel = ClientChannel,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+            ProxyBuilder = new CustomProxyBuilder(),
+        });
+
+        client.Connect();
+
+        var proxy1 = client.CreateProxy<IGenericEchoService>();
+        Assert.Equal("[Yay]", proxy1.Echo("Yay"));
+        Assert.Equal(1, proxy1.Echo(1));
+
+        var proxy2 = client.CreateProxy(typeof(IGenericEchoService)) as IGenericEchoService;
+        Assert.Equal("[Yay]", proxy2.Echo("Yay"));
+        Assert.Equal(1, proxy2.Echo(1));
+
+        var svcref = new ServiceReference(typeof(IGenericEchoService).AssemblyQualifiedName, "");
+        var proxy3 = client.CreateProxy(svcref) as IGenericEchoService;
+        Assert.Equal("[Yay]", proxy3.Echo("Yay"));
+        Assert.Equal(1, proxy3.Echo(1));
+
+        Assert.Equal(0, _serverFixture.ServerErrorCount);
+    }
 }

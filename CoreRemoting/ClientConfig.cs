@@ -89,5 +89,10 @@ namespace CoreRemoting
         /// Gets or set whether this is the default client.
         /// </summary>
         public bool IsDefault { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets an utility class to create remoting proxies.
+        /// </summary>
+        public RemotingProxyBuilder ProxyBuilder { get; set; }
     }
 }
