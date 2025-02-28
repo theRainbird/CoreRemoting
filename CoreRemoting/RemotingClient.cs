@@ -467,6 +467,7 @@ namespace CoreRemoting
                     _goodbyeCompletedTaskSource.TrySetResult(true);
                     break;
                 case "session_closed":
+                    _goodbyeCompletedTaskSource.TrySetResult(true);
                     Disconnect(quiet: true);
                     break;
                 default:
