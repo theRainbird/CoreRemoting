@@ -58,6 +58,10 @@
       <Compile Include="RpcTests_Websockets.cs">
         <DependentUpon>RpcTests.cs</DependentUpon>
       </Compile>
+      <Compile Remove="SessionTests_Websockets.cs" />
+      <Compile Include="SessionTests_Websockets.cs">
+        <DependentUpon>SessionTests.cs</DependentUpon>
+      </Compile>
     </ItemGroup>
     
     <ItemGroup>

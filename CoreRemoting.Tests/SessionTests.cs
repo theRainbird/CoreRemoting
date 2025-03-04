@@ -4,6 +4,7 @@ using System.Linq;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.Channels;
 using CoreRemoting.Tests.Tools;
 using CoreRemoting.Toolbox;
 using Xunit;
@@ -20,9 +21,12 @@ public class SessionTests : IClassFixture<ServerFixture>
     public SessionTests(ServerFixture serverFixture)
     {
         _serverFixture = serverFixture;
-        _serverFixture.Start();
+        _serverFixture.Start(ServerChannel);
     }
-    
+
+    protected virtual IClientChannel ClientChannel => null;
+    protected virtual IServerChannel ServerChannel => null;
+
     [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
     public async Task Client_Connect_should_create_new_session_AND_Disconnect_should_close_session()
@@ -39,7 +43,8 @@ public class SessionTests : IClassFixture<ServerFixture>
             {
                 ConnectionTimeout = 0,
                 MessageEncryption = false,
-                ServerPort = _serverFixture.Server.Config.NetworkPort
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+                Channel = ClientChannel
             });
 
             Assert.False(client.HasSession);
@@ -88,7 +93,8 @@ public class SessionTests : IClassFixture<ServerFixture>
                 AuthenticationProvider = new FakeAuthProvider()
                 {
                     AuthenticateFake = credentials => credentials[1].Value == "secret"
-                }
+                },
+                Channel = ServerChannel
             };
         
         var server = new RemotingServer(serverConfig);
@@ -108,7 +114,8 @@ public class SessionTests : IClassFixture<ServerFixture>
                         [
                             new() { Name = "User", Value = "tester" },
                             new() { Name = "Password", Value = password }
-                        ]
+                        ],
+                        Channel = ClientChannel
                     });
             
                 if (shouldThrow)
@@ -150,7 +157,8 @@ public class SessionTests : IClassFixture<ServerFixture>
                 ConnectionTimeout = 0,
                 MessageEncryption = false,
                 SendTimeout = 0,
-                ServerPort = _serverFixture.Server.Config.NetworkPort
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+                Channel = ClientChannel
             });
 
         var waitForDisconnect = new ManualResetEventSlim(initialState: false);
@@ -183,6 +191,7 @@ public class SessionTests : IClassFixture<ServerFixture>
             SendTimeout = 0,
             MessageEncryption = false,
             ServerPort = _serverFixture.Server.Config.NetworkPort,
+            Channel = ClientChannel
         });
 
         client.Connect();
@@ -204,6 +213,7 @@ public class SessionTests : IClassFixture<ServerFixture>
             SendTimeout = 0,
             MessageEncryption = false,
             ServerPort = _serverFixture.Server.Config.NetworkPort,
+            Channel = ClientChannel
         });
 
         var disconnected = new TaskCompletionSource<bool>();
