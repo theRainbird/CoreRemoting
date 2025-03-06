@@ -71,7 +71,7 @@ public static class SafeDynamicInvoker
                         ),
                         typeof(object)
                     ),
-                    new[] { delegateParameter, argsParameter }
+                    [delegateParameter, argsParameter]
                 );
 
                 // Build invocation delegate
@@ -92,7 +92,7 @@ public static class SafeDynamicInvoker
                     // (RealType)arg[i]
                     paramExpressions
                 ),
-                new[] { delegateParameter, argsParameter }
+                [delegateParameter, argsParameter]
             );
 
             // turn Action<Delegate, object[]> into Func<Delegate, object[], object>
