@@ -87,6 +87,13 @@ namespace CoreRemoting.Tests
         }
 
         [Fact]
+        public async Task Expire_method_returns_true_if_task_completed_and_false_if_task_exceeds_the_specified_timeout()
+        {
+            Assert.True(await Task.Delay(100).Expire(1));
+            Assert.False(await Task.Delay(1000).Expire(0.1));
+        }
+
+        [Fact]
         [SuppressMessage("Usage", "xUnit1031:Do not use blocking task operations in test method", Justification = "<Pending>")]
         public void JustWait_doesnt_wrap_the_exception_into_AggregateException()
         {

@@ -12,12 +12,14 @@ public static class TaskExtensions
 
     /// <summary>
     /// Ensures that the given task is executed within the specified timeout.
+    /// Throws a <see cref="TimeoutException"/> if failed.
     /// </summary>
     public static Task<T> Timeout<T>(this Task<T> task, double secTimeout, string message = TimedOut) =>
         task.Timeout(secTimeout, () => throw new TimeoutException(message));
 
     /// <summary>
     /// Ensures that the given task is executed within the specified timeout.
+    /// Executes a <paramref name="throwAction"/> callback if failed.
     /// </summary>
     public static async Task<T> Timeout<T>(this Task<T> task, double secTimeout, Action throwAction)
     {
@@ -35,12 +37,14 @@ public static class TaskExtensions
 
     /// <summary>
     /// Ensures that the given task is executed within the specified timeout.
+    /// Throws a <see cref="TimeoutException"/> if failed.
     /// </summary>
     public static Task Timeout(this Task task, double secTimeout, string message = TimedOut) =>
         task.Timeout(secTimeout, () => throw new TimeoutException(message));
 
     /// <summary>
     /// Ensures that the given task is executed within the specified timeout.
+    /// Executes a <paramref name="throwAction"/> callback if failed.
     /// </summary>
     public static async Task Timeout(this Task task, double secTimeout, Action throwAction)
     {
@@ -60,6 +64,29 @@ public static class TaskExtensions
 
         throwAction?.Invoke();
         throw new TimeoutException(TimedOut);
+    }
+
+    /// <summary>
+    /// Ensures that the given task is either executed within the specified timeout or skipped.
+    /// </summary>
+    public static async Task<bool> Expire(this Task task, double secTimeout)
+    {
+        if (secTimeout <= 0)
+        {
+            await task.ConfigureAwait(false);
+            return true;
+        }
+
+        var delay = Task.Delay(TimeSpan.FromSeconds(secTimeout));
+        var result = await Task.WhenAny(task, delay).ConfigureAwait(false);
+        if (result == task)
+        {
+            await task.ConfigureAwait(false);
+            return true;
+        }
+
+        // note: the task may still be active, but its result is ignored
+        return false;
     }
 
     /// <summary>

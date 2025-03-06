@@ -313,7 +313,7 @@ namespace CoreRemoting
                 //_goodbyeCompletedWaitHandle.Reset();
 
                 if (await _channel.RawMessageTransport.SendMessageAsync(rawData).ConfigureAwait(false))
-                    await _goodbyeCompletedTaskSource.Task.Timeout(10).ConfigureAwait(false);
+                    await _goodbyeCompletedTaskSource.Task.Expire(10).ConfigureAwait(false);
             }
 
             // lock (_syncObject) // TODO: why we are locking here?
