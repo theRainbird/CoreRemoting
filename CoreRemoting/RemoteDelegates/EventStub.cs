@@ -259,11 +259,10 @@ public class EventStub
             return (TDelegate)(object)result;
         }
 
-
         private object DynamicInvoke(object[] arguments)
         {
-            // TODO: run in non-blocking mode
-            Delegate.DynamicInvoke(arguments);
+            // run in non-blocking mode
+            Delegate.OneWayDynamicInvoke(arguments);
             return DefaultReturnValue;
         }
 
