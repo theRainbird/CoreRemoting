@@ -1,6 +1,9 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Linq;
+using System.Threading.Tasks;
 using CoreRemoting.RemoteDelegates;
+using CoreRemoting.Tests.Tools;
 using CoreRemoting.Toolbox;
 using Xunit;
 
@@ -110,167 +113,160 @@ public class EventStubTests
     }
 
     [Fact]
-    public void EventStub_Simple_Handle_Tests()
+    public async Task EventStub_Simple_Handle_Tests()
     {
         // add the first handler
         var eventStub = new EventStub(typeof(ISampleInterface));
-        var fired = false;
-        eventStub.AddHandler(nameof(ISampleInterface.SimpleEvent), new EventHandler((sender, args) => fired = true));
+        var fired = new AsyncCounter();
+        eventStub.AddHandler(nameof(ISampleInterface.SimpleEvent), new EventHandler((sender, args) => fired++));
 
         // check if it is called
         var handler = (EventHandler)eventStub[nameof(ISampleInterface.SimpleEvent)];
         handler(this, EventArgs.Empty);
-        Assert.True(fired);
+        Assert.Equal(1, await fired.WaitForValue(1).Timeout(1));
 
         // add the second handler
-        fired = false;
-        var firedAgain = false;
-        var tempHandler = new EventHandler((sender, args) => firedAgain = true);
+        var firedAgain = new AsyncCounter();
+        var tempHandler = new EventHandler((sender, args) => firedAgain++);
         eventStub.AddHandler(nameof(ISampleInterface.SimpleEvent), tempHandler);
 
         // check if it is called
         handler(this, EventArgs.Empty);
-        Assert.True(fired);
-        Assert.True(firedAgain);
+        Assert.Equal(2, await fired.WaitForValue(2).Timeout(1));
+        Assert.Equal(1, await firedAgain.WaitForValue(1).Timeout(1));
 
         // remove the second handler
-        fired = false;
-        firedAgain = false;
         eventStub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), tempHandler);
 
         // check if it is not called
         handler(this, EventArgs.Empty);
-        Assert.True(fired);
-        Assert.False(firedAgain);
+        Assert.Equal(3, await fired.WaitForValue(3).Timeout(1));
+        Assert.False(await firedAgain.WaitForValue(2).Expire(0.1));
     }
 
     [Fact]
-    public void EventStub_Cancel_Event_Tests()
+    public async Task EventStub_Cancel_Event_Tests()
     {
         // add the first handler
         var eventStub = new EventStub(typeof(ISampleInterface));
-        var fired = false;
-        eventStub.AddHandler(nameof(ISampleInterface.CancelEvent), new EventHandler<CancelEventArgs>((sender, args) => fired = true));
+        var fired = new AsyncCounter();
+        eventStub.AddHandler(nameof(ISampleInterface.CancelEvent), new EventHandler<CancelEventArgs>((sender, args) => fired++));
 
         // check if it is called
         var handler = (EventHandler<CancelEventArgs>)eventStub[nameof(ISampleInterface.CancelEvent)];
         handler(this, new CancelEventArgs());
-        Assert.True(fired);
+        Assert.Equal(1, await fired.WaitForValue(1).Timeout(1));
 
         // add the second handler
-        fired = false;
-        var firedAgain = false;
-        var tempHandler = new EventHandler<CancelEventArgs>((sender, args) => firedAgain = true);
+        var firedAgain = new AsyncCounter();
+        var tempHandler = new EventHandler<CancelEventArgs>((sender, args) => firedAgain++);
         eventStub.AddHandler(nameof(ISampleInterface.CancelEvent), tempHandler);
 
         // check if it is called
         handler(this, new CancelEventArgs());
-        Assert.True(fired);
-        Assert.True(firedAgain);
+        Assert.Equal(2, await fired.WaitForValue(2).Timeout(1));
+        Assert.Equal(1, await firedAgain.WaitForValue(1).Timeout(1));
 
         // remove the second handler
-        fired = false;
-        firedAgain = false;
         eventStub.RemoveHandler(nameof(ISampleInterface.CancelEvent), tempHandler);
 
         // check if it is not called
         handler(this, new CancelEventArgs());
-        Assert.True(fired);
-        Assert.False(firedAgain);
+        Assert.Equal(2, await fired.WaitForValue(2).Timeout(1));
+        Assert.False(await firedAgain.WaitForValue(2).Expire(0.1));
     }
 
     [Fact]
-    public void EventStub_ActionDelegateTests()
+    public async Task EventStub_ActionDelegateTests()
     {
         // add the first handler
         var eventStub = new EventStub(typeof(ISampleInterface));
-        var fired = false;
-        eventStub.AddHandler(nameof(ISampleInterface.ActionDelegate), new Action(() => fired = true));
+        var fired = new AsyncCounter();
+        eventStub.AddHandler(nameof(ISampleInterface.ActionDelegate), new Action(() => fired++));
 
         // check if it is called
         var handler = (Action)eventStub[nameof(ISampleInterface.ActionDelegate)];
         handler();
-        Assert.True(fired);
+        Assert.Equal(1, await fired.WaitForValue(1).Timeout(1));
 
         // add the second handler
-        fired = false;
-        var firedAgain = false;
-        var tempHandler = new Action(() => firedAgain = true);
+        var firedAgain = new AsyncCounter();
+        var tempHandler = new Action(() => firedAgain++);
         eventStub.AddHandler(nameof(ISampleInterface.ActionDelegate), tempHandler);
 
         // check if it is called
         handler();
-        Assert.True(fired);
-        Assert.True(firedAgain);
+        Assert.Equal(2, await fired.WaitForValue(2).Timeout(1));
+        Assert.Equal(1, await firedAgain.WaitForValue(1).Timeout(1));
 
         // remove the second handler
-        fired = false;
-        firedAgain = false;
         eventStub.RemoveHandler(nameof(ISampleInterface.ActionDelegate), tempHandler);
 
         // check if it is not called
         handler();
-        Assert.True(fired);
-        Assert.False(firedAgain);
+        Assert.Equal(3, await fired.WaitForValue(3).Timeout(1));
+        Assert.False(await firedAgain.WaitForValue(2).Expire(0.1));
     }
 
     [Fact]
-    public void EventStub_FuncDelegateTests()
+    public async Task EventStub_FuncDelegateTests()
     {
         // add the first handler
         var eventStub = new EventStub(typeof(ISampleInterface));
-        var fired = false;
+        var fired = new AsyncCounter();
         eventStub.AddHandler(nameof(ISampleInterface.FuncDelegate), new Func<int, string>(a =>
         {
-            fired = true;
-            return a.ToString();
+            fired++;
+            return a.ToString(); // discarded
         }));
 
         // check if it is called
         var handler = (Func<int, string>)eventStub[nameof(ISampleInterface.FuncDelegate)];
         var result = handler(123);
-        Assert.True(fired);
+        Assert.Equal(1, await fired.WaitForValue(1).Timeout(1));
         Assert.Null(result); // Assert.Equal("123", result);
 
         // add the second handler
-        fired = false;
-        var firedAgain = false;
-        var tempHandler = new Func<int, string>(a => { firedAgain = true; return a.ToString(); });
+        var firedAgain = new AsyncCounter();
+        var tempHandler = new Func<int, string>(a =>
+        {
+            firedAgain++;
+            return a.ToString(); // discarded
+        });
+
         eventStub.AddHandler(nameof(ISampleInterface.FuncDelegate), tempHandler);
 
         // check if it is called
         result = handler(321);
-        Assert.True(fired);
-        Assert.True(firedAgain);
-        Assert.Null(result); // Assert.Equal("321", result);
+        Assert.Equal(2, await fired.WaitForValue(2).Timeout(1));
+        Assert.Equal(1, await firedAgain.WaitForValue(1).Timeout(1));
+        Assert.Null(result); // Assert.Equal("123", result);
 
         // remove the second handler
-        fired = false;
-        firedAgain = false;
         eventStub.RemoveHandler(nameof(ISampleInterface.FuncDelegate), tempHandler);
 
         // check if it is not called
         result = handler(0);
-        Assert.True(fired);
-        Assert.False(firedAgain);
+        Assert.Equal(3, await fired.WaitForValue(3).Timeout(1));
+        Assert.False(await firedAgain.WaitForValue(2).Expire(0.1));
         Assert.Null(result); // Assert.Equal("0", result);
     }
 
     [Fact]
-    public void EventStub_WireUnwireTests()
+    public async Task EventStub_WireUnwireTests()
     {
         var eventStub = new EventStub(typeof(ISampleInterface));
-        var simpleEventFired = false;
-        var cancelEventFired = false;
-        var actionFired = false;
-        var funcFired = false;
+        var simpleEventFired = new AsyncCounter();
+        var cancelEventFired = new AsyncCounter();
+        var actionFired = new AsyncCounter();
+        var funcFired = new AsyncCounter();
 
         // add event handlers
-        eventStub.AddHandler(nameof(ISampleInterface.SimpleEvent), new EventHandler((sender, args) => simpleEventFired = true));
-        eventStub.AddHandler(nameof(ISampleInterface.CancelEvent), new EventHandler<CancelEventArgs>((sender, args) => cancelEventFired = true));
-        eventStub.AddHandler(nameof(ISampleInterface.ActionDelegate), new Action(() => actionFired = true));
-        eventStub.AddHandler(nameof(ISampleInterface.FuncDelegate), new Func<int, string>(a => { funcFired = true; return a.ToString(); }));
-        eventStub.AddHandler(nameof(ISampleInterface.FuncDelegate), new Func<int, string>(a => { return (a * 2).ToString(); }));
+        eventStub.AddHandler(nameof(ISampleInterface.SimpleEvent), new EventHandler((sender, args) => simpleEventFired++));
+        eventStub.AddHandler(nameof(ISampleInterface.CancelEvent), new EventHandler<CancelEventArgs>((sender, args) => cancelEventFired++));
+        eventStub.AddHandler(nameof(ISampleInterface.ActionDelegate), new Action(() => actionFired++));
+        eventStub.AddHandler(nameof(ISampleInterface.FuncDelegate), new Func<int, string>(a => { funcFired++; return a.ToString(); }));
+        eventStub.AddHandler(nameof(ISampleInterface.FuncDelegate), new Func<int, string>(a => { funcFired++; return (a * 2).ToString(); }));
 
         // wire up events
         var component = new SampleService();
@@ -279,25 +275,28 @@ public class EventStubTests
         // test if it works
         var result = component.FireHandlers(102030);
         Assert.Null(result); // Assert.Equal("204060", result);
-        Assert.True(simpleEventFired);
-        Assert.True(cancelEventFired);
-        Assert.True(actionFired);
-        Assert.True(funcFired);
+
+        // check if all events were fired
+        var results = await Task.WhenAll(
+            simpleEventFired.WaitForValue(1),
+            cancelEventFired.WaitForValue(1),
+            actionFired.WaitForValue(1),
+            funcFired.WaitForValue(2)).Timeout(1);
+
+        Assert.Equal(5, results.Sum());
 
         // unwire
-        simpleEventFired = false;
-        cancelEventFired = false;
-        actionFired = false;
-        funcFired = false;
         eventStub.UnwireFrom(component);
 
         // test if it works
         result = component.FireHandlers(123);
+
+        // event handlers shoundn't fire anymore
         Assert.Null(result);
-        Assert.False(simpleEventFired);
-        Assert.False(cancelEventFired);
-        Assert.False(actionFired);
-        Assert.False(funcFired);
+        Assert.False(await simpleEventFired.WaitForValue(2).Expire(0.1));
+        Assert.False(await cancelEventFired.WaitForValue(2).Expire(0.1));
+        Assert.False(await actionFired.WaitForValue(2).Expire(0.1));
+        Assert.False(await funcFired.WaitForValue(3).Expire(0.1));
     }
 
     [Fact]
