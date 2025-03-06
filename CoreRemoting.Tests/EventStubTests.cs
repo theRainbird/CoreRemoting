@@ -322,6 +322,15 @@ public class EventStubTests
     }
 
     [Fact]
+    public void EventStub_doesnt_throw_if_no_subscriptions_exist()
+    {
+        var eventStub = new EventStub(typeof(ISampleInterface));
+        var sampleService = new SampleService();
+        eventStub.WireTo(sampleService);
+        sampleService.FireHandlers(1);
+    }
+
+    [Fact]
     public void MethodInfo_can_represent_subscription_or_unsubscription()
     {
         var method = typeof(ISampleInterface).GetMethod("add_SimpleEvent");
