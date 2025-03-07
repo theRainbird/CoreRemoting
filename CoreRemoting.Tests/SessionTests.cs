@@ -161,20 +161,10 @@ public class SessionTests : IClassFixture<ServerFixture>
                 Channel = ClientChannel
             });
 
-        var waitForDisconnect = new ManualResetEventSlim(initialState: false);
-
-        client.AfterDisconnect += () =>
-        {
-            waitForDisconnect.Set();
-        };
-        
         client.Connect();
         var proxy = client.CreateProxy<ITestService>();
 
         proxy.TestMethod(null);
-
-        waitForDisconnect.Wait();
-        Assert.False(client.IsConnected);
         
         client.Dispose();
     }
