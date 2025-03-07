@@ -119,7 +119,6 @@ public class ServerFixture : IDisposable
     {
         if (Server != null)
         {
-            Thread.Sleep(100); // work around WatsonTcp 6.0.2 bug (todo fix and remove)
             Server.Dispose();
         }
     }
