@@ -13,8 +13,14 @@ public class AsyncCounter
 
     private int value;
 
+    /// <summary>
+    /// Gets the current value of the counter.
+    /// </summary>
     public int Value => value;
 
+    /// <summary>
+    /// Increments the counter.
+    /// </summary>
     public AsyncCounter Increment()
     {
         var v = Interlocked.Increment(ref value);
@@ -27,6 +33,10 @@ public class AsyncCounter
         return this;
     }
 
+    /// <summary>
+    /// Returns the task that can be awaited
+    /// for the counter to get to the specified value.
+    /// </summary>
     public Task<int> WaitForValue(int value)
     {
         var tcs = Sources.GetOrAdd(value, i => new());
@@ -38,6 +48,9 @@ public class AsyncCounter
         return tcs.Task;
     }
 
+    /// <summary>
+    /// Increments the counter.
+    /// </summary>
     public static AsyncCounter operator ++ (AsyncCounter ac) =>
         ac.Increment();
 }
