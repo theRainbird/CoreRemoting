@@ -316,11 +316,11 @@ namespace CoreRemoting
                     await _goodbyeCompletedTaskSource.Task.Expire(10).ConfigureAwait(false);
             }
 
-            // lock (_syncObject) // TODO: why we are locking here?
+            lock (_syncObject)
             {
                 var channel = _channel;
                 if (channel != null)
-                    await channel.DisconnectAsync().ConfigureAwait(false);
+                    channel.DisconnectAsync().ConfigureAwait(false);
             }
 
             OnDisconnected();
