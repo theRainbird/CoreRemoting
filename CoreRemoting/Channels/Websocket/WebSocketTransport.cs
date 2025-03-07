@@ -89,7 +89,7 @@ namespace CoreRemoting.Channels.Websocket
             {
                 while (webSocket.State == WebSocketState.Open)
                 {
-                    var ms = new SmallBlockMemoryStream();
+                    using var ms = new SmallBlockMemoryStream();
                     while (true)
                     {
                         var result = await webSocket.ReceiveAsync(
