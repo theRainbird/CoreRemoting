@@ -238,11 +238,11 @@ public class RpcTests : IClassFixture<ServerFixture>
     [Fact]
     public async Task Call_on_Proxy_should_be_executed_asynchronously()
     {
-        var longRunnigCalled = false;
+        var longRunnigMethodStarted = new AsyncCounter();
         void BeforeCall(object sender, ServerRpcContext e)
         {
             if (e.MethodCallMessage.MethodName == "LongRunnigTestMethod")
-                longRunnigCalled = true;
+                longRunnigMethodStarted++;
         }
 
         try
@@ -260,13 +260,17 @@ public class RpcTests : IClassFixture<ServerFixture>
             client.Connect();
 
             var proxy = client.CreateProxy<ITestService>();
-            _ = Task.Run(() => proxy.LongRunnigTestMethod(5000));
-            await Task.Run(() =>
-            {
-                while (!longRunnigCalled)
-                    Task.Delay(100);
-                proxy.TestMethod("x");
-            }).Timeout(1, "RPC timed out");
+            var longRun = Task.Run(() => proxy.LongRunnigTestMethod(2000));
+
+            // wait until long-running test method is started on server
+            await longRunnigMethodStarted.WaitForValue(1).Timeout(1);
+
+            // try running another RPC call in parallel
+            proxy.TestMethod("x");
+
+            // if a client is disposed before LongRunningTestMethod rpc result is received,
+            // _serverFixture gets its error counter incremented which breaks other tests
+            await longRun;
         }
         catch (Exception e)
         {
