@@ -6,7 +6,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
-using System.Threading;
+using CoreRemoting.Threading;
 
 namespace CoreRemoting.RemoteDelegates;
 
@@ -188,7 +188,7 @@ public static class SafeDynamicInvoker
             // see details here: http://blogs.msdn.com/b/ericlippert/archive/2009/11/12/closing-over-the-loop-variable-considered-harmful.aspx
             var @delegate = d;
 
-            // TODO: use custom replaceable thread pool to fire events
+            // use custom replaceable thread pool to fire events
             ThreadPool.QueueUserWorkItem(x =>
             {
                 try
@@ -200,6 +200,38 @@ public static class SafeDynamicInvoker
                     Trace.WriteLine("Invocation failed: " + ex.ToString());
                 }
             });
+        }
+    }
+
+    private static IThreadPool threadPool = new SimpleLockThreadPool
+    {
+        WorkerThreadName = "SafeDynamicInvoker",
+    };
+
+    /// <summary>
+    /// Gets or sets the thread pool used to send server events to remote subscribers.
+    /// </summary>
+    /// <remarks>
+    /// Assign this property to an instance of the <see cref="ClrThreadPool"/> class
+    /// to fall back to the standard <see cref="System.Threading.ThreadPool"/>.
+    /// </remarks>
+    public static IThreadPool ThreadPool
+    {
+        get { return threadPool; }
+        set
+        {
+            if (value == null)
+            {
+                throw new ArgumentNullException("value");
+            }
+
+            if (threadPool != null)
+            {
+                threadPool.Dispose();
+                threadPool = null;
+            }
+
+            threadPool = value;
         }
     }
 }
