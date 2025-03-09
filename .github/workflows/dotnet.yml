@@ -16,6 +16,8 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
+        exclude:
+          - os: ${{ !contains(github.event.head_commit.message, 'windows') && 'windows-latest' }}
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
