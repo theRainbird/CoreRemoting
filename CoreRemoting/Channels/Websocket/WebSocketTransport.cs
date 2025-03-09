@@ -3,6 +3,7 @@ using System.Net.WebSockets;
 using CoreRemoting.IO;
 using System.Threading.Tasks;
 using System.Threading;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket
 {
@@ -75,6 +76,10 @@ namespace CoreRemoting.Channels.Websocket
             return Guid.Empty;
         }
 
+        private AsyncLock ReceiveLock { get; } = new();
+
+        private AsyncLock SendLock { get; } = new();
+
         /// <summary>
         /// Reads the incoming websocket messages
         /// and fires the <see cref="ReceiveMessage"/> event.
@@ -92,9 +97,12 @@ namespace CoreRemoting.Channels.Websocket
                     using var ms = new SmallBlockMemoryStream();
                     while (true)
                     {
-                        var result = await webSocket.ReceiveAsync(
-                            segment, CancellationToken.None)
-                                .ConfigureAwait(false);
+                        var result = default(WebSocketReceiveResult);
+
+                        using (await ReceiveLock)
+                            result = await webSocket.ReceiveAsync(
+                                segment, CancellationToken.None)
+                                    .ConfigureAwait(false);
 
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
@@ -144,10 +152,11 @@ namespace CoreRemoting.Channels.Websocket
         {
             try
             {
-                await WebSocket.SendAsync(
-                    new ArraySegment<byte>(rawMessage),
-                        WebSocketMessageType.Binary, true, CancellationToken.None)
-                            .ConfigureAwait(false);
+                using (await SendLock)
+                    await WebSocket.SendAsync(
+                        new ArraySegment<byte>(rawMessage),
+                            WebSocketMessageType.Binary, true, CancellationToken.None)
+                                .ConfigureAwait(false);
 
                 return true;
             }
