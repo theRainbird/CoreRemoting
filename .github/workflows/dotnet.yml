@@ -13,8 +13,12 @@ on:
 jobs:
   build:
 
-    runs-on: windows-latest
-    timeout-minutes: 10
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
 
     steps:
     - name: Checkout source
