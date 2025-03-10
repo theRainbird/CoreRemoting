@@ -49,19 +49,20 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <summary>
     /// Establish a connection with the server.
     /// </summary>
-    public Task ConnectAsync()
+    public async Task ConnectAsync()
     {
         if (_tcpClient == null)
             throw new InvalidOperationException("Channel is not initialized.");
 
         if (_tcpClient.Connected)
-            return Task.CompletedTask;
+            return;
 
         _tcpClient.Events.ExceptionEncountered += OnError;
         _tcpClient.Events.MessageReceived += OnMessage;
         _tcpClient.Events.ServerDisconnected += OnDisconnected;
         _tcpClient.Connect();
-        return Task.CompletedTask;
+
+        await _tcpClient.SendAsync([0], _handshakeMetadata);
     }
 
     private void OnDisconnected(object o, DisconnectionEventArgs disconnectionEventArgs)
@@ -88,15 +89,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <param name="e">Event arguments containing the message content</param>
     private void OnMessage(object sender, MessageReceivedEventArgs e)
     {
-        if (e.Metadata != null && e.Metadata.ContainsKey("ServerAcceptConnection"))
-        {
-            if (!_tcpClient.SendAsync(new byte[] { 0x0 }, _handshakeMetadata).Result && !_tcpClient.Connected)
-                _tcpClient = null;
-        }
-        else
-        {
-            ReceiveMessage?.Invoke(e.Data);
-        }
+        ReceiveMessage?.Invoke(e.Data);
     }
 
     /// <summary>
