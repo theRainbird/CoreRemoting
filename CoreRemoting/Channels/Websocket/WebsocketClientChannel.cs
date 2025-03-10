@@ -71,9 +71,8 @@ public class WebsocketClientChannel : WebSocketTransport, IClientChannel
         IsConnected = true;
         StartListening();
 
-        await WebSocket.SendAsync(EmptyMessage,
-            WebSocketMessageType.Binary, true, CancellationToken.None)
-                .ConfigureAwait(false);
+        await SendMessageAsync([])
+            .ConfigureAwait(false);
 
         OnConnected();
     }
