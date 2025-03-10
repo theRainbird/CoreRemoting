@@ -36,11 +36,10 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
         _tcpClient = new WatsonTcpClient(client.Config.ServerHostName, client.Config.ServerPort);
         _tcpClient.Settings.NoDelay = true;
 
-        _handshakeMetadata =
-            new Dictionary<string, object>
-            {
-                { "MessageEncryption", client.MessageEncryption }
-            };
+        _handshakeMetadata = new()
+        {
+            { "MessageEncryption", client.MessageEncryption }
+        };
 
         if (client.MessageEncryption)
             _handshakeMetadata.Add("ShakeHands", Convert.ToBase64String(client.PublicKey));
@@ -156,8 +155,6 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <summary>
     /// Disconnect and free manages resources.
     /// </summary>
-    public void Dispose()
-    {
+    public void Dispose() =>
         DisconnectAsync().JustWait();
-    }
 }
