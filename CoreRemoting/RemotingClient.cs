@@ -35,9 +35,11 @@ namespace CoreRemoting
         private readonly ClientDelegateRegistry _delegateRegistry;
         private readonly CancellationTokenSource _cancellationTokenSource;
         private readonly ClientConfig _config;
+        private readonly AsyncLock _channelLock;
         private Dictionary<Guid, ClientRpcContext> _activeCalls;
-        private readonly object _syncObject;
+        private readonly object _activeCallsLock;
         private Guid _sessionId;
+        private readonly object _sessionLock;
         private TaskCompletionSource<bool> _handshakeCompletedTaskSource;
         private TaskCompletionSource<bool> _authenticationCompletedTaskSource;
         private TaskCompletionSource<bool> _goodbyeCompletedTaskSource;
@@ -64,7 +66,9 @@ namespace CoreRemoting
             MethodCallMessageBuilder = new MethodCallMessageBuilder();
             MessageEncryptionManager = new MessageEncryptionManager();
             _activeCalls = null;
-            _syncObject = new();
+            _activeCallsLock = new();
+            _channelLock = new();
+            _sessionLock = new();
             _cancellationTokenSource = new();
             _delegateRegistry = new();
             _handshakeCompletedTaskSource = new();
@@ -198,7 +202,7 @@ namespace CoreRemoting
         {
             get
             {
-                lock(_syncObject)
+                lock (_sessionLock)
                 {
                     return _sessionId != Guid.Empty;
                 }
@@ -235,7 +239,7 @@ namespace CoreRemoting
                 throw new RemotingException("No client channel configured.");
 
             _goodbyeCompletedTaskSource = new();
-            lock(_syncObject)
+            lock (_activeCallsLock)
                 _activeCalls = new Dictionary<Guid, ClientRpcContext>();
 
             await _channel.ConnectAsync()
@@ -272,7 +276,7 @@ namespace CoreRemoting
                 return;
 
             Guid sessionId;
-            lock (_syncObject)
+            lock (_sessionLock)
             {
                 if (_sessionId == Guid.Empty)
                     return;
@@ -316,11 +320,11 @@ namespace CoreRemoting
                     await _goodbyeCompletedTaskSource.Task.Expire(10).ConfigureAwait(false);
             }
 
-            lock (_syncObject)
+            using (await _channelLock)
             {
                 var channel = _channel;
                 if (channel != null)
-                    channel.DisconnectAsync().ConfigureAwait(false);
+                    await channel.DisconnectAsync().ConfigureAwait(false);
             }
 
             OnDisconnected();
@@ -351,7 +355,7 @@ namespace CoreRemoting
         /// </summary>
         /// <param name="sender">Event sender</param>
         /// <param name="e">Event arguments</param>
-        private void KeepSessionAliveTimerOnElapsed(object sender, ElapsedEventArgs e)
+        private async void KeepSessionAliveTimerOnElapsed(object sender, ElapsedEventArgs e)
         {
             if (_keepSessionAliveTimer == null)
                 return;
@@ -369,14 +373,14 @@ namespace CoreRemoting
             }
 
             // Send empty message to keep session alive
-            _rawMessageTransport.SendMessageAsync([]).JustWait();
+            await _rawMessageTransport.SendMessageAsync([]);
         }
 
         private byte[] SharedSecret()
         {
             if (MessageEncryption)
             {
-                lock (_syncObject)
+                lock (_sessionLock)
                 {
                     return _sessionId.ToByteArray();
                 }
@@ -520,7 +524,7 @@ namespace CoreRemoting
                     signature: signedMessageData.Signature))
                     throw new SecurityException("Verification of message signature failed.");
 
-                lock (_syncObject)
+                lock (_sessionLock)
                 {
                     _sessionId =
                         new Guid(
@@ -533,7 +537,7 @@ namespace CoreRemoting
             }
             else
             {
-                lock (_syncObject)
+                lock (_sessionLock)
                     _sessionId = new Guid(message.Data);
             }
 
@@ -606,7 +610,7 @@ namespace CoreRemoting
 
             ClientRpcContext clientRpcContext;
 
-            lock (_syncObject)
+            lock (_activeCallsLock)
             {
                 if (_activeCalls == null)
                     return;
@@ -691,7 +695,7 @@ namespace CoreRemoting
         {
             var sharedSecret = SharedSecret();
 
-            lock (_syncObject)
+            lock (_activeCallsLock)
             {
                 if (_activeCalls == null)
                     throw new RemoteInvocationException("ServerDisconnected");
@@ -699,7 +703,7 @@ namespace CoreRemoting
 
             var clientRpcContext = new ClientRpcContext();
 
-            lock (_syncObject)
+            lock (_activeCallsLock)
             {
                 if (_activeCalls.ContainsKey(clientRpcContext.UniqueCallKey))
                 {
@@ -817,14 +821,21 @@ namespace CoreRemoting
         /// <summary>
         /// Frees managed resources.
         /// </summary>
-        public void Dispose()
+        public void Dispose() =>
+            DisposeAsync().JustWait();
+
+        /// <summary>
+        /// TODO: consider implementing IDisposableAsync instead?
+        /// </summary>
+        private async Task DisposeAsync()
         {
             if (RemotingClient.DefaultRemotingClient == this)
                 RemotingClient.DefaultRemotingClient = null;
 
             _clientInstances.TryRemove(_config.UniqueClientInstanceName, out _);
 
-            Disconnect();
+            await DisconnectAsync()
+                .ConfigureAwait(false);
 
             _cancellationTokenSource.Cancel();
             _cancellationTokenSource.Dispose();
@@ -836,7 +847,7 @@ namespace CoreRemoting
                 _rawMessageTransport = null;
             }
 
-            lock (_syncObject)
+            using (await _channelLock)
             {
                 if (_channel != null)
                 {
