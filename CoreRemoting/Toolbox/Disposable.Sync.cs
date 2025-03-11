@@ -20,6 +20,19 @@ namespace CoreRemoting.Toolbox
         public static IDisposable Create(Action disposeAction) =>
             new SyncDisposable(disposeAction);
 
+        private class SyncDisposable<T>(Func<T> disposeFunction) : IDisposable
+        {
+            void IDisposable.Dispose() =>
+                disposeFunction?.Invoke();
+        }
+
+        /// <summary>
+        /// Creates a disposable object.
+        /// </summary>
+        /// <param name="disposeFunction">An action to invoke on disposal.</param>
+        public static IDisposable Create<T>(Func<T> disposeFunction) =>
+            new SyncDisposable<T>(disposeFunction);
+
         private class ParamsDisposable(params IDisposable[] disposables) : IDisposable
         {
             void IDisposable.Dispose()

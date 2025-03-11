@@ -60,39 +60,49 @@ public class TcpConnection : IRawMessageTransport
     /// <param name="metadata">Metadata</param>
     internal void FireReceiveMessage(byte[] rawMessage, Dictionary<string, object> metadata)
     {
-        if (_session == null)
+        if (!CreateSessionAsNeeded(metadata))
         {
-            byte[] clientPublicKey = null;
+            ReceiveMessage?.Invoke(rawMessage);
+        }
+    }
 
-            if (metadata != null)
+    /// <summary>
+    /// Creates the <see cref="RemotingSession"/> if it's not yet created.
+    /// </summary>
+    private bool CreateSessionAsNeeded(Dictionary<string, object> metadata)
+    {
+        if (_session != null)
+            return false;
+
+        byte[] clientPublicKey = null;
+
+        if (metadata != null)
+        {
+            var messageEncryption = ((System.Text.Json.JsonElement)metadata["MessageEncryption"]).GetBoolean();
+
+            if (messageEncryption)
             {
-                var messageEncryption = ((System.Text.Json.JsonElement)metadata["MessageEncryption"]).GetBoolean();
+                var shakeHands = ((System.Text.Json.JsonElement)metadata["ShakeHands"]).GetString();
 
-                if (messageEncryption)
+                if (shakeHands != null)
                 {
-                    var shakeHands = ((System.Text.Json.JsonElement)metadata["ShakeHands"]).GetString();
-
-                    if (shakeHands != null)
-                    {
-                        clientPublicKey =
-                            Convert.FromBase64String(shakeHands);
-                    }
+                    clientPublicKey =
+                        Convert.FromBase64String(shakeHands);
                 }
             }
-
-            _session = 
-                _server.SessionRepository.CreateSession(
-                    clientPublicKey,
-                    _clientMetadata.IpPort,
-                    _server,
-                    this);
-                
-            _session.BeforeDispose += BeforeDisposeSession;
         }
-        else
-            ReceiveMessage?.Invoke(rawMessage);
+
+        _session =
+            _server.SessionRepository.CreateSession(
+                clientPublicKey,
+                _clientMetadata.IpPort,
+                _server,
+                this);
+
+        _session.BeforeDispose += BeforeDisposeSession;
+        return true;
     }
-    
+
     /// <summary>
     /// Closes the internal websocket session.
     /// </summary>

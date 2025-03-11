@@ -5,6 +5,8 @@ using System.Runtime.CompilerServices;
 
 namespace CoreRemoting.Toolbox;
 
+using ConfiguredAwaiter = ConfiguredTaskAwaitable<IDisposable>.ConfiguredTaskAwaiter;
+
 /// <summary>
 /// Awaitable async locking synchronization primitive.
 /// </summary>
@@ -15,14 +17,18 @@ public class AsyncLock
     /// <summary>
     /// Locks asynchronously, by awaiting the lock object itself.
     /// </summary>
-    public TaskAwaiter<IDisposable> GetAwaiter()
+    public ConfiguredAwaiter GetAwaiter()
     {
         async Task<IDisposable> LockAsync()
         {
-            await Semaphore.WaitAsync();
-            return Disposable.Create(() => Semaphore.Release());
+            await Semaphore.WaitAsync()
+                .ConfigureAwait(false);
+
+            return Disposable.Create(Semaphore.Release);
         }
 
-        return LockAsync().GetAwaiter();
+        return LockAsync()
+            .ConfigureAwait(false)
+                .GetAwaiter();
     }
 }

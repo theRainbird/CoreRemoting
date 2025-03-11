@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
+using CoreRemoting.Tests.Tools;
 using CoreRemoting.Toolbox;
 using Xunit;
 using Xunit.Sdk;
@@ -14,16 +16,22 @@ public class AsyncLockTests
     private AsyncLock Lock { get; } = new();
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
     public async Task AsyncLock_is_awaitable()
     {
-        using (await Lock)
-            await Task.Delay(1);
+        using var ctx = ValidationSyncContext.Install();
 
         using (await Lock)
-            await Task.Delay(2);
+            await Task.Delay(1)
+                .ConfigureAwait(false);
 
         using (await Lock)
-            await Task.Delay(3);
+            await Task.Delay(2)
+                .ConfigureAwait(false);
+
+        using (await Lock)
+            await Task.Delay(3)
+                .ConfigureAwait(false);
     }
 
     private async Task RunSharedResourceTest(bool useLock)
