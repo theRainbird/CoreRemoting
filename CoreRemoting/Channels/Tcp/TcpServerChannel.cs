@@ -37,31 +37,19 @@ public class TcpServerChannel : IServerChannel
         _tcpServer.Events.MessageReceived += OnTcpMessageReceived;
     }
 
-    private void OnClientConnected(object sender, ConnectionEventArgs e)
-    {
-        if(_connections.TryAdd(e.Client.Guid, new TcpConnection(e.Client, _tcpServer, _remotingServer)))
-        {
-            var metadata = new Dictionary<string, object>
-            {
-                { "ServerAcceptConnection", true }
-            };
+    private TcpConnection GetOrCreateConnection(ClientMetadata client) =>
+        _connections.GetOrAdd(client.Guid, guid =>
+            new TcpConnection(client, _tcpServer, _remotingServer));
 
-            _tcpServer.SendAsync(e.Client.Guid, new byte[]{ 0x02 }, metadata);
-        }
-    }
+    private void OnClientConnected(object sender, ConnectionEventArgs e) =>
+        GetOrCreateConnection(e.Client);
 
-    private void OnClientDisconnected(object sender, DisconnectionEventArgs e)
-    {
+    private void OnClientDisconnected(object sender, DisconnectionEventArgs e) =>
         _connections.TryRemove(e.Client.Guid, out _);
-    }
 
-    private void OnTcpMessageReceived(object sender, MessageReceivedEventArgs e)
-    {
-        if (_connections.TryGetValue(e.Client.Guid, out TcpConnection connection))
-        {
-            connection.FireReceiveMessage(e.Data, e.Metadata);
-        }
-    }
+    private void OnTcpMessageReceived(object sender, MessageReceivedEventArgs e) =>
+        GetOrCreateConnection(e.Client)
+            .FireReceiveMessage(e.Data, e.Metadata);
 
     /// <summary>
     /// Start listening for client requests.

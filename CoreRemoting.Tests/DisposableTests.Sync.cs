@@ -32,6 +32,31 @@ public partial class DisposableTests
     }
 
     [Fact]
+    public void Disposable_executes_function_on_Dispose()
+    {
+        var disposed = false;
+
+        bool Dispose() =>
+            disposed = true;
+
+        using (Disposable.Create(Dispose))
+            Assert.False(disposed);
+
+        Assert.True(disposed);
+    }
+
+    [Fact]
+    public void Disposable_ignores_nulls_function()
+    {
+        Func<int> dispose = null;
+
+        using (Disposable.Create(dispose))
+        {
+            // doesn't throw
+        }
+    }
+
+    [Fact]
     public void Disposable_combines_disposables()
     {
         var count = 0;

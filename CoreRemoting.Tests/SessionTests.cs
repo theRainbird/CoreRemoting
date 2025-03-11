@@ -165,7 +165,6 @@ public class SessionTests : IClassFixture<ServerFixture>
         var proxy = client.CreateProxy<ITestService>();
 
         proxy.TestMethod(null);
-        
         client.Dispose();
     }
 

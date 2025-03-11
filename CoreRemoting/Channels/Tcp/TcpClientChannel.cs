@@ -61,6 +61,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
         _tcpClient.Events.ServerDisconnected += OnDisconnected;
         _tcpClient.Connect();
 
+        // note: we don't rely on the Connected event anymore
         await _tcpClient.SendAsync([0], _handshakeMetadata);
     }
 
