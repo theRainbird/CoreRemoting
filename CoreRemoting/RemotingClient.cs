@@ -468,7 +468,7 @@ namespace CoreRemoting
                     await ProcessRpcResultMessage(message);
                     break;
                 case "invoke":
-                    await ProcessRemoteDelegateInvocationMessage(message);
+                    ProcessRemoteDelegateInvocationMessage(message);
                     break;
                 case "goodbye":
                     await ProcessGoodbyeMessage(message);
@@ -596,10 +596,8 @@ namespace CoreRemoting
         /// Processes a remote delegate invocation message from server.
         /// </summary>
         /// <param name="message">Deserialized WireMessage that contains a RemoteDelegateInvocationMessage</param>
-        private async Task ProcessRemoteDelegateInvocationMessage(WireMessage message)
+        private void ProcessRemoteDelegateInvocationMessage(WireMessage message)
         {
-            await using var rpcLock = await _rpcMessageLock.ReadLock();
-
             if (_goodbyeCompletedTaskSource.Task.IsCompleted)
                 return;
 
