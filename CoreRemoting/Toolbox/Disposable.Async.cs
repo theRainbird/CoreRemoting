@@ -12,10 +12,12 @@ namespace CoreRemoting.Toolbox
             async ValueTask IAsyncDisposable.DisposeAsync()
             {
                 if (disposeAsync != null)
-                    await disposeAsync();
+                    await disposeAsync()
+                        .ConfigureAwait(false);
 
                 if (disposeTaskAsync != null)
-                    await disposeTaskAsync();
+                    await disposeTaskAsync()
+                        .ConfigureAwait(false);
             }
         }
 
@@ -23,14 +25,34 @@ namespace CoreRemoting.Toolbox
         /// Creates an asynchronous disposable object.
         /// </summary>
         /// <param name="disposeAsync">An action to invoke on disposal.</param>
-        public static IAsyncDisposable Create(Func<ValueTask> disposeAsync) =>
+        internal static IAsyncDisposable Create(Func<ValueTask> disposeAsync) =>
             new AsyncDisposable(disposeAsync, null);
 
         /// <summary>
         /// Creates an asynchronous disposable object.
         /// </summary>
         /// <param name="disposeAsync">An action to invoke on disposal.</param>
-        public static IAsyncDisposable Create(Func<Task> disposeAsync) =>
+        internal static IAsyncDisposable Create(Func<Task> disposeAsync) =>
             new AsyncDisposable(null, disposeAsync);
+
+        private class ParamsDisposableAsync(params object[] disposables) : IAsyncDisposable
+        {
+            async ValueTask IAsyncDisposable.DisposeAsync()
+            {
+                foreach (var disposable in disposables ?? [])
+                    if (disposable is IAsyncDisposable asyncDisposable)
+                        await asyncDisposable.DisposeAsync()
+                            .ConfigureAwait(false);
+                    else if (disposable is IDisposable syncDisposable)
+                        syncDisposable.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Creates an asynchronous disposable object.
+        /// </summary>
+        /// <param name="disposables">Disposable items to dispose on disposal, both sync and async.</param>
+        internal static IAsyncDisposable Create(params object[] disposables) =>
+            new ParamsDisposableAsync(disposables);
     }
 }
