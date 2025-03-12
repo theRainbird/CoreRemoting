@@ -27,6 +27,22 @@ public class AsyncReaderWriterLockTests
     }
 
     [Fact]
+    public async Task AsyncReaderWriterLock_is_compatible_with_await_using()
+    {
+        var myLock = new AsyncReaderWriterLock();
+
+        await using (await myLock.ReadLock())
+        {
+            await Task.Yield();
+        }
+
+        await using (await myLock.WriteLock())
+        {
+            await Task.Yield();
+        }
+    }
+
+    [Fact]
     public async Task AsyncReaderWriterLock_simple_multithreaded_test()
     {
         var readers = 0;
@@ -73,6 +89,65 @@ public class AsyncReaderWriterLockTests
             finally
             {
                 await AsyncLock.ExitWriteLock();
+            }
+        }
+
+        const int minDelay = 10;
+        const int maxDelay = 100;
+        const int count = maxDelay - minDelay;
+
+        // exclusive writers should take ~seconds,
+        // parallel readers should take less than seconds
+        // so all tasks should end within ~seconds * 2 or less
+        var seconds = (minDelay + maxDelay) / 2 * count / 1000;
+
+        var readTasks = Enumerable.Range(minDelay, count).Select(SimulateRead);
+        var writeTasks = Enumerable.Range(minDelay, count).Select(SimulateWrite);
+
+        await Task.WhenAll(readTasks.Concat(writeTasks)).Timeout(seconds * 2 + 1);
+
+        // check if it was actually parallelized
+        Assert.True(readerThreads.Count > 0);
+        Assert.True(writerThreads.Count > 0);
+    }
+
+    [Fact]
+    public async Task AsyncReaderWriterLock_await_using_multithreaded_test()
+    {
+        var readers = 0;
+        var writers = 0;
+        var readerThreads = new ConcurrentDictionary<int, int>();
+        var writerThreads = new ConcurrentDictionary<int, int>();
+
+        async Task SimulateRead(int ms)
+        {
+            readerThreads[Environment.CurrentManagedThreadId] = 0;
+
+            await using (await AsyncLock.ReadLock())
+            {
+                // in a reader's critical section, there are no writers
+                Assert.Equal(0, writers);
+                Assert.True(readers >= 0);
+
+                Interlocked.Increment(ref readers);
+                await Task.Delay(ms);
+                Interlocked.Decrement(ref readers);
+            }
+        }
+
+        async Task SimulateWrite(int ms)
+        {
+            writerThreads[Environment.CurrentManagedThreadId] = 0;
+
+            await using (await AsyncLock.WriteLock())
+            {
+                // in a writer's critical section, there are no readers or writers
+                Assert.Equal(0, readers);
+                Assert.Equal(0, writers);
+
+                Interlocked.Increment(ref writers);
+                await Task.Delay(ms);
+                Interlocked.Decrement(ref writers);
             }
         }
 
