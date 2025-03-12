@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.Tests.Tools;
 using CoreRemoting.Toolbox;
 using Xunit;
 using Inv = System.InvalidOperationException;
@@ -18,6 +20,7 @@ public class AsyncReaderWriterLockTests
     [Fact]
     public async Task AsyncReaderWriterLock_can_enter_and_exit()
     {
+        using var ctx = ValidationSyncContext.Install();
         using var myLock = new AsyncReaderWriterLock();
 
         await myLock.EnterReadLock();
@@ -28,32 +31,35 @@ public class AsyncReaderWriterLockTests
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
     public async Task AsyncReaderWriterLock_is_compatible_with_await_using()
     {
+        using var ctx = ValidationSyncContext.Install();
         using var myLock = new AsyncReaderWriterLock();
 
         await using (await myLock.ReadLock())
         {
-            await Task.Yield();
+            await Task.Delay(0)
+                .ConfigureAwait(false);
         }
 
         await using (await myLock.WriteLock())
         {
-            await Task.Yield();
+            await Task.Delay(0)
+                .ConfigureAwait(false);
         }
     }
 
     [Fact]
     public async Task AsyncReaderWriterLock_throws_on_exit_before_enter()
     {
+        using var ctx = ValidationSyncContext.Install();
         using var myLock = new AsyncReaderWriterLock();
 
         await Assert.ThrowsAsync<Inv>(myLock.ExitReadLock);
-
         await Assert.ThrowsAsync<Inv>(myLock.ExitWriteLock);
 
         var readLock = await myLock.ReadLock();
-
         await readLock.DisposeAsync();
 
         await Assert.ThrowsAsync<Inv>(myLock.ExitReadLock);
@@ -204,8 +210,8 @@ public class AsyncReaderWriterLockTests
             Debug.WriteLine($"ReadLocks = {readLockCount}, WriteLocks = {writeLockCount}");
 
             bool countIsCorrect = readLockCount == 0 && writeLockCount == 0 ||
-                    readLockCount > 0 && writeLockCount == 0 ||
-                    readLockCount == 0 && writeLockCount == 1;
+                readLockCount > 0 && writeLockCount == 0 ||
+                readLockCount == 0 && writeLockCount == 1;
 
             if (!countIsCorrect)
                 Interlocked.Increment(ref incorrectLockCount);

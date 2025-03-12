@@ -40,6 +40,7 @@ namespace CoreRemoting
         private readonly AsyncLock _activeCallsLock;
         private Guid _sessionId;
         private readonly object _sessionLock;
+        private readonly AsyncReaderWriterLock _rpcMessageLock;
         private TaskCompletionSource<bool> _handshakeCompletedTaskSource;
         private TaskCompletionSource<bool> _authenticationCompletedTaskSource;
         private TaskCompletionSource<bool> _goodbyeCompletedTaskSource;
@@ -69,6 +70,7 @@ namespace CoreRemoting
             _activeCallsLock = new();
             _channelLock = new();
             _sessionLock = new();
+            _rpcMessageLock = new();
             _cancellationTokenSource = new();
             _delegateRegistry = new();
             _handshakeCompletedTaskSource = new();
@@ -466,14 +468,13 @@ namespace CoreRemoting
                     await ProcessRpcResultMessage(message);
                     break;
                 case "invoke":
-                    ProcessRemoteDelegateInvocationMessage(message);
+                    await ProcessRemoteDelegateInvocationMessage(message);
                     break;
                 case "goodbye":
-                    _goodbyeCompletedTaskSource.TrySetResult(true);
+                    await ProcessGoodbyeMessage(message);
                     break;
                 case "session_closed":
-                    _goodbyeCompletedTaskSource.TrySetResult(true);
-                    await DisconnectAsync(quiet: true);
+                    await ProcessSessionClosedMessage(message);
                     break;
                 default:
                     // TODO: how do we handle invalid wire messages received by the client?
@@ -570,11 +571,38 @@ namespace CoreRemoting
         }
 
         /// <summary>
+        /// Processes a goodbye message.
+        /// </summary>
+        private async Task ProcessGoodbyeMessage(WireMessage message)
+        {
+            await using var rpcLock = await _rpcMessageLock.WriteLock();
+
+            _goodbyeCompletedTaskSource.TrySetResult(true);
+        }
+
+        /// <summary>
+        /// Processes a session_closed message.
+        /// </summary>
+        private async Task ProcessSessionClosedMessage(WireMessage message)
+        {
+            await using var rpcLock = await _rpcMessageLock.WriteLock();
+
+            _goodbyeCompletedTaskSource.TrySetResult(true);
+
+            await DisconnectAsync(quiet: true);
+        }
+
+        /// <summary>
         /// Processes a remote delegate invocation message from server.
         /// </summary>
         /// <param name="message">Deserialized WireMessage that contains a RemoteDelegateInvocationMessage</param>
-        private void ProcessRemoteDelegateInvocationMessage(WireMessage message)
+        private async Task ProcessRemoteDelegateInvocationMessage(WireMessage message)
         {
+            await using var rpcLock = await _rpcMessageLock.ReadLock();
+
+            if (_goodbyeCompletedTaskSource.Task.IsCompleted)
+                return;
+
             var sharedSecret = SharedSecret();
 
             var delegateInvocationMessage =
@@ -601,6 +629,11 @@ namespace CoreRemoting
         /// <exception cref="KeyNotFoundException">Thrown, when the received result is of a unknown call</exception>
         private async Task ProcessRpcResultMessage(WireMessage message)
         {
+            await using var rpcLock = await _rpcMessageLock.ReadLock();
+
+            if (_goodbyeCompletedTaskSource.Task.IsCompleted)
+                return;
+
             var sharedSecret = SharedSecret();
 
             Guid unqiueCallKey =
@@ -857,6 +890,8 @@ namespace CoreRemoting
             }
 
             _keyPair?.Dispose();
+            _activeCallsLock.Dispose();
+            _rpcMessageLock.Dispose();
         }
 
         #endregion
