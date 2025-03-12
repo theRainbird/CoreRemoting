@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Toolbox;
 using Xunit;
+using Inv = System.InvalidOperationException;
 
 namespace CoreRemoting.Tests;
 
@@ -17,7 +18,7 @@ public class AsyncReaderWriterLockTests
     [Fact]
     public async Task AsyncReaderWriterLock_can_enter_and_exit()
     {
-        var myLock = new AsyncReaderWriterLock();
+        using var myLock = new AsyncReaderWriterLock();
 
         await myLock.EnterReadLock();
         await myLock.ExitReadLock();
@@ -29,7 +30,7 @@ public class AsyncReaderWriterLockTests
     [Fact]
     public async Task AsyncReaderWriterLock_is_compatible_with_await_using()
     {
-        var myLock = new AsyncReaderWriterLock();
+        using var myLock = new AsyncReaderWriterLock();
 
         await using (await myLock.ReadLock())
         {
@@ -40,6 +41,22 @@ public class AsyncReaderWriterLockTests
         {
             await Task.Yield();
         }
+    }
+
+    [Fact]
+    public async Task AsyncReaderWriterLock_throws_on_exit_before_enter()
+    {
+        using var myLock = new AsyncReaderWriterLock();
+
+        await Assert.ThrowsAsync<Inv>(myLock.ExitReadLock);
+
+        await Assert.ThrowsAsync<Inv>(myLock.ExitWriteLock);
+
+        var readLock = await myLock.ReadLock();
+
+        await readLock.DisposeAsync();
+
+        await Assert.ThrowsAsync<Inv>(myLock.ExitReadLock);
     }
 
     [Fact]
@@ -175,12 +192,12 @@ public class AsyncReaderWriterLockTests
     {
         // This load test is taken from the AsyncReaderWriterLockSlim unit test suite, but without the sync part:
         // https://github.com/osexpert/AsyncReaderWriterLockSlim/blob/master/AsyncReaderWriterLockSlim.UnitTests/AsyncReaderWriterLockSlimTests.cs#L332
-        var myLock = new AsyncReaderWriterLock();
+        using var myLock = new AsyncReaderWriterLock();
 
         var lockCountSyncRoot = new AsyncLock();
         var readLockCount = 0;
         var writeLockCount = 0;
-        var incorrectLockCount = false;
+        var incorrectLockCount = 0;
 
         void checkLockCount()
         {
@@ -191,12 +208,11 @@ public class AsyncReaderWriterLockTests
                     readLockCount == 0 && writeLockCount == 1;
 
             if (!countIsCorrect)
-                Volatile.Write(ref incorrectLockCount, true);
+                Interlocked.Increment(ref incorrectLockCount);
         }
 
-        bool cancel = false;
-
         var tasks = new Task[20];
+        var cts = new CancellationTokenSource();
 
         var masterRandom = new Random();
 
@@ -205,15 +221,15 @@ public class AsyncReaderWriterLockTests
             var random = new Random(masterRandom.Next());
             tasks[i] = Task.Run(async () =>
             {
-                while (!Volatile.Read(ref cancel))
+                while (!cts.IsCancellationRequested)
                 {
-                    bool isRead = random.Next(10) < 7;
+                    var isRead = random.Next(10) < 7;
                     if (isRead)
                         await myLock.EnterReadLock();
                     else
                         await myLock.EnterWriteLock();
 
-                    lock (lockCountSyncRoot)
+                    using (await lockCountSyncRoot)
                     {
                         if (isRead)
                             readLockCount++;
@@ -224,7 +240,7 @@ public class AsyncReaderWriterLockTests
                     }
 
                     // Simulate work.
-                    await Task.Delay(10);
+                    await Task.Delay(5 + random.Next(5));
 
                     using (await lockCountSyncRoot)
                     {
@@ -245,13 +261,13 @@ public class AsyncReaderWriterLockTests
             });
         }
 
-        // Run for 5 seconds, then stop the tasks and threads.
-        Thread.Sleep(5000);
+        // Run for 5 seconds, then stop the tasks
+        await Task.Delay(TimeSpan.FromSeconds(5));
 
-        Volatile.Write(ref cancel, true);
+        cts.Cancel();
 
         await Task.WhenAll(tasks).Timeout(1);
 
-        Assert.False(incorrectLockCount);
+        Assert.Equal(0, incorrectLockCount);
     }
 }

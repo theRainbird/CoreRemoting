@@ -100,7 +100,7 @@ public class WebsocketClientChannel : WebSocketTransport, IClientChannel
     }
 
     /// <inheritdoc />
-    public void Dispose()
+    public override void Dispose()
     {
         if (ClientWebSocket == null)
             return;
@@ -111,5 +111,7 @@ public class WebsocketClientChannel : WebSocketTransport, IClientChannel
 
         ClientWebSocket.Dispose();
         ClientWebSocket = null;
+
+        base.Dispose();
     }
 }
