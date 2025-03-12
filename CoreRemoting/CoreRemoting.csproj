@@ -66,8 +66,4 @@
       <Protobuf Include="**/*.proto" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Compile Remove="Toolbox\Disposable.Async.cs" />
-    </ItemGroup>
-
 </Project>
