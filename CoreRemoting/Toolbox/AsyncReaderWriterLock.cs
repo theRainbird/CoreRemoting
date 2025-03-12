@@ -87,7 +87,9 @@ public class AsyncReaderWriterLock : IDisposable
     /// </summary>
     internal async Task<IAsyncDisposable> ReadLock()
     {
-        await EnterReadLock();
+        await EnterReadLock()
+            .ConfigureAwait(false);
+
         return Disposable.Create(ExitReadLock);
     }
 
@@ -96,7 +98,9 @@ public class AsyncReaderWriterLock : IDisposable
     /// </summary>
     internal async Task<IAsyncDisposable> WriteLock()
     {
-        await EnterWriteLock();
+        await EnterWriteLock()
+            .ConfigureAwait(false);
+
         return Disposable.Create(ExitWriteLock);
     }
 }
