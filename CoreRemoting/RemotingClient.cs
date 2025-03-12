@@ -37,7 +37,7 @@ namespace CoreRemoting
         private readonly ClientConfig _config;
         private readonly AsyncLock _channelLock;
         private Dictionary<Guid, ClientRpcContext> _activeCalls;
-        private readonly object _activeCallsLock;
+        private readonly AsyncLock _activeCallsLock;
         private Guid _sessionId;
         private readonly object _sessionLock;
         private TaskCompletionSource<bool> _handshakeCompletedTaskSource;
@@ -239,7 +239,7 @@ namespace CoreRemoting
                 throw new RemotingException("No client channel configured.");
 
             _goodbyeCompletedTaskSource = new();
-            lock (_activeCallsLock)
+            using (await _activeCallsLock)
                 _activeCalls = new Dictionary<Guid, ClientRpcContext>();
 
             await _channel.ConnectAsync()
@@ -450,7 +450,7 @@ namespace CoreRemoting
         /// Called when a message is received from server.
         /// </summary>
         /// <param name="rawMessage">Raw message data</param>
-        private void OnMessage(byte[] rawMessage) => Task.Run(() =>
+        private void OnMessage(byte[] rawMessage) => Task.Run(async () =>
         {
             var message = TryDeserialize(rawMessage);
 
@@ -463,7 +463,7 @@ namespace CoreRemoting
                     ProcessAuthenticationResponseMessage(message);
                     break;
                 case "rpc_result":
-                    ProcessRpcResultMessage(message);
+                    await ProcessRpcResultMessage(message);
                     break;
                 case "invoke":
                     ProcessRemoteDelegateInvocationMessage(message);
@@ -473,7 +473,7 @@ namespace CoreRemoting
                     break;
                 case "session_closed":
                     _goodbyeCompletedTaskSource.TrySetResult(true);
-                    Disconnect(quiet: true);
+                    await DisconnectAsync(quiet: true);
                     break;
                 default:
                     // TODO: how do we handle invalid wire messages received by the client?
@@ -599,7 +599,7 @@ namespace CoreRemoting
         /// </summary>
         /// <param name="message">Deserialized WireMessage that contains a MethodCallResultMessage or a RemoteInvocationException</param>
         /// <exception cref="KeyNotFoundException">Thrown, when the received result is of a unknown call</exception>
-        private void ProcessRpcResultMessage(WireMessage message)
+        private async Task ProcessRpcResultMessage(WireMessage message)
         {
             var sharedSecret = SharedSecret();
 
@@ -610,7 +610,7 @@ namespace CoreRemoting
 
             ClientRpcContext clientRpcContext;
 
-            lock (_activeCallsLock)
+            using (await _activeCallsLock)
             {
                 if (_activeCalls == null)
                     return;
@@ -695,7 +695,7 @@ namespace CoreRemoting
         {
             var sharedSecret = SharedSecret();
 
-            lock (_activeCallsLock)
+            using (await _activeCallsLock)
             {
                 if (_activeCalls == null)
                     throw new RemoteInvocationException("ServerDisconnected");
@@ -703,7 +703,7 @@ namespace CoreRemoting
 
             var clientRpcContext = new ClientRpcContext();
 
-            lock (_activeCallsLock)
+            using (await _activeCallsLock)
             {
                 if (_activeCalls.ContainsKey(clientRpcContext.UniqueCallKey))
                 {
