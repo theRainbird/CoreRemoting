@@ -591,7 +591,7 @@ namespace CoreRemoting
                 _delegateRegistry.GetDelegateByHandlerKey(delegateInvocationMessage.HandlerKey);
 
             // Invoke local delegate with arguments from remote caller
-            localDelegate.DynamicInvoke(delegateInvocationMessage.DelegateArguments);
+            localDelegate.OneWayDynamicInvoke(delegateInvocationMessage.DelegateArguments);
         }
 
         /// <summary>
