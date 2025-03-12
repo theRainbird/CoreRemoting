@@ -65,4 +65,22 @@ public class AsyncReaderWriterLock
         ReleaseWritersLock?.Dispose();
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// Enters the lock in the read mode in an async-disposable way.
+    /// </summary>
+    internal async Task<IAsyncDisposable> ReadLock()
+    {
+        await EnterReadLock();
+        return Disposable.Create(ExitReadLock);
+    }
+
+    /// <summary>
+    /// Enters the lock in the write mode in an async-disposable way.
+    /// </summary>
+    internal async Task<IAsyncDisposable> WriteLock()
+    {
+        await EnterWriteLock();
+        return Disposable.Create(ExitWriteLock);
+    }
 }
