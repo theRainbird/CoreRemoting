@@ -64,8 +64,10 @@ public class WebsocketServerConnection : WebSocketTransport, IDisposable
     }
 
     /// <inheritdoc />
-    public void Dispose()
+    public override void Dispose()
     {
         WebSocket.Dispose();
+
+        base.Dispose();
     }
 }

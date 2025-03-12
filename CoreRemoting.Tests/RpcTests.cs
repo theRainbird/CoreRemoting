@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -826,6 +827,7 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
+    [SuppressMessage("Performance", "CA1861:Avoid constant arrays as arguments", Justification = "<Pending>")]
     public void Large_messages_are_sent_and_received()
     {
         // max payload size, in bytes
@@ -859,13 +861,13 @@ public class RpcTests : IClassFixture<ServerFixture>
                 while (true)
                 {
                     // a -> aa -> aaaa ...
-                    var dup = proxy.Duplicate(payload);
-                    if (dup.size >= maxSize)
+                    var (dup, size) = proxy.Duplicate(payload);
+                    if (size >= maxSize)
                         break;
 
                     // save the size for error reporting
-                    lastSize = dup.size;
-                    payload = dup.duplicate;
+                    lastSize = size;
+                    payload = dup;
                 }
             }
             catch (Exception ex)

@@ -11,7 +11,7 @@ namespace CoreRemoting.Toolbox;
 /// Based on Michel Raynal's pseudocode using two mutexes and a counter:
 /// https://en.wikipedia.org/wiki/Readers–writer_lock#Using_two_mutexes
 /// </remarks>
-public class AsyncReaderWriterLock
+public class AsyncReaderWriterLock : IDisposable
 {
     private volatile int blockingReaders = 0;
 
@@ -20,6 +20,13 @@ public class AsyncReaderWriterLock
     private AsyncLock WritersLock { get; } = new();
 
     private IDisposable ReleaseWritersLock { get; set; }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        ReadersLock.Dispose();
+        WritersLock.Dispose();
+    }
 
     /// <summary>
     /// Enter the lock in read mode.
@@ -42,9 +49,15 @@ public class AsyncReaderWriterLock
     {
         using (await ReadersLock)
         {
-            if (Interlocked.Decrement(ref blockingReaders) == 0)
+            var readerCount = Interlocked.Decrement(ref blockingReaders);
+            if (readerCount == 0)
             {
                 ReleaseWritersLock?.Dispose();
+            }
+            else if (readerCount < 0)
+            {
+                blockingReaders = 0;
+                throw new InvalidOperationException("ExitReadLock called before EnterReadLock!");
             }
         }
     }
@@ -62,7 +75,10 @@ public class AsyncReaderWriterLock
     /// </summary>
     public Task ExitWriteLock()
     {
-        ReleaseWritersLock?.Dispose();
+        var exitLock = ReleaseWritersLock ??
+            throw new InvalidOperationException("ExitWriteLock called before EnterWriteLock!");
+
+        exitLock.Dispose();
         return Task.CompletedTask;
     }
 
