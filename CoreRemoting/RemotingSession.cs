@@ -791,7 +791,21 @@ namespace CoreRemoting
             if (_isDisposing)
                 return;
 
-            Task.Run(() => _server?.SessionRepository.RemoveSession(_sessionId));
+            // calling RemoveSession synchronously via RPC call produces a deadlock
+            // in Session.Dispose because the session would wait for the current
+            // RPC message processing to complete
+            var isRpcCall = Current == this;
+
+            Task.Run(async () =>
+            {
+                // TODO: make sure that the current RPC message result gets
+                // sent to the client and processed before the session is disposed
+                if (isRpcCall)
+                    await Task.Delay(100);
+
+                // disposes the current session
+                _server?.SessionRepository.RemoveSession(_sessionId);
+            });
         }
 
         #endregion
