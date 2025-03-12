@@ -19,9 +19,7 @@ jobs:
           - ubuntu-latest
           - windows-latest
         exclude:
-          - os: ${{ !contains(github.event.head_commit.message, 'windows') && 'windows-latest' }}
-        include:
-          - os: ${{ github.event.pull_request && 'windows-latest' }}
+          - os: ${{ !contains(github.event.head_commit.message, 'windows') && !github.event.pull_request && 'windows-latest' }}
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
