@@ -11,7 +11,7 @@ using CoreRemoting.Toolbox;
 using Xunit;
 using Inv = System.InvalidOperationException;
 
-namespace CoreRemoting.Tests;
+namespace CoreRemoting.Tests.Threading;
 
 [Collection("CoreRemoting")]
 public class AsyncReaderWriterLockTests
