@@ -10,7 +10,7 @@ namespace CoreRemoting.Channels.Websocket;
 /// <summary>
 /// Abstract web socket transport for reading and writing messages.
 /// </summary>
-public abstract class WebSocketTransport : IRawMessageTransport, IAsyncDisposable
+public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposable
 {
     /// <summary>
     /// Handshake cookies: message encryption flag.

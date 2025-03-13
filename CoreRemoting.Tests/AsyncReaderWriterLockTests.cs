@@ -37,13 +37,13 @@ public class AsyncReaderWriterLockTests
         using var ctx = ValidationSyncContext.Install();
         using var myLock = new AsyncReaderWriterLock();
 
-        await using (await myLock.ReadLock())
+        await using (await myLock.Read)
         {
             await Task.Delay(0)
                 .ConfigureAwait(false);
         }
 
-        await using (await myLock.WriteLock())
+        await using (await myLock.Write)
         {
             await Task.Delay(0)
                 .ConfigureAwait(false);
@@ -59,7 +59,7 @@ public class AsyncReaderWriterLockTests
         await Assert.ThrowsAsync<Inv>(myLock.ExitReadLock);
         await Assert.ThrowsAsync<Inv>(myLock.ExitWriteLock);
 
-        var readLock = await myLock.ReadLock();
+        var readLock = await myLock.Read;
         await readLock.DisposeAsync();
 
         await Assert.ThrowsAsync<Inv>(myLock.ExitReadLock);
@@ -146,7 +146,7 @@ public class AsyncReaderWriterLockTests
         {
             readerThreads[Environment.CurrentManagedThreadId] = 0;
 
-            await using (await AsyncLock.ReadLock())
+            await using (await AsyncLock.Read)
             {
                 // in a reader's critical section, there are no writers
                 Assert.Equal(0, writers);
@@ -162,7 +162,7 @@ public class AsyncReaderWriterLockTests
         {
             writerThreads[Environment.CurrentManagedThreadId] = 0;
 
-            await using (await AsyncLock.WriteLock())
+            await using (await AsyncLock.Write)
             {
                 // in a writer's critical section, there are no readers or writers
                 Assert.Equal(0, readers);

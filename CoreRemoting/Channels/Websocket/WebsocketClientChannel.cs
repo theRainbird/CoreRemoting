@@ -10,7 +10,7 @@ namespace CoreRemoting.Channels.Websocket;
 /// <summary>
 /// Client side websocket channel implementation based on System.Net.Websockets.
 /// </summary>
-public class WebsocketClientChannel : WebSocketTransport, IClientChannel
+public class WebsocketClientChannel : WebsocketTransport, IClientChannel
 {
     /// <summary>
     /// Gets or sets the URL this channel is connected to.

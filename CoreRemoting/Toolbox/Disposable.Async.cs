@@ -25,14 +25,14 @@ namespace CoreRemoting.Toolbox
         /// Creates an asynchronous disposable object.
         /// </summary>
         /// <param name="disposeAsync">An action to invoke on disposal.</param>
-        internal static IAsyncDisposable Create(Func<ValueTask> disposeAsync) =>
+        public static IAsyncDisposable Create(Func<ValueTask> disposeAsync) =>
             new AsyncDisposable(disposeAsync, null);
 
         /// <summary>
         /// Creates an asynchronous disposable object.
         /// </summary>
         /// <param name="disposeAsync">An action to invoke on disposal.</param>
-        internal static IAsyncDisposable Create(Func<Task> disposeAsync) =>
+        public static IAsyncDisposable Create(Func<Task> disposeAsync) =>
             new AsyncDisposable(null, disposeAsync);
 
         private class ParamsDisposableAsync(params object[] disposables) : IAsyncDisposable
@@ -52,7 +52,7 @@ namespace CoreRemoting.Toolbox
         /// Creates an asynchronous disposable object.
         /// </summary>
         /// <param name="disposables">Disposable items to dispose on disposal, both sync and async.</param>
-        internal static IAsyncDisposable Create(params object[] disposables) =>
+        public static IAsyncDisposable Create(params object[] disposables) =>
             new ParamsDisposableAsync(disposables);
     }
 }

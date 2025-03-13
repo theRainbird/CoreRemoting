@@ -1,8 +1,11 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace CoreRemoting.Toolbox;
+
+using ConfiguredAwaitable = ConfiguredTaskAwaitable<IAsyncDisposable>;
 
 /// <summary>
 /// Simple async readers/writers lock.
@@ -85,7 +88,7 @@ public class AsyncReaderWriterLock : IDisposable
     /// <summary>
     /// Enters the lock in the read mode in an async-disposable way.
     /// </summary>
-    internal async Task<IAsyncDisposable> ReadLock()
+    private async Task<IAsyncDisposable> ReadLock()
     {
         await EnterReadLock()
             .ConfigureAwait(false);
@@ -94,13 +97,25 @@ public class AsyncReaderWriterLock : IDisposable
     }
 
     /// <summary>
+    /// Gets the awaitable async-disposable lock for the read mode.
+    /// </summary>
+    public ConfiguredAwaitable Read =>
+        ReadLock().ConfigureAwait(false);
+
+    /// <summary>
     /// Enters the lock in the write mode in an async-disposable way.
     /// </summary>
-    internal async Task<IAsyncDisposable> WriteLock()
+    private async Task<IAsyncDisposable> WriteLock()
     {
         await EnterWriteLock()
             .ConfigureAwait(false);
 
         return Disposable.Create(ExitWriteLock);
     }
+
+    /// <summary>
+    /// Gets the awaitable async-disposable lock for the write mode.
+    /// </summary>
+    public ConfiguredAwaitable Write =>
+        WriteLock().ConfigureAwait(false);
 }
