@@ -8,7 +8,7 @@ using CoreRemoting.Threading;
 using Xunit;
 using Xunit.Sdk;
 
-namespace CoreRemoting.Tests;
+namespace CoreRemoting.Tests.Threading;
 
 [Collection("CoreRemoting")]
 public class AsyncLockTests
