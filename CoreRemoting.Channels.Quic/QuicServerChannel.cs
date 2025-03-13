@@ -73,7 +73,8 @@ public class QuicServerChannel : IServerChannel
                 {
                     new SslApplicationProtocol(QuicClientChannel.ProtocolName)
                 },
-            });
+            })
+            .ConfigureAwait(false);
 
             // accept incoming connections
             IsListening = true;
@@ -81,8 +82,12 @@ public class QuicServerChannel : IServerChannel
             {
                 try
                 {
-                    var connection = await Listener.AcceptConnectionAsync();
-                    var stream = await connection.AcceptInboundStreamAsync();
+                    var connection = await Listener.AcceptConnectionAsync()
+                        .ConfigureAwait(false);
+
+                    var stream = await connection.AcceptInboundStreamAsync()
+                        .ConfigureAwait(false);
+
                     var session = new QuicServerConnection(connection, stream, Server);
                     var sessionId = session.StartListening();
                     Connections[sessionId] = session;

@@ -99,8 +99,8 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
     public async Task ConnectAsync()
     {
         // connect and open duplex stream
-        Connection = await QuicConnection.ConnectAsync(Options);
-        ClientStream = await Connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional);
+        Connection = await QuicConnection.ConnectAsync(Options).ConfigureAwait(false);
+        ClientStream = await Connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional).ConfigureAwait(false);
         ClientReader = new BinaryReader(ClientStream, Encoding.UTF8, leaveOpen: true);
         ClientWriter = new BinaryWriter(ClientStream, Encoding.UTF8, leaveOpen: true);
 
@@ -116,13 +116,13 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
         StartListening();
 
         // send handshake message
-        await SendMessageAsync(handshakeMessage);
+        await SendMessageAsync(handshakeMessage).ConfigureAwait(false);
         Connected?.Invoke();
     }
 
     public virtual void StartListening()
     {
-        _ = Task.Run(() => ReadIncomingMessages());
+        _ = Task.Run(ReadIncomingMessages);
     }
 
     private void ReadIncomingMessages()
@@ -161,7 +161,9 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
 
             // message length + message body
             ClientWriter.Write7BitEncodedInt(rawMessage.Length);
-            await ClientStream.WriteAsync(rawMessage, 0, rawMessage.Length);
+            await ClientStream.WriteAsync(rawMessage, 0, rawMessage.Length)
+                .ConfigureAwait(false);
+
             return true;
         }
         catch (Exception ex)
@@ -177,7 +179,9 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
     /// <inheritdoc />
     public async Task DisconnectAsync()
     {
-        await Connection.CloseAsync(0x0C);
+        await Connection.CloseAsync(0x0C)
+            .ConfigureAwait(false);
+
         IsConnected = false;
         Disconnected?.Invoke();
     }
