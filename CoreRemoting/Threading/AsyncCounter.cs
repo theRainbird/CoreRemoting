@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CoreRemoting.Toolbox;
+namespace CoreRemoting.Threading;
 
 /// <summary>
 /// Threadsafe counter that can await for the given value.
@@ -51,6 +51,6 @@ public class AsyncCounter
     /// <summary>
     /// Increments the counter.
     /// </summary>
-    public static AsyncCounter operator ++ (AsyncCounter ac) =>
+    public static AsyncCounter operator ++(AsyncCounter ac) =>
         ac.Increment();
 }
