@@ -6,7 +6,7 @@ namespace CoreRemoting.Channels
     /// <summary>
     /// Interface for CoreRemoting client side transport channel.
     /// </summary>
-    public interface IClientChannel : IDisposable
+    public interface IClientChannel : IAsyncDisposable
     {
         /// <summary>
         /// Initializes the channel.

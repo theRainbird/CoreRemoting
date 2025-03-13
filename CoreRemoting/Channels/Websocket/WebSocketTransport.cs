@@ -10,7 +10,7 @@ namespace CoreRemoting.Channels.Websocket;
 /// <summary>
 /// Abstract web socket transport for reading and writing messages.
 /// </summary>
-public abstract class WebSocketTransport : IRawMessageTransport, IDisposable
+public abstract class WebSocketTransport : IRawMessageTransport, IAsyncDisposable
 {
     /// <summary>
     /// Handshake cookies: message encryption flag.
@@ -76,10 +76,11 @@ public abstract class WebSocketTransport : IRawMessageTransport, IDisposable
     private AsyncLock SendLock { get; } = new();
 
     /// <inheritdoc/>
-    public virtual void Dispose()
+    public virtual ValueTask DisposeAsync()
     {
         ReceiveLock.Dispose();
         SendLock.Dispose();
+        return default;
     }
 
     /// <summary>

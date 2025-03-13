@@ -852,13 +852,10 @@ namespace CoreRemoting
         /// <summary>
         /// Frees managed resources.
         /// </summary>
-        public void Dispose() =>
-            DisposeAsync().JustWait();
+        public void Dispose() => DisposeAsync().JustWait();
 
-        /// <summary>
-        /// TODO: consider implementing IDisposableAsync instead?
-        /// </summary>
-        private async Task DisposeAsync()
+        /// <inheritdoc/>
+        public async ValueTask DisposeAsync()
         {
             if (RemotingClient.DefaultRemotingClient == this)
                 RemotingClient.DefaultRemotingClient = null;
@@ -882,7 +879,9 @@ namespace CoreRemoting
             {
                 if (_channel != null)
                 {
-                    _channel.Dispose();
+                    await _channel.DisposeAsync()
+                        .ConfigureAwait(false);
+
                     _channel = null;
                 }
             }

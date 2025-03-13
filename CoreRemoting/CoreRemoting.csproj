@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <LangVersion>default</LangVersion>
@@ -46,6 +46,7 @@
 
     <ItemGroup>
       <PackageReference Include="Castle.Windsor" Version="6.0.0" />
+      <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.2" />
       <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
       <PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.3" />

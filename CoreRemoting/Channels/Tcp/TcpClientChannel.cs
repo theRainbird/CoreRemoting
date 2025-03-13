@@ -156,6 +156,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <summary>
     /// Disconnect and free manages resources.
     /// </summary>
-    public void Dispose() =>
-        DisconnectAsync().JustWait();
+    public async ValueTask DisposeAsync() =>
+        await DisconnectAsync()
+            .ConfigureAwait(false);
 }

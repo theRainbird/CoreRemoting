@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
 
@@ -82,12 +83,13 @@ public class WebsocketServerChannel : IServerChannel
     }
 
     /// <inheritdoc/>
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         StopListening();
         HttpListener = null;
 
         foreach (var conn in Connections.Values)
-            conn.Dispose();
+            await conn.DisposeAsync()
+                .ConfigureAwait(false);
     }
 }

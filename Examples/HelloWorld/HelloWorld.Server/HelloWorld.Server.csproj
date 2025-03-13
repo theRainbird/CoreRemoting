@@ -10,6 +10,7 @@
 
     <ItemGroup>
       <PackageReference Include="System.Runtime.Serialization.Formatters" Version="9.0.0" Condition="'$(TargetFramework)' == 'net8.0'" />
+      <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
     </ItemGroup>
 
     <ItemGroup>

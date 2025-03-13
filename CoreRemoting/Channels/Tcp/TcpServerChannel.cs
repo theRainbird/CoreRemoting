@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
+using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 using WatsonTcp;
 
 namespace CoreRemoting.Channels.Tcp;
@@ -82,12 +83,14 @@ public class TcpServerChannel : IServerChannel
     /// <summary>
     /// Stops listening and frees managed resources.
     /// </summary>
-    public void Dispose()
+    public ValueTask DisposeAsync()
     {
         if (_tcpServer != null)
         {
             _tcpServer.Dispose();
             _tcpServer = null;
         }
+
+        return default;
     }
 }

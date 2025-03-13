@@ -5,18 +5,18 @@ namespace CoreRemoting
     /// <summary>
     /// Interface of a CoreRemoting client.
     /// </summary>
-    public interface IRemotingClient : IDisposable
+    public interface IRemotingClient : IAsyncDisposable, IDisposable
     {
         /// <summary>
         /// Event: Fires after client was disconnected.
         /// </summary>
         event Action AfterDisconnect;
-        
+
         /// <summary>
         /// Gets the configuration settings used by the CoreRemoting client instance.
         /// </summary>
         ClientConfig Config { get; }
-        
+
         /// <summary>
         /// Gets the public key of this CoreRemoting client instance.
         /// </summary>

@@ -9,7 +9,7 @@ namespace CoreRemoting
     /// <summary>
     /// Interface of a CoreRemoting server.
     /// </summary>
-    public interface IRemotingServer : IDisposable
+    public interface IRemotingServer : IAsyncDisposable, IDisposable
     {
         /// <summary>
         /// Event: Fires when an RPC call is prepared and can be canceled.
