@@ -3,7 +3,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CoreRemoting.RemoteDelegates;
-using CoreRemoting.Tests.Tools;
+using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
 using Xunit;
 

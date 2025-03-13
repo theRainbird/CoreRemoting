@@ -4,7 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 using CoreRemoting.Tests.Tools;
-using CoreRemoting.Toolbox;
+using CoreRemoting.Threading;
 using Xunit;
 using Xunit.Sdk;
 

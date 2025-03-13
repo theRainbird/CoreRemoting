@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Tests.Tools;
+using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
 using Xunit;
 using Inv = System.InvalidOperationException;

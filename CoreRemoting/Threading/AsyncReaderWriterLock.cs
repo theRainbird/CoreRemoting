@@ -2,8 +2,9 @@
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 
-namespace CoreRemoting.Toolbox;
+namespace CoreRemoting.Threading;
 
 using ConfiguredAwaitable = ConfiguredTaskAwaitable<IAsyncDisposable>;
 
