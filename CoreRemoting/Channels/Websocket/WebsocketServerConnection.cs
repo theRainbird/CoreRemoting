@@ -7,7 +7,7 @@ namespace CoreRemoting.Channels.Websocket;
 /// <summary>
 /// Websocket connection.
 /// </summary>
-public class WebsocketServerConnection : WebSocketTransport, IAsyncDisposable
+public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="WebsocketServerConnection"/> class.

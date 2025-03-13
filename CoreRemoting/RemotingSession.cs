@@ -801,7 +801,7 @@ namespace CoreRemoting
                 // TODO: make sure that the current RPC message result gets
                 // sent to the client and processed before the session is disposed
                 if (isRpcCall)
-                    await Task.Delay(100);
+                    await Task.Delay(300);
 
                 // disposes the current session
                 _server?.SessionRepository.RemoveSession(_sessionId);

@@ -575,7 +575,7 @@ namespace CoreRemoting
         /// </summary>
         private async Task ProcessGoodbyeMessage(WireMessage message)
         {
-            await using var rpcLock = await _rpcMessageLock.WriteLock();
+            await using var rpcLock = await _rpcMessageLock.Write;
 
             _goodbyeCompletedTaskSource.TrySetResult(true);
         }
@@ -585,7 +585,7 @@ namespace CoreRemoting
         /// </summary>
         private async Task ProcessSessionClosedMessage(WireMessage message)
         {
-            await using var rpcLock = await _rpcMessageLock.WriteLock();
+            await using var rpcLock = await _rpcMessageLock.Write;
 
             _goodbyeCompletedTaskSource.TrySetResult(true);
 
@@ -627,7 +627,7 @@ namespace CoreRemoting
         /// <exception cref="KeyNotFoundException">Thrown, when the received result is of a unknown call</exception>
         private async Task ProcessRpcResultMessage(WireMessage message)
         {
-            await using var rpcLock = await _rpcMessageLock.ReadLock();
+            await using var rpcLock = await _rpcMessageLock.Read;
 
             if (_goodbyeCompletedTaskSource.Task.IsCompleted)
                 return;
