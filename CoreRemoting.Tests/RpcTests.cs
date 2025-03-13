@@ -197,9 +197,10 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
-    public void Delegate_invoked_on_server_should_callback_client()
+    public async Task Delegate_invoked_on_server_should_callback_client()
     {
         string argumentFromServer = null;
+        var serverCalled = new TaskCompletionSource<bool>();
 
         void ClientAction()
         {
@@ -219,7 +220,11 @@ public class RpcTests : IClassFixture<ServerFixture>
                 client.Connect();
 
                 var proxy = client.CreateProxy<ITestService>();
-                proxy.TestMethodWithDelegateArg(arg => argumentFromServer = arg);
+                proxy.TestMethodWithDelegateArg(arg =>
+                {
+                    argumentFromServer = arg;
+                    serverCalled.TrySetResult(true);
+                });
             }
             catch (Exception e)
             {
@@ -232,6 +237,7 @@ public class RpcTests : IClassFixture<ServerFixture>
         clientThread.Start();
         clientThread.Join();
 
+        await serverCalled.Task.Timeout(1);
         Assert.Equal("test", argumentFromServer);
         Assert.Equal(0, _serverFixture.ServerErrorCount);
     }
