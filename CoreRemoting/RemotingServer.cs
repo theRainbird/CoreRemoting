@@ -147,7 +147,7 @@ namespace CoreRemoting
         /// <summary>
         /// Gets the session repository to perform session management tasks.
         /// </summary>
-        public ISessionRepository SessionRepository { get; }
+        public ISessionRepository SessionRepository { get; private set; }
 
         /// <summary>
         /// Gets the channel used to do the raw network transport.
@@ -280,6 +280,14 @@ namespace CoreRemoting
                 RemotingServer.DefaultRemotingServer = null;
 
             _serverInstances.TryRemove(_config.UniqueServerInstanceName, out _);
+
+            if (SessionRepository != null)
+            {
+                await SessionRepository.DisposeAsync()
+                    .ConfigureAwait(false);
+
+                SessionRepository = null;
+            }
 
             if (Channel != null)
             {

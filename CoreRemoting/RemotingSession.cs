@@ -14,6 +14,7 @@ using CoreRemoting.Encryption;
 using CoreRemoting.Serialization;
 using Serialize.Linq.Nodes;
 using CoreRemoting.Toolbox;
+using CoreRemoting.Threading;
 
 namespace CoreRemoting
 {
@@ -21,7 +22,7 @@ namespace CoreRemoting
     /// Implements a CoreRemoting session, which controls the CoreRemoting protocol on application layer at server side.
     /// This is doing the RPC magic of CoreRemoting at server side.
     /// </summary>
-    public sealed class RemotingSession : IDisposable
+    public sealed class RemotingSession : IAsyncDisposable
     {
         #region Fields
 
@@ -37,7 +38,7 @@ namespace CoreRemoting
         private bool _isAuthenticated;
         private bool _isDisposing;
         private DateTime _lastActivityTimestamp;
-        private readonly CountdownEvent _currentlyProcessedMessagesCounter;
+        private readonly AsyncCountdownEvent _currentlyProcessedMessagesCounter;
         private static readonly AsyncLocal<RemotingSession> CurrentSession = new();
 
         /// <summary>
@@ -61,7 +62,7 @@ namespace CoreRemoting
             IRemotingServer server, IRawMessageTransport rawMessageTransport)
         {
             _isDisposing = false;
-            _currentlyProcessedMessagesCounter = new CountdownEvent(initialCount: 1);
+            _currentlyProcessedMessagesCounter = new(initialCount: 1);
             _sessionId = Guid.NewGuid();
             _lastActivityTimestamp = DateTime.Now;
             _isAuthenticated = false;
@@ -799,6 +800,7 @@ namespace CoreRemoting
 
         private void RemoveCurrentSession(bool isRpcMethodCall)
         {
+            // TODO: await the returned task
             Task.Run(async () =>
             {
                 // TODO: make sure that the current RPC message result gets
@@ -807,18 +809,18 @@ namespace CoreRemoting
                     await Task.Delay(300);
 
                 // disposes the current session
-                _server?.SessionRepository.RemoveSession(_sessionId);
+                await _server?.SessionRepository.RemoveSession(_sessionId);
             });
         }
 
         #endregion
 
-        #region IDisposable implementation
+        #region IAsyncDisposable and IDisposable implementations
 
         /// <summary>
         /// Frees managed resources.
         /// </summary>
-        public void Dispose()
+        public async ValueTask DisposeAsync()
         {
             if (_isDisposing)
                 return;
@@ -829,7 +831,9 @@ namespace CoreRemoting
             _rawMessageTransport.ErrorOccured -= OnErrorOccured;
 
             _currentlyProcessedMessagesCounter.Signal();
-            _currentlyProcessedMessagesCounter.Wait(_server.Config.WaitTimeForCurrentlyProcessedMessagesOnDispose);
+            await _currentlyProcessedMessagesCounter.WaitAsync()
+                .Expire(_server.Config.WaitTimeForCurrentlyProcessedMessagesOnDispose)
+                    .ConfigureAwait(false);
 
             var sharedSecret =
                 MessageEncryption
@@ -838,7 +842,7 @@ namespace CoreRemoting
 
             var wireMessage =
                 _server.MessageEncryptionManager.CreateWireMessage(
-                    serializedMessage: Array.Empty<byte>(),
+                    serializedMessage: [],
                     serializer: _server.Serializer,
                     sharedSecret: sharedSecret,
                     keyPair: _keyPair,
@@ -846,9 +850,9 @@ namespace CoreRemoting
 
             try
             {
-                _rawMessageTransport.SendMessageAsync(
+                await _rawMessageTransport.SendMessageAsync(
                     _server.Serializer.Serialize(wireMessage))
-                        .JustWait();
+                        .ConfigureAwait(false);
             }
             catch (Exception)
             {
@@ -863,7 +867,6 @@ namespace CoreRemoting
             _delegateProxyCache.Clear();
             _delegateProxyCache = null;
             _rawMessageTransport = null;
-            _currentlyProcessedMessagesCounter.Dispose();
         }
 
         #endregion

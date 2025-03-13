@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using CoreRemoting.Channels;
 
 namespace CoreRemoting
@@ -7,7 +8,7 @@ namespace CoreRemoting
     /// <summary>
     /// Interface to be implemented by CoreRemoting session repository classes.
     /// </summary>
-    public interface ISessionRepository : IDisposable
+    public interface ISessionRepository : IAsyncDisposable
     {
         /// <summary>
         /// Gets the key size for asymmetric encryption. Should be 3072 or better in 2021 ;)
@@ -44,6 +45,6 @@ namespace CoreRemoting
         /// Removes a specified session by its ID.
         /// </summary>
         /// <param name="sessionId">Session ID</param>
-        void RemoveSession(Guid sessionId);
+        Task RemoveSession(Guid sessionId);
     }
 }
