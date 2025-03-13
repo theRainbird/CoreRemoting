@@ -7,7 +7,7 @@ using Xunit;
 namespace CoreRemoting.Tests.Threading;
 
 /// <summary>
-/// Unit tests based on Nito.AsyncEx unit tests for the AsyncManualResetEvent class:
+/// Unit tests based on Nito.AsyncEx unit tests for the AsyncManualResetEvent class by Stephen Cleary:
 /// https://github.com/StephenCleary/AsyncEx/blob/master/test/AsyncEx.Coordination.UnitTests/AsyncManualResetEventUnitTests.cs
 /// </summary>
 public class AsyncManualResetEventTests
