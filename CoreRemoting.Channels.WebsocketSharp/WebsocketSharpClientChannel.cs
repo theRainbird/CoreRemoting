@@ -131,9 +131,9 @@ namespace CoreRemoting.Channels.WebsocketSharp
         /// <summary>
         /// Disconnect and free manages resources.
         /// </summary>
-        public void Dispose()
+        public async ValueTask DisposeAsync()
         {
-            DisconnectAsync().JustWait();
+            await DisconnectAsync();
             _webSocket = null;
         }
 

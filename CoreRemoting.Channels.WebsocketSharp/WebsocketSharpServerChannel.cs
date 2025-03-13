@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using WebSocketSharp.Server;
 
 namespace CoreRemoting.Channels.WebsocketSharp
@@ -60,11 +61,12 @@ namespace CoreRemoting.Channels.WebsocketSharp
         /// <summary>
         /// Stops listening and frees managed resources.
         /// </summary>
-        public void Dispose()
+        public ValueTask DisposeAsync()
         {
             StopListening();
             _webSocketServer = null;
             _server = null;
+            return default;
         }
     }
 }

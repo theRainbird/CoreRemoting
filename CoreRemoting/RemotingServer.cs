@@ -12,6 +12,8 @@ using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Bson;
 using ServiceLifetime = CoreRemoting.DependencyInjection.ServiceLifetime;
 using System.Runtime.ExceptionServices;
+using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting
 {
@@ -269,7 +271,10 @@ namespace CoreRemoting
         /// <summary>
         /// Frees managed resources.
         /// </summary>
-        public void Dispose()
+        public void Dispose() => DisposeAsync().JustWait();
+
+        /// <inheritdoc/>
+        public async ValueTask DisposeAsync()
         {
             if (RemotingServer.DefaultRemotingServer == this)
                 RemotingServer.DefaultRemotingServer = null;
@@ -278,7 +283,9 @@ namespace CoreRemoting
 
             if (Channel != null)
             {
-                Channel.Dispose();
+                await Channel.DisposeAsync()
+                    .ConfigureAwait(false);
+
                 Channel = null;
             }
         }

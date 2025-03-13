@@ -1,12 +1,13 @@
 ﻿using System;
 using System.Net.WebSockets;
+using System.Threading.Tasks;
 
 namespace CoreRemoting.Channels.Websocket;
 
 /// <summary>
 /// Websocket connection.
 /// </summary>
-public class WebsocketServerConnection : WebSocketTransport, IDisposable
+public class WebsocketServerConnection : WebSocketTransport, IAsyncDisposable
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="WebsocketServerConnection"/> class.
@@ -64,10 +65,11 @@ public class WebsocketServerConnection : WebSocketTransport, IDisposable
     }
 
     /// <inheritdoc />
-    public override void Dispose()
+    public override async ValueTask DisposeAsync()
     {
         WebSocket.Dispose();
 
-        base.Dispose();
+        await base.DisposeAsync()
+            .ConfigureAwait(false);
     }
 }

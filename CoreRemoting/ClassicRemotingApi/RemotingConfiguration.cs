@@ -3,9 +3,11 @@ using System.Configuration;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using CoreRemoting.Authentication;
 using CoreRemoting.ClassicRemotingApi.ConfigSection;
 using CoreRemoting.DependencyInjection;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.ClassicRemotingApi
 {
@@ -86,20 +88,34 @@ namespace CoreRemoting.ClassicRemotingApi
         /// Unregisters a CoreRemoting server.
         /// </summary>
         /// <param name="uniqueServerInstanceName">Unique name of the server instance</param>
-        public static void UnregisterServer(string uniqueServerInstanceName)
+        public static void UnregisterServer(string uniqueServerInstanceName) =>
+            UnregisterServerAsync(uniqueServerInstanceName).JustWait();
+
+        /// <summary>
+        /// Unregisters a CoreRemoting server asynchronously.
+        /// </summary>
+        /// <param name="uniqueServerInstanceName">Unique name of the server instance</param>
+        public static async Task UnregisterServerAsync(string uniqueServerInstanceName)
         {
             var server = RemotingServer.GetActiveServerInstance(uniqueServerInstanceName);
-            server?.Dispose();
+            await (server?.DisposeAsync() ?? default).ConfigureAwait(false);
         }
-        
+
         /// <summary>
         /// Unregisters a CoreRemoting client.
         /// </summary>
         /// <param name="uniqueClientInstanceName">Unique name of the client instance</param>
-        public static void UnregisterClient(string uniqueClientInstanceName)
+        public static void UnregisterClient(string uniqueClientInstanceName) =>
+            UnregisterClientAsync(uniqueClientInstanceName).JustWait();
+
+        /// <summary>
+        /// Unregisters a CoreRemoting client asynchronously.
+        /// </summary>
+        /// <param name="uniqueClientInstanceName">Unique name of the client instance</param>
+        public static async Task UnregisterClientAsync(string uniqueClientInstanceName)
         {
             var client = RemotingClient.GetActiveClientInstance(uniqueClientInstanceName);
-            client?.Dispose();
+            await (client?.DisposeAsync() ?? default).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -197,13 +213,21 @@ namespace CoreRemoting.ClassicRemotingApi
         /// <summary>
         /// Shutdown all registered clients and servers.
         /// </summary>
-        public static void ShutdownAll()
+        public static void ShutdownAll() =>
+            ShutdownAllAsync().JustWait();
+
+        /// <summary>
+        /// Shutdown all registered clients and servers asynchronously.
+        /// </summary>
+        public static async Task ShutdownAllAsync()
         {
             foreach (var registeredClient in RegisteredClientInstances)
-                registeredClient.Dispose();
-            
+                await registeredClient.DisposeAsync()
+                    .ConfigureAwait(false);
+
             foreach (var registeredServer in RegisteredServerInstances)
-                registeredServer.Dispose();
+                await registeredServer.DisposeAsync()
+                    .ConfigureAwait(false);
         }
     }
 }

@@ -100,18 +100,19 @@ public class WebsocketClientChannel : WebSocketTransport, IClientChannel
     }
 
     /// <inheritdoc />
-    public override void Dispose()
+    public override async ValueTask DisposeAsync()
     {
         if (ClientWebSocket == null)
             return;
 
         if (IsConnected)
-            DisconnectAsync()
-                .JustWait();
+            await DisconnectAsync()
+                .ConfigureAwait(false);
 
         ClientWebSocket.Dispose();
         ClientWebSocket = null;
 
-        base.Dispose();
+        await base.DisposeAsync()
+            .ConfigureAwait(false);
     }
 }
