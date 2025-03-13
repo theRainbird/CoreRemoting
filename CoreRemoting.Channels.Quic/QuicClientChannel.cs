@@ -187,19 +187,17 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
     }
 
     /// <inheritdoc />
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         if (Connection == null)
             return;
 
         if (IsConnected)
-            DisconnectAsync()
-                .JustWait();
+            await DisconnectAsync()
+                .ConfigureAwait(false);
 
-        Connection.DisposeAsync()
-            .ConfigureAwait(false)
-                .GetAwaiter()
-                .GetResult();
+        await Connection.DisposeAsync()
+            .ConfigureAwait(false);
         Connection = null;
 
         // clean up readers/writers

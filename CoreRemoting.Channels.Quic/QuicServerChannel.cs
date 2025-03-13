@@ -111,9 +111,10 @@ public class QuicServerChannel : IServerChannel
     }
 
     /// <inheritdoc/>
-    public void Dispose()
+    public ValueTask DisposeAsync()
     {
         StopListening();
         Listener = null;
+        return default;
     }
 }
