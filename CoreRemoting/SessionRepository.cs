@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Timers;
 using CoreRemoting.Channels;
 
@@ -124,10 +125,11 @@ namespace CoreRemoting
         /// Removes a specified session by its ID.
         /// </summary>
         /// <param name="sessionId">Session ID</param>
-        public void RemoveSession(Guid sessionId)
+        public async Task RemoveSession(Guid sessionId)
         {
             if (_sessions.TryRemove(sessionId, out var session))
-                session.Dispose();
+                await session.DisposeAsync()
+                    .ConfigureAwait(false);
         }
 
         /// <summary>
@@ -138,7 +140,7 @@ namespace CoreRemoting
         /// <summary>
         /// Frees managed resources.
         /// </summary>
-        public void Dispose()
+        public async ValueTask DisposeAsync()
         {
             if (_inactiveSessionSweepTimer != null)
             {
@@ -150,7 +152,8 @@ namespace CoreRemoting
             while (_sessions.Count > 0)
             {
                 var sessionId = _sessions.First().Key;
-                RemoveSession(sessionId);
+                await RemoveSession(sessionId)
+                    .ConfigureAwait(false);
             }
         }
     }

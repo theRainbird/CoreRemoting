@@ -20,10 +20,10 @@ public class AsyncCountdownEvent
     /// <summary>
     /// Initializes a new instance of the <see cref="AsyncCountdownEvent"/> class.
     /// </summary>
-    public AsyncCountdownEvent(long count = 0)
+    public AsyncCountdownEvent(long initialCount = 0)
     {
-        _mre = new AsyncManualResetEvent(count == 0);
-        _count = count;
+        _mre = new AsyncManualResetEvent(initialCount == 0);
+        _count = initialCount;
     }
 
     /// <summary>
