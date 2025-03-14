@@ -10,12 +10,12 @@ namespace CoreRemoting.RemoteDelegates
         /// <summary>
         /// Creates a new instance of the RemoteDelegateInvocationEventAggregator class.
         /// </summary>
-        /// <param name="delgateType">Delegate type</param>
+        /// <param name="delegateType">Delegate type</param>
         /// <param name="uniqueCallKey">Unique key to correlate the RPC call</param>
         /// <param name="handlerKey">Unique handler key to correlate the client delegate to be called, when remote delegate is invoked</param>
         /// <param name="remoteDelegateArguments">Arguments of remote delegate invocation</param>
-        internal delegate object RemoteDelegateInvocationNeededEventHandler(
-            Type delgateType,
+        internal delegate void RemoteDelegateInvocationNeededEventHandler(
+            Type delegateType,
             Guid uniqueCallKey,
             Guid handlerKey,
             object[] remoteDelegateArguments);
@@ -34,12 +34,12 @@ namespace CoreRemoting.RemoteDelegates
         /// <returns>Return value provided by the client side callback</returns>
         internal object InvokeRemoteDelegate(Type delegateType, Guid handlerKey, object[] remoteDelegateArguments)
         {
-            return
-                RemoteDelegateInvocationNeeded?.Invoke(
-                    delgateType: delegateType,
-                    uniqueCallKey: Guid.NewGuid(),
-                    handlerKey: handlerKey, 
-                    remoteDelegateArguments: remoteDelegateArguments);
+            RemoteDelegateInvocationNeeded?.Invoke(
+                delegateType: delegateType,
+                uniqueCallKey: Guid.NewGuid(),
+                handlerKey: handlerKey, 
+                remoteDelegateArguments: remoteDelegateArguments);
+            return null;
         }
     }
 }
