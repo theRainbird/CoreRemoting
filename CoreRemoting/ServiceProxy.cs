@@ -103,10 +103,8 @@ namespace CoreRemoting
 
             if (clientRpcContext.Error)
             {
-                if (clientRpcContext.RemoteException == null)
-                    throw new RemoteInvocationException();
-
-                throw clientRpcContext.RemoteException;
+                throw clientRpcContext.RemoteException ??
+                    new RemoteInvocationException();
             }
 
             var resultMessage = clientRpcContext.ResultMessage;
@@ -195,10 +193,8 @@ namespace CoreRemoting
 
             if (clientRpcContext.Error)
             {
-                if (clientRpcContext.RemoteException == null)
-                    throw new RemoteInvocationException();
-
-                throw clientRpcContext.RemoteException;
+                throw clientRpcContext.RemoteException ??
+                    new RemoteInvocationException();
             }
 
             var resultMessage = clientRpcContext.ResultMessage;
