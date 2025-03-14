@@ -125,11 +125,11 @@ namespace CoreRemoting
             }
 
             _remoteDelegateInvocationEventAggregator.RemoteDelegateInvocationNeeded +=
-                (_, uniqueCallKey, handlerKey, arguments) =>
+                async (_, uniqueCallKey, handlerKey, arguments) =>
                 {
                     // handle graceful client disconnection
                     if (_isDisposing)
-                        return null;
+                        return;
 
                     var sharedSecret =
                         MessageEncryption
@@ -156,9 +156,9 @@ namespace CoreRemoting
                     try
                     {
                         // Invoke remote delegate on client
-                        _rawMessageTransport?.SendMessageAsync(
-                            _server.Serializer.Serialize(remoteDelegateInvocationWebsocketMessage))
-                                .JustWait();
+                        await (_rawMessageTransport?.SendMessageAsync(
+                            _server.Serializer.Serialize(remoteDelegateInvocationWebsocketMessage)) ?? Task.CompletedTask)
+                                .ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
@@ -167,8 +167,6 @@ namespace CoreRemoting
                             $"Session: {SessionId}, Unique call key: {uniqueCallKey}, " +
                             $"Handler key: {handlerKey}", ex);
                     }
-
-                    return null;
                 };
 
             _rawMessageTransport?.SendMessageAsync(
