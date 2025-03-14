@@ -334,8 +334,8 @@ public class RpcTests : IClassFixture<ServerFixture>
     {
         using var ctx = ValidationSyncContext.Install();
 
-        var serviceEventCalled = false;
-        var customDelegateEventCalled = false;
+        var serviceEventCallCount = 0;
+        var customDelegateEventCallCount = 0;
 
         using var client = new RemotingClient(
             new ClientConfig()
@@ -356,13 +356,13 @@ public class RpcTests : IClassFixture<ServerFixture>
 
         proxy.ServiceEvent += () =>
         {
-            serviceEventCalled = true;
+            Interlocked.Increment(ref serviceEventCallCount);
             serviceEventResetEvent.Set();
         };
 
         proxy.CustomDelegateEvent += _ =>
         {
-            customDelegateEventCalled = true;
+            Interlocked.Increment(ref customDelegateEventCallCount);
             customDelegateEventResetEvent.Set();
         };
 
@@ -372,8 +372,8 @@ public class RpcTests : IClassFixture<ServerFixture>
         serviceEventResetEvent.Wait(1000);
         customDelegateEventResetEvent.Wait(1000);
 
-        Assert.True(serviceEventCalled);
-        Assert.True(customDelegateEventCalled);
+        Assert.Equal(1, serviceEventCallCount);
+        Assert.Equal(1, customDelegateEventCallCount);
         Assert.Equal(0, _serverFixture.ServerErrorCount);
     }
 
