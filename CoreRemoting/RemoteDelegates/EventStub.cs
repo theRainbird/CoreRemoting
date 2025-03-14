@@ -308,6 +308,38 @@ public class EventStub
         }
     }
 
+    private bool GetWiredTo(object instance) =>
+        AttachmentHelper.Get(instance, out bool wired) ? wired : false;
+
+    private void SetWiredTo(object instance, bool wired) =>
+        AttachmentHelper.Set(instance, wired);
+
+    private object WiredSync { get; } = new();
+
+    private bool IsAlreadyWired(object instance)
+    {
+        lock (WiredSync)
+        {
+            if (GetWiredTo(instance))
+                return true;
+
+            SetWiredTo(instance, true);
+            return false;
+        }
+    }
+
+    private bool IsAlreadyUnwired(object instance)
+    {
+        lock (WiredSync)
+        {
+            if (!GetWiredTo(instance))
+                return true;
+
+            SetWiredTo(instance, false);
+            return false;
+        }
+    }
+
     /// <summary>
     /// Wires all event handlers to the specified instance.
     /// </summary>
@@ -316,7 +348,8 @@ public class EventStub
     {
         if (instance == null ||
             EventProperties.Length +
-            DelegateProperties.Length == 0)
+            DelegateProperties.Length == 0 ||
+            IsAlreadyWired(instance))
         {
             return;
         }
@@ -342,7 +375,8 @@ public class EventStub
     {
         if (instance == null ||
             EventProperties.Length +
-            DelegateProperties.Length == 0)
+            DelegateProperties.Length == 0 ||
+            IsAlreadyUnwired(instance))
         {
             return;
         }
