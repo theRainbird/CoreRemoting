@@ -193,7 +193,7 @@ public class SessionTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
-    public async Task CloseSession_method_should_close_session_gracefully_issue55_and156()
+    public virtual async Task CloseSession_method_should_close_session_gracefully_issue55_and156()
     {
         using var client = new RemotingClient(new ClientConfig()
         {
@@ -213,8 +213,7 @@ public class SessionTests : IClassFixture<ServerFixture>
         var proxy = client.CreateProxy<ISessionAwareService>();
 
         // Wait(1s) should finish after CloseSession(0.5s)
-        // TODO: fix https://github.com/theRainbird/CoreRemoting/issues/156 and Wait(1)
-        var proxy_Wait = proxy.Wait(0.5);
+        var proxy_Wait = proxy.Wait(1);
 
         // CloseSession shouldn't throw exceptions
         await proxy.CloseSession(0.5);
