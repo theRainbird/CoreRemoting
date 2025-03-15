@@ -94,5 +94,11 @@ namespace CoreRemoting
         /// Gets or sets an utility class to create remoting proxies.
         /// </summary>
         public RemotingProxyBuilder ProxyBuilder { get; set; }
+
+        /// <summary>
+        /// Gets or sets the time in milliseconds that Dispose should wait for currently processed messages to finish.
+        /// Set -1 to wait forever (default is 300 milliseconds).
+        /// </summary>
+        public int WaitTimeForCurrentlyProcessedMessagesOnDispose { get; set; } = 300;
     }
 }
