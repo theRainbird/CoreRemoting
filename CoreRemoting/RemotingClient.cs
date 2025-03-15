@@ -41,7 +41,7 @@ namespace CoreRemoting
         private readonly AsyncLock _activeCallsLock;
         private Guid _sessionId;
         private readonly object _sessionLock;
-        private readonly AsyncReaderWriterLock _rpcMessageLock;
+        private readonly AsyncCountdownEvent _currentlyPendingMessagesCounter;
         private TaskCompletionSource<bool> _handshakeCompletedTaskSource;
         private TaskCompletionSource<bool> _authenticationCompletedTaskSource;
         private TaskCompletionSource<bool> _goodbyeCompletedTaskSource;
@@ -71,7 +71,7 @@ namespace CoreRemoting
             _activeCallsLock = new();
             _channelLock = new();
             _sessionLock = new();
-            _rpcMessageLock = new();
+            _currentlyPendingMessagesCounter = new(initialCount: 1);
             _cancellationTokenSource = new();
             _delegateRegistry = new();
             _handshakeCompletedTaskSource = new();
@@ -275,6 +275,12 @@ namespace CoreRemoting
         /// <param name="quiet">When set to true, no goodbye message is sent to the server</param>
         public async Task DisconnectAsync(bool quiet = false)
         {
+            _currentlyPendingMessagesCounter.Signal();
+
+            await _currentlyPendingMessagesCounter.WaitAsync()
+                .ExpireMs(_config.WaitTimeForCurrentlyProcessedMessagesOnDispose)
+                    .ConfigureAwait(false);
+
             if (_channel == null)
                 return;
 
@@ -472,7 +478,7 @@ namespace CoreRemoting
                     ProcessRemoteDelegateInvocationMessage(message);
                     break;
                 case "goodbye":
-                    await ProcessGoodbyeMessage(message);
+                    ProcessGoodbyeMessage(message);
                     break;
                 case "session_closed":
                     await ProcessSessionClosedMessage(message);
@@ -574,10 +580,8 @@ namespace CoreRemoting
         /// <summary>
         /// Processes a goodbye message.
         /// </summary>
-        private async Task ProcessGoodbyeMessage(WireMessage message)
+        private void ProcessGoodbyeMessage(WireMessage message)
         {
-            await using var rpcLock = await _rpcMessageLock.Write;
-
             _goodbyeCompletedTaskSource.TrySetResult(true);
         }
 
@@ -586,8 +590,6 @@ namespace CoreRemoting
         /// </summary>
         private async Task ProcessSessionClosedMessage(WireMessage message)
         {
-            await using var rpcLock = await _rpcMessageLock.Write;
-
             _goodbyeCompletedTaskSource.TrySetResult(true);
 
             await DisconnectAsync(quiet: true);
@@ -628,7 +630,9 @@ namespace CoreRemoting
         /// <exception cref="KeyNotFoundException">Thrown, when the received result is of a unknown call</exception>
         private async Task ProcessRpcResultMessage(WireMessage message)
         {
-            await using var rpcLock = await _rpcMessageLock.Read;
+            // decrease the counter when finished processing
+            using var signal = Disposable.Create(() =>
+                _currentlyPendingMessagesCounter.Signal());
 
             if (_goodbyeCompletedTaskSource.Task.IsCompleted)
                 return;
@@ -725,6 +729,7 @@ namespace CoreRemoting
         /// <returns>Results of the remote method invocation</returns>
         internal async Task<ClientRpcContext> InvokeRemoteMethod(MethodCallMessage methodCallMessage, bool oneWay = false)
         {
+            _currentlyPendingMessagesCounter.AddCount(oneWay ? 0 : 1);
             var sharedSecret = SharedSecret();
 
             using (await _activeCallsLock)
@@ -889,7 +894,6 @@ namespace CoreRemoting
 
             _keyPair?.Dispose();
             _activeCallsLock.Dispose();
-            _rpcMessageLock.Dispose();
         }
 
         #endregion

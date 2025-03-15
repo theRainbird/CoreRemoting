@@ -90,6 +90,12 @@ public static class TaskExtensions
     }
 
     /// <summary>
+    /// Ensures that the given task is either executed within the specified timeout or skipped.
+    /// </summary>
+    public static Task<bool> ExpireMs(this Task task, int milliseconds) =>
+        task.Expire(milliseconds / 1000.0);
+
+    /// <summary>
     /// Waits for the task to complete, but doesn't wrap
     /// the exception in an <see cref="AggregateException"/>.
     /// </summary>

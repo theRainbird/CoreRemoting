@@ -830,7 +830,7 @@ namespace CoreRemoting
 
             _currentlyProcessedMessagesCounter.Signal();
             await _currentlyProcessedMessagesCounter.WaitAsync()
-                .Expire(_server.Config.WaitTimeForCurrentlyProcessedMessagesOnDispose)
+                .ExpireMs(_server.Config.WaitTimeForCurrentlyProcessedMessagesOnDispose)
                     .ConfigureAwait(false);
 
             var sharedSecret =
