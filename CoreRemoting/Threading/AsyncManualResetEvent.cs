@@ -53,7 +53,7 @@ public class AsyncManualResetEvent
     /// <summary>
     /// Sets the event. If it's already set, does nothing.
     /// </summary>
-    public void Set() => Synced(() => _tcs.TrySetResult(true));
+    public void Set() => Synced(() => _tcs).TrySetResult(true);
 
     /// <summary>
     /// Resets the event. If it's already reset, does nothing.
