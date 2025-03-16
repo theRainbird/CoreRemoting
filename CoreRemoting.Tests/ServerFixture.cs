@@ -121,6 +121,11 @@ public class ServerFixture : IDisposable
         {
             Server.Dispose();
         }
+
+        if (ServerErrorCount > 0 && LastServerError != null)
+        {
+            Console.WriteLine($"ServerFixture.Dispose(): LastServerError: {LastServerError.ToString()}");
+        }
     }
 }
 

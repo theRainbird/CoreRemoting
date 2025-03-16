@@ -301,7 +301,10 @@ namespace CoreRemoting
                 _keepSessionAliveTimer = null;
             }
 
-            var sharedSecret = SharedSecret();
+            var sharedSecret =
+                MessageEncryption
+                     ? sessionId.ToByteArray()
+                     : null;
 
             if (!quiet)
             {
