@@ -104,12 +104,13 @@ public class TcpConnection : IRawMessageTransport
     }
 
     /// <summary>
-    /// Closes the internal websocket session.
+    /// Closes the internal tcp channel session.
     /// </summary>
-    private void BeforeDisposeSession()
+    private async void BeforeDisposeSession()
     {
         _session = null;
-        _tcpServer.DisconnectClientAsync(_clientMetadata.Guid, MessageStatus.Shutdown);
+        await _tcpServer.DisconnectClientAsync(_clientMetadata.Guid, MessageStatus.Shutdown)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
