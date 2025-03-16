@@ -83,14 +83,16 @@ public class TcpServerChannel : IServerChannel
     /// <summary>
     /// Stops listening and frees managed resources.
     /// </summary>
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (_tcpServer != null)
         {
+            // work around TaskCanceledException, see
+            // https://github.com/dotnet/WatsonTcp/issues/303
+            await Task.Delay(10).ConfigureAwait(false);
+
             _tcpServer.Dispose();
             _tcpServer = null;
         }
-
-        return default;
     }
 }

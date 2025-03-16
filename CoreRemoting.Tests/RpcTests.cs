@@ -50,6 +50,21 @@ public class RpcTests : IClassFixture<ServerFixture>
         Assert.IsType<ValidationSyncContext>(SynchronizationContext.Current);
     }
 
+    private void CheckServerErrorCount()
+    {
+        try
+        {
+            Assert .Equal(0, _serverFixture.ServerErrorCount);
+        }
+        finally
+        {
+            if (_serverFixture.ServerErrorCount != 0)
+            {
+                Console.WriteLine($"LastServerError: {_serverFixture.LastServerError.ToString()}");
+            }
+        }
+    }
+
     [Fact]
     public void Call_on_Proxy_should_be_invoked_on_remote_service()
     {
@@ -120,7 +135,7 @@ public class RpcTests : IClassFixture<ServerFixture>
         clientThread.Join();
 
         Assert.True(_remoteServiceCalled);
-        Assert.Equal(0, _serverFixture.ServerErrorCount);
+        CheckServerErrorCount();
     }
 
     [Fact]
@@ -193,7 +208,7 @@ public class RpcTests : IClassFixture<ServerFixture>
         _serverFixture.Server.Config.MessageEncryption = false;
 
         Assert.True(_remoteServiceCalled);
-        Assert.Equal(0, _serverFixture.ServerErrorCount);
+        CheckServerErrorCount();
     }
 
     [Fact]
@@ -239,7 +254,7 @@ public class RpcTests : IClassFixture<ServerFixture>
 
         await serverCalled.Task.Timeout(1);
         Assert.Equal("test", argumentFromServer);
-        Assert.Equal(0, _serverFixture.ServerErrorCount);
+        CheckServerErrorCount();
     }
 
     [Fact]
@@ -374,7 +389,7 @@ public class RpcTests : IClassFixture<ServerFixture>
 
         Assert.Equal(1, serviceEventCallCount);
         Assert.Equal(1, customDelegateEventCallCount);
-        Assert.Equal(0, _serverFixture.ServerErrorCount);
+        CheckServerErrorCount();
     }
 
     [Fact]
@@ -421,7 +436,7 @@ public class RpcTests : IClassFixture<ServerFixture>
         clientThread.Join();
 
         Assert.True(_remoteServiceCalled);
-        Assert.Equal(0, _serverFixture.ServerErrorCount);
+        CheckServerErrorCount();
     }
 
     [Fact]
@@ -443,7 +458,7 @@ public class RpcTests : IClassFixture<ServerFixture>
         var result = proxy.Echo("Yay");
 
         Assert.Equal("Yay", result);
-        Assert.Equal(0, _serverFixture.ServerErrorCount);
+        CheckServerErrorCount();
     }
 
     [Fact]
@@ -465,7 +480,7 @@ public class RpcTests : IClassFixture<ServerFixture>
         var result = proxy.BaseMethod();
 
         Assert.True(result);
-        Assert.Equal(0, _serverFixture.ServerErrorCount);
+        CheckServerErrorCount();
     }
 
     [Fact]
@@ -489,7 +504,7 @@ public class RpcTests : IClassFixture<ServerFixture>
 
         Assert.Equal(TestEnum.First, resultFirst);
         Assert.Equal(TestEnum.Second, resultSecond);
-        Assert.Equal(0, _serverFixture.ServerErrorCount);
+        CheckServerErrorCount();
     }
 
     [Fact]
@@ -530,7 +545,7 @@ public class RpcTests : IClassFixture<ServerFixture>
         Assert.Contains("Missing Method", ex.Message);
 
         Console.WriteLine(_serverFixture.LastServerError);
-        Assert.Equal(0, _serverFixture.ServerErrorCount);
+        CheckServerErrorCount();
     }
 
     [Fact]
@@ -556,7 +571,7 @@ public class RpcTests : IClassFixture<ServerFixture>
         // a localized message similar to "Service 'System.IDisposable' is not registered"
         Assert.NotNull(ex);
         Assert.Contains("IDisposable", ex.Message);
-        Assert.Equal(0, _serverFixture.ServerErrorCount);
+        CheckServerErrorCount();
     }
 
     [Fact]
@@ -1388,7 +1403,7 @@ public class RpcTests : IClassFixture<ServerFixture>
         var result3 = proxy3.Echo("Yay");
         Assert.Equal("Yay", result3);
 
-        Assert.Equal(0, _serverFixture.ServerErrorCount);
+        CheckServerErrorCount();
     }
 
     [Fact]
@@ -1420,6 +1435,6 @@ public class RpcTests : IClassFixture<ServerFixture>
         Assert.Equal("[Yay]", proxy3.Echo("Yay"));
         Assert.Equal(1, proxy3.Echo(1));
 
-        Assert.Equal(0, _serverFixture.ServerErrorCount);
+        CheckServerErrorCount();
     }
 }
