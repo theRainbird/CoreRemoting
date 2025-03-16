@@ -44,7 +44,7 @@ namespace CoreRemoting
         private readonly AsyncCountdownEvent _currentlyPendingMessagesCounter;
         private TaskCompletionSource<bool> _handshakeCompletedTaskSource;
         private TaskCompletionSource<bool> _authenticationCompletedTaskSource;
-        private TaskCompletionSource<bool> _goodbyeCompletedTaskSource;
+        private readonly AsyncManualResetEvent _goodbyeCompletedEvent;
         private bool _isAuthenticated;
         private Timer _keepSessionAliveTimer;
         private byte[] _serverPublicKeyBlob;
@@ -76,7 +76,7 @@ namespace CoreRemoting
             _delegateRegistry = new();
             _handshakeCompletedTaskSource = new();
             _authenticationCompletedTaskSource = new();
-            _goodbyeCompletedTaskSource = new();
+            _goodbyeCompletedEvent = new();
         }
 
         /// <summary>
@@ -131,7 +131,7 @@ namespace CoreRemoting
             var activeCalls = _activeCalls;
             _activeCalls = null;
 
-            _goodbyeCompletedTaskSource.TrySetResult(true);
+            _goodbyeCompletedEvent.Set();
 
             if (activeCalls == null)
                 return;
@@ -241,7 +241,8 @@ namespace CoreRemoting
             if (_channel == null)
                 throw new RemotingException("No client channel configured.");
 
-            _goodbyeCompletedTaskSource = new();
+            _goodbyeCompletedEvent.Reset();
+
             using (await _activeCallsLock)
                 _activeCalls = new Dictionary<Guid, ClientRpcContext>();
 
@@ -300,10 +301,7 @@ namespace CoreRemoting
                 _keepSessionAliveTimer = null;
             }
 
-            byte[] sharedSecret =
-                MessageEncryption
-                    ? sessionId.ToByteArray()
-                    : null;
+            var sharedSecret = SharedSecret();
 
             if (!quiet)
             {
@@ -321,19 +319,22 @@ namespace CoreRemoting
                         keyPair: _keyPair,
                         sharedSecret: sharedSecret);
 
-                byte[] rawData = Serializer.Serialize(wireMessage);
+                var rawData = Serializer.Serialize(wireMessage);
 
-                //_goodbyeCompletedWaitHandle.Reset();
+                _goodbyeCompletedEvent.Reset();
 
-                if (await _channel.RawMessageTransport.SendMessageAsync(rawData).ConfigureAwait(false))
-                    await _goodbyeCompletedTaskSource.Task.Expire(10).ConfigureAwait(false);
+                await _channel.RawMessageTransport.SendMessageAsync(rawData)
+                    .ConfigureAwait(false);
+
+                await _goodbyeCompletedEvent.WaitAsync().Expire(10)
+                    .ConfigureAwait(false);
             }
 
             using (await _channelLock)
             {
-                var channel = _channel;
-                if (channel != null)
-                    await channel.DisconnectAsync().ConfigureAwait(false);
+                if (_channel is IClientChannel channel)
+                    await channel.DisconnectAsync()
+                        .ConfigureAwait(false);
             }
 
             OnDisconnected();
@@ -580,20 +581,14 @@ namespace CoreRemoting
         /// <summary>
         /// Processes a goodbye message.
         /// </summary>
-        private void ProcessGoodbyeMessage(WireMessage message)
-        {
-            _goodbyeCompletedTaskSource.TrySetResult(true);
-        }
+        private void ProcessGoodbyeMessage(WireMessage message) =>
+            _goodbyeCompletedEvent.Set();
 
         /// <summary>
         /// Processes a session_closed message.
         /// </summary>
-        private async Task ProcessSessionClosedMessage(WireMessage message)
-        {
-            _goodbyeCompletedTaskSource.TrySetResult(true);
-
-            await DisconnectAsync(quiet: true);
-        }
+        private Task ProcessSessionClosedMessage(WireMessage message) =>
+            DisconnectAsync(quiet: true);
 
         /// <summary>
         /// Processes a remote delegate invocation message from server.
@@ -601,7 +596,7 @@ namespace CoreRemoting
         /// <param name="message">Deserialized WireMessage that contains a RemoteDelegateInvocationMessage</param>
         private void ProcessRemoteDelegateInvocationMessage(WireMessage message)
         {
-            if (_goodbyeCompletedTaskSource.Task.IsCompleted)
+            if (_goodbyeCompletedEvent.IsSet)
                 return;
 
             var sharedSecret = SharedSecret();
@@ -634,7 +629,7 @@ namespace CoreRemoting
             using var signal = Disposable.Create(() =>
                 _currentlyPendingMessagesCounter.Signal());
 
-            if (_goodbyeCompletedTaskSource.Task.IsCompleted)
+            if (_goodbyeCompletedEvent.IsSet)
                 return;
 
             var sharedSecret = SharedSecret();
