@@ -97,8 +97,8 @@ namespace CoreRemoting
 
         /// <summary>
         /// Gets or sets the time in milliseconds that Dispose should wait for currently processed messages to finish.
-        /// Set -1 to wait forever (default is 300 milliseconds).
+        /// Set -1 to wait forever (default is 500 milliseconds).
         /// </summary>
-        public int WaitTimeForCurrentlyProcessedMessagesOnDispose { get; set; } = 300;
+        public int WaitTimeForCurrentlyProcessedMessagesOnDispose { get; set; } = 500;
     }
 }

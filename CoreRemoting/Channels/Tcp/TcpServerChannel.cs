@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
-using CoreRemoting.Toolbox;
 using WatsonTcp;
 
 namespace CoreRemoting.Channels.Tcp;
@@ -89,7 +88,7 @@ public class TcpServerChannel : IServerChannel
         {
             // work around TaskCanceledException, see
             // https://github.com/dotnet/WatsonTcp/issues/303
-            await Task.Delay(10).ConfigureAwait(false);
+            await Task.Delay(100).ConfigureAwait(false);
 
             _tcpServer.Dispose();
             _tcpServer = null;
