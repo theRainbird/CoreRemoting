@@ -54,12 +54,9 @@ namespace CoreRemoting
         /// </summary>
         /// <param name="sender">Event sender</param>
         /// <param name="e">Event arguments</param>
-        private void InactiveSessionSweepTimerOnElapsed(object sender, ElapsedEventArgs e)
+        private async void InactiveSessionSweepTimerOnElapsed(object sender, ElapsedEventArgs e)
         {
-            if (_inactiveSessionSweepTimer == null)
-                return;
-
-            if (!_inactiveSessionSweepTimer.Enabled)
+            if (_inactiveSessionSweepTimer == null || !_inactiveSessionSweepTimer.Enabled)
                 return;
 
             var inactiveSessionIdList =
@@ -70,7 +67,8 @@ namespace CoreRemoting
 
             foreach (var inactiveSessionId in inactiveSessionIdList)
             {
-                RemoveSession(inactiveSessionId);
+                await RemoveSession(inactiveSessionId)
+                    .ConfigureAwait(false);
             }
         }
 
