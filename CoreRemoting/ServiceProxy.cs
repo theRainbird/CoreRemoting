@@ -63,6 +63,16 @@ namespace CoreRemoting
         }
 
         /// <summary>
+        /// Gets the type of the service interface.
+        /// </summary>
+        public Type ServiceInterfaceType => typeof(TServiceInterface);
+
+        /// <summary>
+        /// Gets the name of the service;
+        /// </summary>
+        public string ServiceName => _serviceName;
+
+        /// <summary>
         /// Intercepts a synchronous call of a member on the proxy object.
         /// </summary>
         /// <param name="invocation">Intercepted invocation details</param>

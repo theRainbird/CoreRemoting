@@ -259,10 +259,7 @@ namespace CoreRemoting
         {
             _lastActivityTimestamp = DateTime.Now;
 
-            if (rawMessage == null)
-                return;
-
-            if (rawMessage.Length == 0)
+            if (rawMessage == null || rawMessage.Length == 0)
                 return;
 
             _currentlyProcessedMessagesCounter.AddCount(1);
