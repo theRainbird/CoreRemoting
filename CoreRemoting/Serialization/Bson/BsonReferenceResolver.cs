@@ -74,9 +74,7 @@ internal class BsonReferenceResolver : IReferenceResolver
     private BidirectionalDictionary<string, object> GetMappings(object context)
     {
         if (context.Get<BidirectionalDictionary<string, object>>(out var result))
-        {
             return result;
-        }
 
         var mappings = new BidirectionalDictionary<string, object>();
         context.Set(mappings);
@@ -95,8 +93,8 @@ internal class BsonReferenceResolver : IReferenceResolver
 
         if (!mappings.TryGetBySecond(value, out string reference))
         {
-            Interlocked.Increment(ref _referenceCount);
-            reference = _referenceCount.ToString(CultureInfo.InvariantCulture);
+            var refCounter = Interlocked.Increment(ref _referenceCount);
+            reference = refCounter.ToString(CultureInfo.InvariantCulture);
             mappings.Set(reference, value);
         }
 
