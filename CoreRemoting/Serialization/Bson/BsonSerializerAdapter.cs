@@ -35,7 +35,8 @@ namespace CoreRemoting.Serialization.Bson
                 DateFormatHandling = DateFormatHandling.IsoDateFormat,
                 DateParseHandling = DateParseHandling.DateTime,
                 DefaultValueHandling = DefaultValueHandling.Include,
-                FloatParseHandling = FloatParseHandling.Double
+                FloatParseHandling = FloatParseHandling.Double,
+                ReferenceResolverProvider = () => new BsonReferenceResolver(),
             };
 
             // Add support for DataSet DiffGram serialization
