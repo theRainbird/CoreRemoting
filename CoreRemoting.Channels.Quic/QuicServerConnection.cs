@@ -3,6 +3,7 @@ using System.IO;
 using System.Net.Quic;
 using System.Text;
 using System.Threading.Tasks;
+using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Quic;
@@ -52,6 +53,10 @@ public class QuicServerConnection : IRawMessageTransport
     /// </summary>
     public event Action Disconnected;
 
+    private AsyncLock ReceiveLock { get; } = new();
+
+    private AsyncLock SendLock { get; } = new();
+
     /// <inheritdoc/>
     public async Task<bool> SendMessageAsync(byte[] rawMessage)
     {
@@ -60,6 +65,8 @@ public class QuicServerConnection : IRawMessageTransport
             if (rawMessage.Length > MaxMessageSize)
                 throw new InvalidOperationException("Message is too large. Max size: " +
                     MaxMessageSize + ", actual size: " + rawMessage.Length);
+
+            using var sendLock = await SendLock;
 
             // message length + message body
             ClientWriter.Write7BitEncodedInt(rawMessage.Length);
@@ -79,45 +86,48 @@ public class QuicServerConnection : IRawMessageTransport
     /// <summary>
     /// Starts listening to the incoming messages.
     /// </summary>
-    public Guid StartListening()
+    public async Task<Guid> StartListening()
     {
-        var sessionId = CreateRemotingSession();
-        _ = Task.Run(() => ReadIncomingMessages());
+        var sessionId = await CreateRemotingSession();
+        _ = Task.Run(ReadIncomingMessages);
         return sessionId;
     }
 
     /// <summary>
     /// Creates <see cref="RemotingSession"/> for the incoming QUIC connection.
     /// </summary>
-    private Guid CreateRemotingSession()
+    private async Task<Guid> CreateRemotingSession()
     {
         // read handshake message
-        var clientPublicKey = ReadIncomingMessage();
+        var clientPublicKey = await ReadIncomingMessage()
+            .ConfigureAwait(false);
 
         // disable message encryption if handshake is empty
         if (clientPublicKey != null && clientPublicKey.Length == 0)
             clientPublicKey = null;
 
         Session = RemotingServer.SessionRepository.CreateSession(
-            clientPublicKey, Connection.RemoteEndPoint.ToString(), 
+            clientPublicKey, Connection.RemoteEndPoint.ToString(),
                 RemotingServer, this);
 
         return Session.SessionId;
     }
 
-    private byte[] ReadIncomingMessage()
+    private async Task<byte[]> ReadIncomingMessage()
     {
+    	using var receiveLock = await ReceiveLock;
         var messageSize = ClientReader.Read7BitEncodedInt();
         return ClientReader.ReadBytes(Math.Min(messageSize, MaxMessageSize));
     }
 
-    private void ReadIncomingMessages()
+    private async Task ReadIncomingMessages()
     {
         try
         {
             while (true)
             {
-                var message = ReadIncomingMessage();
+                var message = await ReadIncomingMessage()
+                    .ConfigureAwait(false);
                 ReceiveMessage(message ?? []);
             }
         }
@@ -131,7 +141,7 @@ public class QuicServerConnection : IRawMessageTransport
         }
         finally
         {
-            Connection?.DisposeAsync().JustWait();
+            await (Connection?.DisposeAsync() ?? default);
             Connection = null;
         }
     }

@@ -89,7 +89,9 @@ public class QuicServerChannel : IServerChannel
                         .ConfigureAwait(false);
 
                     var session = new QuicServerConnection(connection, stream, Server);
-                    var sessionId = session.StartListening();
+                    var sessionId = await session.StartListening()
+                        .ConfigureAwait(false);
+
                     Connections[sessionId] = session;
                 }
                 catch
