@@ -6,6 +6,7 @@ using CoreRemoting.Channels.Websocket;
 using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Serialization.Binary;
+using CoreRemoting.Serialization.Bson;
 using CoreRemoting.Tests.Tools;
 using Xunit;
 
@@ -27,7 +28,7 @@ public class RemotingConfigurationTests : IClassFixture<ServerFixture>
         });
 
         var server = RemotingConfiguration.GetRegisteredServer("Server1");
-        
+
         RemotingConfiguration.RegisterWellKnownServiceType(
             interfaceType: typeof(ITestService),
             implementationType: typeof(TestService),
@@ -36,13 +37,13 @@ public class RemotingConfigurationTests : IClassFixture<ServerFixture>
             uniqueServerInstanceName: "Server1");
 
         var service =  server.ServiceRegistry.GetService("Service1");
-        
+
         Assert.NotNull(service);
         Assert.Equal(typeof(TestService), service.GetType());
-        
+
         RemotingConfiguration.ShutdownAll();
     }
-    
+
     [Fact]
     public void RemotingServer_should_register_on_construction_AND_unregister_on_Dispose()
     {
@@ -50,13 +51,13 @@ public class RemotingConfigurationTests : IClassFixture<ServerFixture>
         {
             UniqueServerInstanceName = "Server1"
         });
-        
+
         Assert.NotNull(RemotingConfiguration.GetRegisteredServer("Server1"));
-        
+
         var server = RemotingConfiguration.GetRegisteredServer("Server1");
-        
+
         server.Dispose();
-        
+
         Assert.Null(RemotingConfiguration.GetRegisteredServer("Server1"));
     }
 
@@ -68,30 +69,30 @@ public class RemotingConfigurationTests : IClassFixture<ServerFixture>
             Path.Combine(
                 Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!,
                 "TestConfig.xml");
-        
+
         RemotingConfiguration.Configure(
             fileName: configFileName,
-            credentials: new []
-            {
+            credentials:
+            [
                 new Credential() { Name = "token", Value = "123" }
-            });
+            ]);
 
         var server = RemotingConfiguration.GetRegisteredServer("TestServer4711");
 
         if (!server.Config.Channel.IsListening)
             throw new ApplicationException("Channel is listening.");
-        
+
         var authProvider = (FakeAuthProvider) server.Config.AuthenticationProvider;
-        authProvider.AuthenticateFake = credentials => 
-            credentials.Length == 1 && 
+        authProvider.AuthenticateFake = credentials =>
+            credentials.Length == 1 &&
             credentials[0].Name == "token" &&
             credentials[0].Value == "123";
-        
+
         Assert.NotNull(server);
         Assert.Equal(8089, server.Config.NetworkPort);
         Assert.Equal("localhost", server.Config.HostName);
         Assert.Equal(2048, server.Config.KeySize);
-        Assert.IsType<BinarySerializerAdapter>(server.Serializer);
+        Assert.IsType<BsonSerializerAdapter>(server.Serializer);
         Assert.IsType<WebsocketServerChannel>(server.Config.Channel);
         Assert.IsType<FakeAuthProvider>(server.Config.AuthenticationProvider);
         Assert.True(server.Config.AuthenticationRequired);
@@ -100,12 +101,12 @@ public class RemotingConfigurationTests : IClassFixture<ServerFixture>
         Assert.IsType<TestService>(server.ServiceRegistry.GetService("TestService"));
 
         var client = RemotingConfiguration.GetRegisteredClient("TestClient");
-    
+
         Assert.NotNull(client);
         Assert.Equal(8089, client.Config.ServerPort);
         Assert.Equal("localhost", client.Config.ServerHostName);
         Assert.Equal(2048, client.Config.KeySize);
-        Assert.IsType<BinarySerializerAdapter>(client.Config.Serializer);
+        Assert.IsType<BsonSerializerAdapter>(client.Config.Serializer);
         Assert.IsType<WebsocketClientChannel>(client.Config.Channel);
         Assert.True(client.Config.MessageEncryption);
         Assert.True(client.Config.IsDefault);
@@ -115,7 +116,7 @@ public class RemotingConfigurationTests : IClassFixture<ServerFixture>
 
         var proxy = (ITestService)RemotingServices.Connect(typeof(ITestService), "TestService");
         Assert.True(client.IsConnected);
-        
+
         var result = proxy.Echo("hello");
         Assert.Equal("hello", result);
 

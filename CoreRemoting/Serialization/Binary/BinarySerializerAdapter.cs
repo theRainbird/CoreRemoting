@@ -21,6 +21,9 @@ namespace CoreRemoting.Serialization.Binary
         public BinarySerializerAdapter(BinarySerializerConfig config = null)
         {
             _config = config;
+
+            // throw early if formatter is not supported by the platform
+            Serialize(new object());
         }
 
         /// <summary>
