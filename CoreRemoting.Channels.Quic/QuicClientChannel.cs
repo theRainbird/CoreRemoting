@@ -6,6 +6,7 @@ using System.Net.Quic;
 using System.Net.Security;
 using System.Text;
 using System.Threading.Tasks;
+using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Quic;
@@ -125,12 +126,17 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
         _ = Task.Run(ReadIncomingMessages);
     }
 
-    private void ReadIncomingMessages()
+    private AsyncLock ReceiveLock { get; } = new();
+
+    private AsyncLock SendLock { get; } = new();
+
+    private async Task ReadIncomingMessages()
     {
         try
         {
             while (IsConnected)
             {
+                using var receiveLock = await ReceiveLock;
                 var messageSize = ClientReader.Read7BitEncodedInt();
                 var message = ClientReader.ReadBytes(Math.Min(messageSize, MaxMessageSize));
                 ReceiveMessage(message);
@@ -146,7 +152,8 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
         }
         finally
         {
-            DisconnectAsync().JustWait();
+            await DisconnectAsync()
+                .ConfigureAwait(false);
         }
     }
 
@@ -158,6 +165,8 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
             if (rawMessage.Length > MaxMessageSize)
                 throw new InvalidOperationException("Message is too large. Max size: " +
                     MaxMessageSize + ", actual size: " + rawMessage.Length);
+
+            using var sendLock = await SendLock;
 
             // message length + message body
             ClientWriter.Write7BitEncodedInt(rawMessage.Length);
