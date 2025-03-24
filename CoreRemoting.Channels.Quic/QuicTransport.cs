@@ -11,8 +11,12 @@ namespace CoreRemoting.Channels.Quic;
 /// </summary>
 public abstract class QuicTransport : IAsyncDisposable
 {
-    internal const int MaxMessageSize = 1024 * 1024 * 128;
     internal const string ProtocolName = nameof(CoreRemoting);
+
+    /// <summary>
+    /// Gets or sets the maximal size of network message.
+    /// </summary>
+    public int MaxMessageSize { get; set; } = 1024 * 1024 * 128;
 
     /// <inheritdoc />
     public NetworkException LastException { get; set; }
@@ -96,13 +100,6 @@ public abstract class QuicTransport : IAsyncDisposable
         return Task.FromResult(Guid.Empty);
     }
 
-    protected async Task<byte[]> ReadIncomingMessage()
-    {
-        using var receiveLock = await ReceiveLock;
-        var messageSize = ClientReader.Read7BitEncodedInt();
-        return ClientReader.ReadBytes(Math.Min(messageSize, MaxMessageSize));
-    }
-
     /// <inheritdoc />
     public async Task<bool> SendMessageAsync(byte[] rawMessage)
     {
@@ -129,6 +126,15 @@ public abstract class QuicTransport : IAsyncDisposable
             OnErrorOccured(ex.Message, ex);
             return false;
         }
+    }
+
+    protected async Task<byte[]> ReadIncomingMessage()
+    {
+        // TODO: check message size and skip bytes if message is too large
+        // TODO: rewind the incoming stream to the next message border if possible
+        using var receiveLock = await ReceiveLock;
+        var messageSize = ClientReader.Read7BitEncodedInt();
+        return ClientReader.ReadBytes(Math.Min(messageSize, MaxMessageSize));
     }
 
     /// <summary>
