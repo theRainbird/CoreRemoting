@@ -2,7 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Threading.Tasks;
-using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
 
@@ -91,5 +90,7 @@ public class WebsocketServerChannel : IServerChannel
         foreach (var conn in Connections.Values)
             await conn.DisposeAsync()
                 .ConfigureAwait(false);
+
+        Connections.Clear();
     }
 }

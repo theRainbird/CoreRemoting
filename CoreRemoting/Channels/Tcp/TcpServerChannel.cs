@@ -65,13 +65,8 @@ public class TcpServerChannel : IServerChannel
     /// <summary>
     /// Stop listening for client requests.
     /// </summary>
-    public void StopListening()
-    {
-        if (_tcpServer == null)
-            return;
-
-        _tcpServer.Stop();
-    }
+    public void StopListening() =>
+        _tcpServer?.Stop();
 
     /// <summary>
     /// Gets whether the channel is listening or not.

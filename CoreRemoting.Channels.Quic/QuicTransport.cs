@@ -84,6 +84,92 @@ public abstract class QuicTransport : IAsyncDisposable
 
     protected AsyncLock SendLock { get; } = new();
 
+    /// <summary>
+    /// Starts listening for the incoming messages.
+    /// </summary>
+    /// <returns>
+    /// Client session identity, if used on server.
+    /// </returns>
+    public virtual Task<Guid> StartListening()
+    {
+        _ = Task.Run(ReadIncomingMessages);
+        return Task.FromResult(Guid.Empty);
+    }
+
+    protected async Task<byte[]> ReadIncomingMessage()
+    {
+        using var receiveLock = await ReceiveLock;
+        var messageSize = ClientReader.Read7BitEncodedInt();
+        return ClientReader.ReadBytes(Math.Min(messageSize, MaxMessageSize));
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> SendMessageAsync(byte[] rawMessage)
+    {
+        try
+        {
+            if (rawMessage.Length > MaxMessageSize)
+                throw new InvalidOperationException("Message is too large. Max size: " +
+                    MaxMessageSize + ", actual size: " + rawMessage.Length);
+
+            using var sendLock = await SendLock;
+
+            // message length + message body
+            ClientWriter.Write7BitEncodedInt(rawMessage.Length);
+            await ClientStream.WriteAsync(rawMessage, 0, rawMessage.Length)
+                .ConfigureAwait(false);
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LastException = ex as NetworkException ??
+                new NetworkException(ex.Message, ex);
+
+            OnErrorOccured(ex.Message, ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Reads the incoming network messages until disconnected.
+    /// </summary>
+    protected async Task ReadIncomingMessages()
+    {
+        try
+        {
+            while (IsConnected)
+            {
+                var message = await ReadIncomingMessage()
+                    .ConfigureAwait(false);
+
+                OnReceiveMessage(message ?? []);
+            }
+        }
+        catch (Exception ex)
+        {
+            LastException = ex as NetworkException ??
+                new NetworkException(ex.Message, ex);
+
+            OnErrorOccured(ex.Message, LastException);
+        }
+        finally
+        {
+            await DisconnectAsync()
+                .ConfigureAwait(false);
+        }
+    }
+
+    /// <inheritdoc />
+    public virtual async Task DisconnectAsync()
+    {
+        await Connection.CloseAsync(0x0C)
+            .ConfigureAwait(false);
+
+        IsConnected = false;
+        OnDisconnected();
+    }
+
     /// <inheritdoc/>
     public virtual ValueTask DisposeAsync()
     {

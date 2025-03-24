@@ -4,6 +4,9 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace CoreRemoting.Channels.Quic;
 
+/// <summary>
+/// Self-signed certificate generator for the QUIC channel.
+/// </summary>
 internal class CertificateHelper
 {
     public static X509Certificate2 LoadFromPfx(string pfxFilePath, string pfxPassword) =>

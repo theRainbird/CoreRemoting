@@ -77,81 +77,11 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
 
         // start listening for incoming messages
         IsConnected = true;
-        StartListening();
+        await StartListening();
 
         // send handshake message
         await SendMessageAsync(handshakeMessage).ConfigureAwait(false);
         OnConnected();
-    }
-
-    public virtual void StartListening()
-    {
-        _ = Task.Run(ReadIncomingMessages);
-    }
-
-    private async Task ReadIncomingMessages()
-    {
-        try
-        {
-            while (IsConnected)
-            {
-                using var receiveLock = await ReceiveLock;
-                var messageSize = ClientReader.Read7BitEncodedInt();
-                var message = ClientReader.ReadBytes(Math.Min(messageSize, MaxMessageSize));
-                OnReceiveMessage(message);
-            }
-        }
-        catch (Exception ex)
-        {
-            LastException = ex as NetworkException ??
-                new NetworkException(ex.Message, ex);
-
-            OnErrorOccured(ex.Message, ex);
-            OnDisconnected();
-        }
-        finally
-        {
-            await DisconnectAsync()
-                .ConfigureAwait(false);
-        }
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> SendMessageAsync(byte[] rawMessage)
-    {
-        try
-        {
-            if (rawMessage.Length > MaxMessageSize)
-                throw new InvalidOperationException("Message is too large. Max size: " +
-                    MaxMessageSize + ", actual size: " + rawMessage.Length);
-
-            using var sendLock = await SendLock;
-
-            // message length + message body
-            ClientWriter.Write7BitEncodedInt(rawMessage.Length);
-            await ClientStream.WriteAsync(rawMessage, 0, rawMessage.Length)
-                .ConfigureAwait(false);
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LastException = ex as NetworkException ??
-                new NetworkException(ex.Message, ex);
-
-            OnErrorOccured(ex.Message, ex);
-            return false;
-        }
-    }
-
-    /// <inheritdoc />
-    public async Task DisconnectAsync()
-    {
-        await Connection.CloseAsync(0x0C)
-            .ConfigureAwait(false);
-
-        IsConnected = false;
-        OnDisconnected();
     }
 
     /// <inheritdoc />

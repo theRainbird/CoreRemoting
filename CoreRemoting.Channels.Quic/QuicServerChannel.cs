@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
@@ -102,20 +103,31 @@ public class QuicServerChannel : IServerChannel
     }
 
     /// <inheritdoc/>
-    public void StopListening()
+    public void StopListening() =>
+        StopListeningAsync().JustWait();
+
+    private async Task StopListeningAsync()
     {
         if (Listener != null && IsListening)
         {
             IsListening = false;
-            Listener.DisposeAsync().JustWait();
+            await Listener.DisposeAsync()
+                .ConfigureAwait(false);
         }
     }
 
     /// <inheritdoc/>
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
-        StopListening();
+        await StopListeningAsync()
+            .ConfigureAwait(false);
+
         Listener = null;
-        return default;
+
+        foreach (var conn in Connections.Values.ToArray())
+            await conn.DisposeAsync()
+                .ConfigureAwait(false);
+
+        Connections.Clear();
     }
 }

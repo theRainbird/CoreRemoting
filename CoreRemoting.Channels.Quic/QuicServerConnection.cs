@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using System.Net.Quic;
 using System.Text;
 using System.Threading.Tasks;
@@ -21,45 +20,24 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
         RemotingServer = remotingServer ?? throw new ArgumentNullException(nameof(remotingServer));
         ClientReader = new(stream, Encoding.UTF8, true);
         ClientWriter = new(stream, Encoding.UTF8, true);
+        IsConnected = true;
     }
 
     private IRemotingServer RemotingServer { get; set; }
 
     private RemotingSession Session { get; set; }
 
-    /// <inheritdoc/>
-    public async Task<bool> SendMessageAsync(byte[] rawMessage)
-    {
-        try
-        {
-            if (rawMessage.Length > MaxMessageSize)
-                throw new InvalidOperationException("Message is too large. Max size: " +
-                    MaxMessageSize + ", actual size: " + rawMessage.Length);
-
-            using var sendLock = await SendLock;
-
-            // message length + message body
-            ClientWriter.Write7BitEncodedInt(rawMessage.Length);
-            await ClientStream.WriteAsync(rawMessage, 0, rawMessage.Length);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LastException = ex as NetworkException ??
-                new NetworkException(ex.Message, ex);
-
-            OnErrorOccured(ex.Message, ex);
-            return false;
-        }
-    }
-
     /// <summary>
     /// Starts listening to the incoming messages.
     /// </summary>
-    public async Task<Guid> StartListening()
+    public override async Task<Guid> StartListening()
     {
-        var sessionId = await CreateRemotingSession();
-        _ = Task.Run(ReadIncomingMessages);
+        var sessionId = await CreateRemotingSession()
+            .ConfigureAwait(false);
+
+        await base.StartListening()
+            .ConfigureAwait(false);
+
         return sessionId;
     }
 
@@ -81,39 +59,5 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
                 RemotingServer, this);
 
         return Session.SessionId;
-    }
-
-    private async Task<byte[]> ReadIncomingMessage()
-    {
-    	using var receiveLock = await ReceiveLock;
-        var messageSize = ClientReader.Read7BitEncodedInt();
-        return ClientReader.ReadBytes(Math.Min(messageSize, MaxMessageSize));
-    }
-
-    private async Task ReadIncomingMessages()
-    {
-        try
-        {
-            while (true)
-            {
-                var message = await ReadIncomingMessage()
-                    .ConfigureAwait(false);
-
-                OnReceiveMessage(message ?? []);
-            }
-        }
-        catch (Exception ex)
-        {
-            LastException = ex as NetworkException ??
-                new NetworkException(ex.Message, ex);
-
-            OnErrorOccured(ex.Message, LastException);
-            OnDisconnected();
-        }
-        finally
-        {
-            await (Connection?.DisposeAsync() ?? default);
-            Connection = null;
-        }
     }
 }
