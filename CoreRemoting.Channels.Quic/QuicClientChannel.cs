@@ -1,24 +1,17 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
 using System.Text;
 using System.Threading.Tasks;
-using CoreRemoting.Threading;
-using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Quic;
 
 /// <summary>
-/// Client side QUIC channel implementation based on System.Net.Quic.
+/// Client side QUIC channel implementation, based on System.Net.Quic.
 /// </summary>
-public class QuicClientChannel : IClientChannel, IRawMessageTransport
+public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTransport
 {
-    internal const int MaxMessageSize = 1024 * 1024 * 128;
-    internal const string ProtocolName = nameof(CoreRemoting);
-
     /// <summary>
     /// Gets or sets the URL this channel is connected to.
     /// </summary>
@@ -30,36 +23,8 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
 
     private QuicClientConnectionOptions Options { get; set; }
 
-    private QuicConnection Connection { get; set; }
-
-    private QuicStream ClientStream { get; set; }
-
-    private BinaryReader ClientReader { get; set; }
-
-    private BinaryWriter ClientWriter { get; set; }
-
-    /// <inheritdoc />
-    public bool IsConnected { get; private set; }
-
     /// <inheritdoc />
     public IRawMessageTransport RawMessageTransport => this;
-
-    /// <inheritdoc />
-    public NetworkException LastException { get; set; }
-
-    /// <summary>
-    /// Event: fires when the channel is connected.
-    /// </summary>
-    public event Action Connected;
-
-    /// <inheritdoc />
-    public event Action Disconnected;
-
-    /// <inheritdoc />
-    public event Action<byte[]> ReceiveMessage;
-
-    /// <inheritdoc />
-    public event Action<string, Exception> ErrorOccured;
 
     /// <inheritdoc />
     public void Init(IRemotingClient client)
@@ -68,30 +33,28 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
         if (!QuicConnection.IsSupported)
             throw new NotSupportedException("QUIC is not supported.");
 
-        Url =
-            "quic://" +
+        Url = "quic://" +
             client.Config.ServerHostName + ":" +
-            Convert.ToString(client.Config.ServerPort) +
-            "/rpc";
+            client.Config.ServerPort + "/rpc";
 
         Uri = new Uri(Url);
 
         // prepare QUIC client connection options
-        Options = new QuicClientConnectionOptions
+        Options = new()
         {
             RemoteEndPoint = new IPEndPoint(IPAddress.Loopback, Uri.Port), //new DnsEndPoint(Uri.Host, Uri.Port),
             DefaultStreamErrorCode = 0x0A,
             DefaultCloseErrorCode = 0x0B,
             MaxInboundUnidirectionalStreams = 10,
             MaxInboundBidirectionalStreams = 100,
-            ClientAuthenticationOptions = new SslClientAuthenticationOptions()
+            ClientAuthenticationOptions = new()
             {
                 // accept self-signed certificates generated on-the-fly
                 RemoteCertificateValidationCallback = (sender, certificate, chain, errors) => true,
-                ApplicationProtocols = new List<SslApplicationProtocol>()
-                {
+                ApplicationProtocols =
+                [
                     new SslApplicationProtocol(ProtocolName)
-                }
+                ]
             }
         };
     }
@@ -102,8 +65,8 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
         // connect and open duplex stream
         Connection = await QuicConnection.ConnectAsync(Options).ConfigureAwait(false);
         ClientStream = await Connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional).ConfigureAwait(false);
-        ClientReader = new BinaryReader(ClientStream, Encoding.UTF8, leaveOpen: true);
-        ClientWriter = new BinaryWriter(ClientStream, Encoding.UTF8, leaveOpen: true);
+        ClientReader = new(ClientStream, Encoding.UTF8, leaveOpen: true);
+        ClientWriter = new(ClientStream, Encoding.UTF8, leaveOpen: true);
 
         // prepare handshake message
         var handshakeMessage = Array.Empty<byte>();
@@ -118,17 +81,13 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
 
         // send handshake message
         await SendMessageAsync(handshakeMessage).ConfigureAwait(false);
-        Connected?.Invoke();
+        OnConnected();
     }
 
     public virtual void StartListening()
     {
         _ = Task.Run(ReadIncomingMessages);
     }
-
-    private AsyncLock ReceiveLock { get; } = new();
-
-    private AsyncLock SendLock { get; } = new();
 
     private async Task ReadIncomingMessages()
     {
@@ -139,7 +98,7 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
                 using var receiveLock = await ReceiveLock;
                 var messageSize = ClientReader.Read7BitEncodedInt();
                 var message = ClientReader.ReadBytes(Math.Min(messageSize, MaxMessageSize));
-                ReceiveMessage(message);
+                OnReceiveMessage(message);
             }
         }
         catch (Exception ex)
@@ -147,8 +106,8 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
             LastException = ex as NetworkException ??
                 new NetworkException(ex.Message, ex);
 
-            ErrorOccured?.Invoke(ex.Message, ex);
-            Disconnected?.Invoke();
+            OnErrorOccured(ex.Message, ex);
+            OnDisconnected();
         }
         finally
         {
@@ -180,7 +139,7 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
             LastException = ex as NetworkException ??
                 new NetworkException(ex.Message, ex);
 
-            ErrorOccured?.Invoke(ex.Message, ex);
+            OnErrorOccured(ex.Message, ex);
             return false;
         }
     }
@@ -192,11 +151,11 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
             .ConfigureAwait(false);
 
         IsConnected = false;
-        Disconnected?.Invoke();
+        OnDisconnected();
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         if (Connection == null)
             return;
@@ -214,5 +173,8 @@ public class QuicClientChannel : IClientChannel, IRawMessageTransport
         ClientReader = null;
         ClientWriter.Dispose();
         ClientWriter = null;
+
+        await base.DisposeAsync()
+            .ConfigureAwait(false);
     }
 }

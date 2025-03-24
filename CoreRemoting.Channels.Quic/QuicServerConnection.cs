@@ -3,18 +3,14 @@ using System.IO;
 using System.Net.Quic;
 using System.Text;
 using System.Threading.Tasks;
-using CoreRemoting.Threading;
-using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Quic;
 
 /// <summary>
-/// Quic server-side connection.
+/// Server-side QUIC channel connection, based on System.Net.Quic.
 /// </summary>
-public class QuicServerConnection : IRawMessageTransport
+public class QuicServerConnection : QuicTransport, IRawMessageTransport
 {
-    private const int MaxMessageSize = QuicClientChannel.MaxMessageSize;
-
     /// <summary>
     /// Initializes a new instance of the <see cref="QuicServerConnection"/> class.
     /// </summary>
@@ -23,39 +19,13 @@ public class QuicServerConnection : IRawMessageTransport
         Connection = connection ?? throw new ArgumentNullException(nameof(connection));
         ClientStream = stream ?? throw new ArgumentNullException(nameof(stream));
         RemotingServer = remotingServer ?? throw new ArgumentNullException(nameof(remotingServer));
-        ClientReader = new BinaryReader(stream, Encoding.UTF8, true);
-        ClientWriter = new BinaryWriter(stream, Encoding.UTF8, true);
+        ClientReader = new(stream, Encoding.UTF8, true);
+        ClientWriter = new(stream, Encoding.UTF8, true);
     }
-
-    private QuicConnection Connection { get; set; }
-
-    private QuicStream ClientStream { get; set; }
-
-    private BinaryReader ClientReader { get; set; }
-
-    private BinaryWriter ClientWriter { get; set; }
 
     private IRemotingServer RemotingServer { get; set; }
 
     private RemotingSession Session { get; set; }
-
-    /// <inheritdoc/>
-    public NetworkException LastException { get; set; }
-
-    /// <inheritdoc/>
-    public event Action<byte[]> ReceiveMessage;
-
-    /// <inheritdoc/>
-    public event Action<string, Exception> ErrorOccured;
-
-    /// <summary>
-    /// Event: fires when a web socket is disconnected.
-    /// </summary>
-    public event Action Disconnected;
-
-    private AsyncLock ReceiveLock { get; } = new();
-
-    private AsyncLock SendLock { get; } = new();
 
     /// <inheritdoc/>
     public async Task<bool> SendMessageAsync(byte[] rawMessage)
@@ -78,7 +48,7 @@ public class QuicServerConnection : IRawMessageTransport
             LastException = ex as NetworkException ??
                 new NetworkException(ex.Message, ex);
 
-            ErrorOccured?.Invoke(ex.Message, ex);
+            OnErrorOccured(ex.Message, ex);
             return false;
         }
     }
@@ -128,7 +98,8 @@ public class QuicServerConnection : IRawMessageTransport
             {
                 var message = await ReadIncomingMessage()
                     .ConfigureAwait(false);
-                ReceiveMessage(message ?? []);
+
+                OnReceiveMessage(message ?? []);
             }
         }
         catch (Exception ex)
@@ -136,8 +107,8 @@ public class QuicServerConnection : IRawMessageTransport
             LastException = ex as NetworkException ??
                 new NetworkException(ex.Message, ex);
 
-            ErrorOccured?.Invoke(ex.Message, LastException);
-            Disconnected?.Invoke();
+            OnErrorOccured(ex.Message, LastException);
+            OnDisconnected();
         }
         finally
         {

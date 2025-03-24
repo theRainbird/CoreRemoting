@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
@@ -10,7 +9,7 @@ using CoreRemoting.Toolbox;
 namespace CoreRemoting.Channels.Quic;
 
 /// <summary>
-/// Server side QUIC channel implementation based on System.Net.Quic.
+/// Server side QUIC channel implementation, based on System.Net.Quic.
 /// </summary>
 public class QuicServerChannel : IServerChannel
 {
@@ -44,17 +43,17 @@ public class QuicServerChannel : IServerChannel
         var certificate = CertificateHelper.GenerateSelfSigned(uri.DnsSafeHost);
         ListenEndPoint = new IPEndPoint(IPAddress.Loopback, uri.Port); // TODO: Loopback
 
-        Options = new QuicServerConnectionOptions()
+        Options = new()
         {
             DefaultStreamErrorCode = 0x0A,
             DefaultCloseErrorCode = 0x0B,
-            ServerAuthenticationOptions = new SslServerAuthenticationOptions
+            ServerAuthenticationOptions = new()
             {
                 ServerCertificate = certificate,
-                ApplicationProtocols = new List<SslApplicationProtocol>()
-                {
-                    new SslApplicationProtocol(QuicClientChannel.ProtocolName)
-                },
+                ApplicationProtocols =
+                [
+                    new SslApplicationProtocol(QuicTransport.ProtocolName)
+                ],
             }
         };
     }
@@ -65,14 +64,14 @@ public class QuicServerChannel : IServerChannel
         _ = Task.Run(async () =>
         {
             // start the listener
-            Listener = await QuicListener.ListenAsync(new QuicListenerOptions()
+            Listener = await QuicListener.ListenAsync(new()
             {
                 ListenEndPoint = ListenEndPoint,
                 ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(Options),
-                ApplicationProtocols = new List<SslApplicationProtocol>()
-                {
-                    new SslApplicationProtocol(QuicClientChannel.ProtocolName)
-                },
+                ApplicationProtocols =
+                [
+                    new SslApplicationProtocol(QuicTransport.ProtocolName)
+                ],
             })
             .ConfigureAwait(false);
 
