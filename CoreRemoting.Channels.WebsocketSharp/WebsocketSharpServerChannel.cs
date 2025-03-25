@@ -2,71 +2,70 @@ using System;
 using System.Threading.Tasks;
 using WebSocketSharp.Server;
 
-namespace CoreRemoting.Channels.WebsocketSharp
+namespace CoreRemoting.Channels.WebsocketSharp;
+
+/// <summary>
+/// Server side websocket channel implementation based on websocket-sharp.
+/// </summary>
+public class WebsocketSharpServerChannel : IServerChannel
 {
+    private WebSocketServer _webSocketServer;
+    private IRemotingServer _server;
+
     /// <summary>
-    /// Server side websocket channel implementation based on websocket-sharp.
+    /// Initializes the channel.
     /// </summary>
-    public class WebsocketSharpServerChannel : IServerChannel
+    /// <param name="server">CoreRemoting sever</param>
+    public void Init(IRemotingServer server)
     {
-        private WebSocketServer _webSocketServer;
-        private IRemotingServer _server;
+        _server = server ?? throw new ArgumentNullException(nameof(server));
 
-        /// <summary>
-        /// Initializes the channel.
-        /// </summary>
-        /// <param name="server">CoreRemoting sever</param>
-        public void Init(IRemotingServer server)
+        _webSocketServer = new WebSocketServer(_server.Config.NetworkPort, secure: false)
         {
-            _server = server ?? throw new ArgumentNullException(nameof(server));
+            NoDelay = true
+        };
 
-            _webSocketServer = new WebSocketServer(_server.Config.NetworkPort, secure: false)
-            {
-                NoDelay = true
-            };
+        _webSocketServer.AddWebSocketService(
+            path: "/rpc",
+            initializer: () => new RpcWebsocketSharpBehavior(_server));
+    }
 
-            _webSocketServer.AddWebSocketService(
-                path: "/rpc",
-                initializer: () => new RpcWebsocketSharpBehavior(_server));
-        }
+    /// <summary>
+    /// Start listening for client requests.
+    /// </summary>
+    public void StartListening()
+    {
+        if (_webSocketServer == null)
+            throw new InvalidOperationException("Channel is not initialized.");
 
-        /// <summary>
-        /// Start listening for client requests.
-        /// </summary>
-        public void StartListening()
-        {
-            if (_webSocketServer == null)
-                throw new InvalidOperationException("Channel is not initialized.");
+        _webSocketServer.Start();
+    }
 
-            _webSocketServer.Start();
-        }
+    /// <summary>
+    /// Stop listening for client requests.
+    /// </summary>
+    public void StopListening()
+    {
+        if (_webSocketServer == null)
+            throw new InvalidOperationException("Channel is not initialized.");
 
-        /// <summary>
-        /// Stop listening for client requests.
-        /// </summary>
-        public void StopListening()
-        {
-            if (_webSocketServer == null)
-                throw new InvalidOperationException("Channel is not initialized.");
+        if (_webSocketServer.IsListening)
+            _webSocketServer.Stop();
+    }
 
-            if (_webSocketServer.IsListening)
-                _webSocketServer.Stop();
-        }
+    /// <summary>
+    /// Gets whether the channel is listening or not.
+    /// </summary>
+    public bool IsListening => _webSocketServer != null && _webSocketServer.IsListening;
 
-        /// <summary>
-        /// Gets whether the channel is listening or not.
-        /// </summary>
-        public bool IsListening => _webSocketServer != null && _webSocketServer.IsListening;
-
-        /// <summary>
-        /// Stops listening and frees managed resources.
-        /// </summary>
-        public ValueTask DisposeAsync()
-        {
-            StopListening();
-            _webSocketServer = null;
-            _server = null;
-            return default;
-        }
+    /// <summary>
+    /// Stops listening and frees managed resources.
+    /// </summary>
+    public ValueTask DisposeAsync()
+    {
+        StopListening();
+        _webSocketServer = null;
+        _server = null;
+        return default;
     }
 }
