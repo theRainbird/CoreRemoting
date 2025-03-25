@@ -12,7 +12,7 @@
     <ItemGroup>
         <Compile Remove="RpcTests_Quic.cs" />
         <Compile Remove="RpcTests_WatsonTcp.cs" />
-        <Compile Remove="RpcTests_WebsocketSharp.cs" />
+        <Compile Remove="RpcTests_WebsocketSharp" />
         <Compile Remove="RpcTests_WsClientWsharpServer.cs" />
         <Compile Remove="RpcTests_WsharpClientWsServer.cs" />
     </ItemGroup>
@@ -22,7 +22,7 @@
         <Compile Remove="BinarySerializationTests.cs" />
     </ItemGroup>
 
-    <!-- .NET 9.0 only: include Quit channel -->
+    <!-- .NET 9.0 only: include Quic channel -->
     <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0' and '$(OS)' == 'Windows_NT' ">
         <Compile Include="RpcTests_Quic.cs">
             <DependentUpon>RpcTests.cs</DependentUpon>
