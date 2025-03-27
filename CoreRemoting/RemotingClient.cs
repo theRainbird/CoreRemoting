@@ -741,15 +741,7 @@ namespace CoreRemoting
 
             using (await _activeCallsLock)
             {
-                if (_activeCalls.ContainsKey(clientRpcContext.UniqueCallKey))
-                {
-                    clientRpcContext.Dispose();
-                    throw new ApplicationException("Duplicate unique call key.");
-                }
-                else
-                {
-                    _activeCalls.Add(clientRpcContext.UniqueCallKey, clientRpcContext);
-                }
+                _activeCalls.Add(clientRpcContext.UniqueCallKey, clientRpcContext);
             }
 
             var wireMessage =
