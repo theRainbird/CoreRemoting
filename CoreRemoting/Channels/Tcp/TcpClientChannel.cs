@@ -136,16 +136,18 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <param name="rawMessage">Raw message data</param>
     public async Task<bool> SendMessageAsync(byte[] rawMessage)
     {
-        if (_tcpClient != null)
+        try
         {
-            if (await _tcpClient.SendAsync(rawMessage).ConfigureAwait(false))
-                return true;
-            if (!_tcpClient.Connected)
-                _tcpClient = null;
+            return await _tcpClient.SendAsync(rawMessage).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            LastException = ex as NetworkException ??
+                            new NetworkException(ex.Message, ex);
+
+            ErrorOccured?.Invoke(ex.Message, LastException);
             return false;
         }
-        else
-            throw new NetworkException("Channel disconnected");
     }
 
     /// <summary>
