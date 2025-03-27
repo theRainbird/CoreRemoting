@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using CoreRemoting.Toolbox;
+using CoreRemoting.Threading;
 using WatsonTcp;
 
 namespace CoreRemoting.Channels.Tcp;
@@ -26,6 +26,8 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
 
     /// <inheritdoc />
     public event Action Disconnected;
+    
+    private AsyncLock DisposeLock { get; } = new();
 
     /// <summary>
     /// Initializes the channel.
@@ -95,29 +97,31 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <summary>
     /// Closes the connection.
     /// </summary>
-    public Task DisconnectAsync()
+    public async Task DisconnectAsync()
     {
-        if (_tcpClient == null)
-            return Task.CompletedTask;
-
-        _tcpClient.Events.MessageReceived -= OnMessage;
-        _tcpClient.Events.ExceptionEncountered -= OnError;
-
-        if (_tcpClient.Connected)
+        using (await DisposeLock)
         {
-            try
-            {
-                _tcpClient.Disconnect();
-            }
-            catch
-            {
-                // ignored
-            }
-        }
+            if (_tcpClient == null)
+                return;
 
-        _tcpClient.Dispose();
-        _tcpClient = null;
-        return Task.CompletedTask;
+            _tcpClient.Events.MessageReceived -= OnMessage;
+            _tcpClient.Events.ExceptionEncountered -= OnError;
+
+            if (_tcpClient.Connected)
+            {
+                try
+                {
+                    _tcpClient.Disconnect();
+                }
+                catch
+                {
+                    // ignored
+                }
+            }
+
+            _tcpClient.Dispose();
+            _tcpClient = null;
+        }
     }
 
     /// <summary>
