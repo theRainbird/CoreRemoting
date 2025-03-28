@@ -46,6 +46,7 @@ namespace CoreRemoting
         private TaskCompletionSource<bool> _authenticationCompletedTaskSource;
         private readonly AsyncManualResetEvent _goodbyeCompletedEvent;
         private bool _isAuthenticated;
+        private bool _isDisconnected;
         private Timer _keepSessionAliveTimer;
         private byte[] _serverPublicKeyBlob;
 
@@ -241,6 +242,7 @@ namespace CoreRemoting
             if (_channel == null)
                 throw new RemotingException("No client channel configured.");
 
+            _isDisconnected = false;
             _goodbyeCompletedEvent.Reset();
 
             using (await _activeCallsLock)
@@ -276,6 +278,7 @@ namespace CoreRemoting
         /// <param name="quiet">When set to true, no goodbye message is sent to the server</param>
         public async Task DisconnectAsync(bool quiet = false)
         {
+            _isDisconnected = true;
             _currentlyPendingMessagesCounter.Signal();
 
             await _currentlyPendingMessagesCounter.WaitAsync()
@@ -728,13 +731,21 @@ namespace CoreRemoting
         /// <returns>Results of the remote method invocation</returns>
         internal async Task<ClientRpcContext> InvokeRemoteMethod(MethodCallMessage methodCallMessage, bool oneWay = false)
         {
-            _currentlyPendingMessagesCounter.AddCount(oneWay ? 0 : 1);
+            var signalCount = oneWay ? 0 : 1;
+            _currentlyPendingMessagesCounter.AddCount(signalCount);
+
+            if (_isDisconnected)
+            {
+                _currentlyPendingMessagesCounter.Signal(signalCount);
+                throw new RemoteInvocationException("Client disconnected");
+            }
+
             var sharedSecret = SharedSecret();
 
             using (await _activeCallsLock)
             {
                 if (_activeCalls == null)
-                    throw new RemoteInvocationException("ServerDisconnected");
+                    throw new RemoteInvocationException("Server disconnected");
             }
 
             var clientRpcContext = new ClientRpcContext();

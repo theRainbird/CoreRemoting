@@ -12,7 +12,7 @@
     <ItemGroup>
         <Compile Remove="RpcTests_Quic.cs" />
         <Compile Remove="RpcTests_WatsonTcp.cs" />
-        <Compile Remove="RpcTests_WebsocketSharp" />
+        <Compile Remove="RpcTests_WebsocketSharp.cs" />
         <Compile Remove="RpcTests_WsClientWsharpServer.cs" />
         <Compile Remove="RpcTests_WsharpClientWsServer.cs" />
     </ItemGroup>
