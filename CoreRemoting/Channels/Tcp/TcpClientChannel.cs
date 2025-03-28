@@ -123,18 +123,6 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
                     // ignored
                 }
             }
-
-            // work around for double Dispose, see
-            // https://github.com/dotnet/WatsonTcp/issues/316
-            try
-            {
-                _tcpClient.Dispose();
-                _tcpClient = null;
-            }
-            catch (Exception e)
-            {
-                // ignored
-            }
         }
     }
 
@@ -172,10 +160,30 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// Gets or sets the last exception.
     /// </summary>
     public NetworkException LastException { get; set; }
+
     /// <summary>
     /// Disconnect and free manages resources.
     /// </summary>
-    public async ValueTask DisposeAsync() =>
+    public async ValueTask DisposeAsync()
+    {
         await DisconnectAsync()
             .ConfigureAwait(false);
+        
+        using (await DisposeLock)
+        {
+            // work around for double Dispose, see
+            // https://github.com/dotnet/WatsonTcp/issues/316
+            try
+            {
+                _tcpClient.Dispose();
+                _tcpClient = null;
+            }
+            catch (Exception e)
+            {
+                // ignored
+            }
+        }
+        
+        DisposeLock.Dispose();
+    }
 }
