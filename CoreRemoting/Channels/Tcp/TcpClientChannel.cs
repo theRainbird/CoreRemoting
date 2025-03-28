@@ -178,7 +178,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
                 _tcpClient.Dispose();
                 _tcpClient = null;
             }
-            catch (Exception e)
+            catch
             {
                 // ignored
             }
