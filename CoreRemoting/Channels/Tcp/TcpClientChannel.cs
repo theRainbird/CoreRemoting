@@ -104,8 +104,13 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
             if (_tcpClient == null)
                 return;
 
-            _tcpClient.Events.MessageReceived -= OnMessage;
-            _tcpClient.Events.ExceptionEncountered -= OnError;
+            // work around for double Dispose, see
+            // https://github.com/dotnet/WatsonTcp/issues/316
+            if (_tcpClient.Events != null)
+            {
+                _tcpClient.Events.MessageReceived -= OnMessage;
+                _tcpClient.Events.ExceptionEncountered -= OnError;
+            }
 
             if (_tcpClient.Connected)
             {
@@ -119,8 +124,17 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
                 }
             }
 
-            _tcpClient.Dispose();
-            _tcpClient = null;
+            // work around for double Dispose, see
+            // https://github.com/dotnet/WatsonTcp/issues/316
+            try
+            {
+                _tcpClient.Dispose();
+                _tcpClient = null;
+            }
+            catch (Exception e)
+            {
+                // ignored
+            }
         }
     }
 
@@ -158,7 +172,6 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// Gets or sets the last exception.
     /// </summary>
     public NetworkException LastException { get; set; }
-
     /// <summary>
     /// Disconnect and free manages resources.
     /// </summary>
