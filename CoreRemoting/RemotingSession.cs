@@ -485,7 +485,7 @@ namespace CoreRemoting
                 ((RemotingServer)_server).OnRejectCall(serverRpcContext);
 
                 if (oneWay)
-                    return;
+                    throw;
 
                 serializedResult =
                     _server.Serializer.Serialize(serverRpcContext.Exception);
@@ -565,7 +565,7 @@ namespace CoreRemoting
                     ((RemotingServer)_server).OnAfterCall(serverRpcContext);
 
                     if (oneWay)
-                        return;
+                        throw;
 
                     serializedResult =
                         _server.Serializer.Serialize(serverRpcContext.Exception);
