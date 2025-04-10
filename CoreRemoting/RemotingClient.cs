@@ -516,20 +516,23 @@ namespace CoreRemoting
 
         private WireMessage TryDeserialize(byte[] rawMessage)
         {
+            WireMessage getInvalidMessage() => new()
+            {
+                Data = rawMessage,
+                Error = true,
+                Iv = [],
+                MessageType = "invalid",
+                UniqueCallKey = [],
+            };
+
             try
             {
-                return Serializer.Deserialize<WireMessage>(rawMessage);
+                return Serializer.Deserialize<WireMessage>(rawMessage) ??
+                    getInvalidMessage();
             }
             catch // TODO: dispatch message deserialization exception?
             {
-                return new WireMessage
-                {
-                    Data = rawMessage,
-                    Error = true,
-                    Iv = [],
-                    MessageType = "invalid",
-                    UniqueCallKey = [],
-                };
+                return getInvalidMessage();
             }
         }
 

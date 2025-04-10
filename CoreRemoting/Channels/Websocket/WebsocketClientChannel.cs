@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
-using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
 
