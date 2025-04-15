@@ -144,7 +144,9 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     {
         try
         {
-            return await _tcpClient.SendAsync(rawMessage).ConfigureAwait(false);
+            if (await _tcpClient.SendAsync(rawMessage).ConfigureAwait(false))
+                return true;
+            throw new NetworkException("Channel disconnected");
         }
         catch (Exception ex)
         {
