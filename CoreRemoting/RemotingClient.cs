@@ -329,8 +329,16 @@ namespace CoreRemoting
 
                 _goodbyeCompletedEvent.Reset();
 
-                await _channel.RawMessageTransport.SendMessageAsync(rawData)
-                    .ConfigureAwait(false);
+                try
+                {
+                    await _channel.RawMessageTransport.SendMessageAsync(rawData)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    // ignored
+                    // TODO: dispatch the exception
+                }
 
                 await _goodbyeCompletedEvent.WaitAsync().Expire(10)
                     .ConfigureAwait(false);
