@@ -11,6 +11,16 @@ namespace CoreRemoting.Serialization.Bson
     [SuppressMessage("ReSharper", "ConvertToAutoProperty")]
     public class Envelope
     {
+        /// <summary>
+        /// Gets or sets the function used to convert a wrapped value to its expected type.
+        /// </summary>
+        /// <remarks>
+        /// This strategy is invoked when the actual type of the wrapped value differs from the expected type.
+        /// By default, it uses <see cref="Convert.ChangeType(object, Type)"/>, but it can be overridden
+        /// to provide custom conversion logic for edge cases or unsupported types.
+        /// </remarks>
+        public static Func<object, Type, object> TypeConversionStrategy { get; set; } = Convert.ChangeType;
+
         [JsonProperty]
         private object _value;
         
@@ -69,7 +79,11 @@ namespace CoreRemoting.Serialization.Bson
                         return serializedDiffGram.Restore(_type);
                     }
 
-                    return Convert.ChangeType(_value, _type);
+                    // Special handling of TimeSpan values, because BSON serializes TimeSpans as strings
+                    if (_type == typeof(TimeSpan))
+                        return TimeSpan.Parse(_value.ToString());
+
+                    return TypeConversionStrategy(_value, _type);
                 }
 
                 return _value;
