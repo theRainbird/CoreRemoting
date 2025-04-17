@@ -32,9 +32,9 @@ public class BsonSerializationTests
             writer.WriteValue(value);
         }
     }
-    
+
     #endregion
-    
+
     [Fact]
     public void BsonSerializerAdapter_should_deserialize_MethodCallMessage()
     {
@@ -228,5 +228,48 @@ public class BsonSerializationTests
         Assert.Equal(originalRow["Age", DataRowVersion.Original], deserializedRow["Age", DataRowVersion.Original]);
         Assert.Equal(originalRow["Age", DataRowVersion.Current], deserializedRow["Age", DataRowVersion.Current]);
         Assert.Equal(originalRow["UserName", DataRowVersion.Current], deserializedRow["UserName", DataRowVersion.Current]);
+    }
+
+    [Fact]
+    public void BsonSerializerAdapter_should_deserialize_TimeSpan_value_in_envelope_correctly()
+    {
+        var serializerAdapter = new BsonSerializerAdapter();
+
+        var timeSpanToSerialize = TimeSpan.FromSeconds(42);
+
+        var raw = serializerAdapter.Serialize(timeSpanToSerialize);
+        var deserializedTimeSpan = serializerAdapter.Deserialize<TimeSpan>(raw);
+
+        Assert.Equal(timeSpanToSerialize, deserializedTimeSpan);
+    }
+
+    [Fact]
+    public void BsonSerializerAdapter_should_respect_TypeConversionStrategy()
+    {
+        var serializerAdapter = new BsonSerializerAdapter();
+
+        var uriToSerialize = new Uri("http://127.0.0.1");
+
+        var raw = serializerAdapter.Serialize(uriToSerialize);
+
+        // Convert.ChangeType fails because Uri is serialized as a string
+        Assert.Throws<InvalidCastException>(() => serializerAdapter.Deserialize<Uri>(raw));
+
+        var defaultTypeConversionStrategy = Envelope.TypeConversionStrategy;
+
+        // Inject custom logic to handle Uri
+        Envelope.TypeConversionStrategy = (value, type) =>
+        {
+            if (type == typeof(Uri) && value is string stringValue)
+                return new Uri(stringValue);
+
+            return Convert.ChangeType(value, type);
+        };
+
+        var deserializedUri = serializerAdapter.Deserialize<Uri>(raw);
+
+        Envelope.TypeConversionStrategy = defaultTypeConversionStrategy;
+
+        Assert.Equal(uriToSerialize, deserializedUri);
     }
 }
