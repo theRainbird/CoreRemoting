@@ -396,9 +396,17 @@ namespace CoreRemoting
                 return;
             }
 
-            // Send empty message to keep session alive
-            await _rawMessageTransport.SendMessageAsync([])
-                .ConfigureAwait(false);
+            try
+            {
+                // Send empty message to keep session alive
+                await _rawMessageTransport.SendMessageAsync([])
+                    .ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // ignored
+                // TODO: dispatch the exception
+            }
         }
 
         private byte[] SharedSecret()
