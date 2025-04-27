@@ -3,7 +3,7 @@ using System.Data;
 using System.IO;
 using System.Text;
 
-namespace CoreRemoting.Serialization.Bson.DataSetDiffGramSupport;
+namespace CoreRemoting.Serialization.Bson.Converters.DataSetDiffGramSupport;
 
 /// <summary>
 /// Representation of serialized DataSet/DataTable DiffGram.
