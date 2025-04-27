@@ -2,7 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using CoreRemoting.Serialization.Bson.DataSetDiffGramSupport;
+using CoreRemoting.Serialization.Bson.Converters;
+using CoreRemoting.Serialization.Bson.Converters.DataSetDiffGramSupport;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Bson;
 
@@ -14,6 +15,8 @@ namespace CoreRemoting.Serialization.Bson
     public class BsonSerializerAdapter : ISerializerAdapter
     {
         private readonly JsonSerializer _serializer;
+
+        internal static JsonSerializerSettings CurrentSettings { get; private set; } = new JsonSerializerSettings();
 
         /// <summary>
         /// Creates a new instance of the BsonSerializerAdapter class.
@@ -39,23 +42,34 @@ namespace CoreRemoting.Serialization.Bson
                 ReferenceResolverProvider = () => new BsonReferenceResolver(),
             };
 
-            // Add support for DataSet DiffGram serialization
-            var converters = 
-                new List<JsonConverter>
+            var converters = new List<JsonConverter>();
+
+            // Add support for DataSet DiffGram serialization and other common types
+            if (config == null || config.AddCommonJsonConverters)
+            {
+                converters.AddRange(new JsonConverter[]
                 {
-                    new DataSetDiffGramJsonConverter()
-                };
+                    new DataSetDiffGramJsonConverter(),
+                    new RegionInfoConverter(),
+                    new EncodingConverter(),
+                    new IPAddressConverter(),
+                    new IPEndPointConverter()
+                });
+            }
 
             if (config != null)
             {
+                // Ensure common converters are not added twice
+                var existingConverterTypes = new HashSet<Type>(converters.Select(c => c.GetType()));
+
                 converters.AddRange(
-                    config.JsonConverters.Where(converter =>
-                        converter.GetType() != typeof(DataSetDiffGramJsonConverter))); // Ensure DataSetDiffGramJsonConverter not added twice
+                    config.JsonConverters.Where(converter => !existingConverterTypes.Contains(converter.GetType())));
             }
 
             settings.Converters = converters;
             
             _serializer = JsonSerializer.Create(settings);
+            CurrentSettings = settings;
         }
         
         /// <summary>

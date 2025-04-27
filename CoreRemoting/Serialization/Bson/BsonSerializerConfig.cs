@@ -26,5 +26,10 @@ namespace CoreRemoting.Serialization.Bson
         /// Gets a list of JSON converters to customize BSON serialization.
         /// </summary>
         public List<JsonConverter> JsonConverters { get; }
+
+        /// <summary>
+        /// Gets or sets whether a set of common JSON converters should be added.
+        /// </summary>
+        public bool AddCommonJsonConverters { get; set; } = true;
     }
 }

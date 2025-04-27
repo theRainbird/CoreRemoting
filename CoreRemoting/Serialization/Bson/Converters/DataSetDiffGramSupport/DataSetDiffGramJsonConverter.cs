@@ -6,7 +6,7 @@ using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace CoreRemoting.Serialization.Bson.DataSetDiffGramSupport;
+namespace CoreRemoting.Serialization.Bson.Converters.DataSetDiffGramSupport;
 
 /// <summary>
 /// Converter to serialize and deserialize typed and untyped DataSets / DataTables.

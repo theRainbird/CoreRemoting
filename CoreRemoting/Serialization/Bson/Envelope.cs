@@ -1,7 +1,9 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
-using CoreRemoting.Serialization.Bson.DataSetDiffGramSupport;
+using System.Text;
+using CoreRemoting.Serialization.Bson.Converters.DataSetDiffGramSupport;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace CoreRemoting.Serialization.Bson
 {
@@ -11,16 +13,6 @@ namespace CoreRemoting.Serialization.Bson
     [SuppressMessage("ReSharper", "ConvertToAutoProperty")]
     public class Envelope
     {
-        /// <summary>
-        /// Gets or sets the function used to convert a wrapped value to its expected type.
-        /// </summary>
-        /// <remarks>
-        /// This strategy is invoked when the actual type of the wrapped value differs from the expected type.
-        /// By default, it uses <see cref="Convert.ChangeType(object, Type)"/>, but it can be overridden
-        /// to provide custom conversion logic for edge cases or unsupported types.
-        /// </remarks>
-        public static Func<object, Type, object> TypeConversionStrategy { get; set; } = Convert.ChangeType;
-
         [JsonProperty]
         private object _value;
         
@@ -68,22 +60,29 @@ namespace CoreRemoting.Serialization.Bson
                 
                 if (valueType != _type)
                 {
+                    // Special handling for other common types that can not be simply cast to the given type
+                    if (BsonTypeConversionRegistry.TryGetTypeConversion(_type, out var converter))
+                        return converter(_value);
+
                     // Special handling for enum values, because BSON serializes every integer as Int64!
-                    if (_type.IsEnum && valueType != _type)
+                    if (_type.IsEnum)
                         return Enum.ToObject(_type, _value);
-                    
-                    // Special handling for serializes DiffGrams
-                    if (_value.GetType() == typeof(SerializedDiffGram))
-                    {
-                        var serializedDiffGram = (SerializedDiffGram)_value;
+
+                    // Special handling for serialized DiffGrams
+                    if (_value is SerializedDiffGram serializedDiffGram)
                         return serializedDiffGram.Restore(_type);
-                    }
 
-                    // Special handling of TimeSpan values, because BSON serializes TimeSpans as strings
-                    if (_type == typeof(TimeSpan))
-                        return TimeSpan.Parse(_value.ToString());
+                    // Special handling for encodings (Many encodings have its own class e.g. UTF8Encoding)
+                    if (typeof(Encoding).IsAssignableFrom(_type))
+                        return Encoding.GetEncoding(_value.ToString());
 
-                    return TypeConversionStrategy(_value, _type);
+                    // Special handling for values that are serialized to a JObject using a converter (e.g. IPEndPointConverter)
+                    if (_value is JObject jObject && _type != typeof(JObject))
+                        // TODO: Somewhat ugly and slow but fixes many converters out of the box
+                        return jObject.ToObject(_type, JsonSerializer.Create(BsonSerializerAdapter.CurrentSettings));
+
+                    // Fallback to default type conversion (= Convert.ChangeType if not modified)
+                    return BsonTypeConversionRegistry.DefaultTypeConversion(_value, _type);
                 }
 
                 return _value;

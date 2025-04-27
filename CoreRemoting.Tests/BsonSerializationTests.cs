@@ -1,5 +1,9 @@
 using System;
 using System.Data;
+using System.Globalization;
+using System.Net;
+using System.Numerics;
+using System.Text;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization.Bson;
 using CoreRemoting.Tests.Tools;
@@ -231,45 +235,32 @@ public class BsonSerializationTests
     }
 
     [Fact]
-    public void BsonSerializerAdapter_should_deserialize_TimeSpan_value_in_envelope_correctly()
+    public void BsonSerializerAdapter_should_deserialize_common_dotnet_types_correctly()
     {
-        var serializerAdapter = new BsonSerializerAdapter();
+        var serializer = new BsonSerializerAdapter();
 
-        var timeSpanToSerialize = TimeSpan.FromSeconds(42);
-
-        var raw = serializerAdapter.Serialize(timeSpanToSerialize);
-        var deserializedTimeSpan = serializerAdapter.Deserialize<TimeSpan>(raw);
-
-        Assert.Equal(timeSpanToSerialize, deserializedTimeSpan);
-    }
-
-    [Fact]
-    public void BsonSerializerAdapter_should_respect_TypeConversionStrategy()
-    {
-        var serializerAdapter = new BsonSerializerAdapter();
-
-        var uriToSerialize = new Uri("http://127.0.0.1");
-
-        var raw = serializerAdapter.Serialize(uriToSerialize);
-
-        // Convert.ChangeType fails because Uri is serialized as a string
-        Assert.Throws<InvalidCastException>(() => serializerAdapter.Deserialize<Uri>(raw));
-
-        var defaultTypeConversionStrategy = Envelope.TypeConversionStrategy;
-
-        // Inject custom logic to handle Uri
-        Envelope.TypeConversionStrategy = (value, type) =>
+        void SerializeAndDeserialize<T>(T valueToSerialize)
         {
-            if (type == typeof(Uri) && value is string stringValue)
-                return new Uri(stringValue);
+            var raw = serializer.Serialize(valueToSerialize);
+            var deserializedValue = serializer.Deserialize<T>(raw);
 
-            return Convert.ChangeType(value, type);
-        };
+            Assert.Equal(valueToSerialize, deserializedValue);
+        }
 
-        var deserializedUri = serializerAdapter.Deserialize<Uri>(raw);
+        SerializeAndDeserialize(new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.FromMinutes(42)));
+        SerializeAndDeserialize(TimeSpan.FromSeconds(42));
+        SerializeAndDeserialize(new Uri("http://127.0.0.1"));
+        SerializeAndDeserialize(new RegionInfo("US"));
+        SerializeAndDeserialize(new Version(1, 0));
+        SerializeAndDeserialize(new BigInteger(42));
+        SerializeAndDeserialize(IPAddress.Parse("127.0.0.1"));
+        SerializeAndDeserialize(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 80));
+        SerializeAndDeserialize(typeof(Type));
 
-        Envelope.TypeConversionStrategy = defaultTypeConversionStrategy;
+        foreach (var cultureInfo in CultureInfo.GetCultures(CultureTypes.AllCultures))
+            SerializeAndDeserialize(cultureInfo);
 
-        Assert.Equal(uriToSerialize, deserializedUri);
+        foreach (var encodingInfo in Encoding.GetEncodings())
+            SerializeAndDeserialize(encodingInfo.GetEncoding());
     }
 }
