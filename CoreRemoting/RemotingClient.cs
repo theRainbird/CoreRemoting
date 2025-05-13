@@ -789,6 +789,9 @@ namespace CoreRemoting
 
             if (_rawMessageTransport.LastException != null)
             {
+                using (await _activeCallsLock)
+                    _activeCalls.Remove(clientRpcContext.UniqueCallKey);
+                
                 clientRpcContext.Dispose();
                 throw _rawMessageTransport.LastException;
             }
