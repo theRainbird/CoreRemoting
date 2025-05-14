@@ -101,7 +101,9 @@ public class NullTransport : IRawMessageTransport, IAsyncDisposable
         {
             while (IsConnected)
             {
-                await foreach (var message in ReceiveMessagesAsync(null, ThisEndpoint, RemoteEndpoint))
+                await foreach (var message in
+                    ReceiveMessagesAsync(null, RemoteEndpoint, ThisEndpoint)
+                        .ConfigureAwait(false))
                 {
                     OnReceiveMessage(message.Message ?? []);
                 }
@@ -126,7 +128,7 @@ public class NullTransport : IRawMessageTransport, IAsyncDisposable
     {
         try
         {
-            SendMessage(null, ThisEndpoint, RemoteEndpoint, rawMessage);
+            SendMessage(ThisEndpoint, RemoteEndpoint, rawMessage);
             return Task.FromResult(true);
         }
         catch (Exception ex)

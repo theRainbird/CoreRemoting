@@ -58,6 +58,19 @@ public class NullMessageQueue
         throw new Exception($"No listener is registered for endpoint: {endpoint}");
     }
 
+    private static string GetAddress(string sender, string receiver) =>
+        $"{sender}:{receiver}";
+
+    /// <summary>
+    /// Sends a message to the specified endpoint.
+    /// </summary>
+    /// <param name="sender">Sender endpoint.</param>
+    /// <param name="receiver">Receiver endpoint.</param>
+    /// <param name="message">Message to send.</param>
+    /// <param name="metadata">Message metadata.</param>
+    public static void SendMessage(string sender, string receiver, byte[] message, params string[] metadata) =>
+        SendMessage(GetAddress(sender, receiver), sender, receiver, message, metadata);
+
     /// <summary>
     /// Sends a message to the specified endpoint.
     /// </summary>
@@ -66,7 +79,7 @@ public class NullMessageQueue
     /// <param name="receiver">Receiver endpoint.</param>
     /// <param name="message">Message to send.</param>
     /// <param name="metadata">Message metadata.</param>
-    public static void SendMessage(string address, string sender, string receiver, byte[] message, params string[] metadata)
+    private static void SendMessage(string address, string sender, string receiver, byte[] message, params string[] metadata)
     {
         var adr = address ?? $"{sender}:{receiver}";
         var mre = Events.GetOrAdd(adr, address => new(false));
@@ -87,9 +100,8 @@ public class NullMessageQueue
         var mre = Events.GetOrAdd(adr, address => new(false));
         var queue = Queues.GetOrAdd(adr, address => new());
 
-        //await mre.WaitAsync().ConfigureAwait(false);
-        await Task.Delay(TimeSpan.FromSeconds(0.1))
-            .ConfigureAwait(false);
+        await mre.WaitAsync().ConfigureAwait(false);
+        mre.Reset();
 
         while (queue.TryDequeue(out var message))
             yield return message;
