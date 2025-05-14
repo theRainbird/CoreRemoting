@@ -76,7 +76,9 @@ public class NullServerChannel : IServerChannel
 
     private async Task ReceiveConnections()
     {
-        await foreach (var msg in ReceiveMessagesAsync(Url, string.Empty, Url))
+        await foreach (var msg in
+            ReceiveMessagesAsync(Url, string.Empty, Url)
+                .ConfigureAwait(false))
         {
             var connection = new NullServerConnection(msg, Server);
             var sessionId = connection.StartListening();

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using CoreRemoting.Channels.Null;
 
 namespace CoreRemoting.Channels.Websocket;
@@ -14,8 +15,10 @@ public class NullServerConnection : NullTransport, IAsyncDisposable
     public NullServerConnection(NullMessage connectionMessage, IRemotingServer remotingServer)
     {
         ConnectionMessage = connectionMessage ?? throw new ArgumentNullException(nameof(connectionMessage));
-        ClientAddress = connectionMessage.Sender ?? throw new ArgumentNullException(nameof(connectionMessage.Sender));
-        RemotingServer = remotingServer; // ?? throw new ArgumentNullException(nameof(remotingServer));
+        ClientAddress = IPAddress.Loopback.ToString(); // connections are always local
+        RemotingServer = remotingServer; // note: server is not required, null is acceptable for the unit tests
+        ThisEndpoint = connectionMessage.Receiver ?? throw new ArgumentNullException(nameof(connectionMessage.Receiver));
+        RemoteEndpoint = connectionMessage.Sender ?? throw new ArgumentNullException(nameof(connectionMessage.Sender));
     }
 
     private string ClientAddress { get; set; }
