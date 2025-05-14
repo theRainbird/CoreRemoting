@@ -139,7 +139,7 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
-    public virtual void Call_on_Proxy_should_be_invoked_on_remote_service_with_MessageEncryption()
+    public void Call_on_Proxy_should_be_invoked_on_remote_service_with_MessageEncryption()
     {
         _serverFixture.Server.Config.MessageEncryption = true;
 
@@ -763,7 +763,7 @@ public class RpcTests : IClassFixture<ServerFixture>
 
     [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
-    public virtual async Task Disposed_client_subscription_doesnt_break_other_clients()
+    public async Task Disposed_client_subscription_doesnt_break_other_clients()
     {
         using var ctx = ValidationSyncContext.Install();
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace CoreRemoting.Channels.Null;
@@ -9,8 +10,11 @@ namespace CoreRemoting.Channels.Null;
 public class NullClientChannel : NullTransport, IClientChannel
 {
     /// <inheritdoc />
-    public void Init(IRemotingClient client) =>
+    public void Init(IRemotingClient client)
+    {
+        RemotingClient = client ?? throw new ArgumentNullException(nameof(client));
         SetUrl(client.Config.ServerHostName, client.Config.ServerPort);
+    }
 
     /// <summary>
     /// Sets the server URL.
@@ -23,20 +27,25 @@ public class NullClientChannel : NullTransport, IClientChannel
     /// <inheritdoc />
     public string Url { get; private set; }
 
+    private IRemotingClient RemotingClient { get; set; }
+
     /// <inheritdoc />
     public IRawMessageTransport RawMessageTransport => this;
 
     /// <inheritdoc />
     public async Task ConnectAsync()
     {
-        ThisEndpoint = NullMessageQueue.Connect(Url);
+        var metadata = new List<string>();
+        if (RemotingClient?.MessageEncryption ?? false)
+        {
+            metadata.Add(nameof(RemotingClient.PublicKey));
+            metadata.Add(Convert.ToBase64String(RemotingClient.PublicKey));
+        }
+
+        ThisEndpoint = NullMessageQueue.Connect(Url, metadata.ToArray());
         RemoteEndpoint = Url;
 
         StartListening();
-
-        await SendMessageAsync([])
-            .ConfigureAwait(false);
-
         OnConnected();
     }
 
