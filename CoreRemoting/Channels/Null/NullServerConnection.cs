@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Net;
 using CoreRemoting.Channels.Null;
 
@@ -47,15 +48,13 @@ public class NullServerConnection : NullTransport, IAsyncDisposable
         byte[] clientPublicKey = null;
 
         // get encryption metadata from NullMessage
-        //var cookies = WebSocketContext.CookieCollection;
-        //var messageEncryptionCookie = cookies[MessageEncryptionCookie];
-        //if (messageEncryptionCookie?.Value == "1")
-        //{
-        //    var shakeHandsCookie = cookies[ClientPublicKeyCookie];
-        //    clientPublicKey =
-        //        Convert.FromBase64String(
-        //            shakeHandsCookie.Value);
-        //}
+        if (ConnectionMessage.Metadata != null &&
+            ConnectionMessage.Metadata.Length == 2 &&
+            ConnectionMessage.Metadata.First() == nameof(RemotingClient.PublicKey))
+        {
+            clientPublicKey = Convert.FromBase64String(
+                ConnectionMessage.Metadata.Last());
+        }
 
         if (RemotingServer != null)
         {

@@ -1,12 +1,9 @@
 using System;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 using CoreRemoting.Channels;
 using CoreRemoting.Channels.Null;
-using CoreRemoting.Tests.Tools;
 using CoreRemoting.Toolbox;
-using WatsonTcp;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -117,7 +114,8 @@ public class RpcTests_NullChannel : RpcTests
 
         Assert.True(server.Connections.IsEmpty);
         client.ReceiveMessage += message =>
-            Console.WriteLine($"Client message received: {string.Join("", serverMessage = message)}");
+            Console.WriteLine($"Client message received: {
+                string.Concat(serverMessage = message)}");
 
         server.StartListening();
         await client.ConnectAsync();
@@ -127,22 +125,16 @@ public class RpcTests_NullChannel : RpcTests
 
         var connection = server.Connections.First().Value;
         connection.ReceiveMessage += message =>
-            Console.WriteLine($"Server message received: {string.Join("", clientMessage = message)}");
+            Console.WriteLine($"Server message received: {
+                string.Concat(clientMessage = message)}");
 
         await client.SendMessageAsync([1, 2, 3, 4]);
         await connection.SendMessageAsync([3, 2, 1, 0]);
 
         await Task.Delay(TimeSpan.FromSeconds(0.5));
-        Assert.Equal("1, 2, 3, 4", string.Join(", ", clientMessage));
-        Assert.Equal("3, 2, 1, 0", string.Join(", ", serverMessage));
+        Assert.Equal("1234", string.Concat(clientMessage));
+        Assert.Equal("3210", string.Concat(serverMessage));
     }
-
-    // these tests are known to be broken
-    public override void Call_on_Proxy_should_be_invoked_on_remote_service_with_MessageEncryption() =>
-        Assert.Fail();
-
-    public override Task Disposed_client_subscription_doesnt_break_other_clients() =>
-        Task.Run(() => Assert.Fail());
 
     [Fact]
     public async Task RemotingClient_can_connect_to_RemotingServer_using_NullChannel()

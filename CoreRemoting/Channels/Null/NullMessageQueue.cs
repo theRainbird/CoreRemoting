@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using CoreRemoting.Threading;
 
 namespace CoreRemoting.Channels.Null;
@@ -46,20 +45,18 @@ public class NullMessageQueue
     /// Connects to the specified listener endpoint.
     /// </summary>
     /// <param name="endpoint">Listener endpoint</param>
-    public static string Connect(string endpoint)
+    /// <param name="metadata">Optional metadata strings</param>
+    public static string Connect(string endpoint, params string[] metadata)
     {
         if (Listeners.TryGetValue(endpoint, out var _))
         {
             var sender = Guid.NewGuid().ToString();
-            SendMessage(endpoint, sender, endpoint, []);
+            SendMessage(endpoint, sender, endpoint, [], metadata);
             return sender;
         }
 
         throw new Exception($"No listener is registered for endpoint: {endpoint}");
     }
-
-    private static string GetAddress(string sender, string receiver) =>
-        $"{sender}:{receiver}";
 
     /// <summary>
     /// Sends a message to the specified endpoint.
@@ -69,7 +66,7 @@ public class NullMessageQueue
     /// <param name="message">Message to send.</param>
     /// <param name="metadata">Message metadata.</param>
     public static void SendMessage(string sender, string receiver, byte[] message, params string[] metadata) =>
-        SendMessage(GetAddress(sender, receiver), sender, receiver, message, metadata);
+        SendMessage($"{sender}:{receiver}", sender, receiver, message, metadata);
 
     /// <summary>
     /// Sends a message to the specified endpoint.
