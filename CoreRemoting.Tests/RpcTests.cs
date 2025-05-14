@@ -60,7 +60,7 @@ public class RpcTests : IClassFixture<ServerFixture>
         {
             if (_serverFixture.ServerErrorCount != 0)
             {
-                Console.WriteLine($"LastServerError: {_serverFixture.LastServerError.ToString()}");
+                Console.WriteLine($"LastServerError: {_serverFixture.LastServerError}");
             }
         }
     }

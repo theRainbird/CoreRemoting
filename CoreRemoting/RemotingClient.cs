@@ -246,7 +246,7 @@ namespace CoreRemoting
             _goodbyeCompletedEvent.Reset();
 
             using (await _activeCallsLock)
-                _activeCalls = new Dictionary<Guid, ClientRpcContext>();
+                _activeCalls = new();
 
             await _channel.ConnectAsync()
                 .ConfigureAwait(false);

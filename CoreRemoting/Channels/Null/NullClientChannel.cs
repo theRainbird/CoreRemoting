@@ -33,20 +33,22 @@ public class NullClientChannel : NullTransport, IClientChannel
     public IRawMessageTransport RawMessageTransport => this;
 
     /// <inheritdoc />
-    public async Task ConnectAsync()
+    public Task ConnectAsync()
     {
-        var metadata = new List<string>();
+        var metadata = Array.Empty<string>();
         if (RemotingClient?.MessageEncryption ?? false)
         {
-            metadata.Add(nameof(RemotingClient.PublicKey));
-            metadata.Add(Convert.ToBase64String(RemotingClient.PublicKey));
+            metadata = [nameof(RemotingClient.PublicKey),
+                Convert.ToBase64String(RemotingClient.PublicKey)];
         }
 
-        ThisEndpoint = NullMessageQueue.Connect(Url, metadata.ToArray());
+        ThisEndpoint = NullMessageQueue.Connect(Url, metadata);
         RemoteEndpoint = Url;
 
         StartListening();
         OnConnected();
+
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />

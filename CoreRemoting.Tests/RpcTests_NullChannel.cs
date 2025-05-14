@@ -81,8 +81,8 @@ public class RpcTests_NullChannel : RpcTests
         // receive two messages from server
         await foreach (var msg in NullMessageQueue.ReceiveMessagesAsync(null, client, server))
         {
-            var expected = msg.Metadata.Any() ? "1, 2, 3" : "4, 5";
-            Assert.Equal(expected, string.Join(", ", msg.Message));
+            var expected = msg.Metadata.Length > 0 ? "123" : "45";
+            Assert.Equal(expected, string.Concat(msg.Message));
         }
 
         // no messages left
