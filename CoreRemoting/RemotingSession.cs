@@ -847,7 +847,15 @@ namespace CoreRemoting
                 // TODO: dispatch the exception
             }
 
-            BeforeDispose?.Invoke();
+            try
+            {
+                BeforeDispose?.Invoke();
+            }
+            catch (Exception e)
+            {
+                // ignored
+                // TODO: dispatch the exception
+            }
 
             _keyPair?.Dispose();
             _delegateProxyFactory = null;
