@@ -259,8 +259,16 @@ namespace CoreRemoting
                     throw new NetworkException("Handshake with server failed."))
                 .ConfigureAwait(false);
 
-            await AuthenticateAsync()
-                .ConfigureAwait(false);
+            try
+            {
+                await AuthenticateAsync()
+                    .ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                await DisconnectAsync(quiet: true);
+                throw;
+            }
 
             StartKeepSessionAliveTimer();
         }
@@ -434,7 +442,7 @@ namespace CoreRemoting
         /// <exception cref="SecurityException">Thrown, if authentication failed or timed out</exception>
         private async Task AuthenticateAsync()
         {
-            if (_config.Credentials == null || (_config.Credentials!=null && _config.Credentials.Length == 0))
+            if (_config.Credentials == null || _config.Credentials is { Length: 0 })
                 return;
 
             if (_authenticationCompletedTaskSource.Task.IsCompleted)

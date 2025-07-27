@@ -6,16 +6,16 @@
         <Title>CoreRemoting</Title>
         <Authors>Hagen Siegel</Authors>
         <Description>Easy to use Remoting library for .NET Core and .NET Framework</Description>
-        <Copyright>2024 Hagen Siegel</Copyright>
+        <Copyright>2025 Hagen Siegel</Copyright>
         <PackageTags>Remoting RPC Network</PackageTags>
         <Company>Hagen Siegel</Company>
-        <AssemblyVersion>1.2.1.0</AssemblyVersion>
+        <AssemblyVersion>1.2.2.0</AssemblyVersion>
         <TargetFramework>netstandard2.0</TargetFramework>
         <PackageProjectUrl>https://github.com/theRainbird/CoreRemoting</PackageProjectUrl>
         <PackageLicenseUrl></PackageLicenseUrl>
         <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageVersion>1.2.1.0</PackageVersion>
+        <PackageVersion>1.2.2.0</PackageVersion>
         <PackageReleaseNotes>- Change default serializer to BSON to align with non-classic API's default
 - Change default channel to TCP to align with non-classic API's default
 - Implement TCP channel recognition from Classic Remoting API configuration
