@@ -13,6 +13,11 @@ namespace CoreRemoting.Channels.Websocket;
 public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposable
 {
     /// <summary>
+    /// True when listening to incoming messages.
+    /// </summary>
+    protected bool _listening = false;
+    
+    /// <summary>
     /// Handshake cookies: message encryption flag.
     /// </summary>
     protected const string MessageEncryptionCookie = "MessageEncryption";
@@ -93,9 +98,11 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
         var segment = new ArraySegment<byte>(buffer);
         var webSocket = WebSocket;
 
+        _listening = true;
+        
         try
         {
-            while (webSocket.State == WebSocketState.Open)
+            while (webSocket.State == WebSocketState.Open && _listening)
             {
                 using var ms = new SmallBlockMemoryStream();
                 while (true)
@@ -109,9 +116,12 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure,
-                            string.Empty, CancellationToken.None)
+                        if (webSocket.State != WebSocketState.Closed)
+                        {
+                            await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure,
+                                    string.Empty, CancellationToken.None)
                                 .ConfigureAwait(false);
+                        }
 
                         Disconnected?.Invoke();
                     }

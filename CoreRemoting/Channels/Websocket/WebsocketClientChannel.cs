@@ -11,6 +11,8 @@ namespace CoreRemoting.Channels.Websocket;
 /// </summary>
 public class WebsocketClientChannel : WebsocketTransport, IClientChannel
 {
+    private WeakReference<IRemotingClient> _weakClientRef;
+    
     /// <summary>
     /// Gets or sets the URL this channel is connected to.
     /// </summary>
@@ -32,6 +34,8 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
     /// <inheritdoc />
     public void Init(IRemotingClient client)
     {
+        _weakClientRef = new WeakReference<IRemotingClient>(client);
+        
         Url =
             "ws://" +
             client.Config.ServerHostName + ":" +
@@ -83,6 +87,7 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
             return;
 
         IsConnected = false;
+        _listening = false;
 
         try
         {
@@ -95,6 +100,10 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
             // web socket already closed?
         }
 
+        // Try to create a new socket instance to allow a new connection attempt
+        if (_weakClientRef.TryGetTarget(out var client))
+            Init(client);
+        
         OnDisconnected();
     }
 
