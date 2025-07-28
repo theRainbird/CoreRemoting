@@ -1252,7 +1252,35 @@ public class RpcTests : IClassFixture<ServerFixture>
         {
             server.Config.AuthenticationProvider = authProvider;
             server.Config.AuthenticationRequired = false;
+            _serverFixture.ServerErrorCount = 0;
         }
+    }
+
+    [Fact]
+    public void RemotingClient_can_disconnect_and_connect_again()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            MessageEncryption = false,
+            Channel = ClientChannel,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        client.Connect();
+
+        var proxy = client.CreateProxy<ISessionAwareService>();
+        Assert.NotNull(proxy.ClientAddress);
+
+        client.Disconnect();
+
+        client.Connect();
+        proxy = client.CreateProxy<ISessionAwareService>();
+        Assert.NotNull(proxy.ClientAddress);
     }
 
     [Fact]
