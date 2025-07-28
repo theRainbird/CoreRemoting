@@ -62,6 +62,8 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
     /// <inheritdoc />
     public async Task ConnectAsync()
     {
+        LastException = null;
+
         // connect and open duplex stream
         Connection = await QuicConnection.ConnectAsync(Options).ConfigureAwait(false);
         ClientStream = await Connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional).ConfigureAwait(false);

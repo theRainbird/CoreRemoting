@@ -1215,6 +1215,47 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
+    public void Authentication_can_fail_then_succeed()
+    {
+        var server = _serverFixture.Server;
+        var authProvider = server.Config.AuthenticationProvider;
+        server.Config.AuthenticationRequired = true;
+        server.Config.AuthenticationProvider = new FakeAuthProvider
+        {
+            AuthenticateFake = c => c.Length == 2
+        };
+
+        using var ctx = ValidationSyncContext.Install();
+
+        try
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+                Credentials = [new()],
+            });
+
+            Assert.Throws<SecurityException>(client.Connect);
+
+            client.Config.Credentials = [new(), new()];
+            client.Connect();
+
+            var proxy = client.CreateProxy<ITestService>();
+            Assert.Equal("123", proxy.Reverse("321"));
+        }
+        finally
+        {
+            server.Config.AuthenticationProvider = authProvider;
+            server.Config.AuthenticationRequired = false;
+        }
+    }
+
+    [Fact]
     public void ServerComponent_can_track_client_network_address()
     {
         using var ctx = ValidationSyncContext.Install();
