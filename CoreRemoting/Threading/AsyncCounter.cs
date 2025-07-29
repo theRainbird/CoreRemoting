@@ -49,6 +49,12 @@ public class AsyncCounter
     }
 
     /// <summary>
+    /// Returns the task that can be awaited
+    /// for the counter to get to the specified value.
+    /// </summary>
+    public Task<int> this[int value] => WaitForValue(value);
+
+    /// <summary>
     /// Increments the counter.
     /// </summary>
     public static AsyncCounter operator ++(AsyncCounter ac) =>

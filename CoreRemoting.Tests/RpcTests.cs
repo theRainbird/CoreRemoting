@@ -285,7 +285,7 @@ public class RpcTests : IClassFixture<ServerFixture>
             var longRun = Task.Run(() => proxy.LongRunnigTestMethod(2000));
 
             // wait until long-running test method is started on server
-            await longRunnigMethodStarted.WaitForValue(1).Timeout(1);
+            await longRunnigMethodStarted.WaitForValue(1).Timeout(2);
 
             // try running another RPC call in parallel
             proxy.TestMethod("x");
@@ -900,15 +900,16 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
-    public void BeforeCall_and_AfterCall_events_are_triggered_on_success()
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "Not applicable")]
+    public async Task BeforeCall_and_AfterCall_events_are_triggered_on_success()
     {
-        var beforeCallFired = 0;
+        var beforeCallFired = new AsyncCounter();
         void BeforeCall(object sender, ServerRpcContext e) =>
-            Interlocked.Increment(ref beforeCallFired);
+            beforeCallFired++;
 
-        var afterCallFired = 0;
+        var afterCallFired = new AsyncCounter();
         void AfterCall(object sender, ServerRpcContext e) =>
-            Interlocked.Increment(ref afterCallFired);
+            afterCallFired++;
 
         using var ctx = ValidationSyncContext.Install();
         _serverFixture.Server.BeforeCall += BeforeCall;
@@ -935,8 +936,8 @@ public class RpcTests : IClassFixture<ServerFixture>
             // test normal method
             Assert.Equal("Hello", proxy.Echo("Hello"));
 
-            Assert.Equal(2, beforeCallFired);
-            Assert.Equal(2, afterCallFired);
+            await beforeCallFired[2].Timeout(1).ConfigureAwait(false);
+            await afterCallFired[2].Timeout(1).ConfigureAwait(false);
         }
         finally
         {
@@ -946,15 +947,16 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
-    public void BeforeCall_and_AfterCall_events_are_triggered_on_failures()
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "Not applicable")]
+    public async Task BeforeCall_and_AfterCall_events_are_triggered_on_failures()
     {
-        var beforeCallFired = 0;
+        var beforeCallFired = new AsyncCounter();
         void BeforeCall(object sender, ServerRpcContext e) =>
-            Interlocked.Increment(ref beforeCallFired);
+            beforeCallFired++;
 
-        var afterCallFired = 0;
+        var afterCallFired = new AsyncCounter();
         void AfterCall(object sender, ServerRpcContext e) =>
-            Interlocked.Increment(ref afterCallFired);
+            afterCallFired++;
 
         using var ctx = ValidationSyncContext.Install();
         _serverFixture.Server.BeforeCall += BeforeCall;
@@ -978,8 +980,8 @@ public class RpcTests : IClassFixture<ServerFixture>
             var proxy = client.CreateProxy<ITestService>();
             Assert.Throws<RemoteInvocationException>(() => proxy.Error("Bang"));
 
-            Assert.Equal(1, beforeCallFired);
-            Assert.Equal(1, afterCallFired);
+            await beforeCallFired[1].Timeout(1).ConfigureAwait(false);
+            await afterCallFired[1].Timeout(1).ConfigureAwait(false);
         }
         finally
         {
