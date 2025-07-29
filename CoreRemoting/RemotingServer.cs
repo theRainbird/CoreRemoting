@@ -24,6 +24,7 @@ namespace CoreRemoting
     {
         private readonly IDependencyInjectionContainer _container;
         private readonly ServerConfig _config;
+        private readonly IDelegateInvoker _delegateInvoker;
         private readonly string _uniqueServerInstanceName;
 
         // ReSharper disable once InconsistentNaming
@@ -65,6 +66,7 @@ namespace CoreRemoting
             MethodCallMessageBuilder = new MethodCallMessageBuilder();
             MessageEncryptionManager = new MessageEncryptionManager();
 
+            _delegateInvoker = config.DelegateInvoker ?? new SafeDynamicInvoker();
             _container.RegisterService<IDelegateProxyFactory, DelegateProxyFactory>(
                 lifetime: ServiceLifetime.Singleton,
                 asHiddenSystemService: true);

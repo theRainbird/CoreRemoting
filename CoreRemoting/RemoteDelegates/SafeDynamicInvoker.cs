@@ -15,8 +15,13 @@ using DelegateFactoryCache = ConcurrentDictionary<Type, Func<Delegate, object[],
 /// <summary>
 /// A safer replacement for the Delegate.DynamicInvoke method.
 /// </summary>
-public static class SafeDynamicInvoker
+public class SafeDynamicInvoker : IDelegateInvoker
 {
+    /// <inheritdoc/>
+    public void Invoke(Delegate handler, object[] arguments) =>
+        OneWayDynamicInvoke(handler, arguments);
+
+
     private static DelegateFactoryCache dynamicInvokers = new DelegateFactoryCache();
 
     /// <summary>
@@ -30,7 +35,7 @@ public static class SafeDynamicInvoker
     /// </remarks>
     /// <param name="deleg">The delegate to invoke.</param>
     /// <returns>Dynamic invocation function.</returns>
-    public static Func<Delegate, object[], object> GetDynamicInvoker(this Delegate deleg)
+    private static Func<Delegate, object[], object> GetDynamicInvoker(Delegate deleg)
     {
         return dynamicInvokers.GetOrAdd(deleg.GetType(), delegateType =>
         {
@@ -116,7 +121,7 @@ public static class SafeDynamicInvoker
     /// <param name="deleg">The delegate to invoke.</param>
     /// <param name="args">The arguments for the delegate.</param>
     /// <returns>The return value of the delegate</returns>
-    public static object SafeDynamicInvoke(this Delegate deleg, params object[] args)
+    private static object SafeDynamicInvoke(Delegate deleg, params object[] args)
     {
         if (deleg == null)
         {
@@ -172,7 +177,7 @@ public static class SafeDynamicInvoker
     /// </summary>
     /// <param name="deleg">The delegate to invoke.</param>
     /// <param name="arguments">The arguments.</param>
-    public static void OneWayDynamicInvoke(this Delegate deleg, object[] arguments)
+    private static void OneWayDynamicInvoke(Delegate deleg, object[] arguments)
     {
         if (deleg == null)
         {

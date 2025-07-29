@@ -17,11 +17,15 @@ public class EventStub
     /// Initializes a new instance of the <see cref="EventStub" /> class.
     /// </summary>
     /// <param name="interfaceType">Type of the interface.</param>
-    public EventStub(Type interfaceType)
+    /// <param name="delegateInvoker">Delegate invoker service.</param>
+    public EventStub(Type interfaceType, IDelegateInvoker delegateInvoker)
     {
         InterfaceType = interfaceType ?? throw new ArgumentNullException(nameof(interfaceType));
+        DelegateInvoker = delegateInvoker;
         CreateDelegateHolders();
     }
+
+    private IDelegateInvoker DelegateInvoker { get; set; }
 
     /// <summary>
     /// Gets or sets the invocation delegates for event handlers.
@@ -58,12 +62,14 @@ public class EventStub
 
         foreach (var eventProperty in EventProperties)
         {
-            DelegateHolders[eventProperty.Name] = CreateDelegateHolder(eventProperty.EventHandlerType);
+            DelegateHolders[eventProperty.Name] =
+                CreateDelegateHolder(eventProperty.EventHandlerType, DelegateInvoker);
         }
 
         foreach (var delegateProperty in DelegateProperties)
         {
-            DelegateHolders[delegateProperty.Name] = CreateDelegateHolder(delegateProperty.PropertyType);
+            DelegateHolders[delegateProperty.Name] =
+                CreateDelegateHolder(delegateProperty.PropertyType, DelegateInvoker);
         }
     }
 
@@ -99,20 +105,20 @@ public class EventStub
         where typeof(Delegate).IsAssignableFrom(prop.PropertyType)
         select prop;
 
-    private static IDelegateHolder CreateDelegateHolder(Type delegateType)
+    private static IDelegateHolder CreateDelegateHolder(Type delegateType, IDelegateInvoker delegateInvoker)
     {
         var createDelegateHolder = createDelegateHolderMethod
             .MakeGenericMethod(delegateType)
-            .CreateDelegate(typeof(Func<IDelegateHolder>)) as Func<IDelegateHolder>;
+            .CreateDelegate(typeof(Func<IDelegateInvoker, IDelegateHolder>)) as Func<IDelegateInvoker, IDelegateHolder>;
 
-        return createDelegateHolder();
+        return createDelegateHolder(delegateInvoker);
     }
 
     private static MethodInfo createDelegateHolderMethod =
-        new Func<IDelegateHolder>(CreateDelegateHolder<Action>).Method.GetGenericMethodDefinition();
+        new Func<IDelegateInvoker, IDelegateHolder>(CreateDelegateHolder<Action>).Method.GetGenericMethodDefinition();
 
-    private static IDelegateHolder CreateDelegateHolder<T>() =>
-        new DelegateHolder<T>();
+    private static IDelegateHolder CreateDelegateHolder<T>(IDelegateInvoker delegateInvoker) =>
+        new DelegateHolder<T>(delegateInvoker);
 
     /// <summary>
     /// Non-generic interface for the private generic delegate holder class.
@@ -147,11 +153,14 @@ public class EventStub
     /// </summary>
     private class DelegateHolder<T> : IDelegateHolder
     {
-        public DelegateHolder()
+        public DelegateHolder(IDelegateInvoker delegateInvoker)
         {
             // create default return value for the delegate
             DefaultReturnValue = typeof(T).GetMethod("Invoke").ReturnType.GetDefaultValue();
+            DelegateInvoker = delegateInvoker;
         }
+
+        private IDelegateInvoker DelegateInvoker { get; }
 
         public Delegate InvocationDelegate =>
             (Delegate)(object)InvocationMethod;
@@ -262,7 +271,7 @@ public class EventStub
         private object DynamicInvoke(object[] arguments)
         {
             // run in non-blocking mode
-            Delegate.OneWayDynamicInvoke(arguments);
+            DelegateInvoker.Invoke(Delegate, arguments);
             return DefaultReturnValue;
         }
 
