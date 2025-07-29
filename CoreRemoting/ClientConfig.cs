@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
+using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Serialization;
 
 namespace CoreRemoting
@@ -74,6 +75,11 @@ namespace CoreRemoting
         /// </summary>
         [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
         public IClientChannel Channel { get; set; }
+
+        /// <summary>
+        /// Gets or sets the delegate invoker.
+        /// </summary>
+        public IDelegateInvoker DelegateInvoker { get; set; }
 
         /// <summary>
         /// Gets or sets an array of credentials for authentication (depends on the authentication provider used on server side). 

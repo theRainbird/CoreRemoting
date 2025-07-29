@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
 using CoreRemoting.DependencyInjection;
+using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Serialization;
 
 namespace CoreRemoting
@@ -71,6 +72,11 @@ namespace CoreRemoting
         /// </summary>
         [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")] 
         public IServerChannel Channel { get; set; }
+
+        /// <summary>
+        /// Gets or sets the delegate invoker.
+        /// </summary>
+        public IDelegateInvoker DelegateInvoker { get; set; }
 
         /// <summary>
         /// Gets or sets whether authentication is required in order to establish a new session.
