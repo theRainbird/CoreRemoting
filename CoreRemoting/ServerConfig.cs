@@ -74,11 +74,6 @@ namespace CoreRemoting
         public IServerChannel Channel { get; set; }
 
         /// <summary>
-        /// Gets or sets the delegate invoker.
-        /// </summary>
-        public IDelegateInvoker DelegateInvoker { get; set; }
-
-        /// <summary>
         /// Gets or sets whether authentication is required in order to establish a new session.
         /// </summary>
         public bool AuthenticationRequired { get; set; } = false;

@@ -21,7 +21,6 @@ public class SafeDynamicInvoker : IDelegateInvoker
     public void Invoke(Delegate handler, object[] arguments) =>
         OneWayDynamicInvoke(handler, arguments);
 
-
     private static DelegateFactoryCache dynamicInvokers = new DelegateFactoryCache();
 
     /// <summary>

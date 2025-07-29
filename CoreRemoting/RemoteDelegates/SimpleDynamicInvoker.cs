@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace CoreRemoting.RemoteDelegates;
 
@@ -9,7 +10,6 @@ namespace CoreRemoting.RemoteDelegates;
 /// Features:
 /// - Uses late-bound delegate invocation.
 /// - Doesn't check delegate type.
-/// - Doesn't catch and rethrow exceptions.
 /// - Executes multicast delegates sequentially.
 /// </remarks>
 public class SimpleDynamicInvoker : IDelegateInvoker
@@ -17,6 +17,13 @@ public class SimpleDynamicInvoker : IDelegateInvoker
     /// <inheritdoc/>
     public void Invoke(Delegate handler, object[] arguments)
     {
-        handler?.DynamicInvoke(arguments);
+        try
+        {
+            handler?.DynamicInvoke(arguments);
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine("Invocation failed: " + ex.ToString());
+        }
     }
 }

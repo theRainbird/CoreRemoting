@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
+using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Serialization;
 using CoreRemoting.Tests.ExternalTypes;
 using CoreRemoting.Tests.Tools;
@@ -40,7 +41,15 @@ public class RpcTests : IClassFixture<ServerFixture>
         };
 
         _serverFixture.Start(ServerChannel);
+
+        // setup event handler invoker
+        EventStub.DelegateInvoker = DelegateInvoker;
     }
+
+    /// <summary>
+    /// Gets the delegate invoker to be used for event handler tests.
+    /// </summary>
+    protected virtual IDelegateInvoker DelegateInvoker => new SafeDynamicInvoker();
 
     [Fact]
     public void ValidationSyncContext_is_installed()

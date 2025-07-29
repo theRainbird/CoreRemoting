@@ -34,7 +34,6 @@ namespace CoreRemoting
         private IRawMessageTransport _rawMessageTransport;
         private readonly RsaKeyPair _keyPair;
         private readonly ClientDelegateRegistry _delegateRegistry;
-        private readonly IDelegateInvoker _delegateInvoker;
         private readonly CancellationTokenSource _cancellationTokenSource;
         private readonly ClientConfig _config;
         private readonly AsyncLock _channelLock;
@@ -113,7 +112,6 @@ namespace CoreRemoting
                 throw new NetworkException(s);
             };
 
-            _delegateInvoker = config.DelegateInvoker ?? new SafeDynamicInvoker();
             _clientInstances.AddOrUpdate(
                 key: config.UniqueClientInstanceName,
                 addValueFactory: _ => this,
@@ -651,7 +649,7 @@ namespace CoreRemoting
                 _delegateRegistry.GetDelegateByHandlerKey(delegateInvocationMessage.HandlerKey);
 
             // Invoke local delegate with arguments from remote caller
-            _delegateInvoker.Invoke(localDelegate, delegateInvocationMessage.DelegateArguments);
+            EventStub.DelegateInvoker.Invoke(localDelegate, delegateInvocationMessage.DelegateArguments);
         }
 
         /// <summary>
