@@ -17,15 +17,22 @@ public class EventStub
     /// Initializes a new instance of the <see cref="EventStub" /> class.
     /// </summary>
     /// <param name="interfaceType">Type of the interface.</param>
-    /// <param name="delegateInvoker">Delegate invoker service.</param>
-    public EventStub(Type interfaceType, IDelegateInvoker delegateInvoker)
+    public EventStub(Type interfaceType)
     {
         InterfaceType = interfaceType ?? throw new ArgumentNullException(nameof(interfaceType));
-        DelegateInvoker = delegateInvoker;
         CreateDelegateHolders();
     }
 
-    private IDelegateInvoker DelegateInvoker { get; set; }
+    /// <summary>
+    /// Gets or sets the delegate invoker for remote event invocations.
+    /// </summary>
+    public static IDelegateInvoker DelegateInvoker
+    {
+        get => _delegateInvoker;
+        set => _delegateInvoker = value ?? new SafeDynamicInvoker();
+    }
+
+    private static IDelegateInvoker _delegateInvoker = new SafeDynamicInvoker();
 
     /// <summary>
     /// Gets or sets the invocation delegates for event handlers.

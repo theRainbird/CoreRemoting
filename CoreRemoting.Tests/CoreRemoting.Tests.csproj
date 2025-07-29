@@ -70,6 +70,14 @@
       <Compile Include="RpcTests_NullChannel.cs">
         <DependentUpon>RpcTests.cs</DependentUpon>
       </Compile>
+      <Compile Remove="RpcTests_NullChannel_SimpleInvoker.cs" />
+      <Compile Include="RpcTests_NullChannel_SimpleInvoker.cs">
+        <DependentUpon>RpcTests.cs</DependentUpon>
+      </Compile>
+      <Compile Remove="RpcTests_TcpChannel_SimpleInvoker.cs" />
+      <Compile Include="RpcTests_TcpChannel_SimpleInvoker.cs">
+        <DependentUpon>RpcTests.cs</DependentUpon>
+      </Compile>
       <Compile Remove="SessionTests_Websockets.cs" />
       <Compile Include="SessionTests_Websockets.cs">
         <DependentUpon>SessionTests.cs</DependentUpon>
