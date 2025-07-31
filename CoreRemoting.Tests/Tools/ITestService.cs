@@ -14,6 +14,8 @@ public interface ITestService : IBaseService
 
     event ServerEventHandler CustomDelegateEvent;
 
+    event EventHandler<HeavyweightObjectSimulator> HeavyEvent;
+
     object TestMethod(object arg);
 
     object LongRunnigTestMethod(int timeout);
@@ -23,6 +25,8 @@ public interface ITestService : IBaseService
     void FireServiceEvent();
 
     void FireCustomDelegateEvent();
+
+    int FireHeavyEvents(params int[] delays);
 
     [OneWay]
     void OneWayMethod();

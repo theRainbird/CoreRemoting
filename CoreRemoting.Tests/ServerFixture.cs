@@ -2,7 +2,9 @@ using System;
 using System.Threading;
 using CoreRemoting.Channels;
 using CoreRemoting.DependencyInjection;
+using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Tests.Tools;
+using CoreRemoting.Threading;
 using Xunit;
 
 namespace CoreRemoting.Tests;
@@ -89,6 +91,8 @@ public class ServerFixture : IDisposable
                         lifetime: ServiceLifetime.SingleCall);
                 }
             };
+
+        SafeDynamicInvoker.ThreadPool = new SimpleLockThreadPool(Environment.ProcessorCount + 1);
     }
 
     public void Start(IServerChannel channel = null)

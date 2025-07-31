@@ -214,6 +214,11 @@ public sealed class SimpleLockThreadPool : IThreadPool
         }
     }
 
+    /// <summary>
+    /// Gets or sets the timeout while waiting for the running threads to finish.
+    /// </summary>
+    public int DisposalTimeoutMs { get; set; } = 5000;
+
     // Disposing will signal shutdown, and then wait for all threads to finish.
 
     /// <summary>
@@ -226,7 +231,7 @@ public sealed class SimpleLockThreadPool : IThreadPool
         if (m_threads != null)
         {
             for (int i = 0; i < m_threads.Length; i++)
-                m_threads[i].Join();
+                m_threads[i].Join(DisposalTimeoutMs);
         }
     }
 

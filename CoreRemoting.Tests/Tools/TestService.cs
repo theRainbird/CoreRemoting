@@ -15,13 +15,15 @@ public class TestService : ITestService
     public Func<object, object> TestMethodFake { get; set; }
 
     public Action OneWayMethodFake { get; set; }
-    
+
     public Action<DataClass> TestExternalTypeParameterFake { get; set; }
-    
-    public event Action ServiceEvent; 
-    
+
+    public event Action ServiceEvent;
+
     public event ServerEventHandler CustomDelegateEvent;
-    
+
+    public event EventHandler<HeavyweightObjectSimulator> HeavyEvent;
+
     public object TestMethod(object arg)
     {
         return TestMethodFake?.Invoke(arg);
@@ -46,6 +48,16 @@ public class TestService : ITestService
     public void FireCustomDelegateEvent()
     {
         CustomDelegateEvent?.Invoke(null);
+    }
+
+    public int FireHeavyEvents(params int[] delays)
+    {
+        foreach (var delay in delays)
+        {
+            HeavyEvent?.Invoke(null, new() { SerializationDelay = delay });
+        }
+
+        return delays.Length;
     }
 
     public void OneWayMethod()
