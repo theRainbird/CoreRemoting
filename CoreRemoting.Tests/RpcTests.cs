@@ -698,6 +698,42 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
+    public void Nonserializable_method_return_value_throws_Exception()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        try
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 5,
+                InvocationTimeout = 5,
+                SendTimeout = 5,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort
+            });
+
+            client.Connect();
+
+            var proxy = client.CreateProxy<ITestService>();
+            var ex = Assert.Throws<RemoteInvocationException>(() =>
+                proxy.NonSerializableReturnValue("Hello"));
+
+            Assert.NotNull(ex);
+            Assert.Contains("serialize", ex.Message);
+            Assert.Contains("return", ex.Message);
+            Assert.Contains("value", ex.Message);
+            Assert.NotNull(ex.InnerException);
+        }
+        finally
+        {
+            // reset the error counter for other tests
+            _serverFixture.ServerErrorCount = 0;
+        }
+    }
+
+    [Fact]
     public void AfterCall_event_handler_can_translate_exceptions_to_improve_diagnostics()
     {
         // replace cryptic database error report with a user-friendly error message
