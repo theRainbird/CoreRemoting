@@ -120,6 +120,16 @@ public class TestService : ITestService
         throw ex;
     }
 
+    public class NonSerializableObject(string text)
+    {
+        public string Text => throw new Exception(text);
+    }
+
+    public object NonSerializableReturnValue(string text)
+    {
+        return new NonSerializableObject(text);
+    }
+
     public DataTable TestDt(DataTable dt, long num)
     {
         dt.Rows.Clear();

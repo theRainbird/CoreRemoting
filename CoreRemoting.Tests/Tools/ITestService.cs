@@ -45,6 +45,8 @@ public interface ITestService : IBaseService
 
     void NonSerializableError(string text, params object[] data);
 
+    object NonSerializableReturnValue(string text);
+
     DataTable TestDt(DataTable dt, long num);
 
     (T duplicate, int size) Duplicate<T>(T sample) where T : class;
