@@ -15,6 +15,7 @@ using CoreRemoting.Serialization;
 using Serialize.Linq.Nodes;
 using CoreRemoting.Toolbox;
 using CoreRemoting.Threading;
+using System.Text.RegularExpressions;
 
 namespace CoreRemoting
 {
@@ -593,8 +594,19 @@ namespace CoreRemoting
                 // don't overwrite the serialized exception
                 if (ReferenceEquals(serializedResult, Array.Empty<byte>()))
                 {
-                    serializedResult =
-                        _server.Serializer.Serialize(serverRpcContext.MethodCallResultMessage);
+                    try
+                    {
+                        serializedResult =
+                            _server.Serializer.Serialize(serverRpcContext.MethodCallResultMessage);
+                    }
+                    catch (Exception serializationException)
+                    {
+                        serverRpcContext.Exception = new RemoteInvocationException(
+                            message: "Failed to serialize method return value. " + serializationException.Message,
+                            innerEx: serializationException.ToSerializable());
+
+                        serializedResult = _server.Serializer.Serialize(serverRpcContext.Exception);
+                    }
                 }
             }
 
