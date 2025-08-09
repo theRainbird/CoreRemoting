@@ -14,6 +14,7 @@ using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization;
 using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
+using Serialize.Linq.Extensions;
 using Serialize.Linq.Nodes;
 
 namespace CoreRemoting;
@@ -522,6 +523,11 @@ public sealed class RemotingSession : IAsyncDisposable
                     if (task.isAwaited)
                     {
                         result = task.result;
+                    }
+                    else if (returnType.IsLinqExpressionType())
+                    {
+                        var expression = (Expression)result;
+                        result = expression.ToExpressionNode();
                     }
                     else if (returnType.GetCustomAttribute<ReturnAsProxyAttribute>() != null)
                     {

@@ -6,9 +6,12 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Castle.DynamicProxy;
 using CoreRemoting.RemoteDelegates;
+using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Bson;
+using CoreRemoting.Toolbox;
 using Serialize.Linq.Extensions;
+using Serialize.Linq.Nodes;
 using stakx.DynamicProxy;
 
 namespace CoreRemoting;
@@ -155,18 +158,7 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
             }
         }
 
-        var returnValue =
-            resultMessage.IsReturnValueNull
-                ? null
-                : resultMessage.ReturnValue is Envelope returnValueEnvelope
-                    ? returnValueEnvelope.Value
-                    : resultMessage.ReturnValue;
-
-        // Create a proxy to remote service, if return type is a service reference
-        if (returnValue is ServiceReference serviceReference)
-            returnValue = _client.CreateProxy(serviceReference);
-
-        invocation.ReturnValue = returnValue;
+        invocation.ReturnValue = UnmapReturnValue(resultMessage);
 
         CallContext.RestoreFromSnapshot(resultMessage.CallContextSnapshot);
     }
@@ -215,14 +207,34 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
             return;
         }
 
-        invocation.Result =
+        invocation.Result = UnmapReturnValue(resultMessage);
+
+        CallContext.RestoreFromSnapshot(resultMessage.CallContextSnapshot);
+    }
+
+    /// <summary>
+    /// Unmaps the return value back to its original type.
+    /// </summary>
+    /// <param name="resultMessage">Method call result message.</param>
+    private object UnmapReturnValue(MethodCallResultMessage resultMessage)
+    {
+        // Unwrap an enveloped value
+        var returnValue =
             resultMessage.IsReturnValueNull
                 ? null
                 : resultMessage.ReturnValue is Envelope returnValueEnvelope
                     ? returnValueEnvelope.Value
                     : resultMessage.ReturnValue;
 
-        CallContext.RestoreFromSnapshot(resultMessage.CallContextSnapshot);
+        // Create a proxy to remote service, if return type is a service reference
+        if (returnValue is ServiceReference serviceReference)
+            returnValue = _client.CreateProxy(serviceReference);
+
+        // Restore LINQ expression, if return type is a serializable expression
+        if (returnValue is ExpressionNode exprNode)
+            returnValue = exprNode.ToExpression();
+
+        return returnValue;
     }
 
     /// <summary>
@@ -263,15 +275,7 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
     /// <returns>True if mapping applied, otherwise false</returns>
     private bool MapLinqExpressionArgument(Type argumentType, object argument, out object mappedArgument)
     {
-        var isLinqExpression =
-            argumentType is
-            {
-                IsGenericType: true,
-                BaseType.IsGenericType: true
-            }
-            && argumentType.BaseType.GetGenericTypeDefinition() == typeof(Expression<>);
-
-        if (!isLinqExpression)
+        if (!argumentType.IsLinqExpressionType())
         {
             mappedArgument = argument;
             return false;

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Linq.Expressions;
 using System.Reflection;
 
 namespace CoreRemoting.Toolbox;
@@ -69,5 +70,24 @@ public static class Extensions
         }
 
         return DefaultValues.GetOrAdd(type, Activator.CreateInstance);
+    }
+
+    /// <summary>
+    /// Checks if the given type is LINQ expression type.
+    /// </summary>
+    /// <param name="type">The type.</param>
+    /// <returns>True, if it's an expression.</returns>
+    public static bool IsLinqExpressionType(this Type type)
+    {
+        // turns out, this definition is too narrow:
+        // var isLinqExpression =
+        //    argumentType is
+        //    {
+        //        IsGenericType: true,
+        //        BaseType.IsGenericType: true
+        //    }
+        //    && argumentType.BaseType.GetGenericTypeDefinition() == typeof(Expression<>);
+
+        return typeof(Expression).IsAssignableFrom(type);
     }
 }

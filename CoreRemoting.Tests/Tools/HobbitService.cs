@@ -21,4 +21,10 @@ public class HobbitService : IHobbitService
 
         return _hobbits.FirstOrDefault(criteria);
     }
+
+    public Expression<Func<T, bool>> ValidatePredicate<T>(Expression<Func<T, bool>> predicate)
+    {
+        // add more conditions to the user's predicate, etc.
+        return predicate;
+    }
 }
