@@ -52,12 +52,18 @@ public class TestService : ITestService
 
     public int FireHeavyEvents(params int[] delays)
     {
-        foreach (var delay in delays)
+        HeavyweightObjectSimulator create(int d) => new(true)
         {
-            HeavyEvent?.Invoke(null, new() { SerializationDelay = delay });
+            SerializationDelay = d,
+        };
+
+        var args = delays.Select(create).ToArray();
+        foreach (var arg in args)
+        {
+            HeavyEvent?.Invoke(null, arg);
         }
 
-        return delays.Length;
+        return args.Length;
     }
 
     public void OneWayMethod()
