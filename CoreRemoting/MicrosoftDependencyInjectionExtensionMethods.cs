@@ -39,7 +39,7 @@ public static class MicrosoftDependencyInjectionExtensionMethods
     public static void AddCoreRemotingServer(this IServiceCollection services, ServerConfig config)
     {
         config.DependencyInjectionContainer = new MicrosoftDependencyInjectionContainer(services);
-        
+
         var server = new RemotingServer(config);
         services.AddSingleton<IRemotingServer>(server);
     }

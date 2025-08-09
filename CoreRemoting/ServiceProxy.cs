@@ -11,300 +11,299 @@ using CoreRemoting.Serialization.Bson;
 using Serialize.Linq.Extensions;
 using stakx.DynamicProxy;
 
-namespace CoreRemoting
+namespace CoreRemoting;
+
+/// <summary>
+/// Implements a proxy of a remote service that is hosted on a CoreRemoting server..
+/// This is doing the RPC magic of CoreRemoting at client side.
+/// </summary>
+/// <typeparam name="TServiceInterface">Type of the remote service's interface (also known as contract of the service)</typeparam>
+public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
 {
+    private readonly string _serviceName;
+    private RemotingClient _client;
+
     /// <summary>
-    /// Implements a proxy of a remote service that is hosted on a CoreRemoting server..
-    /// This is doing the RPC magic of CoreRemoting at client side.
+    /// Creates a new instance of the ServiceProxy class.
     /// </summary>
-    /// <typeparam name="TServiceInterface">Type of the remote service's interface (also known as contract of the service)</typeparam>
-    public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
+    /// <param name="client">CoreRemoting client to be used for client/server communication</param>
+    /// <param name="serviceName">Unique name of the remote service</param>
+    public ServiceProxy(RemotingClient client, string serviceName = "")
     {
-        private readonly string _serviceName;
-        private RemotingClient _client;
+        _client = client ?? throw new ArgumentNullException(nameof(client));
 
-        /// <summary>
-        /// Creates a new instance of the ServiceProxy class.
-        /// </summary>
-        /// <param name="client">CoreRemoting client to be used for client/server communication</param>
-        /// <param name="serviceName">Unique name of the remote service</param>
-        public ServiceProxy(RemotingClient client, string serviceName = "")
+        var serviceInterfaceType = typeof(TServiceInterface);
+
+        _serviceName =
+            string.IsNullOrWhiteSpace(serviceName)
+                ? serviceInterfaceType.FullName
+                : serviceName;
+    }
+
+    /// <summary>
+    /// Finalizer.
+    /// </summary>
+    ~ServiceProxy()
+    {
+        ((IServiceProxy)this).Shutdown();
+    }
+
+    /// <summary>
+    /// Shutdown service proxy and free resources.
+    /// </summary>
+    void IServiceProxy.Shutdown()
+    {
+        if (_client != null)
         {
-            _client = client ?? throw new ArgumentNullException(nameof(client));
-
-            var serviceInterfaceType = typeof(TServiceInterface);
-
-            _serviceName =
-                string.IsNullOrWhiteSpace(serviceName)
-                    ? serviceInterfaceType.FullName
-                    : serviceName;
+            _client.ClientDelegateRegistry.UnregisterClientDelegatesOfServiceProxy(this);
+            _client = null;
         }
 
-        /// <summary>
-        /// Finalizer.
-        /// </summary>
-        ~ServiceProxy()
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Gets the type of the service interface.
+    /// </summary>
+    public Type ServiceInterfaceType => typeof(TServiceInterface);
+
+    /// <summary>
+    /// Gets the name of the service;
+    /// </summary>
+    public string ServiceName => _serviceName;
+
+    /// <summary>
+    /// Intercepts a synchronous call of a member on the proxy object.
+    /// </summary>
+    /// <param name="invocation">Intercepted invocation details</param>
+    /// <exception cref="RemotingException">Thrown if a remoting operation has been failed</exception>
+    /// <exception cref="NotSupportedException">Thrown if a member of a type marked as OneWay is intercepted, that has another return type than void</exception>
+    /// <exception cref="RemoteInvocationException">Thrown if an exception occurred when the remote method was invoked</exception>
+    protected override void Intercept(IInvocation invocation)
+    {
+        var method = invocation.Method;
+        var oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
+        var returnType = method.ReturnType;
+
+        if (oneWay && returnType != typeof(void))
+            throw new NotSupportedException("OneWay methods must not have a return type.");
+
+        var arguments = MapArguments(invocation.Arguments);
+
+        var remoteMethodCallMessage =
+            _client.MethodCallMessageBuilder.BuildMethodCallMessage(
+                serializer: _client.Serializer,
+                remoteServiceName: _serviceName,
+                targetMethod: method,
+                args: arguments);
+
+        var sendTask =
+            _client.InvokeRemoteMethod(remoteMethodCallMessage, oneWay);
+        sendTask.ConfigureAwait(false);
+
+        if (!sendTask.Wait(
+                _client.Config.SendTimeout == 0
+                    ? -1 // Infinite
+                    : _client.Config.SendTimeout * 1000))
         {
-            ((IServiceProxy)this).Shutdown();
+            throw new TimeoutException($"Send timeout ({_client.Config.SendTimeout}) exceeded.");
         }
 
-        /// <summary>
-        /// Shutdown service proxy and free resources.
-        /// </summary>
-        void IServiceProxy.Shutdown()
-        {
-            if (_client != null)
-            {
-                _client.ClientDelegateRegistry.UnregisterClientDelegatesOfServiceProxy(this);
-                _client = null;
-            }
+        var clientRpcContext = sendTask.Result;
 
-            GC.SuppressFinalize(this);
+        if (clientRpcContext.Error)
+        {
+            throw clientRpcContext.RemoteException ??
+                new RemoteInvocationException();
         }
 
-        /// <summary>
-        /// Gets the type of the service interface.
-        /// </summary>
-        public Type ServiceInterfaceType => typeof(TServiceInterface);
+        var resultMessage = clientRpcContext.ResultMessage;
 
-        /// <summary>
-        /// Gets the name of the service;
-        /// </summary>
-        public string ServiceName => _serviceName;
-
-        /// <summary>
-        /// Intercepts a synchronous call of a member on the proxy object.
-        /// </summary>
-        /// <param name="invocation">Intercepted invocation details</param>
-        /// <exception cref="RemotingException">Thrown if a remoting operation has been failed</exception>
-        /// <exception cref="NotSupportedException">Thrown if a member of a type marked as OneWay is intercepted, that has another return type than void</exception>
-        /// <exception cref="RemoteInvocationException">Thrown if an exception occurred when the remote method was invoked</exception>
-        protected override void Intercept(IInvocation invocation)
+        if (resultMessage == null)
         {
-            var method = invocation.Method;
-            var oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
-            var returnType = method.ReturnType;
+            invocation.ReturnValue = null;
+            return;
+        }
 
-            if (oneWay && returnType != typeof(void))
-                throw new NotSupportedException("OneWay methods must not have a return type.");
+        var parameterInfos = method.GetParameters();
 
-            var arguments = MapArguments(invocation.Arguments);
+        var serializer = _client.Serializer;
 
-            var remoteMethodCallMessage =
-                _client.MethodCallMessageBuilder.BuildMethodCallMessage(
-                    serializer: _client.Serializer,
-                    remoteServiceName: _serviceName,
-                    targetMethod: method,
-                    args: arguments);
+        foreach (var outParameterValue in resultMessage.OutParameters)
+        {
+            var parameterInfo =
+                parameterInfos.First(p => p.Name == outParameterValue.ParameterName);
 
-            var sendTask =
-                _client.InvokeRemoteMethod(remoteMethodCallMessage, oneWay);
-            sendTask.ConfigureAwait(false);
-
-            if (!sendTask.Wait(
-                    _client.Config.SendTimeout == 0
-                        ? -1 // Infinite
-                        : _client.Config.SendTimeout * 1000))
+            if (outParameterValue.IsOutValueNull)
+                invocation.Arguments[parameterInfo.Position] = null;
+            else
             {
-                throw new TimeoutException($"Send timeout ({_client.Config.SendTimeout}) exceeded.");
-            }
+                if (serializer.EnvelopeNeededForParameterSerialization)
+                {
+                    var outParamEnvelope =
+                        serializer.Deserialize<Envelope>((byte[])outParameterValue.OutValue);
 
-            var clientRpcContext = sendTask.Result;
-
-            if (clientRpcContext.Error)
-            {
-                throw clientRpcContext.RemoteException ??
-                    new RemoteInvocationException();
-            }
-
-            var resultMessage = clientRpcContext.ResultMessage;
-
-            if (resultMessage == null)
-            {
-                invocation.ReturnValue = null;
-                return;
-            }
-
-            var parameterInfos = method.GetParameters();
-
-            var serializer = _client.Serializer;
-
-            foreach (var outParameterValue in resultMessage.OutParameters)
-            {
-                var parameterInfo =
-                    parameterInfos.First(p => p.Name == outParameterValue.ParameterName);
-
-                if (outParameterValue.IsOutValueNull)
-                    invocation.Arguments[parameterInfo.Position] = null;
+                    invocation.Arguments[parameterInfo.Position] = outParamEnvelope.Value;
+                }
                 else
                 {
-                    if (serializer.EnvelopeNeededForParameterSerialization)
-                    {
-                        var outParamEnvelope =
-                            serializer.Deserialize<Envelope>((byte[])outParameterValue.OutValue);
+                    var outParamValue =
+                        serializer.Deserialize(parameterInfo.ParameterType, (byte[])outParameterValue.OutValue);
 
-                        invocation.Arguments[parameterInfo.Position] = outParamEnvelope.Value;
-                    }
-                    else
-                    {
-                        var outParamValue =
-                            serializer.Deserialize(parameterInfo.ParameterType, (byte[])outParameterValue.OutValue);
-
-                        invocation.Arguments[parameterInfo.Position] = outParamValue;
-                    }
+                    invocation.Arguments[parameterInfo.Position] = outParamValue;
                 }
             }
-
-            var returnValue =
-                resultMessage.IsReturnValueNull
-                    ? null
-                    : resultMessage.ReturnValue is Envelope returnValueEnvelope
-                        ? returnValueEnvelope.Value
-                        : resultMessage.ReturnValue;
-
-            // Create a proxy to remote service, if return type is a service reference
-            if (returnValue is ServiceReference serviceReference)
-                returnValue = _client.CreateProxy(serviceReference);
-
-            invocation.ReturnValue = returnValue;
-
-            CallContext.RestoreFromSnapshot(resultMessage.CallContextSnapshot);
         }
 
-        /// <summary>
-        /// Intercepts an asynchronous call of a member on the proxy object.
-        /// </summary>
-        /// <param name="invocation">Intercepted invocation details</param>
-        /// <returns>Asynchronous running task</returns>
-        /// <exception cref="RemotingException">Thrown if a remoting operation has been failed</exception>
-        /// <exception cref="NotSupportedException">Thrown if a member of a type marked as OneWay is intercepted, that has another return type than void</exception>
-        /// <exception cref="RemoteInvocationException">Thrown if an exception occurred when the remote method was invoked</exception>
-        protected override async ValueTask InterceptAsync(IAsyncInvocation invocation)
+        var returnValue =
+            resultMessage.IsReturnValueNull
+                ? null
+                : resultMessage.ReturnValue is Envelope returnValueEnvelope
+                    ? returnValueEnvelope.Value
+                    : resultMessage.ReturnValue;
+
+        // Create a proxy to remote service, if return type is a service reference
+        if (returnValue is ServiceReference serviceReference)
+            returnValue = _client.CreateProxy(serviceReference);
+
+        invocation.ReturnValue = returnValue;
+
+        CallContext.RestoreFromSnapshot(resultMessage.CallContextSnapshot);
+    }
+
+    /// <summary>
+    /// Intercepts an asynchronous call of a member on the proxy object.
+    /// </summary>
+    /// <param name="invocation">Intercepted invocation details</param>
+    /// <returns>Asynchronous running task</returns>
+    /// <exception cref="RemotingException">Thrown if a remoting operation has been failed</exception>
+    /// <exception cref="NotSupportedException">Thrown if a member of a type marked as OneWay is intercepted, that has another return type than void</exception>
+    /// <exception cref="RemoteInvocationException">Thrown if an exception occurred when the remote method was invoked</exception>
+    protected override async ValueTask InterceptAsync(IAsyncInvocation invocation)
+    {
+        var method = invocation.Method;
+        var oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
+        var returnType = method.ReturnType;
+
+        if (oneWay && returnType != typeof(void))
+            throw new NotSupportedException("OneWay methods must not have a return type.");
+
+        var arguments = MapArguments(invocation.Arguments);
+
+        var remoteMethodCallMessage =
+            _client.MethodCallMessageBuilder.BuildMethodCallMessage(
+                serializer: _client.Serializer,
+                remoteServiceName: _serviceName,
+                targetMethod: method,
+                args: arguments);
+
+        var clientRpcContext =
+            await _client.InvokeRemoteMethod(remoteMethodCallMessage, oneWay)
+                .ConfigureAwait(false);
+
+        if (clientRpcContext.Error)
         {
-            var method = invocation.Method;
-            var oneWay = method.GetCustomAttribute<OneWayAttribute>() != null;
-            var returnType = method.ReturnType;
-
-            if (oneWay && returnType != typeof(void))
-                throw new NotSupportedException("OneWay methods must not have a return type.");
-
-            var arguments = MapArguments(invocation.Arguments);
-
-            var remoteMethodCallMessage =
-                _client.MethodCallMessageBuilder.BuildMethodCallMessage(
-                    serializer: _client.Serializer,
-                    remoteServiceName: _serviceName,
-                    targetMethod: method,
-                    args: arguments);
-
-            var clientRpcContext =
-                await _client.InvokeRemoteMethod(remoteMethodCallMessage, oneWay)
-                    .ConfigureAwait(false);
-
-            if (clientRpcContext.Error)
-            {
-                throw clientRpcContext.RemoteException ??
-                    new RemoteInvocationException();
-            }
-
-            var resultMessage = clientRpcContext.ResultMessage;
-
-            if (resultMessage == null)
-            {
-                invocation.Result = null;
-                return;
-            }
-
-            invocation.Result =
-                resultMessage.IsReturnValueNull
-                    ? null
-                    : resultMessage.ReturnValue is Envelope returnValueEnvelope
-                        ? returnValueEnvelope.Value
-                        : resultMessage.ReturnValue;
-
-            CallContext.RestoreFromSnapshot(resultMessage.CallContextSnapshot);
+            throw clientRpcContext.RemoteException ??
+                new RemoteInvocationException();
         }
 
-        /// <summary>
-        /// Maps a delegate argument into a serializable RemoteDelegateInfo object.
-        /// </summary>
-        /// <param name="argumentType">Type of argument to be mapped</param>
-        /// <param name="argument">Argument to be wrapped</param>
-        /// <param name="mappedArgument">Out: Mapped argument</param>
-        /// <returns>True if mapping applied, otherwise false</returns>
-        private bool MapDelegateArgument(Type argumentType, object argument, out object mappedArgument)
+        var resultMessage = clientRpcContext.ResultMessage;
+
+        if (resultMessage == null)
         {
-            if (argumentType == null || !typeof(Delegate).IsAssignableFrom(argumentType))
-            {
-                mappedArgument = argument;
-                return false;
-            }
-
-            var delegateReturnType = argumentType.GetMethod("Invoke")?.ReturnType;
-
-            if (delegateReturnType != null && delegateReturnType != typeof(void))
-                throw new NotSupportedException("Only void delegates are supported.");
-
-            var remoteDelegateInfo =
-                new RemoteDelegateInfo(
-                    handlerKey: _client.ClientDelegateRegistry.RegisterClientDelegate((Delegate)argument, this),
-                    delegateTypeName: argumentType.FullName + ", " + argumentType.Assembly.GetName().Name);
-
-            mappedArgument = remoteDelegateInfo;
-            return true;
+            invocation.Result = null;
+            return;
         }
 
-        /// <summary>
-        /// Maps a Linq expression argument into a serializable ExpressionNode object.
-        /// </summary>
-        /// <param name="argumentType">Type of argument to be mapped</param>
-        /// <param name="argument">Argument to be wrapped</param>
-        /// <param name="mappedArgument">Out: Mapped argument</param>
-        /// <returns>True if mapping applied, otherwise false</returns>
-        private bool MapLinqExpressionArgument(Type argumentType, object argument, out object mappedArgument)
+        invocation.Result =
+            resultMessage.IsReturnValueNull
+                ? null
+                : resultMessage.ReturnValue is Envelope returnValueEnvelope
+                    ? returnValueEnvelope.Value
+                    : resultMessage.ReturnValue;
+
+        CallContext.RestoreFromSnapshot(resultMessage.CallContextSnapshot);
+    }
+
+    /// <summary>
+    /// Maps a delegate argument into a serializable RemoteDelegateInfo object.
+    /// </summary>
+    /// <param name="argumentType">Type of argument to be mapped</param>
+    /// <param name="argument">Argument to be wrapped</param>
+    /// <param name="mappedArgument">Out: Mapped argument</param>
+    /// <returns>True if mapping applied, otherwise false</returns>
+    private bool MapDelegateArgument(Type argumentType, object argument, out object mappedArgument)
+    {
+        if (argumentType == null || !typeof(Delegate).IsAssignableFrom(argumentType))
         {
-            var isLinqExpression =
-                argumentType is
-                {
-                    IsGenericType: true,
-                    BaseType.IsGenericType: true
-                }
-                && argumentType.BaseType.GetGenericTypeDefinition() == typeof(Expression<>);
+            mappedArgument = argument;
+            return false;
+        }
 
-            if (!isLinqExpression)
+        var delegateReturnType = argumentType.GetMethod("Invoke")?.ReturnType;
+
+        if (delegateReturnType != null && delegateReturnType != typeof(void))
+            throw new NotSupportedException("Only void delegates are supported.");
+
+        var remoteDelegateInfo =
+            new RemoteDelegateInfo(
+                handlerKey: _client.ClientDelegateRegistry.RegisterClientDelegate((Delegate)argument, this),
+                delegateTypeName: argumentType.FullName + ", " + argumentType.Assembly.GetName().Name);
+
+        mappedArgument = remoteDelegateInfo;
+        return true;
+    }
+
+    /// <summary>
+    /// Maps a Linq expression argument into a serializable ExpressionNode object.
+    /// </summary>
+    /// <param name="argumentType">Type of argument to be mapped</param>
+    /// <param name="argument">Argument to be wrapped</param>
+    /// <param name="mappedArgument">Out: Mapped argument</param>
+    /// <returns>True if mapping applied, otherwise false</returns>
+    private bool MapLinqExpressionArgument(Type argumentType, object argument, out object mappedArgument)
+    {
+        var isLinqExpression =
+            argumentType is
             {
-                mappedArgument = argument;
-                return false;
+                IsGenericType: true,
+                BaseType.IsGenericType: true
             }
+            && argumentType.BaseType.GetGenericTypeDefinition() == typeof(Expression<>);
 
-            var expression = (Expression)argument;
-            mappedArgument = expression.ToExpressionNode();
-
-            return true;
-        }
-
-        /// <summary>
-        /// Maps non serializable arguments into a serializable form.
-        /// </summary>
-        /// <param name="arguments">Arguments</param>
-        /// <returns>Array of arguments (includes mapped ones)</returns>
-        private object[] MapArguments(IEnumerable<object> arguments)
+        if (!isLinqExpression)
         {
-            var mappedArguments =
-                arguments.Select(argument =>
-                {
-                    var type = argument?.GetType();
-
-                    if (MapDelegateArgument(type, argument, out var mappedArgument))
-                        return mappedArgument;
-
-                    if (MapLinqExpressionArgument(type, argument, out mappedArgument))
-                        return mappedArgument;
-
-                    return argument;
-                }).ToArray();
-
-            return mappedArguments;
+            mappedArgument = argument;
+            return false;
         }
+
+        var expression = (Expression)argument;
+        mappedArgument = expression.ToExpressionNode();
+
+        return true;
+    }
+
+    /// <summary>
+    /// Maps non serializable arguments into a serializable form.
+    /// </summary>
+    /// <param name="arguments">Arguments</param>
+    /// <returns>Array of arguments (includes mapped ones)</returns>
+    private object[] MapArguments(IEnumerable<object> arguments)
+    {
+        var mappedArguments =
+            arguments.Select(argument =>
+            {
+                var type = argument?.GetType();
+
+                if (MapDelegateArgument(type, argument, out var mappedArgument))
+                    return mappedArgument;
+
+                if (MapLinqExpressionArgument(type, argument, out mappedArgument))
+                    return mappedArgument;
+
+                return argument;
+            }).ToArray();
+
+        return mappedArguments;
     }
 }
