@@ -7,11 +7,11 @@ namespace CoreRemoting.Tests.Tools
     /// <summary>
     /// Simulates a heavy object.
     /// </summary>
-    public class HeavyweightObjectSimulator
+    public class HeavyweightObjectSimulator(bool init = false)
     {
         private static int lastValue = 0;
 
-        public int Counter { get; set; } = Interlocked.Increment(ref lastValue);
+        public int Counter { get; set; } = init ? Interlocked.Increment(ref lastValue) : 0;
 
         public int SerializationDelay { get; set; }
 
