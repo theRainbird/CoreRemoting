@@ -869,11 +869,6 @@ public sealed class RemotingSession : IAsyncDisposable
         _rawMessageTransport.ReceiveMessage -= OnReceiveMessage;
         _rawMessageTransport.ErrorOccured -= OnErrorOccured;
 
-        _currentlyProcessedMessagesCounter.Signal();
-        await _currentlyProcessedMessagesCounter.WaitAsync()
-            .ExpireMs(_server.Config.WaitTimeForCurrentlyProcessedMessagesOnDispose)
-                .ConfigureAwait(false);
-
         var sharedSecret =
             MessageEncryption
                 ? _sessionId.ToByteArray()
@@ -886,6 +881,11 @@ public sealed class RemotingSession : IAsyncDisposable
                 sharedSecret: sharedSecret,
                 keyPair: _keyPair,
                 messageType: "session_closed");
+
+        _currentlyProcessedMessagesCounter.Signal();
+        await _currentlyProcessedMessagesCounter.WaitAsync()
+            .ExpireMs(_server.Config.WaitTimeForCurrentlyProcessedMessagesOnDispose)
+                .ConfigureAwait(false);        
 
         try
         {
