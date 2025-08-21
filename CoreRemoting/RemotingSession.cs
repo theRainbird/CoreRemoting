@@ -882,11 +882,6 @@ public sealed class RemotingSession : IAsyncDisposable
                 keyPair: _keyPair,
                 messageType: "session_closed");
 
-        _currentlyProcessedMessagesCounter.Signal();
-        await _currentlyProcessedMessagesCounter.WaitAsync()
-            .ExpireMs(_server.Config.WaitTimeForCurrentlyProcessedMessagesOnDispose)
-                .ConfigureAwait(false);        
-
         try
         {
             await _rawMessageTransport.SendMessageAsync(
@@ -898,6 +893,11 @@ public sealed class RemotingSession : IAsyncDisposable
             // ignored
             // TODO: dispatch the exception
         }
+
+        _currentlyProcessedMessagesCounter.Signal();
+        await _currentlyProcessedMessagesCounter.WaitAsync()
+            .ExpireMs(_server.Config.WaitTimeForCurrentlyProcessedMessagesOnDispose)
+                .ConfigureAwait(false);
 
         try
         {
