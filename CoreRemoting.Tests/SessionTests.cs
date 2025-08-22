@@ -202,7 +202,8 @@ public class SessionTests : IClassFixture<ServerFixture>
             SendTimeout = 0,
             MessageEncryption = false,
             ServerPort = _serverFixture.Server.Config.NetworkPort,
-            Channel = ClientChannel
+            Channel = ClientChannel,
+            WaitTimeForCurrentlyProcessedMessagesOnDispose = 1000
         });
 
         var disconnected = new TaskCompletionSource<bool>();
