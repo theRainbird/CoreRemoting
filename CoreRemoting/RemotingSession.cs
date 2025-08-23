@@ -260,7 +260,7 @@ public sealed class RemotingSession : IAsyncDisposable
     {
         _lastActivityTimestamp = DateTime.Now;
 
-        if (rawMessage == null || rawMessage.Length == 0)
+        if (rawMessage == null || rawMessage.Length == 0 || _isDisposing)
             return;
 
         _currentlyProcessedMessagesCounter.AddCount(1);
@@ -869,6 +869,11 @@ public sealed class RemotingSession : IAsyncDisposable
         _rawMessageTransport.ReceiveMessage -= OnReceiveMessage;
         _rawMessageTransport.ErrorOccured -= OnErrorOccured;
 
+        _currentlyProcessedMessagesCounter.Signal();
+        await _currentlyProcessedMessagesCounter.WaitAsync()
+            .ExpireMs(_server.Config.WaitTimeForCurrentlyProcessedMessagesOnDispose)
+                .ConfigureAwait(false);
+
         var sharedSecret =
             MessageEncryption
                 ? _sessionId.ToByteArray()
@@ -881,11 +886,6 @@ public sealed class RemotingSession : IAsyncDisposable
                 sharedSecret: sharedSecret,
                 keyPair: _keyPair,
                 messageType: "session_closed");
-
-        _currentlyProcessedMessagesCounter.Signal();
-        await _currentlyProcessedMessagesCounter.WaitAsync()
-            .ExpireMs(_server.Config.WaitTimeForCurrentlyProcessedMessagesOnDispose)
-                .ConfigureAwait(false);        
 
         try
         {
