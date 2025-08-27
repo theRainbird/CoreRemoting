@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Security;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 using Castle.DynamicProxy;
@@ -46,7 +47,9 @@ public sealed class RemotingClient : IRemotingClient
     private TaskCompletionSource<bool> _authenticationCompletedTaskSource;
     private readonly AsyncManualResetEvent _goodbyeCompletedEvent;
     private bool _isAuthenticated;
-    private bool _isDisconnected;
+    private int _isConnected;
+    private const int _true = 1;
+    private const int _false = 0;
     private Timer _keepSessionAliveTimer;
     private byte[] _serverPublicKeyBlob;
 
@@ -242,7 +245,7 @@ public sealed class RemotingClient : IRemotingClient
         if (_channel == null)
             throw new RemotingException("No client channel configured.");
 
-        _isDisconnected = false;
+        _isConnected = _true;
         _goodbyeCompletedEvent.Reset();
 
         using (await _activeCallsLock)
@@ -286,8 +289,8 @@ public sealed class RemotingClient : IRemotingClient
     /// <param name="quiet">When set to true, no goodbye message is sent to the server</param>
     public async Task DisconnectAsync(bool quiet = false)
     {
-        _isDisconnected = true;
-        _currentlyPendingMessagesCounter.Signal();
+        if (Interlocked.Exchange(ref _isConnected, _false) == _true)
+            _currentlyPendingMessagesCounter.Signal();
 
         await _currentlyPendingMessagesCounter.WaitAsync()
             .ExpireMs(_config.WaitTimeForCurrentlyProcessedMessagesOnDispose)
@@ -761,7 +764,7 @@ public sealed class RemotingClient : IRemotingClient
         var signalCount = oneWay ? 0 : 1;
         _currentlyPendingMessagesCounter.AddCount(signalCount);
 
-        if (_isDisconnected)
+        if (_isConnected == _false)
         {
             _currentlyPendingMessagesCounter.Signal(signalCount);
             throw new RemoteInvocationException("Client disconnected");
@@ -903,8 +906,12 @@ public sealed class RemotingClient : IRemotingClient
         await DisconnectAsync()
             .ConfigureAwait(false);
 
-        _cancellationTokenSource.Cancel();
-        _cancellationTokenSource.Dispose();
+        if (!_cancellationTokenSource.IsCancellationRequested)
+        {
+            _cancellationTokenSource.Cancel();
+            _cancellationTokenSource.Dispose();
+        }
+
         _delegateRegistry.Clear();
 
         if (_rawMessageTransport != null)

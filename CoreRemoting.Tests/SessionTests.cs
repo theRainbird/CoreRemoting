@@ -224,4 +224,27 @@ public class SessionTests : IClassFixture<ServerFixture>
         // Disconnection event should occur
         await disconnected.Task.Timeout(2);
     }
+
+    [Fact]
+    public virtual async Task Client_shouldnt_time_out_when_Disconnect_is_called_more_than_once_issue_192()
+    {
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+            Channel = ClientChannel,
+            WaitTimeForCurrentlyProcessedMessagesOnDispose = 10000 // 20 seconds for really long wait
+        });
+
+        client.Connect();
+
+        var proxy = client.CreateProxy<ISessionAwareService>();
+        await proxy.CloseSession(0.5); // server sends close_session
+        await Task.Delay(TimeSpan.FromSeconds(1)); // client gets close_session and disconnects
+        await Task.Run(client.Dispose).Timeout(2); // client calls Dispose and disconnects
+    }
 }
+

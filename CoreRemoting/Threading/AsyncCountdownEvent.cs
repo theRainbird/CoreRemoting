@@ -95,4 +95,8 @@ public class AsyncCountdownEvent
     /// <param name="signalCount">The amount to change the current count.</param>
     public void Signal(long signalCount = 1) =>
         ModifyCount(-signalCount);
+
+    /// <inheritdoc/>
+    public override string ToString() =>
+        $"{base.ToString()}: {CurrentCount}";
 }
