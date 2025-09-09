@@ -17,6 +17,7 @@ namespace CoreRemoting.Serialization.Bson
         private object _value;
         
         [JsonProperty]
+        [JsonConverter(typeof(TypeIgnoreVersionConverter))]
         private Type _type;
         
         /// <summary>
