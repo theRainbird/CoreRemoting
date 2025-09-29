@@ -72,6 +72,12 @@ public class WebsocketServerChannel : IServerChannel
         // handle incoming websocket messages
         var sessionId = connection.StartListening();
         Connections[sessionId] = connection;
+
+        connection.Disconnected += async () =>
+        {
+            Connections.TryRemove(sessionId, out connection);
+            await connection.DisposeAsync();
+        };
     }
 
     /// <inheritdoc/>
