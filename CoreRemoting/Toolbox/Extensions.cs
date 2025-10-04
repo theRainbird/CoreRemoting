@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 
@@ -90,4 +91,12 @@ public static class Extensions
 
         return typeof(Expression).IsAssignableFrom(type);
     }
+
+    /// <summary>
+    /// Dumps the given byte array as hexadecimal text.
+    /// </summary>
+    /// <param name="bytes">The array to dump.</param>
+    public static string HexDump(this byte[] bytes) => bytes == null ? "" :
+        string.Join("\n", Enumerable.Range(0, (bytes.Length + 15) / 16)
+            .Select(i => string.Join(" ", bytes.Skip(i * 16).Take(16).Select(b => b.ToString("X2")))));
 }
