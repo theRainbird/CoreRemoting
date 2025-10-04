@@ -405,6 +405,20 @@ public sealed class RemotingSession : IAsyncDisposable
     /// <exception cref="MissingMethodException">Thrown if specified method in request doesn't exist</exception>
     private async Task ProcessRpcMessage(WireMessage request)
     {
+        var serverRpcContext =
+            new ServerRpcContext
+            {
+                UniqueCallKey =
+                    request.UniqueCallKey == null
+                        ? Guid.Empty
+                        : new Guid(request.UniqueCallKey),
+                AuthenticationRequired = _server.Config.AuthenticationRequired,
+                ServiceInstance = null,
+                MethodCallParameterValues = [],
+                MethodCallParameterTypes = [],
+                Session = this
+            };
+
         var sharedSecret =
             MessageEncryption
                 ? SessionId.ToByteArray()
@@ -418,25 +432,6 @@ public sealed class RemotingSession : IAsyncDisposable
                 sendersPublicKeyBlob: _clientPublicKeyBlob,
                 sendersPublicKeySize: _keyPair?.KeySize ?? 0);
 
-        var callMessage =
-            _server.Serializer
-                .Deserialize<MethodCallMessage>(decryptedRawMessage);
-
-        var serverRpcContext =
-            new ServerRpcContext
-            {
-                UniqueCallKey =
-                    request.UniqueCallKey == null
-                        ? Guid.Empty
-                        : new Guid(request.UniqueCallKey),
-                AuthenticationRequired = _server.Config.AuthenticationRequired,
-                ServiceInstance = null,
-                MethodCallMessage = callMessage,
-                MethodCallParameterValues = [],
-                MethodCallParameterTypes = [],
-                Session = this
-            };
-
         using var scope = _server.ServiceRegistry.CreateScope();
         var serializedResult = Array.Empty<byte>();
         var method = default(MethodInfo);
@@ -444,6 +439,12 @@ public sealed class RemotingSession : IAsyncDisposable
 
         try
         {
+            var callMessage =
+                _server.Serializer
+                    .Deserialize<MethodCallMessage>(decryptedRawMessage);
+
+            serverRpcContext.MethodCallMessage = callMessage;
+
             CallContext.RestoreFromSnapshot(callMessage.CallContextSnapshot);
 
             callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
