@@ -1553,4 +1553,34 @@ public class RpcTests : IClassFixture<ServerFixture>
 
         CheckServerErrorCount();
     }
+
+    [Fact]
+    public void NonDeserializableObject_TriggersException()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 5,
+            SendTimeout = 0,
+            MessageEncryption = false,
+            Channel = ClientChannel,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        client.Connect();
+
+        var proxy = client.CreateProxy<ITestService>();
+        try
+        {
+            // TODO: it should throw something else
+            Assert.Throws<AggregateException>(() =>
+                proxy.Duplicate(new NonDeserializable(123))); // times out!
+        }
+        finally
+        {
+            _serverFixture.ServerErrorCount = 0;
+        }
+    }
 }
