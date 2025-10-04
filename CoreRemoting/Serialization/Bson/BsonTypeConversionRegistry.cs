@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Net;
 using System.Numerics;
-using System.Text;
 
 namespace CoreRemoting.Serialization.Bson
 {
@@ -12,6 +11,9 @@ namespace CoreRemoting.Serialization.Bson
     /// </summary>
     public static class BsonTypeConversionRegistry
     {
+        // copied from Newtonsoft.Json.Converters.IsoDateTimeConverter
+        internal const string DateTimeFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss.FFFFFFFK";
+
         private static readonly Dictionary<Type, Func<object, object>> _registry = CreateDefaultRegistry();
 
         /// <summary>
@@ -54,6 +56,7 @@ namespace CoreRemoting.Serialization.Bson
             return new Dictionary<Type, Func<object, object>>
             {
                 { typeof(DateTimeOffset), value => ConvertToDateTimeOffset(value) },
+                { typeof(DateTime), value => ConvertToDateTime(value) },
                 { typeof(TimeSpan), value => TimeSpan.Parse(value.ToString()) },
                 { typeof(Uri), value => new Uri(value.ToString()) },
                 { typeof(CultureInfo), value => GetCultureInfo(value.ToString()) },
@@ -69,7 +72,15 @@ namespace CoreRemoting.Serialization.Bson
         {
             return value is DateTime dateTime
                 ? new DateTimeOffset(dateTime)
-                : DateTimeOffset.Parse(value.ToString());
+                : DateTimeOffset.TryParseExact(value.ToString(), DateTimeFormat, CultureInfo.CurrentCulture, DateTimeStyles.RoundtripKind, out var parsed) ?
+                    parsed: DateTimeOffset.Parse(value.ToString());
+        }
+
+        private static DateTime ConvertToDateTime(object value)
+        {
+            return value is DateTime dateTime ? dateTime
+                : DateTime.TryParseExact(value.ToString(), DateTimeFormat, CultureInfo.CurrentCulture, DateTimeStyles.RoundtripKind, out var parsed) ?
+                    parsed : DateTime.Parse(value.ToString());
         }
 
         private static CultureInfo GetCultureInfo(string value)

@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Globalization;
+using System.Linq;
 using System.Net;
 using System.Numerics;
 using System.Text;
@@ -52,7 +53,7 @@ public class BsonSerializationTests
                 serializer,
                 testServiceInterfaceType.Name,
                 testServiceInterfaceType.GetMethod("TestMethod"),
-                new object[] { 4711});
+                [4711]);
 
         var rawData = serializer.Serialize(message);
         
@@ -98,10 +99,10 @@ public class BsonSerializationTests
     public void BsonSerializerAdapter_should_use_configured_JsonConverters()
     {
         var fakeConverter = new FakeDateTimeConverter();
-        var config = new BsonSerializerConfig(new []
-        {
+        var config = new BsonSerializerConfig(
+        [
             fakeConverter
-        });
+        ]);
 
         var serializerAdapter = new BsonSerializerAdapter(config);
 
@@ -248,6 +249,9 @@ public class BsonSerializationTests
         }
 
         SerializeAndDeserialize(new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.FromMinutes(42)));
+        SerializeAndDeserialize(new DateTime(2025, 10, 1, 6, 11, 52, 123, DateTimeKind.Unspecified));
+        SerializeAndDeserialize(new DateTime(2025, 10, 1, 6, 11, 52, 321, DateTimeKind.Local));
+        SerializeAndDeserialize(new DateTime(2025, 10, 1, 6, 11, 52, 321, DateTimeKind.Utc));
         SerializeAndDeserialize(TimeSpan.FromSeconds(42));
         SerializeAndDeserialize(new Uri("http://127.0.0.1"));
         SerializeAndDeserialize(new RegionInfo("US"));

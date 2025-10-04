@@ -6,6 +6,7 @@ using CoreRemoting.Serialization.Bson.Converters;
 using CoreRemoting.Serialization.Bson.Converters.DataSetDiffGramSupport;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Bson;
+using Newtonsoft.Json.Converters;
 
 namespace CoreRemoting.Serialization.Bson
 {
@@ -36,7 +37,8 @@ namespace CoreRemoting.Serialization.Bson
                 CheckAdditionalContent = true,
                 ConstructorHandling = ConstructorHandling.AllowNonPublicDefaultConstructor,
                 DateFormatHandling = DateFormatHandling.IsoDateFormat,
-                DateParseHandling = DateParseHandling.DateTime,
+                DateParseHandling = DateParseHandling.DateTimeOffset,
+                DateTimeZoneHandling = DateTimeZoneHandling.RoundtripKind,
                 DefaultValueHandling = DefaultValueHandling.Include,
                 FloatParseHandling = FloatParseHandling.Double,
                 ReferenceResolverProvider = () => new BsonReferenceResolver(),
@@ -47,14 +49,15 @@ namespace CoreRemoting.Serialization.Bson
             // Add support for DataSet DiffGram serialization and other common types
             if (config == null || config.AddCommonJsonConverters)
             {
-                converters.AddRange(new JsonConverter[]
-                {
+                converters.AddRange(
+                [
                     new DataSetDiffGramJsonConverter(),
                     new RegionInfoConverter(),
                     new EncodingConverter(),
                     new IPAddressConverter(),
-                    new IPEndPointConverter()
-                });
+                    new IPEndPointConverter(),
+                    new IsoDateTimeConverter(),
+                ]);
             }
 
             if (config != null)
@@ -62,8 +65,10 @@ namespace CoreRemoting.Serialization.Bson
                 // Ensure common converters are not added twice
                 var existingConverterTypes = new HashSet<Type>(converters.Select(c => c.GetType()));
 
-                converters.AddRange(
-                    config.JsonConverters.Where(converter => !existingConverterTypes.Contains(converter.GetType())));
+                // custom converters should have higher priority than common converters
+                foreach (var conv in config.JsonConverters)
+                    if (!existingConverterTypes.Contains(conv.GetType()))
+                        converters.Insert(0, conv);
             }
 
             settings.Converters = converters;
@@ -71,7 +76,7 @@ namespace CoreRemoting.Serialization.Bson
             _serializer = JsonSerializer.Create(settings);
             CurrentSettings = settings;
         }
-        
+
         /// <summary>
         /// Serializes an object graph.
         /// </summary>
