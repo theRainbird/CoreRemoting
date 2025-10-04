@@ -1562,7 +1562,7 @@ public class RpcTests : IClassFixture<ServerFixture>
         using var client = new RemotingClient(new ClientConfig()
         {
             ConnectionTimeout = 0,
-            InvocationTimeout = 5,
+            InvocationTimeout = 0,
             SendTimeout = 0,
             MessageEncryption = false,
             Channel = ClientChannel,
@@ -1574,9 +1574,10 @@ public class RpcTests : IClassFixture<ServerFixture>
         var proxy = client.CreateProxy<ITestService>();
         try
         {
-            // TODO: it should throw something else
-            Assert.Throws<AggregateException>(() =>
-                proxy.Duplicate(new NonDeserializable(123))); // times out!
+            var ex = Assert.Throws<RemoteInvocationException>(() =>
+                proxy.Duplicate(new NonDeserializable(123)));
+
+            Assert.Equal(NonDeserializable.ErrorMessage, ex.Message);
         }
         finally
         {
