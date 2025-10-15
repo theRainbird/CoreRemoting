@@ -1,5 +1,7 @@
 using System;
+#if NETFRAMEWORK
 using System.Security.Permissions;
+#endif
 using System.Threading;
 using CoreRemoting.Toolbox;
 
@@ -9,7 +11,7 @@ namespace CoreRemoting.Threading;
 /// Thread pool with simple locking work item queue.
 /// </summary>
 /// <remarks>
-/// Written by Joe Duffy as a part of the «Building a custom thread pool» series:
+/// Written by Joe Duffy as a part of the Â«Building a custom thread poolÂ» series:
 /// http://www.bluebytesoftware.com/blog/2008/07/29/BuildingACustomThreadPoolSeriesPart1.aspx
 /// https://joeduffyblog.com/2008/07/29/building-a-custom-thread-pool-series-part-1/
 /// </remarks>
@@ -71,7 +73,7 @@ public sealed class SimpleLockThreadPool : IThreadPool
         m_flowExecutionContext = flowExecutionContext;
         m_queue = new LimitedSizeQueue<WorkItem>(limit);
 
-#if !XAMARIN
+#if NETFRAMEWORK && !XAMARIN
         // If suppressing flow, we need to demand permissions.
         if (!flowExecutionContext)
             new SecurityPermission(SecurityPermissionFlag.Infrastructure).Demand();

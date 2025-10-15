@@ -2,20 +2,23 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
         <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
         <LangVersion>8</LangVersion>
         <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
+        <TargetFramework>net8.0</TargetFramework>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="System.Runtime.Serialization.Formatters" Version="9.0.0" Condition="'$(TargetFramework)' == 'net8.0'" />
-      <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
+      <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.10" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\..\..\CoreRemoting\CoreRemoting.csproj" />
       <ProjectReference Include="..\HelloWorld.Shared\HelloWorld.Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+      <PackageReference Include="System.Runtime.Serialization.Formatters" Version="4.3.0" />
     </ItemGroup>
 
 </Project>

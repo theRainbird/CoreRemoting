@@ -46,13 +46,13 @@
 
     <ItemGroup>
       <PackageReference Include="Castle.Windsor" Version="6.0.0" />
-      <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
-      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.2" />
-      <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+      <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.10" />
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.10" />
+      <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
       <PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.3" />
-      <PackageReference Include="Serialize.Linq" Version="3.1.160" />
+      <PackageReference Include="Serialize.Linq" Version="4.0.167" />
       <PackageReference Include="stakx.DynamicProxy.AsyncInterceptor" Version="0.1.0" />
-      <PackageReference Include="System.Configuration.ConfigurationManager" Version="6.0.2" />
+      <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.10" />
       <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
       <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.7.0" />
       <PackageReference Include="System.Runtime.Serialization.Formatters" Version="4.3.0" />
