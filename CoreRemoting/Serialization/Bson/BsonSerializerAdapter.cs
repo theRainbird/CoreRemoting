@@ -28,7 +28,7 @@ namespace CoreRemoting.Serialization.Bson
             var settings = new JsonSerializerSettings
             {
                 TypeNameHandling = TypeNameHandling.All,
-                TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Full,
+                TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple,
                 Formatting = Formatting.Indented,
                 ObjectCreationHandling = ObjectCreationHandling.Auto,
                 FloatFormatHandling = FloatFormatHandling.String,
