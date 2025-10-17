@@ -351,7 +351,7 @@ public sealed class RemotingClient : IRemotingClient
                 // TODO: dispatch the exception
             }
 
-            await _goodbyeCompletedEvent.WaitAsync().Expire(10)
+            await _goodbyeCompletedEvent.WaitAsync().ExpireMs(_config.WaitTimeForGoodbyeOnDisconnect)
                 .ConfigureAwait(false);
         }
 

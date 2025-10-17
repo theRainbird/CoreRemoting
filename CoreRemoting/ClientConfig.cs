@@ -100,4 +100,10 @@ public class ClientConfig
     /// Set -1 to wait forever (default is 500 milliseconds).
     /// </summary>
     public int WaitTimeForCurrentlyProcessedMessagesOnDispose { get; set; } = 500;
+
+    /// <summary>
+    /// Gets or sets the time in milliseconds that Disconnect should wait for "goodbye" message from server.
+    /// Set -1 to wait forever (default is 10000 milliseconds).
+    /// </summary>
+    public int WaitTimeForGoodbyeOnDisconnect { get; set; } = 10000;
 }
