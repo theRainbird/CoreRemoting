@@ -19,10 +19,11 @@
         <Compile Remove="RpcTests_WsharpClientWsServer.cs" />
     </ItemGroup>
 
-    <!-- .NET 9.0 only: skip BinaryFormatter -->
+    <!-- .NET 9.0 only: skip BinaryFormatter ->
     <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0' ">
         <Compile Remove="BinarySerializationTests.cs" />
     </ItemGroup>
+    -->
 
     <!-- .NET 9.0 only: include Quic channel -->
     <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0' and '$(OS)' == 'Windows_NT' ">
@@ -35,7 +36,8 @@
     <ItemGroup>
         <PackageReference Include="DryIoc.MefAttributedModel.dll" Version="7.0.2" />
         <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.10" />
-        <PackageReference Include="System.Runtime.Serialization.Formatters" Version="9.0.0" Condition="'$(TargetFramework)' == 'net8.0'" />
+        <PackageReference Include="System.Runtime.Serialization.Formatters" Version="4.3.0" Condition=" '$(TargetFramework)' == 'netstandard2.0' "/>
+        <PackageReference Include="System.Runtime.Serialization.Formatters" Version="9.0.10" Condition="'$(TargetFramework)' == 'net8.0'" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
         <PackageReference Include="xunit" Version="2.9.3" />

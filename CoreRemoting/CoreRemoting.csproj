@@ -10,7 +10,8 @@
         <PackageTags>Remoting RPC Network</PackageTags>
         <Company>Hagen Siegel</Company>
         <AssemblyVersion>1.2.2.0</AssemblyVersion>
-        <TargetFramework>netstandard2.0</TargetFramework>
+        <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+        <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
         <PackageProjectUrl>https://github.com/theRainbird/CoreRemoting</PackageProjectUrl>
         <PackageLicenseUrl></PackageLicenseUrl>
         <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
@@ -55,10 +56,11 @@
       <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.10" />
       <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
       <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.7.0" />
-      <PackageReference Include="System.Runtime.Serialization.Formatters" Version="4.3.0" />
       <PackageReference Include="System.Security.Cryptography.Algorithms" Version="4.3.1" />
       <PackageReference Include="System.Security.Cryptography.Cng" Version="5.0.0" />
       <PackageReference Include="System.Security.Cryptography.OpenSsl" Version="5.0.0" />
+      <PackageReference Include="System.Runtime.Serialization.Formatters" Version="4.3.0" Condition=" '$(TargetFramework)' == 'netstandard2.0' "/>
+      <PackageReference Include="System.Runtime.Serialization.Formatters" Version="9.0.10" Condition=" '$(TargetFramework)' == 'net8.0' "/>
       <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
       <PackageReference Include="WatsonTcp" Version="6.0.10" />
     </ItemGroup>
