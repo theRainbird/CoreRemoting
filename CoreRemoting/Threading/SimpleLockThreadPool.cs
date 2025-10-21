@@ -135,7 +135,7 @@ public sealed class SimpleLockThreadPool : IThreadPool
     /// <param name="obj">An object containing data to be used by the method.</param>
     public void QueueUserWorkItem(WaitCallback work, object obj)
     {
-        WorkItem wi = new WorkItem(work, obj);
+        var wi = new WorkItem(work, obj);
 
         // If execution context flowing is on, capture the caller's context.
         if (m_flowExecutionContext)

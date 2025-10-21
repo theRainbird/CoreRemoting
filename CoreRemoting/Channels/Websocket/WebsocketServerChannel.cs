@@ -40,7 +40,7 @@ public class WebsocketServerChannel : IServerChannel
     {
         HttpListener.Start();
 
-        _ = Task.Factory.StartNew(async () =>
+        _ = Task.Run(async () =>
         {
             while (IsListening)
                 await ReceiveConnection();
@@ -72,7 +72,6 @@ public class WebsocketServerChannel : IServerChannel
         // handle incoming websocket messages
         var sessionId = connection.StartListening();
         Connections[sessionId] = connection;
-
         connection.Disconnected += async () =>
         {
             Connections.TryRemove(sessionId, out connection);
