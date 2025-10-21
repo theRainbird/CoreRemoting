@@ -79,27 +79,35 @@ public class QuicServerChannel : IServerChannel
             // accept incoming connections
             IsListening = true;
             while (IsListening)
-            {
-                try
-                {
-                    var connection = await Listener.AcceptConnectionAsync()
-                        .ConfigureAwait(false);
-
-                    var stream = await connection.AcceptInboundStreamAsync()
-                        .ConfigureAwait(false);
-
-                    var session = new QuicServerConnection(connection, stream, Server);
-                    var sessionId = await session.StartListening()
-                        .ConfigureAwait(false);
-
-                    Connections[sessionId] = session;
-                }
-                catch
-                {
-                    IsListening = false; // TODO: not sure??
-                }
-            }
+                await ReceiveConnection();
         });
+    }
+
+    private async Task ReceiveConnection()
+    {
+        try
+        {
+            var connection = await Listener.AcceptConnectionAsync()
+                .ConfigureAwait(false);
+
+            var stream = await connection.AcceptInboundStreamAsync()
+                .ConfigureAwait(false);
+
+            var session = new QuicServerConnection(connection, stream, Server);
+            var sessionId = await session.StartListening()
+                .ConfigureAwait(false);
+
+            Connections[sessionId] = session;
+            session.Disconnected += async () =>
+            {
+                Connections.TryRemove(sessionId, out session);
+                await session.DisposeAsync();
+            };
+        }
+        catch
+        {
+            IsListening = false; // TODO: not sure??
+        }
     }
 
     /// <inheritdoc/>
