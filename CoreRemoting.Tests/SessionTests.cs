@@ -246,5 +246,33 @@ public class SessionTests : IClassFixture<ServerFixture>
         await Task.Delay(TimeSpan.FromSeconds(1)); // client gets close_session and disconnects
         await Task.Run(client.Dispose).Timeout(2); // client calls Dispose and disconnects
     }
+
+    [Fact]
+    public virtual async Task Client_shouldnt_time_out_when_dispose_is_called_after_remote_disconnect()
+    {
+        _serverFixture.TestService.TestMethodFake = _ =>
+        {
+            RemotingSession.Current.Close();
+            return null;
+        };
+        
+        using var client = new RemotingClient(new ClientConfig
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+            Channel = ClientChannel,
+            WaitTimeForGoodbyeOnDisconnect = 100 //We will set such a timeout so that the client is guaranteed not to wait more than 3 seconds.
+        });
+
+        client.Connect();
+        
+        var proxy = client.CreateProxy<ITestService>();
+
+        proxy.TestMethod(null);// server sends close_session
+        await Task.Run(client.Dispose).Timeout(3); // client calls Dispose and disconnects
+    }
 }
 
