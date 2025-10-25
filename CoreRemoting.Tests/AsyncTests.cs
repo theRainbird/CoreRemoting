@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Threading.Tasks;
 using CoreRemoting.Tests.Tools;
 using Xunit;
 
@@ -17,7 +18,7 @@ public class AsyncTests : IClassFixture<ServerFixture>
 
     [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
-    public async void AsyncMethods_should_work()
+    public async Task AsyncMethods_should_work()
     {
         using var client = new RemotingClient(new ClientConfig()
         {
@@ -40,7 +41,7 @@ public class AsyncTests : IClassFixture<ServerFixture>
     /// </summary>
     [Fact(Timeout = 15000)]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
-    public async void Awaiting_non_generic_Task_should_not_hang_forever()
+    public async Task Awaiting_non_generic_Task_should_not_hang_forever()
     {
         using var client = new RemotingClient(new ClientConfig()
         {
@@ -58,7 +59,7 @@ public class AsyncTests : IClassFixture<ServerFixture>
 
     [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
-    public async void AsyncMethods_returning_ValueTask_should_work()
+    public async Task AsyncMethods_returning_ValueTask_should_work()
     {
         using var client = new RemotingClient(new ClientConfig()
         {
@@ -81,7 +82,7 @@ public class AsyncTests : IClassFixture<ServerFixture>
     /// </summary>
     [Fact(Timeout = 15000)]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
-    public async void Awaiting_non_generic_ValueTask_should_work()
+    public async Task Awaiting_non_generic_ValueTask_should_work()
     {
         using var client = new RemotingClient(new ClientConfig()
         {
