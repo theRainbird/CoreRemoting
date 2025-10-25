@@ -1383,7 +1383,8 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
-    public void Logon_and_logoff_events_are_triggered()
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "Not applicable")]
+    public async Task Logon_and_logoff_events_are_triggered()
     {
         using var ctx = ValidationSyncContext.Install();
 
@@ -1397,17 +1398,17 @@ public class RpcTests : IClassFixture<ServerFixture>
             Console.WriteLine($"Client {rs.Identity.Name} from {rs.ClientAddress} is {operation}");
         }
 
-        var logon = false;
+        var logon = new AsyncCounter();
         void Logon(object sender, EventArgs _)
         {
-            logon = true;
+            logon++;
             CheckSession("logged on");
         }
 
-        var logoff = false;
+        var logoff = new AsyncCounter();
         void Logoff(object sender, EventArgs _)
         {
-            logoff = true;
+            logoff++;
             CheckSession("logged off");
         }
 
@@ -1439,8 +1440,8 @@ public class RpcTests : IClassFixture<ServerFixture>
 
             client.Disconnect();
 
-            Assert.True(logon);
-            Assert.True(logoff);
+            await logon[1].Timeout(1).ConfigureAwait(false);
+            await logoff[1].Timeout(1).ConfigureAwait(false);
         }
         finally
         {
