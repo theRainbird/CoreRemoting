@@ -9,28 +9,15 @@
         <Copyright>2025 Hagen Siegel</Copyright>
         <PackageTags>Remoting RPC Network</PackageTags>
         <Company>Hagen Siegel</Company>
-        <AssemblyVersion>1.2.2.0</AssemblyVersion>
+        <AssemblyVersion>1.2.3.0</AssemblyVersion>
         <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
         <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
         <PackageProjectUrl>https://github.com/theRainbird/CoreRemoting</PackageProjectUrl>
         <PackageLicenseUrl></PackageLicenseUrl>
         <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageVersion>1.2.2.0</PackageVersion>
-        <PackageReleaseNotes>- Change default serializer to BSON to align with non-classic API's default
-- Change default channel to TCP to align with non-classic API's default
-- Implement TCP channel recognition from Classic Remoting API configuration
-- Preventing Leakage of the Remoting Session
-- Use Async methods for WatsonTCP
-- Replace obsolete methods for Aes encryption
-- Remove RemotingSession in a separate task
-- Avoid nested envelopes
-- RemotingSession shouldn't overwrite the serialized exception with an empty MessageCallResult message.
-- Try to keep useful information from the non-serializable exceptions.
-- Fix a hang due to a WireMessage deserialization error.
-- Demonstrate failing event dispatch when one of the clients disconnects unexpectedly.
-- Don't try to dispatch the client events to a disposed remoting session.
-- Try your best not to fail event dispatch even if the client had power failure</PackageReleaseNotes>
+        <PackageVersion>1.2.3.0</PackageVersion>
+        <PackageReleaseNotes>- Update WatsonTcp version to 6.0.11</PackageReleaseNotes>
     </PropertyGroup>
 
     <PropertyGroup>
