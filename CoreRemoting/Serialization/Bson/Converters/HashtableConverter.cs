@@ -149,18 +149,18 @@ namespace CoreRemoting.Serialization.Bson.Converters
             // Convert types if needed
             if (key != null)
             {
-                if (keyPrimitiveType.HasValue)
-                    key = ConvertValueFromPrimitiveType(key, keyPrimitiveType.Value);
-                else if (keyTypeName != null)
+                if (keyTypeName != null)
                     key = ConvertValueOptimized(key, keyTypeName);
+                else if (keyPrimitiveType.HasValue)
+                    key = ConvertValueFromPrimitiveType(key, keyPrimitiveType.Value);
             }
             
             if (value != null)
             {
-                if (valuePrimitiveType.HasValue)
-                    value = ConvertValueFromPrimitiveType(value, valuePrimitiveType.Value);
-                else if (valueTypeName != null)
+                if (valueTypeName != null)
                     value = ConvertValueOptimized(value, valueTypeName);
+                else if (valuePrimitiveType.HasValue)
+                    value = ConvertValueFromPrimitiveType(value, valuePrimitiveType.Value);
             }
 
             return (key, value);
@@ -180,7 +180,7 @@ namespace CoreRemoting.Serialization.Bson.Converters
             if (keyType != null)
             {
                 var keyPrimitiveType = GetPrimitiveType(keyType);
-                if (keyPrimitiveType != PrimitiveType.Complex)
+                if (keyPrimitiveType != PrimitiveType.Complex && keyPrimitiveType != PrimitiveType.Enum)
                 {
                     writer.WritePropertyName("KP");
                     writer.WriteValue((byte)keyPrimitiveType);
@@ -199,7 +199,7 @@ namespace CoreRemoting.Serialization.Bson.Converters
             if (valueType != null)
             {
                 var valuePrimitiveType = GetPrimitiveType(valueType);
-                if (valuePrimitiveType != PrimitiveType.Complex)
+                if (valuePrimitiveType != PrimitiveType.Complex && valuePrimitiveType != PrimitiveType.Enum)
                 {
                     writer.WritePropertyName("VP");
                     writer.WriteValue((byte)valuePrimitiveType);
@@ -257,6 +257,11 @@ namespace CoreRemoting.Serialization.Bson.Converters
                     return Convert.ToUInt32(value);
                 case PrimitiveType.UInt64:
                     return Convert.ToUInt64(value);
+                case PrimitiveType.Enum:
+                    // For enums, we need the type information from VT field
+                    // This method is called when we have primitive type info only
+                    // So we can't handle enum conversion here without type info
+                    return value;
                 default:
                     return value;
             }
@@ -310,6 +315,8 @@ namespace CoreRemoting.Serialization.Bson.Converters
                     return Convert.ToUInt32(value);
                 case PrimitiveType.UInt64:
                     return Convert.ToUInt64(value);
+                case PrimitiveType.Enum:
+                    return Enum.ToObject(targetType, value);
                 default:
                     // For complex types, return as-is since they should already be deserialized correctly
                     return value;
@@ -328,9 +335,9 @@ namespace CoreRemoting.Serialization.Bson.Converters
             {
                 var sb = _stringBuilder.Value;
                 sb.Clear();
-                sb.Append(t.Assembly.GetName().Name);
-                sb.Append(", ");
                 sb.Append(t.FullName);
+                sb.Append(", ");
+                sb.Append(t.Assembly.GetName().Name);
                 return sb.ToString();
             });
         }
@@ -371,6 +378,7 @@ namespace CoreRemoting.Serialization.Bson.Converters
                 if (t == typeof(ushort)) return PrimitiveType.UInt16;
                 if (t == typeof(uint)) return PrimitiveType.UInt32;
                 if (t == typeof(ulong)) return PrimitiveType.UInt64;
+                if (t.IsEnum) return PrimitiveType.Enum;
                 return PrimitiveType.Complex;
             });
         }

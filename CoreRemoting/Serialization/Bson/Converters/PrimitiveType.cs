@@ -21,6 +21,7 @@ namespace CoreRemoting.Serialization.Bson.Converters
         UInt16 = 13,
         UInt32 = 14,
         UInt64 = 15,
+        Enum = 16,
         Complex = 255
     }
 }

@@ -2,11 +2,8 @@ using System;
 using System.Collections;
 using System.Data;
 using System.Globalization;
-using System.IO;
-using System.Linq;
 using System.Net;
 using System.Numerics;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization.Bson;
@@ -285,5 +282,16 @@ public class BsonSerializationTests
         
         Assert.Equal(originalValue, deserializedValue); 
         Assert.True(deserializedValue is int);
+        
+        var enumHashtable = new Hashtable();
+        var originalEnumValue = Tools.TestEnum.Second;
+        enumHashtable["StoredEnum"] = originalEnumValue;
+        
+        var enumSerializedBytes = serializer.Serialize(enumHashtable);
+        var deserializedEnumHashtable = serializer.Deserialize<Hashtable>(enumSerializedBytes);
+        var deserializedEnumValue = deserializedEnumHashtable["StoredEnum"];
+        
+        Assert.Equal(originalEnumValue, deserializedEnumValue);
+        Assert.True(deserializedEnumValue is Tools.TestEnum);
     }
 }
