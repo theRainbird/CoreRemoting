@@ -57,6 +57,7 @@ namespace CoreRemoting.Serialization.Bson
                     new IPAddressConverter(),
                     new IPEndPointConverter(),
                     new IsoDateTimeConverter(),
+                    new HashtableConverter()
                 ]);
             }
 

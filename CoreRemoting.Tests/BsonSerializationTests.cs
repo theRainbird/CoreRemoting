@@ -1,9 +1,12 @@
 using System;
+using System.Collections;
 using System.Data;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Numerics;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization.Bson;
@@ -266,5 +269,21 @@ public class BsonSerializationTests
 
         foreach (var encodingInfo in Encoding.GetEncodings())
             SerializeAndDeserialize(encodingInfo.GetEncoding());
+    }
+    
+    [Fact]
+    public void BsonSerializerAdapter_should_deserialize_Hashtable_original_content_types()
+    {
+        var originalHashtable = new Hashtable();
+        int originalValue = 10;
+        originalHashtable["StoredValue"] = originalValue;
+        
+        var serializer = new BsonSerializerAdapter();
+        var serializedBytes = serializer.Serialize(originalHashtable);
+        var deserializedHastable = serializer.Deserialize<Hashtable>(serializedBytes);
+        var deserializedValue = deserializedHastable["StoredValue"];
+        
+        Assert.Equal(originalValue, deserializedValue); 
+        Assert.True(deserializedValue is int);
     }
 }
