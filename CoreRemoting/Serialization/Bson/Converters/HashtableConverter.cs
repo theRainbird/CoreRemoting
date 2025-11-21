@@ -135,7 +135,23 @@ namespace CoreRemoting.Serialization.Bson.Converters
                         valueTypeName = reader.Value?.ToString();
                         break;
                     case "V":
-                        value = reader.Value;
+                        // For complex types, we need to deserialize the full object
+                        if (valueTypeName != null && GetPrimitiveType(GetTypeFromNameCached(valueTypeName)) == PrimitiveType.Complex)
+                        {
+                            var targetType = GetTypeFromNameCached(valueTypeName);
+                            if (targetType != null)
+                            {
+                                value = serializer.Deserialize(reader, targetType);
+                            }
+                            else
+                            {
+                                value = reader.Value;
+                            }
+                        }
+                        else
+                        {
+                            value = reader.Value;
+                        }
                         break;
                     case "KP":
                         keyPrimitiveType = (PrimitiveType)Convert.ToByte(reader.Value);
@@ -212,7 +228,16 @@ namespace CoreRemoting.Serialization.Bson.Converters
             }
 
             writer.WritePropertyName("V");
-            writer.WriteValue(value);
+            
+            // For complex types, use the serializer to properly serialize them
+            if (valueType != null && GetPrimitiveType(valueType) == PrimitiveType.Complex)
+            {
+                serializer.Serialize(writer, value);
+            }
+            else
+            {
+                writer.WriteValue(value);
+            }
 
             writer.WriteEndObject();
         }
