@@ -82,6 +82,16 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
     public event Action<string, Exception> ErrorOccured;
 
     /// <summary>
+    /// Event: Fires when the connection is disconnected.
+    /// </summary>
+    public event Action Disconnected;
+
+    /// <summary>
+    /// Event: Fires when the connection is disposed.
+    /// </summary>
+    public event EventHandler Disposed;
+
+    /// <summary>
     /// Gets or sets the last exception.
     /// </summary>
     public NetworkException LastException { get; set; }
@@ -103,6 +113,8 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
         }
         finally
         {
+            // Fire disconnected event before disposing
+            Disconnected?.Invoke();
             await DisposeAsync();
         }
     }
@@ -210,7 +222,9 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
     private void BeforeDisposeSession()
     {
         _session = null;
-        _ = DisposeAsync();
+        // Don't dispose the connection here - just like in WebSocket implementation
+        // The connection should only be disposed when the client actually disconnects
+        // or when the server stops. This prevents premature disconnection.
     }
 
     public async Task<bool> SendMessageAsync(byte[] rawMessage)
@@ -264,6 +278,11 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
         }
 
         _cancellationTokenSource.Dispose();
+        
+        // Notify subscribers that this connection is disposed
+        // Include information about whether this was due to session end
+        Disposed?.Invoke(this, EventArgs.Empty);
+        
         await Task.CompletedTask;
     }
 

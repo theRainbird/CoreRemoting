@@ -105,6 +105,14 @@ public class NamedPipeServerChannel : IServerChannel
                     var connection = new SimpleNamedPipeConnection(connectionId, serverStream, _remotingServer);
                     _connections.TryAdd(connectionId, connection);
                     
+                    // Subscribe to connection disconnection to remove from collection
+                    // This follows the same pattern as WebsocketServerChannel
+                    connection.Disconnected += () =>
+                    {
+                        _connections.TryRemove(connectionId, out _);
+                        _ = connection.DisposeAsync();
+                    };
+                    
                     // Start handling this client
                     _ = Task.Run(() => connection.HandleClientAsync());
                 }
