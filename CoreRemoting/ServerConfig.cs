@@ -73,6 +73,12 @@ public class ServerConfig
     public IServerChannel Channel { get; set; }
 
     /// <summary>
+    /// Gets or sets the channel connection name (e.g., pipe name for Named Pipe channel).
+    /// This property is only relevant for channels that require a specific connection name.
+    /// </summary>
+    public string ChannelConnectionName { get; set; }
+
+    /// <summary>
     /// Gets or sets whether authentication is required in order to establish a new session.
     /// </summary>
     public bool AuthenticationRequired { get; set; } = false;

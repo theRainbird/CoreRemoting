@@ -76,6 +76,12 @@ public class ClientConfig
     public IClientChannel Channel { get; set; }
 
     /// <summary>
+    /// Gets or sets the channel connection name (e.g., pipe name for Named Pipe channel).
+    /// This property is only relevant for channels that require a specific connection name.
+    /// </summary>
+    public string ChannelConnectionName { get; set; }
+
+    /// <summary>
     /// Gets or sets an array of credentials for authentication (depends on the authentication provider used on server side).
     /// </summary>
     public Credential[] Credentials { get; set; }

@@ -34,6 +34,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CoreRemoting.Channels.Webso
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.Channels.Quic", "CoreRemoting.Channels.Quic\CoreRemoting.Channels.Quic.csproj", "{ABAC063B-67FD-43A4-AE80-1B92ED5DEE58}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.Channels.NamedPipe", "CoreRemoting.Channels.NamedPipe\CoreRemoting.Channels.NamedPipe.csproj", "{61BB1307-F09E-46DE-A7E2-A1E1E8F85732}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -84,6 +86,10 @@ Global
 		{ABAC063B-67FD-43A4-AE80-1B92ED5DEE58}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ABAC063B-67FD-43A4-AE80-1B92ED5DEE58}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{ABAC063B-67FD-43A4-AE80-1B92ED5DEE58}.Release|Any CPU.Build.0 = Release|Any CPU
+		{61BB1307-F09E-46DE-A7E2-A1E1E8F85732}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{61BB1307-F09E-46DE-A7E2-A1E1E8F85732}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{61BB1307-F09E-46DE-A7E2-A1E1E8F85732}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{61BB1307-F09E-46DE-A7E2-A1E1E8F85732}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
