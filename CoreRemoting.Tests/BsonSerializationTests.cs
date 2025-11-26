@@ -671,4 +671,35 @@ public class BsonSerializationTests
         var desDto = BSONSerializeDeserialize(dto);
         Assert.Equal((TimeSpan)dto["TimeSpan"], (TimeSpan)desDto["TimeSpan"]);
     }
+    
+    private class Param
+    {
+        public object Value;
+        public object Something;
+    }
+    
+    [Fact]
+    public void BsonSerializerAdapter_should_deserialize_HashtableAsObjectParamInList()
+    {
+        List<Param> paramsList = [];
+        
+        var par = new Param
+        {
+            Value = new Hashtable{["x"] = "test"}
+        };
+        paramsList.Add(par);
+        
+        var par2 = new Param()
+        {
+            Something = new Hashtable{["y"] = "yay"}
+        };
+        paramsList.Add(par2);
+        
+        var serializer = new BsonSerializerAdapter();
+        var bytes = serializer.Serialize(paramsList);
+        var desDto = serializer.Deserialize<List<Param>>(bytes);
+
+        Assert.Equal(paramsList[0].Value.GetType(), desDto[0].Value.GetType());
+        Assert.Equal(paramsList[1].Something.GetType(), desDto[1].Something.GetType());
+    }
 }

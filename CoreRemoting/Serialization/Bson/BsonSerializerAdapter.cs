@@ -51,6 +51,8 @@ namespace CoreRemoting.Serialization.Bson
             {
                 converters.AddRange(
                 [
+                    // Must be first! Sets context for object-typed properties
+                    new ObjectTypeSlotConverter(),
                     new DataSetDiffGramJsonConverter(),
                     new RegionInfoConverter(),
                     new EncodingConverter(),
@@ -66,10 +68,10 @@ namespace CoreRemoting.Serialization.Bson
                 // Ensure common converters are not added twice
                 var existingConverterTypes = new HashSet<Type>(converters.Select(c => c.GetType()));
 
-                // custom converters should have higher priority than common converters
+                // custom converters should have higher priority than common converters (except ObjectTypeSlotConverter!)
                 foreach (var conv in config.JsonConverters)
                     if (!existingConverterTypes.Contains(conv.GetType()))
-                        converters.Insert(0, conv);
+                        converters.Insert(1, conv);
             }
 
             settings.Converters = converters;

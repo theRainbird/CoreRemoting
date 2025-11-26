@@ -61,8 +61,19 @@ namespace CoreRemoting.Serialization.Bson.Converters
                     throw new JsonSerializationException($"Expected PropertyName token, got {reader.TokenType}");
 
                 var propertyName = reader.Value?.ToString();
-                reader.Read(); // Move to start of entry object
 
+                // Read value token
+                if (!reader.Read())
+                    throw new JsonSerializationException("Unexpected end when reading Hashtable.");
+
+                // Skip optional $type metadata that may be present to allow object-typed fields to deserialize as Hashtable
+                if (string.Equals(propertyName, "$type", StringComparison.Ordinal))
+                {
+                    // value is a string type name – ignore and continue to next property
+                    continue;
+                }
+
+                // For all other properties we expect an entry object
                 if (reader.TokenType != JsonToken.StartObject)
                     throw new JsonSerializationException($"Expected StartObject for entry, got {reader.TokenType}");
 
@@ -88,6 +99,17 @@ namespace CoreRemoting.Serialization.Bson.Converters
             }
 
             writer.WriteStartObject();
+
+            // Write $type if this Hashtable is likely to be serialized in an object-typed slot with high probability. Two triggers:
+            //  1) An explicit context flag (if available) – generic and independent of the property name.
+            //  2) Heuristic for lists/arrays of POCOs: paths like "[0].Foo" contain "].".
+            var path = writer.Path;
+            if (ObjectTypeSlotContext.InObjectSlot || (!string.IsNullOrEmpty(path) && path.Contains("].") && !path.EndsWith(".V", StringComparison.Ordinal)))
+            {
+                var hashtableTypeName = GetTypeNameCached(value?.GetType() ?? typeof(Hashtable));
+                writer.WritePropertyName("$type");
+                writer.WriteValue(hashtableTypeName);
+            }
 
             foreach (DictionaryEntry entry in value)
             {

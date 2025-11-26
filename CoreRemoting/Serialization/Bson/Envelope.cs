@@ -78,7 +78,7 @@ namespace CoreRemoting.Serialization.Bson
                         return Encoding.GetEncoding(_value.ToString());
 
                     // Special handling for values that are serialized to a JObject using a converter (e.g. IPEndPointConverter)
-                    if (_value is JObject jObject && _type != typeof(JObject))
+                    if (_value is JObject jObject && _type != typeof(JObject) && _type != typeof(object))
                         // TODO: Somewhat ugly and slow but fixes many converters out of the box
                         return jObject.ToObject(_type, JsonSerializer.Create(BsonSerializerAdapter.CurrentSettings));
 
