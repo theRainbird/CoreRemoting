@@ -233,32 +233,45 @@ namespace CoreRemoting.Serialization.Bson.Converters
             writer.WritePropertyName("K");
             writer.WriteValue(key);
 
-            // Write value type and value
-            if (valueType != null)
+            // Check if value is already wrapped in an Envelope (common in RPC scenarios)
+            if (value is Envelope envelope)
             {
-                var valuePrimitiveType = GetPrimitiveType(valueType);
-                if (valuePrimitiveType != PrimitiveType.Complex && valuePrimitiveType != PrimitiveType.Enum)
-                {
-                    writer.WritePropertyName("VP");
-                    writer.WriteValue((byte)valuePrimitiveType);
-                }
-                else
-                {
-                    writer.WritePropertyName("VT");
-                    writer.WriteValue(GetTypeNameCached(valueType));
-                }
-            }
-
-            writer.WritePropertyName("V");
-            
-            // For complex types, use the serializer to properly serialize them
-            if (valueType != null && GetPrimitiveType(valueType) == PrimitiveType.Complex)
-            {
-                serializer.Serialize(writer, value);
+                // Use the Envelope's type information instead of adding our own metadata
+                writer.WritePropertyName("VT");
+                writer.WriteValue(GetTypeNameCached(envelope.Type));
+                
+                writer.WritePropertyName("V");
+                serializer.Serialize(writer, envelope.Value);
             }
             else
             {
-                writer.WriteValue(value);
+                // Write value type and value for non-Envelope objects
+                if (valueType != null)
+                {
+                    var valuePrimitiveType = GetPrimitiveType(valueType);
+                    if (valuePrimitiveType != PrimitiveType.Complex && valuePrimitiveType != PrimitiveType.Enum)
+                    {
+                        writer.WritePropertyName("VP");
+                        writer.WriteValue((byte)valuePrimitiveType);
+                    }
+                    else
+                    {
+                        writer.WritePropertyName("VT");
+                        writer.WriteValue(GetTypeNameCached(valueType));
+                    }
+                }
+
+                writer.WritePropertyName("V");
+                
+                // For complex types, use the serializer to properly serialize them
+                if (valueType != null && GetPrimitiveType(valueType) == PrimitiveType.Complex)
+                {
+                    serializer.Serialize(writer, value);
+                }
+                else
+                {
+                    writer.WriteValue(value);
+                }
             }
 
             writer.WriteEndObject();
