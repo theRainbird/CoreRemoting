@@ -22,7 +22,7 @@
 
     <ItemGroup>
       <PackageReference Include="Castle.Windsor" Version="6.0.0" />
-      <PackageReference Include="CoreRemoting" Version="1.2.2" />
+      <PackageReference Include="CoreRemoting" Version="1.2.3" />
       <PackageReference Include="CoreRemoting.Authentication.LinuxPamAuthProvider" Version="1.2.1" />
       <PackageReference Include="CoreRemoting.Authentication.WindowsAuthProvider" Version="1.2.1" />
       <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.10" />

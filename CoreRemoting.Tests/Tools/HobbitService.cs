@@ -27,4 +27,9 @@ public class HobbitService : IHobbitService
         // add more conditions to the user's predicate, etc.
         return predicate;
     }
+
+    public System.Threading.Tasks.Task<Expression<Func<T, bool>>> ValidatePredicateAsync<T>(Expression<Func<T, bool>> predicate)
+    {
+        return System.Threading.Tasks.Task.FromResult(predicate);
+    }
 }

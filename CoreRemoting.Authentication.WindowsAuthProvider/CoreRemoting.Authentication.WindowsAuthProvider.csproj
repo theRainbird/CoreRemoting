@@ -22,7 +22,7 @@
 
   <ItemGroup>
     <PackageReference Include="Castle.Windsor" Version="6.0.0" />
-    <PackageReference Include="CoreRemoting" Version="1.2.2" />
+    <PackageReference Include="CoreRemoting" Version="1.2.3" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.10" />
     <PackageReference Include="System.DirectoryServices.AccountManagement" Version="9.0.10" />
   </ItemGroup>

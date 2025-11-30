@@ -33,8 +33,7 @@ namespace CoreRemoting.Tests
                 NetworkPort = Port,
                 Serializer = new NeoBinarySerializerAdapter(new NeoBinarySerializerConfig
                 {
-                    AllowUnknownTypes = true,
-                    StrictTypeChecking = true
+                    AllowUnknownTypes = true
                 }),
                 RegisterServicesAction = container =>
                 {
@@ -66,8 +65,7 @@ namespace CoreRemoting.Tests
                 MessageEncryption = false,
                 Serializer = new NeoBinarySerializerAdapter(new NeoBinarySerializerConfig
                 {
-                    AllowUnknownTypes = true,
-                    StrictTypeChecking = true
+                    AllowUnknownTypes = true
                 })
             });
 
@@ -229,7 +227,7 @@ namespace CoreRemoting.Tests
             Assert.Equal("value1", innerHt["key1"]);
         }
 
-        [Fact(Skip = "NeoBinarySerializer does not support System.Char primitive type serialization yet")]
+        [Fact]
         public void HashtableCharServ()
         {
             char typeChar = 'A';

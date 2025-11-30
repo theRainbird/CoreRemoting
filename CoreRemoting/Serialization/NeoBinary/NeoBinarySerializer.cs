@@ -4,6 +4,7 @@
  using System.IO;
  using System.Linq;
  using System.Reflection;
+ using System.Runtime.Serialization;
  using System.Text;
 
 namespace CoreRemoting.Serialization.NeoBinary
@@ -136,6 +137,14 @@ namespace CoreRemoting.Serialization.NeoBinary
 
             var type = obj.GetType();
 
+            if (IsSimpleType(type))
+            {
+                writer.Write((byte)3); // Simple object marker
+                WriteTypeInfo(writer, type);
+                SerializePrimitive(obj, writer);
+                return;
+            }
+
             // Check for circular references
             if (serializedObjects.Contains(obj))
             {
@@ -156,11 +165,7 @@ namespace CoreRemoting.Serialization.NeoBinary
             WriteTypeInfo(writer, type);
 
             // Serialize based on type
-                if (type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(UIntPtr) || type == typeof(IntPtr))
-            {
-                SerializePrimitive(obj, writer);
-            }
-            else if (type.IsEnum)
+            if (type.IsEnum)
             {
                 SerializeEnum(obj, writer);
             }
@@ -188,13 +193,10 @@ namespace CoreRemoting.Serialization.NeoBinary
             {
                 SerializeException((Exception)obj, writer, serializedObjects, objectMap);
             }
-            else if (IsSerializable(type))
-            {
-                SerializeComplexObject(obj, writer, serializedObjects, objectMap);
-            }
             else
             {
-                throw new InvalidOperationException($"Type '{type.FullName}' is not serializable");
+                // Serialize any complex object regardless of [Serializable] attribute
+                SerializeComplexObject(obj, writer, serializedObjects, objectMap);
             }
         }
 
@@ -219,6 +221,12 @@ namespace CoreRemoting.Serialization.NeoBinary
                 }
 
                 return deserializedObjects[objectId];
+            }
+
+            if (marker == 3) // Simple object marker
+            {
+                var type = ReadTypeInfo(reader);
+                return DeserializePrimitive(type, reader);
             }
 
             if (marker == 1) // Object marker
@@ -275,10 +283,25 @@ namespace CoreRemoting.Serialization.NeoBinary
         private void WriteTypeInfo(BinaryWriter writer, Type type)
         {
             var assemblyName = type.Assembly.GetName();
-            var typeName = type.FullName ?? type.Name;
+            string typeName;
+
+            // When assembly versions are excluded, we must also avoid embedding
+            // assembly-qualified generic argument type names inside the type name.
+            if (Config.IncludeAssemblyVersions)
+            {
+                typeName = type.FullName ?? type.Name;
+            }
+            else
+            {
+                typeName = BuildAssemblyNeutralTypeName(type);
+            }
 
             writer.Write(typeName);
-            
+
+            // Always persist the simple assembly name to allow the deserializer to
+            // load the defining assembly, even if we omit version information.
+            // This improves resolution for types from third-party assemblies
+            // (e.g., Serialize.Linq.Nodes) that might not yet be loaded.
             if (Config.IncludeAssemblyVersions)
             {
                 writer.Write(assemblyName.Name ?? string.Empty);
@@ -286,8 +309,8 @@ namespace CoreRemoting.Serialization.NeoBinary
             }
             else
             {
-                writer.Write(string.Empty);
-                writer.Write(string.Empty);
+                writer.Write(assemblyName.Name ?? string.Empty);
+                writer.Write(string.Empty); // omit version to keep assembly-neutral diffs stable
             }
         }
 
@@ -297,7 +320,7 @@ namespace CoreRemoting.Serialization.NeoBinary
             var assemblyName = reader.ReadString();
             var assemblyVersion = reader.ReadString();
 
-            Type type;
+            Type type = null;
 
             if (!string.IsNullOrEmpty(assemblyName))
             {
@@ -305,7 +328,7 @@ namespace CoreRemoting.Serialization.NeoBinary
                 type = AppDomain.CurrentDomain.GetAssemblies()
                     .SelectMany(a => a.GetTypes())
                     .FirstOrDefault(t => t.FullName == typeName || t.Name == typeName);
-                
+
                 // If not found in loaded assemblies, try Assembly.Load
                 if (type == null)
                 {
@@ -321,18 +344,11 @@ namespace CoreRemoting.Serialization.NeoBinary
                     }
                 }
             }
-            else
+
+            // If still not found, try assembly-neutral resolution
+            if (type == null)
             {
-                // Try Type.GetType first
-                type = Type.GetType(typeName);
-                
-                // If not found, try to find in loaded assemblies
-                if (type == null)
-                {
-                    type = AppDomain.CurrentDomain.GetAssemblies()
-                        .SelectMany(a => a.GetTypes())
-                        .FirstOrDefault(t => t.FullName == typeName || t.Name == typeName);
-                }
+                type = ResolveAssemblyNeutralType(typeName);
             }
 
             if (type == null)
@@ -342,6 +358,167 @@ namespace CoreRemoting.Serialization.NeoBinary
             TypeValidator.ValidateType(type);
 
             return type;
+        }
+
+        /// <summary>
+        /// Builds a type name string without embedding assembly information for generic argument types.
+        /// The format is compatible with Type.GetType style generic notation, e.g.:
+        /// Namespace.Generic`1[[Arg.Namespace.Type]]
+        /// </summary>
+        private static string BuildAssemblyNeutralTypeName(Type type)
+        {
+            if (type.IsGenericType)
+            {
+                var genericDef = type.GetGenericTypeDefinition();
+                var defName = genericDef.FullName; // e.g. System.Collections.Generic.List`1
+                var args = type.GetGenericArguments();
+                var argNames = args.Select(BuildAssemblyNeutralTypeName).ToArray();
+                var joined = string.Join("],[", argNames);
+                return $"{defName}[[{joined}]]";
+            }
+
+            if (type.IsArray)
+            {
+                // Handle arrays by composing element type and rank suffix
+                var elem = type.GetElementType();
+                var rank = type.GetArrayRank();
+                var suffix = rank == 1 ? "[]" : "[" + new string(',', rank - 1) + "]";
+                return BuildAssemblyNeutralTypeName(elem) + suffix;
+            }
+
+            return type.FullName ?? type.Name;
+        }
+
+        /// <summary>
+        /// Resolves a type name written without assembly qualifiers for generic arguments.
+        /// Tries Type.GetType, then searches loaded assemblies, and for generics parses and resolves recursively.
+        /// </summary>
+        private static Type ResolveAssemblyNeutralType(string typeName)
+        {
+            // Fast path
+            var t = Type.GetType(typeName);
+            if (t != null) return t;
+
+            // If looks like a generic with our [[...]] notation
+            int idx = typeName.IndexOf("[[", StringComparison.Ordinal);
+            if (idx > 0)
+            {
+                var defName = typeName.Substring(0, idx);
+                var argsPart = typeName.Substring(idx);
+
+                var defType = FindTypeInLoadedAssemblies(defName) ?? Type.GetType(defName);
+                if (defType == null)
+                    return null;
+
+                var argNames = ParseGenericArgumentNames(argsPart);
+                var argTypes = new Type[argNames.Count];
+                for (int i = 0; i < argNames.Count; i++)
+                {
+                    var at = ResolveAssemblyNeutralType(argNames[i]);
+                    if (at == null) return null;
+                    argTypes[i] = at;
+                }
+
+                try
+                {
+                    return defType.MakeGenericType(argTypes);
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            // Non-generic: search loaded assemblies by FullName then by Name
+            return FindTypeInLoadedAssemblies(typeName);
+        }
+
+        private static Type FindTypeInLoadedAssemblies(string fullOrSimpleName)
+        {
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                try
+                {
+                    var t = asm.GetType(fullOrSimpleName, throwOnError: false, ignoreCase: false);
+                    if (t != null) return t;
+                }
+                catch { /* ignore problematic assemblies */ }
+            }
+
+            // Fallback: search by simple name across all types (could be expensive)
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                try
+                {
+                    var t = asm.GetTypes().FirstOrDefault(x => x.FullName == fullOrSimpleName || x.Name == fullOrSimpleName);
+                    if (t != null) return t;
+                }
+                catch { /* ignore */ }
+            }
+
+            return null;
+        }
+
+        private static List<string> ParseGenericArgumentNames(string argsPart)
+        {
+            // argsPart starts with [[ and ends with ]] possibly; we extract inside and split at top-level '],['
+            if (argsPart.StartsWith("[[") && argsPart.EndsWith("]]"))
+            {
+                argsPart = argsPart.Substring(2, argsPart.Length - 4);
+            }
+
+            var result = new List<string>();
+            var sb = new StringBuilder();
+            int depth = 0; // depth of bracket nesting considering double brackets
+
+            for (int i = 0; i < argsPart.Length; i++)
+            {
+                char c = argsPart[i];
+
+                if (c == '[')
+                {
+                    depth++;
+                    sb.Append(c);
+                    continue;
+                }
+                if (c == ']')
+                {
+                    depth--;
+                    sb.Append(c);
+                    continue;
+                }
+
+                // Split token is ",[" when at top level (depth == 0) but our format uses "],["
+                if (depth == 0 && i + 2 < argsPart.Length && argsPart[i] == ']' && argsPart[i + 1] == ',' && argsPart[i + 2] == '[')
+                {
+                    // Not applicable due to previous bracket handling; instead detect "," at depth 0
+                }
+
+                if (depth == 0 && c == ',' && i + 1 < argsPart.Length && argsPart[i - 1] == ']' && argsPart[i + 1] == '[')
+                {
+                    // Separator between arguments
+                    result.Add(TrimBrackets(sb.ToString()));
+                    sb.Clear();
+                    continue;
+                }
+
+                sb.Append(c);
+            }
+
+            if (sb.Length > 0)
+            {
+                result.Add(TrimBrackets(sb.ToString()));
+            }
+
+            return result;
+        }
+
+        private static string TrimBrackets(string s)
+        {
+            s = s.Trim();
+            while (s.StartsWith("[")) s = s.Substring(1);
+            while (s.EndsWith("]")) s = s.Substring(0, s.Length - 1);
+            return s;
         }
 
         private void SerializePrimitive(object obj, BinaryWriter writer)
@@ -357,6 +534,7 @@ namespace CoreRemoting.Serialization.NeoBinary
                 case uint ui: writer.Write(ui); break;
                 case long l: writer.Write(l); break;
                 case ulong ul: writer.Write(ul); break;
+                case char ch: writer.Write(ch); break;
                 case float f: writer.Write(f); break;
                 case double d: writer.Write(d); break;
                 case decimal dec: writer.Write(dec.ToString()); break;
@@ -378,6 +556,7 @@ namespace CoreRemoting.Serialization.NeoBinary
             if (type == typeof(uint)) return reader.ReadUInt32();
             if (type == typeof(long)) return reader.ReadInt64();
             if (type == typeof(ulong)) return reader.ReadUInt64();
+            if (type == typeof(char)) return reader.ReadChar();
             if (type == typeof(float)) return reader.ReadSingle();
             if (type == typeof(double)) return reader.ReadDouble();
             if (type == typeof(decimal)) return decimal.Parse(reader.ReadString());
@@ -402,6 +581,11 @@ namespace CoreRemoting.Serialization.NeoBinary
             return Enum.ToObject(type, value);
         }
 
+        private bool IsSimpleType(Type type)
+        {
+            return type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(UIntPtr) || type == typeof(IntPtr);
+        }
+
         private void SerializeArray(Array array, BinaryWriter writer, HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
         {
             writer.Write(array.Rank);
@@ -413,12 +597,22 @@ namespace CoreRemoting.Serialization.NeoBinary
             var length = array.Length;
             writer.Write(length);
 
+            var elementType = array.GetType().GetElementType()!;
+            var isSimpleElement = IsSimpleType(elementType);
+
             if (array.Rank == 1)
             {
                 for (int i = 0; i < length; i++)
                 {
                     var element = array.GetValue(i);
-                    SerializeObject(element, writer, serializedObjects, objectMap);
+                    if (isSimpleElement)
+                    {
+                        SerializePrimitive(element, writer);
+                    }
+                    else
+                    {
+                        SerializeObject(element, writer, serializedObjects, objectMap);
+                    }
                 }
             }
             else
@@ -427,8 +621,15 @@ namespace CoreRemoting.Serialization.NeoBinary
                 for (int i = 0; i < length; i++)
                 {
                     var element = array.GetValue(indices);
-                    SerializeObject(element, writer, serializedObjects, objectMap);
-                    
+                    if (isSimpleElement)
+                    {
+                        SerializePrimitive(element, writer);
+                    }
+                    else
+                    {
+                        SerializeObject(element, writer, serializedObjects, objectMap);
+                    }
+
                     IncrementArrayIndices(indices, array);
                 }
             }
@@ -455,15 +656,26 @@ namespace CoreRemoting.Serialization.NeoBinary
             }
 
             var totalLength = reader.ReadInt32();
-            var array = Array.CreateInstance(type.GetElementType()!, lengths);
-            
+            var elementType = type.GetElementType()!;
+            var array = Array.CreateInstance(elementType, lengths);
+
             // Register array immediately to handle circular references
             deserializedObjects[objectId] = array;
+
+            var isSimpleElement = IsSimpleType(elementType);
 
             for (int i = 0; i < totalLength; i++)
             {
                 var indices = GetIndicesFromLinearIndex(i, lengths);
-                var element = DeserializeObject(reader, deserializedObjects);
+                object element;
+                if (isSimpleElement)
+                {
+                    element = DeserializePrimitive(elementType, reader);
+                }
+                else
+                {
+                    element = DeserializeObject(reader, deserializedObjects);
+                }
                 array.SetValue(element, indices);
             }
 
@@ -537,9 +749,9 @@ namespace CoreRemoting.Serialization.NeoBinary
         private void SerializeComplexObject(object obj, BinaryWriter writer, HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
         {
             var type = obj.GetType();
-            var fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var fields = GetAllFieldsInHierarchy(type);
 
-            writer.Write(fields.Length);
+            writer.Write(fields.Count);
 
             foreach (var field in fields)
             {
@@ -552,18 +764,18 @@ namespace CoreRemoting.Serialization.NeoBinary
         private object DeserializeComplexObject(Type type, BinaryReader reader, Dictionary<int, object> deserializedObjects, int objectId)
         {
             var obj = CreateInstanceWithoutConstructor(type);
-            
+
             // Register the object immediately to handle circular references
             deserializedObjects[objectId] = obj;
-            
+
             var fieldCount = reader.ReadInt32();
 
             for (int i = 0; i < fieldCount; i++)
             {
                 var fieldName = reader.ReadString();
                 var value = DeserializeObject(reader, deserializedObjects);
-                
-                var field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+                var field = GetFieldInHierarchy(type, fieldName);
                 field?.SetValue(obj, value);
             }
 
@@ -898,13 +1110,6 @@ namespace CoreRemoting.Serialization.NeoBinary
             return standardFields.Contains(fieldName);
         }
 
-        private bool IsSerializable(Type type)
-        {
-            return type.IsSerializable || 
-                   type.GetCustomAttributes<SerializableAttribute>().Any() ||
-                   typeof(Exception).IsAssignableFrom(type);
-        }
-
         private string StripArgumentParameterSuffix(string message, string paramName)
         {
             var result = message ?? string.Empty;
@@ -934,6 +1139,16 @@ namespace CoreRemoting.Serialization.NeoBinary
                 // If that fails, try other methods
             }
 
+            // Use FormatterServices to create an uninitialized object without invoking any constructor
+            try
+            {
+                return FormatterServices.GetUninitializedObject(type);
+            }
+            catch
+            {
+                // Not supported for some types; continue with other strategies
+            }
+
             // Try to find a parameterless constructor and invoke it
             var constructor = type.GetConstructor(Type.EmptyTypes);
             if (constructor != null)
@@ -945,21 +1160,6 @@ namespace CoreRemoting.Serialization.NeoBinary
             if (type.IsValueType)
             {
                 return Activator.CreateInstance(type)!;
-            }
-
-            // Try using FormatterServices for objects without parameterless constructor
-            try
-            {
-                var formatterServicesType = typeof(System.Runtime.Serialization.FormatterServices);
-                var getUninitializedObjectMethod = formatterServicesType.GetMethod("GetUninitializedObject", BindingFlags.Public | BindingFlags.Static);
-                if (getUninitializedObjectMethod != null)
-                {
-                    return getUninitializedObjectMethod.Invoke(null, new object[] { type })!;
-                }
-            }
-            catch
-            {
-                // FormatterServices not available or failed
             }
 
             // Try using System.Runtime.Serialization.ObjectManager for .NET Core/5+
@@ -1166,6 +1366,38 @@ namespace CoreRemoting.Serialization.NeoBinary
                 }
                 // No recursion
             }
+        }
+
+        private static List<FieldInfo> GetAllFieldsInHierarchy(Type type)
+        {
+            var fields = new List<FieldInfo>();
+            var currentType = type;
+
+            while (currentType != null && currentType != typeof(object))
+            {
+                var typeFields = currentType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                fields.AddRange(typeFields);
+                currentType = currentType.BaseType;
+            }
+
+            return fields;
+        }
+
+        private static FieldInfo GetFieldInHierarchy(Type type, string fieldName)
+        {
+            var currentType = type;
+
+            while (currentType != null && currentType != typeof(object))
+            {
+                var field = currentType.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                if (field != null)
+                {
+                    return field;
+                }
+                currentType = currentType.BaseType;
+            }
+
+            return null;
         }
     }
 }

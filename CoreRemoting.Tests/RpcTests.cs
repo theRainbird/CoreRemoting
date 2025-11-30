@@ -151,6 +151,9 @@ public class RpcTests : IClassFixture<ServerFixture>
     public void Call_on_Proxy_should_be_invoked_on_remote_service_with_MessageEncryption()
     {
         _serverFixture.Server.Config.MessageEncryption = true;
+        // Use a smaller RSA key size for tests to avoid very slow key generation on some platforms
+        var oldKeySize = _serverFixture.Server.Config.KeySize;
+        _serverFixture.Server.Config.KeySize = 1024;
 
         void ClientAction()
         {
@@ -167,6 +170,7 @@ public class RpcTests : IClassFixture<ServerFixture>
                     Channel = ClientChannel,
                     ServerPort = _serverFixture.Server.Config.NetworkPort,
                     MessageEncryption = true,
+                    KeySize = 1024,
                 });
 
                 stopWatch.Stop();
@@ -207,6 +211,11 @@ public class RpcTests : IClassFixture<ServerFixture>
             {
                 _testOutputHelper.WriteLine(e.ToString());
                 throw;
+            }
+            finally
+            {
+                // restore server key size for other tests
+                _serverFixture.Server.Config.KeySize = oldKeySize;
             }
         }
 
@@ -824,6 +833,8 @@ public class RpcTests : IClassFixture<ServerFixture>
                     Channel = ClientChannel,
                     ServerPort = _serverFixture.Server.Config.NetworkPort,
                     MessageEncryption = encryption,
+                    ConnectionTimeout = encryption ? 0 : 5,
+                    KeySize = 1024
                 });
 
                 using var client1 = CreateClient();

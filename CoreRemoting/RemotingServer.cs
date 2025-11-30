@@ -12,6 +12,7 @@ using CoreRemoting.RemoteDelegates;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Bson;
+using CoreRemoting.Serialization.NeoBinary;
 using CoreRemoting.Toolbox;
 using ServiceLifetime = CoreRemoting.DependencyInjection.ServiceLifetime;
 
@@ -61,7 +62,7 @@ public sealed class RemotingServer : IRemotingServer
                     maximumSessionInactivityTime: _config.MaximumSessionInactivityTime);
 
         _container = _config.DependencyInjectionContainer ?? new CastleWindsorDependencyInjectionContainer();
-        Serializer = _config.Serializer ?? new BsonSerializerAdapter();
+        Serializer = _config.Serializer ?? new NeoBinarySerializerAdapter();
         MethodCallMessageBuilder = new MethodCallMessageBuilder();
         MessageEncryptionManager = new MessageEncryptionManager();
 

@@ -20,8 +20,7 @@ namespace CoreRemoting.Serialization.NeoBinary
             
             var typeValidator = new NeoBinaryTypeValidator()
             {
-                AllowUnknownTypes = effectiveConfig.AllowUnknownTypes,
-                StrictTypeChecking = effectiveConfig.StrictTypeChecking
+                AllowUnknownTypes = effectiveConfig.AllowUnknownTypes
             };
             
             // Transfer allowed and blocked types from config to validator

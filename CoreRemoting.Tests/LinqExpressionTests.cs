@@ -5,6 +5,7 @@ using CoreRemoting.Tests.Tools;
 using CoreRemoting.Toolbox;
 using Serialize.Linq.Extensions;
 using Xunit;
+using System.Threading.Tasks;
 
 namespace CoreRemoting.Tests;
 
@@ -80,6 +81,26 @@ public class LinqExpressionTests : IClassFixture<ServerFixture>
         var proxy = client.CreateProxy<IHobbitService>();
 
         var result = proxy.ValidatePredicate<Hobbit>(h => h.LastName.EndsWith("s"));
+        var func = result.Compile();
+
+        Assert.True(func(new Hobbit { LastName = "Baggins" }));
+        Assert.False(func(new Hobbit { LastName = "Gamgee" }));
+    }
+
+    [Fact]
+    public async Task LinqExpression_can_be_returned_from_async_server_method()
+    {
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort
+        });
+
+        client.Connect();
+        var proxy = client.CreateProxy<IHobbitService>();
+
+        var result = await proxy.ValidatePredicateAsync<Hobbit>(h => h.LastName.EndsWith("s"));
         var func = result.Compile();
 
         Assert.True(func(new Hobbit { LastName = "Baggins" }));

@@ -97,12 +97,13 @@ namespace CoreRemoting.RpcMessaging
                             ? new Envelope(arg)
                             : arg;
                 
+                var typeForName = parameterInfo.ParameterType.IsByRef ? parameterInfo.ParameterType.GetElementType() : parameterInfo.ParameterType;
                 yield return
                     new MethodCallParameterMessage
                     {
                         IsOut = parameterInfo.IsOut,
                         ParameterName = parameterInfo.Name,
-                        ParameterTypeName =  parameterInfo.ParameterType.FullName + "," + parameterInfo.ParameterType.Assembly.GetName().Name,
+                        ParameterTypeName =  typeForName.FullName + "," + typeForName.Assembly.GetName().Name,
                         Value = parameterValue,
                         IsValueNull = isArgNull
                     };
@@ -153,10 +154,11 @@ namespace CoreRemoting.RpcMessaging
                 
                 var isArgNull = arg == null;
 
+                var typeToSerialize = parameterInfo.ParameterType.IsByRef ? parameterInfo.ParameterType.GetElementType() : parameterInfo.ParameterType;
                 var serializedArgValue =
                     serializer.EnvelopeNeededForParameterSerialization && arg is not Envelope
                         ? serializer.Serialize(typeof(Envelope), new Envelope(arg))
-                        : serializer.Serialize(parameterInfo.ParameterType, arg);
+                        : serializer.Serialize(typeToSerialize, arg);
                 
                 outParameters.Add(
                     new MethodCallOutParameterMessage

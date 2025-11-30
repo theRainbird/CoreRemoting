@@ -525,9 +525,12 @@ public sealed class RemotingSession : IAsyncDisposable
                     {
                         result = task.result;
                     }
-                    else if (returnType.IsLinqExpressionType())
+
+                    // After potential await, perform post-processing based on the actual value/type.
+                    // This fixes cases when async methods return LINQ expressions (Task<Expression<...>>),
+                    // which previously weren't converted to ExpressionNode and caused serialization issues.
+                    if (result is Expression expression)
                     {
-                        var expression = (Expression)result;
                         result = expression.ToExpressionNode();
                     }
                     else if (returnType.GetCustomAttribute<ReturnAsProxyAttribute>() != null)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Data;
 using System.Linq;
 using CoreRemoting.Serialization.NeoBinary;
@@ -158,6 +159,34 @@ namespace CoreRemoting.Tests
             {
                 Assert.Equal(kvp.Value, deserializedDictionary[kvp.Key]);
             }
+
+            // Test ObservableCollection<T>
+            var observableCollection = new ObservableCollection<string> { "item1", "item2", "item3" };
+            serialized = serializer.Serialize(observableCollection);
+            var deserializedObservableCollection = serializer.Deserialize<ObservableCollection<string>>(serialized);
+
+            Assert.Equal(observableCollection.Count, deserializedObservableCollection.Count);
+            for (int i = 0; i < observableCollection.Count; i++)
+            {
+                Assert.Equal(observableCollection[i], deserializedObservableCollection[i]);
+            }
+
+            // Test ObservableCollection<T> with custom class
+            var customObservableCollection = new ObservableCollection<TestComplexObject>
+            {
+                new TestComplexObject { Id = 1, Name = "First", IsActive = true },
+                new TestComplexObject { Id = 2, Name = "Second", IsActive = false }
+            };
+            serialized = serializer.Serialize(customObservableCollection);
+            var deserializedCustomObservableCollection = serializer.Deserialize<ObservableCollection<TestComplexObject>>(serialized);
+
+            Assert.Equal(customObservableCollection.Count, deserializedCustomObservableCollection.Count);
+            for (int i = 0; i < customObservableCollection.Count; i++)
+            {
+                Assert.Equal(customObservableCollection[i].Id, deserializedCustomObservableCollection[i].Id);
+                Assert.Equal(customObservableCollection[i].Name, deserializedCustomObservableCollection[i].Name);
+                Assert.Equal(customObservableCollection[i].IsActive, deserializedCustomObservableCollection[i].IsActive);
+            }
         }
 
         [Fact]
@@ -255,8 +284,7 @@ namespace CoreRemoting.Tests
         {
             var validator = new NeoBinaryTypeValidator
             {
-                AllowUnknownTypes = false,
-                StrictTypeChecking = true
+                AllowUnknownTypes = false
             };
 
             // Should block delegates
@@ -407,8 +435,7 @@ namespace CoreRemoting.Tests
         {
             var config = new NeoBinarySerializerConfig
             {
-                AllowUnknownTypes = true,
-                StrictTypeChecking = false
+                AllowUnknownTypes = true
             };
             var serializer = new NeoBinarySerializerAdapter(config);
 
@@ -530,6 +557,29 @@ namespace CoreRemoting.Tests
             Assert.Equal(originalRow["UserName", DataRowVersion.Current], deserializedRow["UserName", DataRowVersion.Current]);
         }
 
+        [Fact]
+        public void NeoBinarySerializerAdapter_should_serialize_and_deserialize_inherited_objects()
+        {
+            var serializer = new NeoBinarySerializerAdapter();
+
+            var testObject = new TestDerivedObject
+            {
+                BaseId = 100,
+                BaseName = "Base Name",
+                DerivedId = 200,
+                DerivedDescription = "Derived Description"
+            };
+
+            var serialized = serializer.Serialize(testObject);
+            var deserializedObject = serializer.Deserialize<TestDerivedObject>(serialized);
+
+            Assert.NotNull(deserializedObject);
+            Assert.Equal(testObject.BaseId, deserializedObject.BaseId);
+            Assert.Equal(testObject.BaseName, deserializedObject.BaseName);
+            Assert.Equal(testObject.DerivedId, deserializedObject.DerivedId);
+            Assert.Equal(testObject.DerivedDescription, deserializedObject.DerivedDescription);
+        }
+
         [Serializable]
         public class TestComplexObject
         {
@@ -573,6 +623,20 @@ namespace CoreRemoting.Tests
             public TestCustomException(string message, Exception innerException) : base(message, innerException)
             {
             }
+        }
+
+        [Serializable]
+        public class TestBaseObject
+        {
+            public int BaseId { get; set; }
+            public string BaseName { get; set; }
+        }
+
+        [Serializable]
+        public class TestDerivedObject : TestBaseObject
+        {
+            public int DerivedId { get; set; }
+            public string DerivedDescription { get; set; }
         }
     }
 }

@@ -17,6 +17,7 @@ using CoreRemoting.RemoteDelegates;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Bson;
+using CoreRemoting.Serialization.NeoBinary;
 using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
 using CancellationTokenSource = System.Threading.CancellationTokenSource;
@@ -92,7 +93,7 @@ public sealed class RemotingClient : IRemotingClient
         if (config == null)
             throw new ArgumentException("No config provided and no default configuration found.");
 
-        Serializer = config.Serializer ?? new BsonSerializerAdapter();
+        Serializer = config.Serializer ?? new NeoBinarySerializerAdapter();
         MessageEncryption = config.MessageEncryption;
         ProxyBuilder = config.ProxyBuilder ?? new RemotingProxyBuilder();
 

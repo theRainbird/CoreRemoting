@@ -26,6 +26,7 @@ public class ServerFixture : IDisposable
                 IsDefault = true,
                 MessageEncryption = false,
                 NetworkPort = 9094,
+                KeySize = 1024,
                 RegisterServicesAction = container =>
                 {
                     // Service with fakable methods

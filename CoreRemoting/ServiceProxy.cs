@@ -150,8 +150,9 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
                 }
                 else
                 {
+                    var typeToDeserialize = parameterInfo.ParameterType.IsByRef ? parameterInfo.ParameterType.GetElementType() : parameterInfo.ParameterType;
                     var outParamValue =
-                        serializer.Deserialize(parameterInfo.ParameterType, (byte[])outParameterValue.OutValue);
+                        serializer.Deserialize(typeToDeserialize, (byte[])outParameterValue.OutValue);
 
                     invocation.Arguments[parameterInfo.Position] = outParamValue;
                 }

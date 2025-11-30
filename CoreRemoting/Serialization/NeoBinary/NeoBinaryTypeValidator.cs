@@ -37,11 +37,6 @@ namespace CoreRemoting.Serialization.NeoBinary
         public bool AllowUnknownTypes { get; set; } = false;
 
         /// <summary>
-        /// Gets or sets whether strict type checking is enabled.
-        /// </summary>
-        public bool StrictTypeChecking { get; set; } = true;
-
-        /// <summary>
         /// Gets or sets whether to allow delegates during deserialization.
         /// </summary>
         public bool AllowDelegates { get; set; } = false;
@@ -95,12 +90,6 @@ namespace CoreRemoting.Serialization.NeoBinary
             if (!AllowDynamicAssemblies && type.Assembly.IsDynamic)
             {
                 throw new NeoBinaryUnsafeDeserializationException($"Type '{type.FullName}' from dynamic assembly is not allowed.");
-            }
-
-            // Strict type checking
-            if (StrictTypeChecking)
-            {
-                PerformStrictTypeChecks(type);
             }
 
             // Check if type is explicitly allowed
@@ -278,51 +267,6 @@ namespace CoreRemoting.Serialization.NeoBinary
         {
             var typeNamespace = type.Namespace ?? string.Empty;
             return _blockedNamespaces.Any(blockedNs => typeNamespace.StartsWith(blockedNs, StringComparison.Ordinal));
-        }
-
-        private void PerformStrictTypeChecks(Type type)
-        {
-            // Check for potentially dangerous attributes
-            var dangerousAttributes = new[]
-            {
-                "System.SerializableAttribute",
-                "System.Runtime.Serialization.DataContractAttribute",
-                "System.Xml.Serialization.XmlIncludeAttribute"
-            };
-
-            // foreach (var attributeName in dangerousAttributes)
-            // {
-            //     var attributeType = Type.GetType(attributeName);
-            //     if (attributeType != null && type.GetCustomAttributes(attributeType, false).Length > 0)
-            //     {
-            //         // Additional check for dangerous attribute combinations
-            //         if (IsDangerousTypeCombination(type))
-            //         {
-            //             throw new NeoBinaryUnsafeDeserializationException($"Type '{type.FullName}' has potentially dangerous attribute combination.");
-            //         }
-            //     }
-            // }
-
-            // Check for types that implement dangerous interfaces
-            var dangerousInterfaces = new[]
-            {
-                "System.Runtime.Serialization.ISerializable",
-                "System.Runtime.Serialization.IDeserializationCallback",
-                "System.Runtime.Serialization.IObjectReference"
-            };
-
-            foreach (var interfaceName in dangerousInterfaces)
-            {
-                var interfaceType = Type.GetType(interfaceName);
-                if (interfaceType != null && interfaceType.IsAssignableFrom(type))
-                {
-                    // Allow ISerializable only for known safe types
-                    if (interfaceName == "System.Runtime.Serialization.ISerializable" && !IsKnownSafeISerializableType(type))
-                    {
-                        throw new NeoBinaryUnsafeDeserializationException($"Type '{type.FullName}' implements dangerous interface '{interfaceName}'.");
-                    }
-                }
-            }
         }
 
         private bool IsDangerousTypeCombination(Type type)

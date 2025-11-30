@@ -52,6 +52,8 @@ namespace CoreRemoting.RpcMessaging
             {
                 var parameter = callMessage.Parameters[i];
                 var parameterType = Type.GetType(parameter.ParameterTypeName);
+                if (parameter.IsOut)
+                    parameterType = parameterType.MakeByRefType();
                 parameterTypes[i] = parameterType;
 
                 parameterValues[i] =

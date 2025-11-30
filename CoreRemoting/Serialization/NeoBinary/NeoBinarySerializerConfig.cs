@@ -20,7 +20,6 @@ namespace CoreRemoting.Serialization.NeoBinary
             AllowedTypes = new HashSet<Type>();
             BlockedTypes = new HashSet<Type>();
             AllowUnknownTypes = true;
-            StrictTypeChecking = true;
         }
 
         /// <summary>
@@ -60,13 +59,7 @@ namespace CoreRemoting.Serialization.NeoBinary
         /// When false, only known and allowed types can be deserialized.
         /// </summary>
         public bool AllowUnknownTypes { get; set; }
-
-        /// <summary>
-        /// Gets or sets whether strict type checking should be enabled.
-        /// When true, additional security checks are performed during deserialization.
-        /// </summary>
-        public bool StrictTypeChecking { get; set; }
-
+        
         /// <summary>
         /// Gets or sets whether to include field names during serialization.
         /// When true, field names are included for better compatibility.
@@ -99,7 +92,6 @@ namespace CoreRemoting.Serialization.NeoBinary
                 AllowedTypes = new HashSet<Type>(this.AllowedTypes),
                 BlockedTypes = new HashSet<Type>(this.BlockedTypes),
                 AllowUnknownTypes = this.AllowUnknownTypes,
-                StrictTypeChecking = this.StrictTypeChecking,
                 IncludeFieldNames = this.IncludeFieldNames,
                 EnableCompression = this.EnableCompression,
                 CompressionLevel = this.CompressionLevel
