@@ -12,8 +12,10 @@ namespace CoreRemoting.Tests
         [Fact]
         public void NeoBinarySerializerAdapter_should_serialize_and_deserialize_primitive_types()
         {
-            var config = new NeoBinarySerializerConfig();
-            config.AllowUnknownTypes = true;
+            var config = new NeoBinarySerializerConfig
+            {
+                AllowUnknownTypes = true
+            };
             var serializer = new NeoBinarySerializerAdapter(config);
 
             // Test all primitive types
@@ -55,7 +57,7 @@ namespace CoreRemoting.Tests
                 Name = "Test Object",
                 CreatedDate = DateTime.Now,
                 IsActive = true,
-                Tags = new List<string> { "tag1", "tag2", "tag3" },
+                Tags = ["tag1", "tag2", "tag3"],
                 Metadata = new Dictionary<string, object>
                 {
                     ["key1"] = "value1",
@@ -200,6 +202,7 @@ namespace CoreRemoting.Tests
             var serializer = new NeoBinarySerializerAdapter();
 
             TestComplexObject nullObject = null;
+            // ReSharper disable once ExpressionIsAlwaysNull
             var serialized = serializer.Serialize(nullObject);
             var deserialized = serializer.Deserialize<TestComplexObject>(serialized);
 
@@ -321,6 +324,7 @@ namespace CoreRemoting.Tests
             Assert.Equal(innerException.Message, deserializedException.InnerException.Message);
 
             // Test ArgumentException with parameters
+            // ReSharper disable once NotResolvedInText
             var argumentException = new ArgumentException("Invalid argument", "parameterName");
             serialized = serializer.Serialize(argumentException);
             deserializedException = serializer.Deserialize<ArgumentException>(serialized);
@@ -353,10 +357,15 @@ namespace CoreRemoting.Tests
         {
             var serializer = new NeoBinarySerializerAdapter();
 
-            var exception = new Exception("Test exception");
-            exception.Data["key1"] = "value1";
-            exception.Data["key2"] = 42;
-            exception.Data["key3"] = true;
+            var exception = new Exception("Test exception")
+            {
+                Data =
+                {
+                    ["key1"] = "value1",
+                    ["key2"] = 42,
+                    ["key3"] = true
+                }
+            };
 
             var serialized = serializer.Serialize(exception);
             var deserializedException = serializer.Deserialize<Exception>(serialized);
@@ -396,15 +405,17 @@ namespace CoreRemoting.Tests
         [Fact]
         public void NeoBinarySerializerAdapter_should_serialize_typed_DataSet_as_DiffGram()
         {
-            var config = new NeoBinarySerializerConfig();
-            config.AllowUnknownTypes = true;
-            config.StrictTypeChecking = false;
+            var config = new NeoBinarySerializerConfig
+            {
+                AllowUnknownTypes = true,
+                StrictTypeChecking = false
+            };
             var serializer = new NeoBinarySerializerAdapter(config);
 
-            var originalTable = new System.Data.DataTable("TestTable");
+            var originalTable = new DataTable("TestTable");
             originalTable.Columns.Add("UserName", typeof(string));
             originalTable.Columns.Add("Age", typeof(short));
-            var originalDataSet = new System.Data.DataSet("TestDataSet");
+            var originalDataSet = new DataSet("TestDataSet");
             originalDataSet.Tables.Add(originalTable);
 
             var originalRow = originalTable.NewRow();
@@ -417,7 +428,7 @@ namespace CoreRemoting.Tests
             originalRow["Age"] = 43;
 
             var serialized = serializer.Serialize(originalDataSet);
-            var deserializedDataSet = serializer.Deserialize<System.Data.DataSet>(serialized);
+            var deserializedDataSet = serializer.Deserialize<DataSet>(serialized);
 
             var deserializedTable = deserializedDataSet.Tables["TestTable"];
             var deserializedRow = deserializedTable!.Rows[0];
@@ -460,10 +471,10 @@ namespace CoreRemoting.Tests
         {
             var serializer = new NeoBinarySerializerAdapter();
 
-            var originalTable = new System.Data.DataTable("TestTable");
+            var originalTable = new DataTable("TestTable");
             originalTable.Columns.Add("UserName", typeof(string));
             originalTable.Columns.Add("Age", typeof(short));
-            var originalDataSet = new System.Data.DataSet("TestDataSet");
+            var originalDataSet = new DataSet("TestDataSet");
             originalDataSet.Tables.Add(originalTable);
 
             var originalRow = originalTable.NewRow();
@@ -476,7 +487,7 @@ namespace CoreRemoting.Tests
             originalRow["Age"] = 43;
 
             var serialized = serializer.Serialize(originalDataSet);
-            var deserializedDataSet = serializer.Deserialize<System.Data.DataSet>(serialized);
+            var deserializedDataSet = serializer.Deserialize<DataSet>(serialized);
 
             var deserializedTable = deserializedDataSet.Tables["TestTable"];
             var deserializedRow = deserializedTable!.Rows[0];
@@ -494,7 +505,7 @@ namespace CoreRemoting.Tests
         {
             var serializer = new NeoBinarySerializerAdapter();
 
-            var originalTable = new System.Data.DataTable("TestTable");
+            var originalTable = new DataTable("TestTable");
             originalTable.Columns.Add("UserName", typeof(string));
             originalTable.Columns.Add("Age", typeof(short));
 
@@ -508,7 +519,7 @@ namespace CoreRemoting.Tests
             originalRow["Age"] = 43;
 
             var serialized = serializer.Serialize(originalTable);
-            var deserializedTable = serializer.Deserialize<System.Data.DataTable>(serialized);
+            var deserializedTable = serializer.Deserialize<DataTable>(serialized);
 
             var deserializedRow = deserializedTable.Rows[0];
 
@@ -551,7 +562,7 @@ namespace CoreRemoting.Tests
             public int ErrorCode { get; set; }
             public string AdditionalInfo { get; set; }
 
-            public TestCustomException() : base()
+            public TestCustomException()
             {
             }
 

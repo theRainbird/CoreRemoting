@@ -265,8 +265,7 @@ namespace CoreRemoting.Serialization.NeoBinary
             BlockNamespace("System.Windows.Forms");
             BlockNamespace("Microsoft.Win32");
             
-            // Allow all exception types by default
-            AllowNamespace("System");
+            // Note: Do not blanket-allow System namespace; validation will explicitly allow Exception types
         }
 
         private bool IsInAllowedNamespace(Type type)
