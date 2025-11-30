@@ -176,6 +176,10 @@ namespace CoreRemoting.Serialization.NeoBinary
             {
                 SerializeDictionary((System.Collections.IDictionary)obj, writer, serializedObjects, objectMap);
             }
+            else if (typeof(Exception).IsAssignableFrom(type))
+            {
+                SerializeException((Exception)obj, writer, serializedObjects, objectMap);
+            }
             else if (IsSerializable(type))
             {
                 SerializeComplexObject(obj, writer, serializedObjects, objectMap);
@@ -235,6 +239,10 @@ namespace CoreRemoting.Serialization.NeoBinary
                 else if (typeof(System.Collections.IDictionary).IsAssignableFrom(type))
                 {
                     obj = DeserializeDictionary(type, reader, deserializedObjects, objectId);
+                }
+                else if (typeof(Exception).IsAssignableFrom(type))
+                {
+                    obj = DeserializeException(type, reader, deserializedObjects, objectId);
                 }
                 else
                 {
@@ -454,7 +462,7 @@ namespace CoreRemoting.Serialization.NeoBinary
         private object DeserializeList(Type type, BinaryReader reader, Dictionary<int, object> deserializedObjects, int objectId)
         {
             var count = reader.ReadInt32();
-            var list = (System.Collections.IList)Activator.CreateInstance(type)!;
+            var list = (System.Collections.IList)CreateInstanceWithoutConstructor(type);
             
             // Register the list immediately to handle circular references
             deserializedObjects[objectId] = list;
@@ -491,7 +499,7 @@ namespace CoreRemoting.Serialization.NeoBinary
         private object DeserializeDictionary(Type type, BinaryReader reader, Dictionary<int, object> deserializedObjects, int objectId)
         {
             var count = reader.ReadInt32();
-            var dictionary = (System.Collections.IDictionary)Activator.CreateInstance(type)!;
+            var dictionary = (System.Collections.IDictionary)CreateInstanceWithoutConstructor(type);
             
             // Register the dictionary immediately to handle circular references
             deserializedObjects[objectId] = dictionary;
@@ -523,7 +531,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 
         private object DeserializeComplexObject(Type type, BinaryReader reader, Dictionary<int, object> deserializedObjects, int objectId)
         {
-            var obj = Activator.CreateInstance(type)!;
+            var obj = CreateInstanceWithoutConstructor(type);
             
             // Register the object immediately to handle circular references
             deserializedObjects[objectId] = obj;
@@ -542,9 +550,239 @@ namespace CoreRemoting.Serialization.NeoBinary
             return obj;
         }
 
+        private void SerializeException(Exception exception, BinaryWriter writer, HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
+        {
+            var type = exception.GetType();
+            
+            // Serialize basic exception properties
+            writer.Write(exception.Message ?? string.Empty);
+            writer.Write(exception.Source ?? string.Empty);
+            writer.Write(exception.StackTrace ?? string.Empty);
+            writer.Write(exception.HelpLink ?? string.Empty);
+            
+            // Serialize HResult
+            writer.Write(exception.HResult);
+            
+            // Serialize inner exception if present
+            SerializeObject(exception.InnerException, writer, serializedObjects, objectMap);
+            
+            // Serialize data dictionary
+            if (exception.Data != null)
+            {
+                writer.Write(exception.Data.Count);
+                foreach (System.Collections.DictionaryEntry entry in exception.Data)
+                {
+                    SerializeObject(entry.Key, writer, serializedObjects, objectMap);
+                    SerializeObject(entry.Value, writer, serializedObjects, objectMap);
+                }
+            }
+            else
+            {
+                writer.Write(0);
+            }
+            
+            // Serialize additional fields for custom exceptions
+            var fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .Where(f => !IsStandardExceptionField(f.Name))
+                .ToArray();
+            
+            writer.Write(fields.Length);
+            foreach (var field in fields)
+            {
+                writer.Write(field.Name);
+                SerializeObject(field.GetValue(exception), writer, serializedObjects, objectMap);
+            }
+        }
+
+        private object DeserializeException(Type type, BinaryReader reader, Dictionary<int, object> deserializedObjects, int objectId)
+        {
+            // Create exception instance
+            var exception = (Exception)CreateInstanceWithoutConstructor(type);
+            
+            // Register immediately for circular references
+            deserializedObjects[objectId] = exception;
+            
+            // Read basic exception properties
+            var message = reader.ReadString();
+            var source = reader.ReadString();
+            var stackTrace = reader.ReadString();
+            var helpLink = reader.ReadString();
+            var hResult = reader.ReadInt32();
+            
+            // Use reflection to set private fields
+            SetExceptionField(exception, "_message", message);
+            SetExceptionField(exception, "_source", source);
+            SetExceptionField(exception, "_stackTraceString", stackTrace);
+            SetExceptionField(exception, "_helpURL", helpLink);
+            SetExceptionField(exception, "_HResult", hResult);
+            
+            // Deserialize inner exception
+            var innerException = (Exception)DeserializeObject(reader, deserializedObjects);
+            SetExceptionField(exception, "_innerException", innerException);
+            
+            // Deserialize data dictionary
+            var dataCount = reader.ReadInt32();
+            for (int i = 0; i < dataCount; i++)
+            {
+                var key = DeserializeObject(reader, deserializedObjects);
+                var value = DeserializeObject(reader, deserializedObjects);
+                exception.Data[key] = value;
+            }
+            
+            // Deserialize additional fields
+            var fieldCount = reader.ReadInt32();
+            for (int i = 0; i < fieldCount; i++)
+            {
+                var fieldName = reader.ReadString();
+                var fieldValue = DeserializeObject(reader, deserializedObjects);
+                
+                var field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                field?.SetValue(exception, fieldValue);
+            }
+            
+            return exception;
+        }
+
+        private void SetExceptionField(Exception exception, string fieldName, object value)
+        {
+            var field = typeof(Exception).GetField(fieldName, 
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            field?.SetValue(exception, value);
+        }
+
+        private bool IsStandardExceptionField(string fieldName)
+        {
+            var standardFields = new[]
+            {
+                "_message", "_source", "_stackTraceString", "_helpURL", "_HResult", "_innerException",
+                "Message", "Source", "StackTrace", "HelpLink", "HResult", "InnerException", "Data",
+                "TargetSite"
+            };
+            return standardFields.Contains(fieldName);
+        }
+
         private bool IsSerializable(Type type)
         {
-            return type.IsSerializable || type.GetCustomAttributes<SerializableAttribute>().Any();
+            return type.IsSerializable || 
+                   type.GetCustomAttributes<SerializableAttribute>().Any() ||
+                   typeof(Exception).IsAssignableFrom(type);
+        }
+
+        private object CreateInstanceWithoutConstructor(Type type)
+        {
+            // Try Activator.CreateInstance first (for types with parameterless constructor)
+            try
+            {
+                return Activator.CreateInstance(type)!;
+            }
+            catch
+            {
+                // If that fails, try other methods
+            }
+
+            // Try to find a parameterless constructor and invoke it
+            var constructor = type.GetConstructor(Type.EmptyTypes);
+            if (constructor != null)
+            {
+                return constructor.Invoke(null);
+            }
+
+            // For value types, we can use default(T) and box it
+            if (type.IsValueType)
+            {
+                return Activator.CreateInstance(type)!;
+            }
+
+            // Try using FormatterServices for objects without parameterless constructor
+            try
+            {
+                var formatterServicesType = typeof(System.Runtime.Serialization.FormatterServices);
+                var getUninitializedObjectMethod = formatterServicesType.GetMethod("GetUninitializedObject", BindingFlags.Public | BindingFlags.Static);
+                if (getUninitializedObjectMethod != null)
+                {
+                    return getUninitializedObjectMethod.Invoke(null, new object[] { type })!;
+                }
+            }
+            catch
+            {
+                // FormatterServices not available or failed
+            }
+
+            // Try using System.Runtime.Serialization.ObjectManager for .NET Core/5+
+            try
+            {
+                // For .NET Core 3.0+ and .NET 5+, we can use reflection to access internal methods
+                var runtimeType = typeof(System.Type).Assembly.GetType("System.RuntimeType");
+                if (runtimeType != null)
+                {
+                    var getUninitializedObjectMethod = runtimeType.GetMethod("GetUninitializedObject", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                    if (getUninitializedObjectMethod != null)
+                    {
+                        return getUninitializedObjectMethod.Invoke(null, new object[] { type })!;
+                    }
+                }
+            }
+            catch
+            {
+                // Internal method not available or failed
+            }
+
+            // Last resort: try to create using the most accessible constructor with default parameters
+            var constructors = type.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (constructors.Length > 0)
+            {
+                // Try the parameterless constructor first (already checked above, but just in case)
+                var parameterlessConstructor = constructors.FirstOrDefault(c => c.GetParameters().Length == 0);
+                if (parameterlessConstructor != null)
+                {
+                    return parameterlessConstructor.Invoke(null);
+                }
+
+                // Try constructors with parameters and use default values
+                foreach (var ctor in constructors.OrderBy(c => c.GetParameters().Length))
+                {
+                    var parameters = ctor.GetParameters();
+                    var args = new object[parameters.Length];
+                    
+                    bool canCreate = true;
+                    for (int i = 0; i < parameters.Length; i++)
+                    {
+                        var paramType = parameters[i].ParameterType;
+                        
+                        if (paramType.IsValueType)
+                        {
+                            args[i] = Activator.CreateInstance(paramType)!;
+                        }
+                        else if (paramType == typeof(string))
+                        {
+                            args[i] = string.Empty;
+                        }
+                        else if (parameters[i].HasDefaultValue)
+                        {
+                            args[i] = parameters[i].DefaultValue;
+                        }
+                        else
+                        {
+                            canCreate = false;
+                            break;
+                        }
+                    }
+                    
+                    if (canCreate)
+                    {
+                        try
+                        {
+                            return ctor.Invoke(args);
+                        }
+                        catch
+                        {
+                            // Try next constructor
+                        }
+                    }
+                }
+            }
+
+            throw new InvalidOperationException($"Cannot create instance of type '{type.FullName}' without a parameterless constructor. Consider adding a parameterless constructor or marking the type with [Serializable].");
         }
 
         private int[] GetIndicesFromLinearIndex(int linearIndex, int[] lengths)

@@ -31,7 +31,7 @@ namespace CoreRemoting.Tests
                 3.14159265359,
                 123.456m,
                 "Hello, World!",
-                null as string
+                null
             };
 
             foreach (var originalValue in testValues)
@@ -112,7 +112,7 @@ namespace CoreRemoting.Tests
             }
 
             // Test multi-dimensional array
-            var multiArray = new int[,] { { 1, 2 }, { 3, 4 } };
+            var multiArray = new[,] { { 1, 2 }, { 3, 4 } };
             serialized = serializer.Serialize(multiArray);
             var deserializedMultiArray = serializer.Deserialize<int[,]>(serialized);
 
@@ -293,6 +293,105 @@ namespace CoreRemoting.Tests
             Assert.Equal(testObject.Tags.Count, deserialized.Tags.Count);
         }
 
+        [Fact]
+        public void NeoBinarySerializerAdapter_should_serialize_and_deserialize_exceptions()
+        {
+            var serializer = new NeoBinarySerializerAdapter();
+
+            // Test basic Exception
+            var basicException = new Exception("Test exception message");
+            var serialized = serializer.Serialize(basicException);
+            var deserializedException = serializer.Deserialize<Exception>(serialized);
+
+            Assert.NotNull(deserializedException);
+            Assert.Equal(basicException.Message, deserializedException.Message);
+            Assert.Equal(basicException.HResult, deserializedException.HResult);
+            Assert.Null(deserializedException.InnerException);
+
+            // Test Exception with inner exception
+            var innerException = new InvalidOperationException("Inner exception");
+            var outerException = new Exception("Outer exception", innerException);
+            serialized = serializer.Serialize(outerException);
+            deserializedException = serializer.Deserialize<Exception>(serialized);
+
+            Assert.NotNull(deserializedException);
+            Assert.Equal(outerException.Message, deserializedException.Message);
+            Assert.NotNull(deserializedException.InnerException);
+            Assert.Equal(innerException.Message, deserializedException.InnerException.Message);
+
+            // Test ArgumentException with parameters
+            var argumentException = new ArgumentException("Invalid argument", "parameterName");
+            serialized = serializer.Serialize(argumentException);
+            deserializedException = serializer.Deserialize<ArgumentException>(serialized);
+
+            Assert.NotNull(deserializedException);
+            Assert.IsType<ArgumentException>(deserializedException);
+            var argEx = (ArgumentException)deserializedException;
+            Assert.Equal(argumentException.Message, argEx.Message);
+            Assert.Equal(argumentException.ParamName, argEx.ParamName);
+
+            // Test custom exception
+            var customException = new TestCustomException(message: "Custom exception message")
+            {
+                ErrorCode = 123,
+                AdditionalInfo = "Additional data"
+            };
+            serialized = serializer.Serialize(customException);
+            deserializedException = serializer.Deserialize<TestCustomException>(serialized);
+
+            Assert.NotNull(deserializedException);
+            Assert.IsType<TestCustomException>(deserializedException);
+            var customEx = (TestCustomException)deserializedException;
+            Assert.Equal(customException.Message, customEx.Message);
+            Assert.Equal(customException.ErrorCode, customEx.ErrorCode);
+            Assert.Equal(customException.AdditionalInfo, customEx.AdditionalInfo);
+        }
+
+        [Fact]
+        public void NeoBinarySerializerAdapter_should_serialize_exception_with_data()
+        {
+            var serializer = new NeoBinarySerializerAdapter();
+
+            var exception = new Exception("Test exception");
+            exception.Data["key1"] = "value1";
+            exception.Data["key2"] = 42;
+            exception.Data["key3"] = true;
+
+            var serialized = serializer.Serialize(exception);
+            var deserializedException = serializer.Deserialize<Exception>(serialized);
+
+            Assert.NotNull(deserializedException);
+            Assert.Equal(exception.Message, deserializedException.Message);
+            Assert.Equal(exception.Data.Count, deserializedException.Data.Count);
+            Assert.Equal("value1", deserializedException.Data["key1"]);
+            Assert.Equal(42, deserializedException.Data["key2"]);
+            Assert.Equal(true, deserializedException.Data["key3"]);
+        }
+
+        [Fact]
+        public void NeoBinarySerializerAdapter_should_serialize_exception_with_stack_trace()
+        {
+            var serializer = new NeoBinarySerializerAdapter();
+
+            Exception exception;
+            try
+            {
+                throw new Exception("Test exception with stack trace");
+            }
+            catch (Exception ex)
+            {
+                exception = ex;
+            }
+
+            var serialized = serializer.Serialize(exception);
+            var deserializedException = serializer.Deserialize<Exception>(serialized);
+
+            Assert.NotNull(deserializedException);
+            Assert.Equal(exception.Message, deserializedException.Message);
+            Assert.NotNull(deserializedException.StackTrace);
+            Assert.Contains("Test exception with stack trace", deserializedException.StackTrace);
+        }
+
         [Serializable]
         public class TestComplexObject
         {
@@ -317,6 +416,25 @@ namespace CoreRemoting.Tests
             Option1,
             Option2,
             Option3
+        }
+
+        [Serializable]
+        public class TestCustomException : Exception
+        {
+            public int ErrorCode { get; set; }
+            public string AdditionalInfo { get; set; }
+
+            public TestCustomException() : base()
+            {
+            }
+
+            public TestCustomException(string message) : base(message)
+            {
+            }
+
+            public TestCustomException(string message, Exception innerException) : base(message, innerException)
+            {
+            }
         }
     }
 }

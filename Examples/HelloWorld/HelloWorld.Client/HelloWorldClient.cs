@@ -1,6 +1,7 @@
 ﻿using System;
 using CoreRemoting;
 using CoreRemoting.Serialization.Binary;
+using CoreRemoting.Serialization.NeoBinary;
 using HelloWorld.Shared;
 
 namespace HelloWorld.Client
@@ -19,7 +20,7 @@ namespace HelloWorld.Client
             using var client = new RemotingClient(new ClientConfig()
             {
                 ServerHostName = "localhost",
-                Serializer = new BinarySerializerAdapter(), // IMPORTANT NOTE: building with .Net Core 8 and above requires 
+                Serializer = new NeoBinarySerializerAdapter(), // IMPORTANT NOTE: building with .Net Core 8 and above requires 
                 MessageEncryption = false,                  // <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
                 ServerPort = 9090                           // to be added in your .csproj file for proper work of BinarySerializerAdapter
             });

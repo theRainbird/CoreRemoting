@@ -2,6 +2,7 @@
 using CoreRemoting;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Serialization.Binary;
+using CoreRemoting.Serialization.NeoBinary;
 using HelloWorld.Shared;
 
 namespace HelloWorld.Server
@@ -43,7 +44,7 @@ namespace HelloWorld.Server
                 HostName = "localhost",
                 NetworkPort = 9090,
                 MessageEncryption = false,
-                Serializer = new BinarySerializerAdapter(), // IMPORTANT NOTE: building with .Net Core 8 and above requires 
+                Serializer = new NeoBinarySerializerAdapter(), // IMPORTANT NOTE: building with .Net Core 8 and above requires 
                                                             // <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
                                                             // to be added in your .csproj file for proper work of BinarySerializerAdapter
                 RegisterServicesAction = container =>

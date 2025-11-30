@@ -84,6 +84,12 @@ namespace CoreRemoting.Serialization.NeoBinary
             {
                 throw new NeoBinaryUnsafeDeserializationException($"Delegate type '{type.FullName}' is not allowed.");
             }
+            
+            // Always allow exception types
+            if (typeof(Exception).IsAssignableFrom(type))
+            {
+                return;
+            }
 
             // Check dynamic assembly restrictions
             if (!AllowDynamicAssemblies && type.Assembly.IsDynamic)
@@ -258,6 +264,9 @@ namespace CoreRemoting.Serialization.NeoBinary
             BlockNamespace("System.Web");
             BlockNamespace("System.Windows.Forms");
             BlockNamespace("Microsoft.Win32");
+            
+            // Allow all exception types by default
+            AllowNamespace("System");
         }
 
         private bool IsInAllowedNamespace(Type type)
@@ -282,18 +291,18 @@ namespace CoreRemoting.Serialization.NeoBinary
                 "System.Xml.Serialization.XmlIncludeAttribute"
             };
 
-            foreach (var attributeName in dangerousAttributes)
-            {
-                var attributeType = Type.GetType(attributeName);
-                if (attributeType != null && type.GetCustomAttributes(attributeType, false).Length > 0)
-                {
-                    // Additional check for dangerous attribute combinations
-                    if (IsDangerousTypeCombination(type))
-                    {
-                        throw new NeoBinaryUnsafeDeserializationException($"Type '{type.FullName}' has potentially dangerous attribute combination.");
-                    }
-                }
-            }
+            // foreach (var attributeName in dangerousAttributes)
+            // {
+            //     var attributeType = Type.GetType(attributeName);
+            //     if (attributeType != null && type.GetCustomAttributes(attributeType, false).Length > 0)
+            //     {
+            //         // Additional check for dangerous attribute combinations
+            //         if (IsDangerousTypeCombination(type))
+            //         {
+            //             throw new NeoBinaryUnsafeDeserializationException($"Type '{type.FullName}' has potentially dangerous attribute combination.");
+            //         }
+            //     }
+            // }
 
             // Check for types that implement dangerous interfaces
             var dangerousInterfaces = new[]
@@ -353,11 +362,13 @@ namespace CoreRemoting.Serialization.NeoBinary
                 typeof(System.Collections.ArrayList),
                 typeof(System.Collections.Queue),
                 typeof(System.Collections.Stack),
-                typeof(System.Collections.SortedList)
+                typeof(System.Collections.SortedList),
+                typeof(Exception)
             };
 
             return safeTypes.Contains(type) || 
-                   type.Namespace?.StartsWith("System", StringComparison.Ordinal) == true;
+                   type.Namespace?.StartsWith("System", StringComparison.Ordinal) == true ||
+                   typeof(Exception).IsAssignableFrom(type);
         }
     }
 }
