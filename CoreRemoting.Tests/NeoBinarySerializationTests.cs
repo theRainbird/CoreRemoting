@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using CoreRemoting.Serialization.NeoBinary;
 using Xunit;
@@ -390,6 +391,132 @@ namespace CoreRemoting.Tests
             Assert.Equal(exception.Message, deserializedException.Message);
             Assert.NotNull(deserializedException.StackTrace);
             Assert.Contains("Test exception with stack trace", deserializedException.StackTrace);
+        }
+
+        [Fact]
+        public void NeoBinarySerializerAdapter_should_serialize_typed_DataSet_as_DiffGram()
+        {
+            var config = new NeoBinarySerializerConfig();
+            config.AllowUnknownTypes = true;
+            config.StrictTypeChecking = false;
+            var serializer = new NeoBinarySerializerAdapter(config);
+
+            var originalTable = new System.Data.DataTable("TestTable");
+            originalTable.Columns.Add("UserName", typeof(string));
+            originalTable.Columns.Add("Age", typeof(short));
+            var originalDataSet = new System.Data.DataSet("TestDataSet");
+            originalDataSet.Tables.Add(originalTable);
+
+            var originalRow = originalTable.NewRow();
+            originalRow["UserName"] = "Tester";
+            originalRow["Age"] = 44;
+            originalTable.Rows.Add(originalRow);
+
+            originalTable.AcceptChanges();
+
+            originalRow["Age"] = 43;
+
+            var serialized = serializer.Serialize(originalDataSet);
+            var deserializedDataSet = serializer.Deserialize<System.Data.DataSet>(serialized);
+
+            var deserializedTable = deserializedDataSet.Tables["TestTable"];
+            var deserializedRow = deserializedTable!.Rows[0];
+
+            Assert.Equal(originalDataSet.DataSetName, deserializedDataSet.DataSetName);
+            Assert.Equal(originalTable.TableName, deserializedTable.TableName);
+            Assert.Equal(originalRow.RowState, deserializedRow.RowState);
+            Assert.Equal(originalRow["Age", DataRowVersion.Original], deserializedRow["Age", DataRowVersion.Original]);
+            Assert.Equal(originalRow["Age", DataRowVersion.Current], deserializedRow["Age", DataRowVersion.Current]);
+            Assert.Equal(originalRow["UserName", DataRowVersion.Current], deserializedRow["UserName", DataRowVersion.Current]);
+        }
+
+        [Fact]
+        public void NeoBinarySerializerAdapter_should_serialize_typed_DataTable_as_DiffGram()
+        {
+            var serializer = new NeoBinarySerializerAdapter();
+
+            var originalTable = new TestDataSet.TestTableDataTable();
+            var originalRow = originalTable.NewTestTableRow();
+            originalRow.UserName = "TestUser";
+            originalRow.Age = 44;
+            originalTable.AddTestTableRow(originalRow);
+            originalTable.AcceptChanges();
+
+            originalRow.Age = 43;
+
+            var serialized = serializer.Serialize(originalTable);
+            var deserializedTable = serializer.Deserialize<TestDataSet.TestTableDataTable>(serialized);
+
+            var deserializedRow = deserializedTable[0];
+
+            Assert.Equal(originalRow.RowState, deserializedRow.RowState);
+            Assert.Equal(originalRow["Age", DataRowVersion.Original], deserializedRow["Age", DataRowVersion.Original]);
+            Assert.Equal(originalRow["Age", DataRowVersion.Current], deserializedRow["Age", DataRowVersion.Current]);
+            Assert.Equal(originalRow["UserName", DataRowVersion.Current], deserializedRow["UserName", DataRowVersion.Current]);
+        }
+
+        [Fact]
+        public void NeoBinarySerializerAdapter_should_serialize_untyped_DataSet_as_DiffGram()
+        {
+            var serializer = new NeoBinarySerializerAdapter();
+
+            var originalTable = new System.Data.DataTable("TestTable");
+            originalTable.Columns.Add("UserName", typeof(string));
+            originalTable.Columns.Add("Age", typeof(short));
+            var originalDataSet = new System.Data.DataSet("TestDataSet");
+            originalDataSet.Tables.Add(originalTable);
+
+            var originalRow = originalTable.NewRow();
+            originalRow["UserName"] = "Tester";
+            originalRow["Age"] = 44;
+            originalTable.Rows.Add(originalRow);
+
+            originalTable.AcceptChanges();
+
+            originalRow["Age"] = 43;
+
+            var serialized = serializer.Serialize(originalDataSet);
+            var deserializedDataSet = serializer.Deserialize<System.Data.DataSet>(serialized);
+
+            var deserializedTable = deserializedDataSet.Tables["TestTable"];
+            var deserializedRow = deserializedTable!.Rows[0];
+
+            Assert.Equal(originalDataSet.DataSetName, deserializedDataSet.DataSetName);
+            Assert.Equal(originalTable.TableName, deserializedTable.TableName);
+            Assert.Equal(originalRow.RowState, deserializedRow.RowState);
+            Assert.Equal(originalRow["Age", DataRowVersion.Original], deserializedRow["Age", DataRowVersion.Original]);
+            Assert.Equal(originalRow["Age", DataRowVersion.Current], deserializedRow["Age", DataRowVersion.Current]);
+            Assert.Equal(originalRow["UserName", DataRowVersion.Current], deserializedRow["UserName", DataRowVersion.Current]);
+        }
+
+        [Fact]
+        public void NeoBinarySerializerAdapter_should_serialize_untyped_DataTable_as_DiffGram()
+        {
+            var serializer = new NeoBinarySerializerAdapter();
+
+            var originalTable = new System.Data.DataTable("TestTable");
+            originalTable.Columns.Add("UserName", typeof(string));
+            originalTable.Columns.Add("Age", typeof(short));
+
+            var originalRow = originalTable.NewRow();
+            originalRow["UserName"] = "Tester";
+            originalRow["Age"] = 44;
+            originalTable.Rows.Add(originalRow);
+
+            originalTable.AcceptChanges();
+
+            originalRow["Age"] = 43;
+
+            var serialized = serializer.Serialize(originalTable);
+            var deserializedTable = serializer.Deserialize<System.Data.DataTable>(serialized);
+
+            var deserializedRow = deserializedTable.Rows[0];
+
+            Assert.Equal(originalTable.TableName, deserializedTable.TableName);
+            Assert.Equal(originalRow.RowState, deserializedRow.RowState);
+            Assert.Equal(originalRow["Age", DataRowVersion.Original], deserializedRow["Age", DataRowVersion.Original]);
+            Assert.Equal(originalRow["Age", DataRowVersion.Current], deserializedRow["Age", DataRowVersion.Current]);
+            Assert.Equal(originalRow["UserName", DataRowVersion.Current], deserializedRow["UserName", DataRowVersion.Current]);
         }
 
         [Serializable]

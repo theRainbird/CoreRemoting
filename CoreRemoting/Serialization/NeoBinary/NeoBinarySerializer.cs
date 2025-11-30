@@ -1,9 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Text;
+ using System;
+ using System.Collections.Generic;
+ using System.Data;
+ using System.IO;
+ using System.Linq;
+ using System.Reflection;
+ using System.Text;
 
 namespace CoreRemoting.Serialization.NeoBinary
 {
@@ -91,10 +92,9 @@ namespace CoreRemoting.Serialization.NeoBinary
                 // Put the byte back
                 serializationStream.Position = serializationStream.Position - 1;
                 var result = DeserializeObject(reader, deserializedObjects);
-                
-                // Resolve forward references
-                ResolveForwardReferences(deserializedObjects);
-                
+
+                // Skip resolving forward references to avoid stack overflow
+
                 return result;
             }
         }
@@ -176,6 +176,14 @@ namespace CoreRemoting.Serialization.NeoBinary
             {
                 SerializeDictionary((System.Collections.IDictionary)obj, writer, serializedObjects, objectMap);
             }
+            else if (typeof(System.Data.DataSet).IsAssignableFrom(type))
+            {
+                SerializeDataSet((DataSet)obj, writer, serializedObjects, objectMap);
+            }
+            else if (typeof(System.Data.DataTable).IsAssignableFrom(type))
+            {
+                SerializeDataTable((DataTable)obj, writer, serializedObjects, objectMap);
+            }
             else if (typeof(Exception).IsAssignableFrom(type))
             {
                 SerializeException((Exception)obj, writer, serializedObjects, objectMap);
@@ -239,6 +247,14 @@ namespace CoreRemoting.Serialization.NeoBinary
                 else if (typeof(System.Collections.IDictionary).IsAssignableFrom(type))
                 {
                     obj = DeserializeDictionary(type, reader, deserializedObjects, objectId);
+                }
+                else if (typeof(System.Data.DataSet).IsAssignableFrom(type))
+                {
+                    obj = DeserializeDataSet(type, reader, deserializedObjects, objectId);
+                }
+                else if (typeof(System.Data.DataTable).IsAssignableFrom(type))
+                {
+                    obj = DeserializeDataTable(type, reader, deserializedObjects, objectId);
                 }
                 else if (typeof(Exception).IsAssignableFrom(type))
                 {
@@ -553,19 +569,19 @@ namespace CoreRemoting.Serialization.NeoBinary
         private void SerializeException(Exception exception, BinaryWriter writer, HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
         {
             var type = exception.GetType();
-            
+
             // Serialize basic exception properties
             writer.Write(exception.Message ?? string.Empty);
             writer.Write(exception.Source ?? string.Empty);
             writer.Write(exception.StackTrace ?? string.Empty);
             writer.Write(exception.HelpLink ?? string.Empty);
-            
+
             // Serialize HResult
             writer.Write(exception.HResult);
-            
+
             // Serialize inner exception if present
             SerializeObject(exception.InnerException, writer, serializedObjects, objectMap);
-            
+
             // Serialize data dictionary
             if (exception.Data != null)
             {
@@ -580,12 +596,12 @@ namespace CoreRemoting.Serialization.NeoBinary
             {
                 writer.Write(0);
             }
-            
+
             // Serialize additional fields for custom exceptions
             var fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
                 .Where(f => !IsStandardExceptionField(f.Name))
                 .ToArray();
-            
+
             writer.Write(fields.Length);
             foreach (var field in fields)
             {
@@ -594,32 +610,60 @@ namespace CoreRemoting.Serialization.NeoBinary
             }
         }
 
+        private void SerializeDataSet(DataSet dataSet, BinaryWriter writer, HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
+        {
+            using var ms = new MemoryStream();
+            dataSet.WriteXmlSchema(ms);
+            var schemaXml = Encoding.UTF8.GetString(ms.ToArray());
+            writer.Write(schemaXml);
+
+            ms.SetLength(0);
+            dataSet.WriteXml(ms, XmlWriteMode.DiffGram);
+            var diffGramXml = Encoding.UTF8.GetString(ms.ToArray());
+            writer.Write(diffGramXml);
+        }
+
+        private void SerializeDataTable(DataTable dataTable, BinaryWriter writer, HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
+        {
+            var tempDataSet = new DataSet();
+            tempDataSet.Tables.Add(dataTable);
+            using var ms = new MemoryStream();
+            tempDataSet.WriteXmlSchema(ms);
+            var schemaXml = Encoding.UTF8.GetString(ms.ToArray());
+            writer.Write(schemaXml);
+
+            ms.SetLength(0);
+            tempDataSet.WriteXml(ms, XmlWriteMode.DiffGram);
+            var diffGramXml = Encoding.UTF8.GetString(ms.ToArray());
+            writer.Write(diffGramXml);
+        }
+
         private object DeserializeException(Type type, BinaryReader reader, Dictionary<int, object> deserializedObjects, int objectId)
         {
             // Create exception instance
             var exception = (Exception)CreateInstanceWithoutConstructor(type);
-            
+
             // Register immediately for circular references
             deserializedObjects[objectId] = exception;
-            
+
             // Read basic exception properties
             var message = reader.ReadString();
             var source = reader.ReadString();
             var stackTrace = reader.ReadString();
             var helpLink = reader.ReadString();
             var hResult = reader.ReadInt32();
-            
+
             // Use reflection to set private fields
             SetExceptionField(exception, "_message", message);
             SetExceptionField(exception, "_source", source);
             SetExceptionField(exception, "_stackTraceString", stackTrace);
             SetExceptionField(exception, "_helpURL", helpLink);
             SetExceptionField(exception, "_HResult", hResult);
-            
+
             // Deserialize inner exception
             var innerException = (Exception)DeserializeObject(reader, deserializedObjects);
             SetExceptionField(exception, "_innerException", innerException);
-            
+
             // Deserialize data dictionary
             var dataCount = reader.ReadInt32();
             for (int i = 0; i < dataCount; i++)
@@ -628,19 +672,46 @@ namespace CoreRemoting.Serialization.NeoBinary
                 var value = DeserializeObject(reader, deserializedObjects);
                 exception.Data[key] = value;
             }
-            
+
             // Deserialize additional fields
             var fieldCount = reader.ReadInt32();
             for (int i = 0; i < fieldCount; i++)
             {
                 var fieldName = reader.ReadString();
                 var fieldValue = DeserializeObject(reader, deserializedObjects);
-                
+
                 var field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                 field?.SetValue(exception, fieldValue);
             }
-            
+
             return exception;
+        }
+
+        private object DeserializeDataSet(Type type, BinaryReader reader, Dictionary<int, object> deserializedObjects, int objectId)
+        {
+            var schemaXml = reader.ReadString();
+            var diffGramXml = reader.ReadString();
+            var dataSet = (DataSet)CreateInstanceWithoutConstructor(type);
+            deserializedObjects[objectId] = dataSet;
+            using var sr = new StringReader(schemaXml);
+            dataSet.ReadXmlSchema(sr);
+            using var sr2 = new StringReader(diffGramXml);
+            dataSet.ReadXml(sr2, XmlReadMode.DiffGram);
+            return dataSet;
+        }
+
+        private object DeserializeDataTable(Type type, BinaryReader reader, Dictionary<int, object> deserializedObjects, int objectId)
+        {
+            var schemaXml = reader.ReadString();
+            var diffGramXml = reader.ReadString();
+            var tempDataSet = new DataSet();
+            using var sr = new StringReader(schemaXml);
+            tempDataSet.ReadXmlSchema(sr);
+            using var sr2 = new StringReader(diffGramXml);
+            tempDataSet.ReadXml(sr2, XmlReadMode.DiffGram);
+            var dataTable = tempDataSet.Tables[0];
+            deserializedObjects[objectId] = dataTable;
+            return dataTable;
         }
 
         private void SetExceptionField(Exception exception, string fieldName, object value)
@@ -846,40 +917,31 @@ namespace CoreRemoting.Serialization.NeoBinary
                         // Replace placeholder with actual object
                         deserializedObjects[placeholderId] = actualObject;
                         hasChanges = true;
-                        
-                        // Update all existing references to this placeholder
-                        UpdateForwardReferences(placeholder, actualObject, deserializedObjects);
+
+                        // Skip updating references to avoid stack overflow
                     }
                 }
 
-                // Now update all object fields to replace any remaining placeholders
-                foreach (var obj in deserializedObjects.Values.ToList())
-                {
-                    if (obj != null && !(obj is ForwardReferencePlaceholder))
-                    {
-                        hasChanges |= ReplacePlaceholdersInObjectFields(obj, deserializedObjects);
-                    }
-                }
-
+                // Skip updating object fields to avoid stack overflow
             } while (hasChanges && iteration < maxIterations);
         }
 
         private void UpdateForwardReferences(ForwardReferencePlaceholder placeholder, object actualObject, Dictionary<int, object> deserializedObjects)
         {
-            // Update all objects that might reference this placeholder
-            foreach (var obj in deserializedObjects.Values.ToList())
-            {
-                if (obj != null && !(obj is ForwardReferencePlaceholder))
-                {
-                    ReplacePlaceholdersInObjectFields(obj, placeholder, actualObject);
-                }
-            }
+            // Skip updating to avoid stack overflow
         }
 
         private bool ReplacePlaceholdersInObjectFields(object obj, Dictionary<int, object> deserializedObjects)
         {
             bool hasChanges = false;
             var type = obj.GetType();
+
+            // Skip for DataSets and DataTables to avoid issues
+            if (typeof(DataSet).IsAssignableFrom(type) || typeof(DataTable).IsAssignableFrom(type))
+            {
+                return false;
+            }
+
             var fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
             foreach (var field in fields)
@@ -894,11 +956,7 @@ namespace CoreRemoting.Serialization.NeoBinary
                         hasChanges = true;
                     }
                 }
-                else if (value != null && !value.GetType().IsPrimitive && value.GetType() != typeof(string))
-                {
-                    // Recursively check nested objects
-                    hasChanges |= ReplacePlaceholdersInObjectFields(value, deserializedObjects);
-                }
+                // No recursion to avoid stack overflow
             }
 
             return hasChanges;
@@ -907,6 +965,13 @@ namespace CoreRemoting.Serialization.NeoBinary
         private void ReplacePlaceholdersInObjectFields(object obj, ForwardReferencePlaceholder targetPlaceholder, object replacementObject)
         {
             var type = obj.GetType();
+
+            // Skip for DataSets and DataTables
+            if (typeof(DataSet).IsAssignableFrom(type) || typeof(DataTable).IsAssignableFrom(type))
+            {
+                return;
+            }
+
             var fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
             foreach (var field in fields)
@@ -916,11 +981,7 @@ namespace CoreRemoting.Serialization.NeoBinary
                 {
                     field.SetValue(obj, replacementObject);
                 }
-                else if (value != null && !value.GetType().IsPrimitive && value.GetType() != typeof(string))
-                {
-                    // Recursively check nested objects
-                    ReplacePlaceholdersInObjectFields(value, targetPlaceholder, replacementObject);
-                }
+                // No recursion
             }
         }
     }

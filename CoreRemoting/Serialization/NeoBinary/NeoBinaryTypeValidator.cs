@@ -363,12 +363,16 @@ namespace CoreRemoting.Serialization.NeoBinary
                 typeof(System.Collections.Queue),
                 typeof(System.Collections.Stack),
                 typeof(System.Collections.SortedList),
-                typeof(Exception)
+                typeof(Exception),
+                typeof(System.Data.DataSet),
+                typeof(System.Data.DataTable)
             };
 
-            return safeTypes.Contains(type) || 
+            return safeTypes.Any(t => t.IsAssignableFrom(type)) ||
                    type.Namespace?.StartsWith("System", StringComparison.Ordinal) == true ||
-                   typeof(Exception).IsAssignableFrom(type);
+                   typeof(Exception).IsAssignableFrom(type) ||
+                   typeof(System.Data.DataSet).IsAssignableFrom(type) ||
+                   typeof(System.Data.DataTable).IsAssignableFrom(type);
         }
     }
 }
