@@ -52,7 +52,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\CoreRemoting.Channels.NamedPipe\CoreRemoting.Channels.NamedPipe.csproj" />
       <ProjectReference Include="..\CoreRemoting.Channels.WebsocketSharp\CoreRemoting.Channels.WebsocketSharp.csproj" />
       <ProjectReference Include="..\CoreRemoting.Tests.ExternalTypes\CoreRemoting.Tests.ExternalTypes.csproj" />
       <ProjectReference Include="..\CoreRemoting\CoreRemoting.csproj" />

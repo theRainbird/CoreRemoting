@@ -53,6 +53,7 @@ public sealed class RemotingClient : IRemotingClient
     private const int _false = 0;
     private Timer _keepSessionAliveTimer;
     private byte[] _serverPublicKeyBlob;
+    private bool _sessionClosedByServer;
 
     // ReSharper disable once InconsistentNaming
     private static readonly ConcurrentDictionary<string, IRemotingClient> _clientInstances = new();
@@ -93,7 +94,7 @@ public sealed class RemotingClient : IRemotingClient
         if (config == null)
             throw new ArgumentException("No config provided and no default configuration found.");
 
-        Serializer = config.Serializer ?? new NeoBinarySerializerAdapter();
+        Serializer = config.Serializer ?? new BsonSerializerAdapter();
         MessageEncryption = config.MessageEncryption;
         ProxyBuilder = config.ProxyBuilder ?? new RemotingProxyBuilder();
 
@@ -143,10 +144,25 @@ public sealed class RemotingClient : IRemotingClient
 
         foreach (var activeCall in activeCalls)
         {
-            activeCall.Value.Error = true;
-            activeCall.Value.RemoteException = new RemoteInvocationException("Server Disconnected");
-            activeCall.Value.TaskSource.TrySetResult(null);
+            if (_sessionClosedByServer)
+            {
+                // Session was closed gracefully by server.
+                // Complete all pending calls without error to allow graceful shutdown of in-flight calls
+                activeCall.Value.Error = false;
+                activeCall.Value.RemoteException = null;
+                activeCall.Value.TaskSource.TrySetResult(null);
+            }
+            else
+            {
+                // Unexpected disconnect: mark calls as failed
+                activeCall.Value.Error = true;
+                activeCall.Value.RemoteException = new RemoteInvocationException("Server Disconnected");
+                activeCall.Value.TaskSource.TrySetResult(null);
+            }
         }
+
+        // Reset the flag after handling disconnect
+        _sessionClosedByServer = false;
     }
 
     #endregion
@@ -625,8 +641,12 @@ public sealed class RemotingClient : IRemotingClient
     /// <summary>
     /// Processes a session_closed message.
     /// </summary>
-    private Task ProcessSessionClosedMessage(WireMessage message) =>
-        DisconnectAsync(quiet: true);
+    private Task ProcessSessionClosedMessage(WireMessage message)
+    {
+        // Mark that the session was closed by server to gracefully complete in-flight calls
+        _sessionClosedByServer = true;
+        return DisconnectAsync(quiet: true);
+    }
 
     /// <summary>
     /// Processes a remote delegate invocation message from server.

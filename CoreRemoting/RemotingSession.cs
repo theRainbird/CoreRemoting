@@ -14,6 +14,7 @@ using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization;
 using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
+using CoreRemoting.DependencyInjection;
 using Serialize.Linq.Extensions;
 using Serialize.Linq.Nodes;
 
@@ -436,6 +437,7 @@ public sealed class RemotingSession : IAsyncDisposable
         var serializedResult = Array.Empty<byte>();
         var method = default(MethodInfo);
         var oneWay = false;
+        var registration = default(ServiceRegistration);
 
         try
         {
@@ -460,7 +462,7 @@ public sealed class RemotingSession : IAsyncDisposable
             if (serverRpcContext.AuthenticationRequired && !_isAuthenticated)
                 throw new NetworkException("Session is not authenticated.");
 
-            var registration = _server.ServiceRegistry.GetServiceRegistration(callMessage.ServiceName);
+            registration = _server.ServiceRegistry.GetServiceRegistration(callMessage.ServiceName);
             var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
             var serviceInterfaceType = registration.InterfaceType;
 
@@ -481,10 +483,14 @@ public sealed class RemotingSession : IAsyncDisposable
 
             serverRpcContext.Exception =
                 new RemoteInvocationException(
-                    message: ex.Message,
+                    message: $"Error invoking service '{registration?.ImplementationType?.Name ?? "unknown"}': {ex.GetBaseException()?.Message ?? ex.Message}",
                     innerEx: ex.ToSerializable());
 
             ((RemotingServer)_server).OnRejectCall(serverRpcContext);
+            
+            // Debug: Log exception after RejectCall
+            var exceptionAfterReject = serverRpcContext.Exception;
+            System.Diagnostics.Debug.WriteLine($"RejectCall: Exception type = {exceptionAfterReject?.GetType().Name}, Message = {exceptionAfterReject?.Message}");
 
             if (oneWay)
                 throw;
@@ -560,7 +566,7 @@ public sealed class RemotingSession : IAsyncDisposable
 
                 serverRpcContext.Exception =
                     new RemoteInvocationException(
-                        message: ex.Message,
+                        message: $"Error invoking service '{registration?.ImplementationType?.Name ?? "unknown"}': {ex.GetBaseException()?.Message ?? ex.Message}",
                         innerEx: ex.ToSerializable());
 
                 ((RemotingServer)_server).OnAfterCall(serverRpcContext);
@@ -572,7 +578,7 @@ public sealed class RemotingSession : IAsyncDisposable
                     _server.Serializer.Serialize(serverRpcContext.Exception);
             }
 
-            if (!oneWay)
+            if (!oneWay && serverRpcContext.Exception == null)
             {
                 serverRpcContext.MethodCallResultMessage =
                     _server

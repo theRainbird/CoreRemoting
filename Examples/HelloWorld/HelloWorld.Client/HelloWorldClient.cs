@@ -1,6 +1,5 @@
 ﻿using System;
 using CoreRemoting;
-using CoreRemoting.Serialization.Binary;
 using CoreRemoting.Serialization.NeoBinary;
 using HelloWorld.Shared;
 

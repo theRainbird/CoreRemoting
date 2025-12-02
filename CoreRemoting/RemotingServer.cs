@@ -62,7 +62,7 @@ public sealed class RemotingServer : IRemotingServer
                     maximumSessionInactivityTime: _config.MaximumSessionInactivityTime);
 
         _container = _config.DependencyInjectionContainer ?? new CastleWindsorDependencyInjectionContainer();
-        Serializer = _config.Serializer ?? new NeoBinarySerializerAdapter();
+        Serializer = _config.Serializer ?? new BsonSerializerAdapter();
         MethodCallMessageBuilder = new MethodCallMessageBuilder();
         MessageEncryptionManager = new MessageEncryptionManager();
 

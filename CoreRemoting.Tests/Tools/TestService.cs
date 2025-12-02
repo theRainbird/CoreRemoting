@@ -128,7 +128,15 @@ public class TestService : ITestService
 
     public class NonSerializableObject(string text)
     {
+        // This field contains a delegate, which NeoBinary cannot serialize by default
+        private readonly Func<string> _throwingDelegate = () => throw new Exception(text);
+        
         public string Text => throw new Exception(text);
+    }
+
+    public class ThrowingField(string text)
+    {
+        public string Value => throw new Exception(text);
     }
 
     public object NonSerializableReturnValue(string text)
