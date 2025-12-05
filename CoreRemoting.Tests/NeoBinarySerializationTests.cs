@@ -745,5 +745,281 @@ namespace CoreRemoting.Tests
 			public int DerivedId { get; set; }
 			public string DerivedDescription { get; set; }
 		}
+
+		[Fact]
+		public void NeoBinarySerializerAdapter_should_serialize_and_deserialize_structs()
+		{
+			var serializer = new NeoBinarySerializerAdapter();
+
+			// Test simple struct
+			var simpleStruct = new TestStruct { Id = 42, Name = "Test Struct" };
+			var serialized = serializer.Serialize(simpleStruct);
+			var deserializedStruct = serializer.Deserialize<TestStruct>(serialized);
+
+			Assert.Equal(simpleStruct.Id, deserializedStruct.Id);
+			Assert.Equal(simpleStruct.Name, deserializedStruct.Name);
+
+			// Test struct with nested object
+			var complexStruct = new ComplexStruct
+			{
+				Id = 100,
+				Data = "Complex Data",
+				CreatedDate = DateTime.Now,
+				Tags = new[] { "tag1", "tag2" },
+				Metadata = new Dictionary<string, object> { ["key"] = "value" }
+			};
+			serialized = serializer.Serialize(complexStruct);
+			var deserializedComplex = serializer.Deserialize<ComplexStruct>(serialized);
+
+			Assert.Equal(complexStruct.Id, deserializedComplex.Id);
+			Assert.Equal(complexStruct.Data, deserializedComplex.Data);
+			Assert.Equal(complexStruct.Tags.Length, deserializedComplex.Tags.Length);
+			Assert.Equal(complexStruct.Metadata.Count, deserializedComplex.Metadata.Count);
+		}
+
+		[Fact]
+		public void NeoBinarySerializerAdapter_should_serialize_and_deserialize_interfaces()
+		{
+			var serializer = new NeoBinarySerializerAdapter();
+
+			// Test interface implementation
+			ITestInterface testObj = new TestInterfaceImplementation
+			{
+				Id = 123,
+				Name = "Interface Test",
+				Value = 456.789
+			};
+
+			var serialized = serializer.Serialize(testObj);
+			var deserializedObj = serializer.Deserialize<ITestInterface>(serialized);
+
+			Assert.NotNull(deserializedObj);
+			Assert.Equal(testObj.Id, deserializedObj.Id);
+			Assert.Equal(testObj.Name, deserializedObj.Name);
+			Assert.Equal(testObj.GetValue(), deserializedObj.GetValue());
+
+			// Test with List<IInterface>
+			var interfaceList = new List<ITestInterface>
+			{
+				new TestInterfaceImplementation { Id = 1, Name = "First", Value = 1.1 },
+				new TestInterfaceImplementation { Id = 2, Name = "Second", Value = 2.2 }
+			};
+
+			serialized = serializer.Serialize(interfaceList);
+			var deserializedList = serializer.Deserialize<List<ITestInterface>>(serialized);
+
+			Assert.Equal(2, deserializedList.Count);
+			Assert.Equal(1, deserializedList[0].Id);
+			Assert.Equal("First", deserializedList[0].Name);
+			Assert.Equal(2, deserializedList[1].Id);
+			Assert.Equal("Second", deserializedList[1].Name);
+		}
+
+		[Fact]
+		public void NeoBinarySerializerAdapter_should_serialize_and_deserialize_polymorphic_types()
+		{
+			var serializer = new NeoBinarySerializerAdapter();
+
+			// Test polymorphic collection
+			var shapes = new List<IShape>
+			{
+				new Circle { Radius = 5 },
+				new Rectangle { Width = 10, Height = 20 },
+				new Triangle { Base = 8, Height = 6 }
+			};
+
+			var serialized = serializer.Serialize(shapes);
+			var deserializedShapes = serializer.Deserialize<List<IShape>>(serialized);
+
+			Assert.Equal(3, deserializedShapes.Count);
+			Assert.IsType<Circle>(deserializedShapes[0]);
+			Assert.IsType<Rectangle>(deserializedShapes[1]);
+			Assert.IsType<Triangle>(deserializedShapes[2]);
+
+			var circle = (Circle)deserializedShapes[0];
+			Assert.Equal(5, circle.Radius);
+			Assert.Equal(Math.PI * 25, circle.GetArea(), 4);
+
+			var rectangle = (Rectangle)deserializedShapes[1];
+			Assert.Equal(10, rectangle.Width);
+			Assert.Equal(20, rectangle.Height);
+			Assert.Equal(200, rectangle.GetArea());
+
+			var triangle = (Triangle)deserializedShapes[2];
+			Assert.Equal(8, triangle.Base);
+			Assert.Equal(6, triangle.Height);
+			Assert.Equal(24, triangle.GetArea());
+		}
+
+		[Fact]
+		public void NeoBinarySerializerAdapter_should_serialize_and_deserialize_expando_objects()
+		{
+			var serializer = new NeoBinarySerializerAdapter();
+
+			// Test ExpandoObject
+			dynamic expando = new System.Dynamic.ExpandoObject();
+			expando.Id = 42;
+			expando.Name = "Dynamic Object";
+			expando.Tags = new[] { "dynamic", "expando" };
+			expando.Metadata = new System.Dynamic.ExpandoObject();
+			expando.Metadata.Created = DateTime.Now;
+			expando.Metadata.IsActive = true;
+
+			var serialized = serializer.Serialize((object)expando);
+			var deserializedExpando = serializer.Deserialize<System.Dynamic.ExpandoObject>(serialized);
+
+			Assert.NotNull(deserializedExpando);
+			var dict = (IDictionary<string, object>)deserializedExpando;
+
+			Assert.True(dict.ContainsKey("Id"));
+			Assert.Equal(42, dict["Id"]);
+			Assert.True(dict.ContainsKey("Name"));
+			Assert.Equal("Dynamic Object", dict["Name"]);
+			Assert.True(dict.ContainsKey("Tags"));
+			Assert.IsType<string[]>(dict["Tags"]);
+			Assert.True(dict.ContainsKey("Metadata"));
+
+			var metadataDict = (IDictionary<string, object>)dict["Metadata"];
+			Assert.True(metadataDict.ContainsKey("Created"));
+			Assert.True(metadataDict.ContainsKey("IsActive"));
+			Assert.Equal(true, metadataDict["IsActive"]);
+		}
+
+		[Fact]
+		public void NeoBinarySerializerAdapter_should_serialize_and_deserialize_polymorphic_properties()
+		{
+			var serializer = new NeoBinarySerializerAdapter();
+
+			var container = new PolymorphicContainer
+			{
+				Id = 1,
+				Name = "Container",
+				Shape = new Circle { Radius = 7 },
+				Shapes = new List<IShape>
+				{
+					new Rectangle { Width = 3, Height = 4 },
+					new Triangle { Base = 5, Height = 12 }
+				},
+				Data = new System.Dynamic.ExpandoObject()
+			};
+
+			((dynamic)container.Data).Value = "dynamic data";
+			((dynamic)container.Data).Count = 42;
+
+			var serialized = serializer.Serialize(container);
+			var deserializedContainer = serializer.Deserialize<PolymorphicContainer>(serialized);
+
+			Assert.Equal(container.Id, deserializedContainer.Id);
+			Assert.Equal(container.Name, deserializedContainer.Name);
+			Assert.IsType<Circle>(deserializedContainer.Shape);
+			Assert.Equal(7, ((Circle)deserializedContainer.Shape).Radius);
+			Assert.Equal(2, deserializedContainer.Shapes.Count);
+			Assert.IsType<Rectangle>(deserializedContainer.Shapes[0]);
+			Assert.IsType<Triangle>(deserializedContainer.Shapes[1]);
+			Assert.IsType<System.Dynamic.ExpandoObject>(deserializedContainer.Data);
+
+			var dataDict = (IDictionary<string, object>)deserializedContainer.Data;
+			Assert.Equal("dynamic data", dataDict["Value"]);
+			Assert.Equal(42, dataDict["Count"]);
+		}
+
+		[Fact]
+		public void NeoBinarySerializerAdapter_should_handle_null_polymorphic_references()
+		{
+			var serializer = new NeoBinarySerializerAdapter();
+
+			var container = new PolymorphicContainer
+			{
+				Id = 1,
+				Name = "Container with nulls",
+				Shape = null,
+				Shapes = new List<IShape>(),
+				Data = null
+			};
+
+			var serialized = serializer.Serialize(container);
+			var deserializedContainer = serializer.Deserialize<PolymorphicContainer>(serialized);
+
+			Assert.Equal(container.Id, deserializedContainer.Id);
+			Assert.Equal(container.Name, deserializedContainer.Name);
+			Assert.Null(deserializedContainer.Shape);
+			Assert.Empty(deserializedContainer.Shapes);
+			Assert.Null(deserializedContainer.Data);
+		}
+
+		// Test data structures
+
+		public struct TestStruct
+		{
+			public int Id { get; set; }
+			public string Name { get; set; }
+		}
+
+		public struct ComplexStruct
+		{
+			public int Id { get; set; }
+			public string Data { get; set; }
+			public DateTime CreatedDate { get; set; }
+			public string[] Tags { get; set; }
+			public Dictionary<string, object> Metadata { get; set; }
+		}
+
+		public interface ITestInterface
+		{
+			int Id { get; set; }
+			string Name { get; set; }
+			double GetValue();
+		}
+
+		[Serializable]
+		public class TestInterfaceImplementation : ITestInterface
+		{
+			public int Id { get; set; }
+			public string Name { get; set; }
+			public double Value { get; set; }
+
+			public double GetValue() => Value;
+		}
+
+		public interface IShape
+		{
+			double GetArea();
+		}
+
+		[Serializable]
+		public class Circle : IShape
+		{
+			public double Radius { get; set; }
+
+			public double GetArea() => Math.PI * Radius * Radius;
+		}
+
+		[Serializable]
+		public class Rectangle : IShape
+		{
+			public double Width { get; set; }
+			public double Height { get; set; }
+
+			public double GetArea() => Width * Height;
+		}
+
+		[Serializable]
+		public class Triangle : IShape
+		{
+			public double Base { get; set; }
+			public double Height { get; set; }
+
+			public double GetArea() => 0.5 * Base * Height;
+		}
+
+		[Serializable]
+		public class PolymorphicContainer
+		{
+			public int Id { get; set; }
+			public string Name { get; set; }
+			public IShape Shape { get; set; }
+			public List<IShape> Shapes { get; set; }
+			public object Data { get; set; }
+		}
 	}
 }
