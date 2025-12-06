@@ -77,10 +77,12 @@ namespace CoreRemoting.Serialization.Binary
                         context: new StreamingContext(context.State, false))
                     .Safe();
                 
-                using var ms = new MemoryStream(buffer);
-                
-                var dt = fmt.Deserialize(ms);
-                
+                object dt;
+                using (var ms = new MemoryStream(buffer))
+                {
+                    dt = fmt.Deserialize(ms);
+                }
+
                 if (dt is DataTable)
                 {
                     continue;

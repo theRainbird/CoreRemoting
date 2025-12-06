@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
+    <AssemblyName>CoreRemoting.Serialization.Binary</AssemblyName>
+    <RootNamespace>CoreRemoting.Serialization.Binary</RootNamespace>
+    <PackageId>CoreRemoting.Serialization.Binary</PackageId>
+    <Authors>CoreRemoting.Serialization.Binary</Authors>
+    <Company>CoreRemoting.Serialization.Binary</Company>
+    <Product>CoreRemoting.Serialization.Binary</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CoreRemoting\CoreRemoting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Runtime.Serialization.Formatters" Version="4.3.0" />
+    <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
+  </ItemGroup>
+
+</Project>

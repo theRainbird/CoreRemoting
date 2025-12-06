@@ -24,6 +24,7 @@ namespace CoreRemoting.Channels
         /// </summary>
         /// <param name="info">Serialization info</param>
         /// <param name="context">Streaming context</param>
+        [Obsolete("Only preserved for backward compatibility")]
         public NetworkException(SerializationInfo info, StreamingContext context) 
             : base(info, context)
         {

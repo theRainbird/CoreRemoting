@@ -88,7 +88,10 @@ public class SerializableException : Exception
 	/// the serialized object data about the exception being thrown.</param>
 	/// <param name="context">The <see cref="T:System.Runtime.Serialization.StreamingContext" /> that contains
 	/// contextual information about the source or destination.</param>
+#pragma warning disable CS0809 // Obsolete member overrides non-obsolete member
+	[Obsolete("This API supports obsolete formatter-based serialization. It should not be called or extended by application code.")]
 	public override void GetObjectData(SerializationInfo info, StreamingContext context)
+#pragma warning restore CS0809 // Obsolete member overrides non-obsolete member
 	{
 		base.GetObjectData(info, context);
 		info.AddValue("MyStackTrace", _stackTrace);

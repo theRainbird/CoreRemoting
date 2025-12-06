@@ -6,8 +6,8 @@ using CoreRemoting.Channels;
 using CoreRemoting.Channels.Tcp;
 using CoreRemoting.Channels.Websocket;
 using CoreRemoting.Serialization;
-using CoreRemoting.Serialization.Binary;
 using CoreRemoting.Serialization.Bson;
+using CoreRemoting.Serialization.NeoBinary;
 
 namespace CoreRemoting.ClassicRemotingApi.ConfigSection
 {
@@ -182,6 +182,13 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
                     "binaryserializer"
                 };
 
+            var neoBinarySerializerShortcuts =
+                new[]
+                {
+                    "neobinary",
+                    "neobinaryserializer"
+                };
+            
             var bsonSerializerShortcuts =
                 new[]
                 {
@@ -191,10 +198,18 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
                 };
             
             if (binarySerializerShortcuts.Contains(serializerName.ToLower()))
-                return new BinarySerializerAdapter();
+            {
+                // Load BinarySerializerAdapter from separate assembly
+                var assembly = Assembly.Load("CoreRemoting.Serialization.Binary");
+                var type = assembly.GetType("CoreRemoting.Serialization.Binary.BinarySerializerAdapter");
+                return (ISerializerAdapter)Activator.CreateInstance(type);
+            }
 
             if (bsonSerializerShortcuts.Contains(serializerName.ToLower()))
                 return new BsonSerializerAdapter();
+
+            if (neoBinarySerializerShortcuts.Contains(serializerName.ToLower()))
+                return new NeoBinarySerializerAdapter();
             
             var serializerAdapterType = GetTypeFromConfigString(serializerName);
             

@@ -16,11 +16,18 @@ public class SimpleNamedPipeServer : IDisposable
 	private readonly string _pipeName;
 	private bool _isRunning;
 
+	/// <summary>
+	/// Initializes a new instance of the <see cref="SimpleNamedPipeServer"/> class with the specified pipe name.
+	/// </summary>
+	/// <param name="pipeName">The name of the named pipe.</param>
 	public SimpleNamedPipeServer(string pipeName)
 	{
 		_pipeName = pipeName;
 	}
 
+	/// <summary>
+	/// Starts the named pipe server.
+	/// </summary>
 	public void Start()
 	{
 		if (_isRunning)
@@ -29,6 +36,9 @@ public class SimpleNamedPipeServer : IDisposable
 		_isRunning = true;
 	}
 
+	/// <summary>
+	/// Stops the named pipe server.
+	/// </summary>
 	public void Stop()
 	{
 		if (!_isRunning)
@@ -37,11 +47,19 @@ public class SimpleNamedPipeServer : IDisposable
 		_isRunning = false;
 	}
 
+	/// <summary>
+	/// Disposes the server and stops it.
+	/// </summary>
 	public void Dispose()
 	{
 		Stop();
 	}
 
+	/// <summary>
+	/// Accepts a client connection asynchronously and returns the server stream.
+	/// </summary>
+	/// <returns>A task that represents the asynchronous operation. The task result contains the <see cref="NamedPipeServerStream"/> for the connected client.</returns>
+	/// <exception cref="InvalidOperationException">Thrown if the server is not running.</exception>
 	public async Task<NamedPipeServerStream> AcceptClientAsync()
 	{
 		if (!_isRunning)
@@ -98,6 +116,12 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 	/// </summary>
 	public NetworkException LastException { get; set; }
 
+	/// <summary>
+	/// Initializes a new instance of the <see cref="SimpleNamedPipeConnection"/> class.
+	/// </summary>
+	/// <param name="connectionId">The unique identifier for the connection.</param>
+	/// <param name="serverStream">The named pipe server stream.</param>
+	/// <param name="server">The remoting server instance.</param>
 	public SimpleNamedPipeConnection(string connectionId, NamedPipeServerStream serverStream, IRemotingServer server)
 	{
 		_connectionId = connectionId ?? throw new ArgumentNullException(nameof(connectionId));
@@ -107,6 +131,10 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 		_sendLock = new AsyncLock();
 	}
 
+	/// <summary>
+	/// Handles the client connection asynchronously.
+	/// </summary>
+	/// <returns>A task that represents the asynchronous operation.</returns>
 	public async Task HandleClientAsync()
 	{
 		try
@@ -250,6 +278,11 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 		// or when the server stops. This prevents premature disconnection.
 	}
 
+	/// <summary>
+	/// Sends a message asynchronously to the connected client.
+	/// </summary>
+	/// <param name="rawMessage">The raw message data to send.</param>
+	/// <returns>A task that represents the asynchronous operation. The task result indicates whether the message was sent successfully.</returns>
 	public async Task<bool> SendMessageAsync(byte[] rawMessage)
 	{
 		if (_isDisposed || rawMessage == null || _serverStream == null)
@@ -294,6 +327,10 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 		}
 	}
 
+	/// <summary>
+	/// Disposes the connection asynchronously.
+	/// </summary>
+	/// <returns>A <see cref="ValueTask"/> that represents the asynchronous dispose operation.</returns>
 	public async ValueTask DisposeAsync()
 	{
 		if (_isDisposed)
@@ -325,6 +362,9 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 		await Task.CompletedTask.ConfigureAwait(false);
 	}
 
+	/// <summary>
+	/// Disposes the connection synchronously.
+	/// </summary>
 	public void Dispose()
 	{
 		DisposeAsync().AsTask().Wait();

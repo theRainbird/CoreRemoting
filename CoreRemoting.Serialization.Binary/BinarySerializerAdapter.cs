@@ -9,8 +9,8 @@ namespace CoreRemoting.Serialization.Binary
     /// </summary>
     public class BinarySerializerAdapter : ISerializerAdapter
     {
-        [ThreadStatic] 
-        private static BinaryFormatter _formatter;
+        [ThreadStatic]
+        private static System.Runtime.Serialization.Formatters.Binary.BinaryFormatter _formatter;
         private readonly BinarySerializerConfig _config;
        
         /// <summary>
@@ -31,11 +31,11 @@ namespace CoreRemoting.Serialization.Binary
         /// The instance is reused for further calls.
         /// </summary>
         /// <returns>Binary formatter instance</returns>
-        private BinaryFormatter GetFormatter()
+        private System.Runtime.Serialization.Formatters.Binary.BinaryFormatter GetFormatter()
         {
             if (_formatter == null)
             {
-                _formatter = new BinaryFormatter();
+                _formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
 
                 if (_config != null)
                 {

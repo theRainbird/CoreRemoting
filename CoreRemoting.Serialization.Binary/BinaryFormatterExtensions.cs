@@ -51,9 +51,11 @@ namespace CoreRemoting.Serialization.Binary
         /// <returns>Serialized data</returns>
         public static byte[] SerializeByteArray(this BinaryFormatter formatter, object objectToSerialize)
         {
-            using var stream = new MemoryStream();
-            formatter.Serialize(stream, objectToSerialize);
-            return stream.ToArray();
+            using (var stream = new MemoryStream())
+            {
+                formatter.Serialize(stream, objectToSerialize);
+                return stream.ToArray();
+            }
         }
         
         /// <summary>
@@ -65,8 +67,10 @@ namespace CoreRemoting.Serialization.Binary
         public static object DeserializeSafe(this BinaryFormatter formatter, byte[] rawData)
         {
             var safeBinaryFormatter = formatter.Safe();
-            using var stream = new MemoryStream(rawData);
-            return safeBinaryFormatter.Deserialize(stream);
+            using (var stream = new MemoryStream(rawData))
+            {
+                return safeBinaryFormatter.Deserialize(stream);
+            }
         }
     }
 }
