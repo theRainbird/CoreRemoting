@@ -61,6 +61,12 @@ namespace CoreRemoting.Serialization.NeoBinary
 		public bool AllowUnknownTypes { get; set; }
 
 		/// <summary>
+		/// Gets or sets whether LINQ expressions should be allowed during serialization/deserialization.
+		/// When false, expressions are not supported for security reasons.
+		/// </summary>
+		public bool AllowExpressions { get; set; } = false;
+
+		/// <summary>
 		/// Gets or sets whether to include field names during serialization.
 		/// When true, field names are included for better compatibility.
 		/// </summary>
@@ -101,7 +107,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 				IncludeFieldNames = this.IncludeFieldNames,
 				EnableCompression = this.EnableCompression,
 				CompressionLevel = this.CompressionLevel,
-				EnableBinaryDataSetSerialization = this.EnableBinaryDataSetSerialization
+				EnableBinaryDataSetSerialization = this.EnableBinaryDataSetSerialization,
+				AllowExpressions = this.AllowExpressions
 			};
 		}
 

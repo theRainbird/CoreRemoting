@@ -36,10 +36,15 @@ namespace CoreRemoting.Serialization.NeoBinary
         /// </summary>
         public bool AllowUnknownTypes { get; set; } = false;
 
-        /// <summary>
-        /// Gets or sets whether to allow delegates during deserialization.
-        /// </summary>
-        public bool AllowDelegates { get; set; } = false;
+		/// <summary>
+		/// Gets or sets whether to allow delegates during deserialization.
+		/// </summary>
+		public bool AllowDelegates { get; set; } = false;
+
+		/// <summary>
+		/// Gets or sets whether to allow LINQ expressions during deserialization.
+		/// </summary>
+		public bool AllowExpressions { get; set; } = false;
 
         /// <summary>
         /// Gets or sets whether to allow types from dynamic assemblies.
@@ -114,9 +119,269 @@ namespace CoreRemoting.Serialization.NeoBinary
             if (AllowUnknownTypes)
                 return;
 
-            // Type is not allowed
-            throw new NeoBinaryUnsafeDeserializationException($"Type '{type.FullName}' is not allowed.");
-        }
+			// Type is not allowed
+			throw new NeoBinaryUnsafeDeserializationException($"Type '{type.FullName}' is not allowed.");
+		}
+
+		/// <summary>
+		/// Validates an expression for secure deserialization.
+		/// </summary>
+		/// <param name="expression">Expression to validate</param>
+		/// <exception cref="NeoBinaryUnsafeDeserializationException">Thrown when expression contains dangerous elements</exception>
+		public void ValidateExpression(System.Linq.Expressions.Expression expression)
+		{
+			if (!AllowExpressions)
+			{
+				throw new NeoBinaryUnsafeDeserializationException("Expressions are not allowed. Set AllowExpressions=true to enable.");
+			}
+
+			if (expression == null)
+				return;
+
+			// Traverse the expression tree and validate each node
+			ValidateExpressionNode(expression);
+		}
+
+		private void ValidateExpressionNode(System.Linq.Expressions.Expression node)
+		{
+			if (node == null)
+				return;
+
+			// Validate the node's type
+			ValidateType(node.GetType());
+
+			switch (node.NodeType)
+			{
+				case System.Linq.Expressions.ExpressionType.Call:
+					var callExpr = (System.Linq.Expressions.MethodCallExpression)node;
+					ValidateMethodCall(callExpr);
+					break;
+				case System.Linq.Expressions.ExpressionType.MemberAccess:
+					var memberExpr = (System.Linq.Expressions.MemberExpression)node;
+					ValidateMemberAccess(memberExpr);
+					break;
+				case System.Linq.Expressions.ExpressionType.New:
+					var newExpr = (System.Linq.Expressions.NewExpression)node;
+					ValidateNewExpression(newExpr);
+					break;
+				case System.Linq.Expressions.ExpressionType.Invoke:
+					var invokeExpr = (System.Linq.Expressions.InvocationExpression)node;
+					ValidateInvocation(invokeExpr);
+					break;
+				// Add more cases as needed for other expression types
+			}
+
+			// Recursively validate child nodes
+			foreach (var child in GetChildExpressions(node))
+			{
+				ValidateExpressionNode(child);
+			}
+		}
+
+		private void ValidateMethodCall(System.Linq.Expressions.MethodCallExpression callExpr)
+		{
+			if (callExpr.Method == null)
+				return;
+
+			// Block dangerous methods
+			var declaringType = callExpr.Method.DeclaringType;
+			if (declaringType != null)
+			{
+				if (IsDangerousNamespace(declaringType.Namespace) ||
+					IsDangerousType(declaringType))
+				{
+					throw new NeoBinaryUnsafeDeserializationException($"Method call to '{callExpr.Method.Name}' on type '{declaringType.FullName}' is not allowed.");
+				}
+			}
+		}
+
+		private void ValidateMemberAccess(System.Linq.Expressions.MemberExpression memberExpr)
+		{
+			if (memberExpr.Member == null)
+				return;
+
+			// Block access to dangerous members
+			var declaringType = memberExpr.Member.DeclaringType;
+			if (declaringType != null && IsDangerousType(declaringType))
+			{
+				throw new NeoBinaryUnsafeDeserializationException($"Member access to '{memberExpr.Member.Name}' on type '{declaringType.FullName}' is not allowed.");
+			}
+		}
+
+		private void ValidateNewExpression(System.Linq.Expressions.NewExpression newExpr)
+		{
+			if (newExpr.Constructor == null)
+				return;
+
+			var declaringType = newExpr.Constructor.DeclaringType;
+			if (declaringType != null && IsDangerousType(declaringType))
+			{
+				throw new NeoBinaryUnsafeDeserializationException($"Constructor call for type '{declaringType.FullName}' is not allowed.");
+			}
+		}
+
+		private void ValidateInvocation(System.Linq.Expressions.InvocationExpression invokeExpr)
+		{
+			// Invocations can be dangerous if they call delegates or expressions
+			// For now, allow but could be restricted further
+		}
+
+		private bool IsDangerousNamespace(string @namespace)
+		{
+			if (string.IsNullOrEmpty(@namespace))
+				return false;
+
+			var dangerousNamespaces = new[]
+			{
+				"System.Reflection",
+				"System.IO",
+				"System.Diagnostics",
+				"System.Runtime.InteropServices",
+				"Microsoft.Win32"
+			};
+
+			return dangerousNamespaces.Any(dns => @namespace.StartsWith(dns, StringComparison.Ordinal));
+		}
+
+		private bool IsDangerousType(Type type)
+		{
+			if (type == null)
+				return false;
+
+			var dangerousTypes = new[]
+			{
+				typeof(System.Reflection.MethodInfo),
+				typeof(System.Reflection.FieldInfo),
+				typeof(System.Reflection.PropertyInfo),
+				typeof(System.IO.File),
+				typeof(System.IO.Directory),
+				typeof(System.Diagnostics.Process),
+				typeof(System.Runtime.InteropServices.Marshal)
+			};
+
+			return dangerousTypes.Any(dt => dt.IsAssignableFrom(type)) ||
+				   IsDangerousNamespace(type.Namespace);
+		}
+
+		private System.Collections.Generic.IEnumerable<System.Linq.Expressions.Expression> GetChildExpressions(System.Linq.Expressions.Expression node)
+		{
+			switch (node.NodeType)
+			{
+				case System.Linq.Expressions.ExpressionType.Add:
+				case System.Linq.Expressions.ExpressionType.AddChecked:
+				case System.Linq.Expressions.ExpressionType.And:
+				case System.Linq.Expressions.ExpressionType.AndAlso:
+				case System.Linq.Expressions.ExpressionType.ArrayIndex:
+				case System.Linq.Expressions.ExpressionType.Coalesce:
+				case System.Linq.Expressions.ExpressionType.Divide:
+				case System.Linq.Expressions.ExpressionType.Equal:
+				case System.Linq.Expressions.ExpressionType.ExclusiveOr:
+				case System.Linq.Expressions.ExpressionType.GreaterThan:
+				case System.Linq.Expressions.ExpressionType.GreaterThanOrEqual:
+				case System.Linq.Expressions.ExpressionType.LeftShift:
+				case System.Linq.Expressions.ExpressionType.LessThan:
+				case System.Linq.Expressions.ExpressionType.LessThanOrEqual:
+				case System.Linq.Expressions.ExpressionType.Modulo:
+				case System.Linq.Expressions.ExpressionType.Multiply:
+				case System.Linq.Expressions.ExpressionType.MultiplyChecked:
+				case System.Linq.Expressions.ExpressionType.NotEqual:
+				case System.Linq.Expressions.ExpressionType.Or:
+				case System.Linq.Expressions.ExpressionType.OrElse:
+				case System.Linq.Expressions.ExpressionType.Power:
+				case System.Linq.Expressions.ExpressionType.RightShift:
+				case System.Linq.Expressions.ExpressionType.Subtract:
+				case System.Linq.Expressions.ExpressionType.SubtractChecked:
+					var binaryExpr = (System.Linq.Expressions.BinaryExpression)node;
+					if (binaryExpr.Left != null) yield return binaryExpr.Left;
+					if (binaryExpr.Right != null) yield return binaryExpr.Right;
+					if (binaryExpr.Conversion != null) yield return binaryExpr.Conversion;
+					break;
+
+				case System.Linq.Expressions.ExpressionType.ArrayLength:
+				case System.Linq.Expressions.ExpressionType.Convert:
+				case System.Linq.Expressions.ExpressionType.ConvertChecked:
+				case System.Linq.Expressions.ExpressionType.Negate:
+				case System.Linq.Expressions.ExpressionType.NegateChecked:
+				case System.Linq.Expressions.ExpressionType.Not:
+				case System.Linq.Expressions.ExpressionType.Quote:
+				case System.Linq.Expressions.ExpressionType.TypeAs:
+				case System.Linq.Expressions.ExpressionType.UnaryPlus:
+					var unaryExpr = (System.Linq.Expressions.UnaryExpression)node;
+					if (unaryExpr.Operand != null) yield return unaryExpr.Operand;
+					break;
+
+				case System.Linq.Expressions.ExpressionType.Call:
+					var callExpr = (System.Linq.Expressions.MethodCallExpression)node;
+					if (callExpr.Object != null) yield return callExpr.Object;
+					foreach (var arg in callExpr.Arguments) yield return arg;
+					break;
+
+				case System.Linq.Expressions.ExpressionType.Conditional:
+					var condExpr = (System.Linq.Expressions.ConditionalExpression)node;
+					if (condExpr.Test != null) yield return condExpr.Test;
+					if (condExpr.IfTrue != null) yield return condExpr.IfTrue;
+					if (condExpr.IfFalse != null) yield return condExpr.IfFalse;
+					break;
+
+				case System.Linq.Expressions.ExpressionType.Constant:
+					// No children
+					break;
+
+				case System.Linq.Expressions.ExpressionType.Invoke:
+					var invokeExpr = (System.Linq.Expressions.InvocationExpression)node;
+					if (invokeExpr.Expression != null) yield return invokeExpr.Expression;
+					foreach (var arg in invokeExpr.Arguments) yield return arg;
+					break;
+
+				case System.Linq.Expressions.ExpressionType.Lambda:
+					var lambdaExpr = (System.Linq.Expressions.LambdaExpression)node;
+					if (lambdaExpr.Body != null) yield return lambdaExpr.Body;
+					break;
+
+				case System.Linq.Expressions.ExpressionType.ListInit:
+					var listInitExpr = (System.Linq.Expressions.ListInitExpression)node;
+					if (listInitExpr.NewExpression != null) yield return listInitExpr.NewExpression;
+					foreach (var init in listInitExpr.Initializers)
+					{
+						foreach (var arg in init.Arguments) yield return arg;
+					}
+					break;
+
+				case System.Linq.Expressions.ExpressionType.MemberAccess:
+					var memberExpr = (System.Linq.Expressions.MemberExpression)node;
+					if (memberExpr.Expression != null) yield return memberExpr.Expression;
+					break;
+
+				case System.Linq.Expressions.ExpressionType.MemberInit:
+					var memberInitExpr = (System.Linq.Expressions.MemberInitExpression)node;
+					if (memberInitExpr.NewExpression != null) yield return memberInitExpr.NewExpression;
+					break;
+
+				case System.Linq.Expressions.ExpressionType.New:
+					var newExpr = (System.Linq.Expressions.NewExpression)node;
+					foreach (var arg in newExpr.Arguments) yield return arg;
+					break;
+
+				case System.Linq.Expressions.ExpressionType.NewArrayBounds:
+				case System.Linq.Expressions.ExpressionType.NewArrayInit:
+					var newArrayExpr = (System.Linq.Expressions.NewArrayExpression)node;
+					foreach (var expr in newArrayExpr.Expressions) yield return expr;
+					break;
+
+				case System.Linq.Expressions.ExpressionType.Parameter:
+					// No children
+					break;
+
+				case System.Linq.Expressions.ExpressionType.TypeIs:
+					var typeBinaryExpr = (System.Linq.Expressions.TypeBinaryExpression)node;
+					if (typeBinaryExpr.Expression != null) yield return typeBinaryExpr.Expression;
+					break;
+
+				default:
+					// For unsupported expression types, skip children to avoid errors
+					break;
+			}
+		}
 
         /// <summary>
         /// Adds a type to the allowed types list.
