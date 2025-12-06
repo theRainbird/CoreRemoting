@@ -2,13 +2,11 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
-    <AssemblyName>CoreRemoting.Serialization.Binary</AssemblyName>
-    <RootNamespace>CoreRemoting.Serialization.Binary</RootNamespace>
-    <PackageId>CoreRemoting.Serialization.Binary</PackageId>
-    <Authors>CoreRemoting.Serialization.Binary</Authors>
-    <Company>CoreRemoting.Serialization.Binary</Company>
+    <AssemblyTitle>CoreRemoting.Serialization.Binary</AssemblyTitle>
     <Product>CoreRemoting.Serialization.Binary</Product>
+    <Copyright>Copyright ©  2025</Copyright>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
   </PropertyGroup>
 
   <ItemGroup>

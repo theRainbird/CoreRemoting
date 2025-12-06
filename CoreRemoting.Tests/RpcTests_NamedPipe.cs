@@ -158,19 +158,5 @@ public class RpcTests_NamedPipe : RpcTests
 		// The test passes for other channels (NullChannel, WebSockets)
 	}
 
-	[Theory]
-	[InlineData("TestService_Singleton_Service")]
-	[InlineData("TestService_Singleton_Factory")]
-	[InlineData("TestService_SingleCall_Service")]
-	[InlineData("TestService_SingleCall_Factory")]
-	[InlineData("TestService_Scoped_Service")]
-	[InlineData("TestService_Scoped_Factory")]
-	public override void Events_should_work_remotely(string serviceName)
-	{
-		// Skip events test for NamedPipe due to scoped service issues
-		// NamedPipe has problems with scoped service event handling
-		// The test passes for other channels (NullChannel, WebSockets)
-	}
-
 	// Note: Reconnect test uses base implementation; ensure ChannelConnectionName is set via ConfigureServer
 }

@@ -36,6 +36,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.Channels.Quic"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.Serialization.Binary", "CoreRemoting.Serialization.Binary\CoreRemoting.Serialization.Binary.csproj", "{61425F0B-78DE-4DA6-BD9B-8E6AF19DA341}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.Benchmark", "CoreRemoting.Benchmark\CoreRemoting.Benchmark.csproj", "{A67E6FAB-82AC-454F-85C8-CD86555D3FEC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -90,6 +92,10 @@ Global
 		{61425F0B-78DE-4DA6-BD9B-8E6AF19DA341}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{61425F0B-78DE-4DA6-BD9B-8E6AF19DA341}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{61425F0B-78DE-4DA6-BD9B-8E6AF19DA341}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A67E6FAB-82AC-454F-85C8-CD86555D3FEC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A67E6FAB-82AC-454F-85C8-CD86555D3FEC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A67E6FAB-82AC-454F-85C8-CD86555D3FEC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A67E6FAB-82AC-454F-85C8-CD86555D3FEC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

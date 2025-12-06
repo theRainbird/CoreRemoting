@@ -634,7 +634,7 @@ namespace CoreRemoting.Tests
 
 			Assert.NotNull(deserializedTable);
 			Assert.Equal(table.TableName, deserializedTable.TableName);
-			Assert.Equal(1, deserializedTable.Constraints.Count);
+			Assert.Single(deserializedTable.Constraints);
 			Assert.IsType<UniqueConstraint>(deserializedTable.Constraints[0]);
 			var deserializedUnique = (UniqueConstraint)deserializedTable.Constraints[0];
 			Assert.Single(deserializedUnique.Columns);
@@ -692,13 +692,13 @@ namespace CoreRemoting.Tests
 			Assert.NotNull(deserializedDataSet);
 			Assert.Equal(dataSet.DataSetName, deserializedDataSet.DataSetName);
 			Assert.Equal(2, deserializedDataSet.Tables.Count);
-			Assert.Equal(1, deserializedDataSet.Relations.Count);
+			Assert.Single(deserializedDataSet.Relations);
 
 			var deserializedParent = deserializedDataSet.Tables["ParentTable"];
 			var deserializedChild = deserializedDataSet.Tables["ChildTable"];
 
-			Assert.Equal(1, deserializedParent.Constraints.Count);
-			Assert.Equal(1, deserializedChild.Constraints.Count);
+			Assert.Single(deserializedParent.Constraints);
+			Assert.Single(deserializedChild.Constraints);
 
 			var deserializedRelation = deserializedDataSet.Relations[0];
 			Assert.Equal(relation.RelationName, deserializedRelation.RelationName);
