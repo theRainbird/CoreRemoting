@@ -20,6 +20,10 @@
         <PackageReleaseNotes>- New NeoBinaryFormatter as replacement for classic BinaryFormatter</PackageReleaseNotes>
     </PropertyGroup>
 
+    <ItemGroup>
+        <InternalsVisibleTo Include="CoreRemoting.Tests" />
+    </ItemGroup>
+    
     <PropertyGroup>
       <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
     </PropertyGroup>
@@ -34,6 +38,7 @@
 
     <ItemGroup>
       <PackageReference Include="Castle.Windsor" Version="6.0.0" />
+      <PackageReference Include="Hyperion" Version="0.12.2" />
       <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.10" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.10" />
       <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />

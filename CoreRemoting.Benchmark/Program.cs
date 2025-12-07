@@ -10,7 +10,7 @@ namespace CoreRemoting.Benchmark
     public class TestObject
     {
         public int Id { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; } = null!;
         public List<string> Items { get; set; } = new();
         public DateTime Timestamp { get; set; }
     }
@@ -18,7 +18,7 @@ namespace CoreRemoting.Benchmark
     [MemoryDiagnoser]
     public class SerializationBenchmark
     {
-        private TestObject _testObject;
+        private TestObject _testObject = null!;
 
         [GlobalSetup]
         public void Setup()
@@ -55,6 +55,13 @@ namespace CoreRemoting.Benchmark
         }
 
         [Benchmark]
+        public byte[] Hyperion_Serialize()
+        {
+            var serializer = new CoreRemoting.Serialization.Hyperion.HyperionSerializerAdapter();
+            return serializer.Serialize(_testObject);
+        }
+
+        [Benchmark]
         public TestObject NeoBinary_Deserialize()
         {
             var serializer = new NeoBinarySerializerAdapter();
@@ -74,6 +81,14 @@ namespace CoreRemoting.Benchmark
         public TestObject Bson_Deserialize()
         {
             var serializer = new BsonSerializerAdapter();
+            var data = serializer.Serialize(_testObject);
+            return serializer.Deserialize<TestObject>(data);
+        }
+
+        [Benchmark]
+        public TestObject Hyperion_Deserialize()
+        {
+            var serializer = new CoreRemoting.Serialization.Hyperion.HyperionSerializerAdapter();
             var data = serializer.Serialize(_testObject);
             return serializer.Deserialize<TestObject>(data);
         }

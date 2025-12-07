@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\CoreRemoting\CoreRemoting.csproj" />
     <ProjectReference Include="..\CoreRemoting.Serialization.Binary\CoreRemoting.Serialization.Binary.csproj" />
+    <ProjectReference Include="..\CoreRemoting.Serialization.Hyperion\CoreRemoting.Serialization.Hyperion.csproj" />
   </ItemGroup>
 
   <ItemGroup>
