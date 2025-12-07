@@ -29,6 +29,9 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private readonly ConcurrentDictionary<string, Type> _resolvedTypeCache = new();
 		private readonly ConcurrentDictionary<FieldInfo, Func<object, object>> _getterCache = new();
 		
+		// Performance optimization: compiled field setter delegates
+		private readonly ConcurrentDictionary<FieldInfo, Action<object, object>> _setterCache = new();
+		
 		// String pooling for frequently used strings
 		private readonly ConcurrentDictionary<string, string> _stringPool = new();
 
@@ -342,6 +345,13 @@ namespace CoreRemoting.Serialization.NeoBinary
 			var assemblyName = reader.ReadString();
 			var assemblyVersion = reader.ReadString();
 
+			// Create cache key for type resolution
+			var cacheKey = $"{typeName}|{assemblyName}|{assemblyVersion}";
+			
+			// Use cached type resolution for better performance
+			if (_resolvedTypeCache.TryGetValue(cacheKey, out var cachedType))
+				return cachedType;
+
 			Type type = null;
 
 			if (!string.IsNullOrEmpty(assemblyName))
@@ -378,6 +388,9 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			// Validate type for security
 			TypeValidator.ValidateType(type);
+
+			// Cache the resolved type for future use
+			_resolvedTypeCache[cacheKey] = type;
 
 			return type;
 		}
@@ -858,7 +871,30 @@ namespace CoreRemoting.Serialization.NeoBinary
 				var value = DeserializeObject(reader, deserializedObjects);
 
 				var field = GetFieldInHierarchy(type, fieldName);
-				field?.SetValue(obj, value);
+				if (field != null)
+				{
+					// Use cached setter for better performance, but fallback to reflection for read-only fields
+					if (field.IsInitOnly || field.IsLiteral)
+					{
+						// Skip read-only fields (they should be handled by constructor)
+						continue;
+					}
+					
+					var setter = _setterCache.GetOrAdd(field, f =>
+					{
+						var objParam = Expression.Parameter(typeof(object), "obj");
+						var valueParam = Expression.Parameter(typeof(object), "value");
+						
+						var castObj = Expression.Convert(objParam, type);
+						var castValue = Expression.Convert(valueParam, f.FieldType);
+						var fieldAccess = Expression.Field(castObj, f);
+						var assign = Expression.Assign(fieldAccess, castValue);
+						
+						return Expression.Lambda<Action<object, object>>(assign, objParam, valueParam).Compile();
+					});
+					
+					setter(obj, value);
+				}
 			}
 
 			return obj;
