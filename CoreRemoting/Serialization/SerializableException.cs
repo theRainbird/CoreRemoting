@@ -65,6 +65,7 @@ public class SerializableException : Exception
 	/// </summary>
 	/// <param name="info">The object that holds the serialized object data.</param>
 	/// <param name="context">The contextual information about the source or destination.</param>
+	[Obsolete("Only to preserve backward compatibility")]
 	protected SerializableException(SerializationInfo info, StreamingContext context)
 		: base(info, context)
 	{

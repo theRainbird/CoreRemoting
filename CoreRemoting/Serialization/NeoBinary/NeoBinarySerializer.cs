@@ -20,7 +20,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private const string MAGIC_NAME = "NEOB";
 		private const ushort CURRENT_VERSION = 1;
 
-		private readonly ReaderWriterLockSlim _lock = new ReaderWriterLockSlim();
 		private readonly Dictionary<Type, MethodInfo> _serializeMethods = new();
 		private readonly Dictionary<Type, MethodInfo> _deserializeMethods = new();
 
@@ -29,6 +28,9 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private readonly ConcurrentDictionary<Type, string> _typeNameCache = new();
 		private readonly ConcurrentDictionary<string, Type> _resolvedTypeCache = new();
 		private readonly ConcurrentDictionary<FieldInfo, Func<object, object>> _getterCache = new();
+		
+		// String pooling for frequently used strings
+		private readonly ConcurrentDictionary<string, string> _stringPool = new();
 
 		/// <summary>
 		/// Gets or sets the serializer configuration.
@@ -50,33 +52,25 @@ namespace CoreRemoting.Serialization.NeoBinary
 			if (serializationStream == null)
 				throw new ArgumentNullException(nameof(serializationStream));
 
-			_lock.EnterWriteLock();
-			try
+			using var writer = new BinaryWriter(serializationStream, Encoding.UTF8, leaveOpen: true);
+			var serializedObjects = new HashSet<object>(ReferenceEqualityComparer.Instance);
+			var objectMap = new Dictionary<object, int>(ReferenceEqualityComparer.Instance);
+
+			// Write header
+			WriteHeader(writer);
+
+			// Serialize object graph
+			if (graph != null)
 			{
-				using var writer = new BinaryWriter(serializationStream, Encoding.UTF8, leaveOpen: true);
-				var serializedObjects = new HashSet<object>(ReferenceEqualityComparer.Instance);
-				var objectMap = new Dictionary<object, int>(ReferenceEqualityComparer.Instance);
-
-				// Write header
-				WriteHeader(writer);
-
-				// Serialize object graph
-				if (graph != null)
-				{
-					SerializeObject(graph, writer, serializedObjects, objectMap);
-				}
-				else
-				{
-					// Write null marker
-					writer.Write((byte)0);
-				}
-
-				writer.Flush();
+				SerializeObject(graph, writer, serializedObjects, objectMap);
 			}
-			finally
+			else
 			{
-				_lock.ExitWriteLock();
+				// Write null marker
+				writer.Write((byte)0);
 			}
+
+			writer.Flush();
 		}
 
 		/// <summary>
@@ -89,34 +83,26 @@ namespace CoreRemoting.Serialization.NeoBinary
 			if (serializationStream == null)
 				throw new ArgumentNullException(nameof(serializationStream));
 
-			_lock.EnterWriteLock();
-			try
+			using var reader = new BinaryReader(serializationStream, Encoding.UTF8, leaveOpen: true);
+			var deserializedObjects = new Dictionary<int, object>();
+
+			// Read and validate header
+			ReadHeader(reader);
+
+			// Deserialize object graph
+			var firstByte = reader.ReadByte();
+			if (firstByte == 0)
 			{
-				using var reader = new BinaryReader(serializationStream, Encoding.UTF8, leaveOpen: true);
-				var deserializedObjects = new Dictionary<int, object>();
-
-				// Read and validate header
-				ReadHeader(reader);
-
-				// Deserialize object graph
-				var firstByte = reader.ReadByte();
-				if (firstByte == 0)
-				{
-					return null;
-				}
-
-				// Put the byte back
-				serializationStream.Position = serializationStream.Position - 1;
-				var result = DeserializeObject(reader, deserializedObjects);
-
-				// Skip resolving forward references to avoid stack overflow
-
-				return result;
+				return null;
 			}
-			finally
-			{
-				_lock.ExitWriteLock();
-			}
+
+			// Put the byte back
+			serializationStream.Position = serializationStream.Position - 1;
+			var result = DeserializeObject(reader, deserializedObjects);
+
+			// Skip resolving forward references to avoid stack overflow
+
+			return result;
 		}
 
 		private void WriteHeader(BinaryWriter writer)
@@ -325,20 +311,27 @@ namespace CoreRemoting.Serialization.NeoBinary
 				typeName = BuildAssemblyNeutralTypeName(type);
 			}
 
+			// Use string pooling for frequently used type names
+			typeName = _stringPool.GetOrAdd(typeName, t => t);
+
 			writer.Write(typeName);
 
 			// Always persist the simple assembly name to allow the deserializer to
 			// load the defining assembly, even if we omit version information.
 			// This improves resolution for types from third-party assemblies
 			// (e.g., Serialize.Linq.Nodes) that might not yet be loaded.
+			var assemblyNameString = assemblyName.Name ?? string.Empty;
+			assemblyNameString = _stringPool.GetOrAdd(assemblyNameString, s => s);
+			writer.Write(assemblyNameString);
+			
 			if (Config.IncludeAssemblyVersions)
 			{
-				writer.Write(assemblyName.Name ?? string.Empty);
-				writer.Write(assemblyName.Version?.ToString() ?? string.Empty);
+				var versionString = assemblyName.Version?.ToString() ?? string.Empty;
+				versionString = _stringPool.GetOrAdd(versionString, v => v);
+				writer.Write(versionString);
 			}
 			else
 			{
-				writer.Write(assemblyName.Name ?? string.Empty);
 				writer.Write(string.Empty); // omit version to keep assembly-neutral diffs stable
 			}
 		}
@@ -566,6 +559,31 @@ namespace CoreRemoting.Serialization.NeoBinary
 			return s;
 		}
 
+		/// <summary>
+		/// Serializes decimal efficiently as binary data (96-bit integer + scale + flags)
+		/// </summary>
+		private static void SerializeDecimal(decimal value, BinaryWriter writer)
+		{
+			var bits = decimal.GetBits(value);
+			writer.Write(bits[0]); // low 32 bits
+			writer.Write(bits[1]); // middle 32 bits  
+			writer.Write(bits[2]); // high 32 bits
+			writer.Write(bits[3]); // flags and scale
+		}
+
+		/// <summary>
+		/// Deserializes decimal from binary format
+		/// </summary>
+		private static decimal DeserializeDecimal(BinaryReader reader)
+		{
+			var bits = new int[4];
+			bits[0] = reader.ReadInt32(); // low 32 bits
+			bits[1] = reader.ReadInt32(); // middle 32 bits
+			bits[2] = reader.ReadInt32(); // high 32 bits
+			bits[3] = reader.ReadInt32(); // flags and scale
+			return new decimal(bits);
+		}
+
 		private void SerializePrimitive(object obj, BinaryWriter writer)
 		{
 			switch (obj)
@@ -582,7 +600,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				case char ch: writer.Write(ch); break;
 				case float f: writer.Write(f); break;
 				case double d: writer.Write(d); break;
-				case decimal dec: writer.Write(dec.ToString()); break;
+				case decimal dec: SerializeDecimal(dec, writer); break;
 				case string str: writer.Write(str ?? string.Empty); break;
 				case UIntPtr up: writer.Write(up.ToUInt64()); break;
 				case IntPtr ip: writer.Write(ip.ToInt64()); break;
@@ -604,7 +622,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			if (type == typeof(char)) return reader.ReadChar();
 			if (type == typeof(float)) return reader.ReadSingle();
 			if (type == typeof(double)) return reader.ReadDouble();
-			if (type == typeof(decimal)) return decimal.Parse(reader.ReadString());
+			if (type == typeof(decimal)) return DeserializeDecimal(reader);
 			if (type == typeof(string)) return reader.ReadString();
 			if (type == typeof(UIntPtr)) return new UIntPtr(reader.ReadUInt64());
 			if (type == typeof(IntPtr)) return new IntPtr(reader.ReadInt64());
@@ -809,7 +827,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			foreach (var field in fields)
 			{
-				writer.Write(field.Name);
+				var fieldName = _stringPool.GetOrAdd(field.Name, n => n);
+				writer.Write(fieldName);
 				var getter = _getterCache.GetOrAdd(field, f =>
 				{
 					var objParam = Expression.Parameter(typeof(object), "obj");
@@ -850,11 +869,11 @@ namespace CoreRemoting.Serialization.NeoBinary
 		{
 			var type = exception.GetType();
 
-			// Serialize basic exception properties
-			writer.Write(exception.Message ?? string.Empty);
-			writer.Write(exception.Source ?? string.Empty);
-			writer.Write(exception.StackTrace ?? string.Empty);
-			writer.Write(exception.HelpLink ?? string.Empty);
+			// Serialize basic exception properties with string pooling
+			writer.Write(_stringPool.GetOrAdd(exception.Message ?? string.Empty, m => m));
+			writer.Write(_stringPool.GetOrAdd(exception.Source ?? string.Empty, s => s));
+			writer.Write(_stringPool.GetOrAdd(exception.StackTrace ?? string.Empty, st => st));
+			writer.Write(_stringPool.GetOrAdd(exception.HelpLink ?? string.Empty, h => h));
 
 			// Serialize HResult
 			writer.Write(exception.HResult);
@@ -2115,7 +2134,9 @@ namespace CoreRemoting.Serialization.NeoBinary
 			// Use FormatterServices to create an uninitialized object without invoking any constructor
 			try
 			{
+#pragma warning disable SYSLIB0050
 				return FormatterServices.GetUninitializedObject(type);
+#pragma warning restore SYSLIB0050
 			}
 			catch
 			{

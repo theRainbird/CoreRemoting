@@ -4,3 +4,8 @@ obj/
 *.user
 .temp
 /CoreRemoting.Benchmark/BenchmarkDotNet.Artifacts/
+/BenchmarkDotNet.Artifacts/CoreRemoting.Benchmark.SerializationBenchmark-20251207-144404.log
+/BenchmarkDotNet.Artifacts/CoreRemoting.Benchmark.SerializationBenchmark-20251207-144451.log
+/BenchmarkDotNet.Artifacts/CoreRemoting.Benchmark.SerializationBenchmark-20251207-145208.log
+/BenchmarkDotNet.Artifacts/CoreRemoting.Benchmark.SerializationBenchmark-20251207-145829.log
+/BenchmarkDotNet.Artifacts/CoreRemoting.Benchmark.SerializationBenchmark-20251207-183137.log

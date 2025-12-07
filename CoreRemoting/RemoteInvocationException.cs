@@ -24,6 +24,7 @@ public class RemoteInvocationException : Exception
     /// </summary>
     /// <param name="info">Serialization info</param>
     /// <param name="context">Streaming context</param>
+    [Obsolete("Only to preserve backward compatibility")]
     public RemoteInvocationException(SerializationInfo info, StreamingContext context)
         : base(info, context)
     {
