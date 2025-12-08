@@ -28,10 +28,13 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private readonly ConcurrentDictionary<Type, string> _typeNameCache = new();
 		private readonly ConcurrentDictionary<string, Type> _resolvedTypeCache = new();
 		private readonly ConcurrentDictionary<FieldInfo, Func<object, object>> _getterCache = new();
-		
+
 		// Performance optimization: compiled field setter delegates
 		private readonly ConcurrentDictionary<FieldInfo, Action<object, object>> _setterCache = new();
-		
+
+		// Performance optimization: precompiled serializers for complex types
+		private readonly ConcurrentDictionary<Type, Action<object, BinaryWriter, HashSet<object>, Dictionary<object, int>>> _compiledSerializers = new();
+
 		// String pooling for frequently used strings
 		private readonly ConcurrentDictionary<string, string> _stringPool = new();
 
@@ -924,25 +927,53 @@ namespace CoreRemoting.Serialization.NeoBinary
 			Dictionary<object, int> objectMap)
 		{
 			var type = obj.GetType();
+
+			if (_compiledSerializers.TryGetValue(type, out var compiledSerializer))
+			{
+				compiledSerializer(obj, writer, serializedObjects, objectMap);
+			}
+			else
+			{
+				var serializer = CreateCompiledSerializer(type);
+				_compiledSerializers[type] = serializer;
+				serializer(obj, writer, serializedObjects, objectMap);
+			}
+		}
+
+		private Action<object, BinaryWriter, HashSet<object>, Dictionary<object, int>> CreateCompiledSerializer(Type type)
+		{
 			var fields = GetAllFieldsInHierarchy(type);
 
-			writer.Write(fields.Count);
+			var objParam = Expression.Parameter(typeof(object), "obj");
+			var writerParam = Expression.Parameter(typeof(BinaryWriter), "writer");
+			var serializedObjectsParam = Expression.Parameter(typeof(HashSet<object>), "serializedObjects");
+			var objectMapParam = Expression.Parameter(typeof(Dictionary<object, int>), "objectMap");
+
+			var thisParam = Expression.Constant(this);
+
+			var statements = new List<Expression>();
+
+			// Write field count
+			statements.Add(Expression.Call(writerParam, typeof(BinaryWriter).GetMethod("Write", new[] { typeof(int) })!, Expression.Constant(fields.Count)));
 
 			foreach (var field in fields)
 			{
+				// Write field name
 				var fieldName = _stringPool.GetOrAdd(field.Name, n => n);
-				writer.Write(fieldName);
-				var getter = _getterCache.GetOrAdd(field, f =>
-				{
-					var objParam = Expression.Parameter(typeof(object), "obj");
-					var castObj = Expression.Convert(objParam, f.DeclaringType);
-					var fieldExpr = Expression.Field(castObj, f);
-					var convertExpr = Expression.Convert(fieldExpr, typeof(object));
-					return Expression.Lambda<Func<object, object>>(convertExpr, objParam).Compile();
-				});
-				var value = getter(obj);
-				SerializeObject(value, writer, serializedObjects, objectMap);
+				statements.Add(Expression.Call(writerParam, typeof(BinaryWriter).GetMethod("Write", new[] { typeof(string) })!, Expression.Constant(fieldName)));
+
+				// Get field value
+				var castObj = Expression.Convert(objParam, field.DeclaringType!);
+				var fieldExpr = Expression.Field(castObj, field);
+				var valueExpr = Expression.Convert(fieldExpr, typeof(object));
+
+				// Call SerializeObject
+				statements.Add(Expression.Call(thisParam, typeof(NeoBinarySerializer).GetMethod("SerializeObject", BindingFlags.NonPublic | BindingFlags.Instance)!, valueExpr, writerParam, serializedObjectsParam, objectMapParam));
 			}
+
+			var block = Expression.Block(statements);
+			var lambda = Expression.Lambda<Action<object, BinaryWriter, HashSet<object>, Dictionary<object, int>>>(block, objParam, writerParam, serializedObjectsParam, objectMapParam);
+			return lambda.Compile();
 		}
 
 		private object DeserializeComplexObject(Type type, BinaryReader reader,
@@ -972,24 +1003,33 @@ namespace CoreRemoting.Serialization.NeoBinary
 						{
 							continue;
 						}
-						
+
 						// Use reflection to set the field value on the boxed struct
 						field.SetValue(obj, value);
 					}
 				}
-				
+
 				return obj;
 			}
 			else
 			{
-				// Regular reference type handling
+				// Regular reference type handling with optimized field lookup
+				var fields = _fieldCache.GetOrAdd(type, t => GetAllFieldsInHierarchy(t).ToArray());
+				var fieldIndex = 0;
+
 				for (int i = 0; i < fieldCount; i++)
 				{
 					var fieldName = reader.ReadString();
 					var value = DeserializeObject(reader, deserializedObjects);
 
-					var field = GetFieldInHierarchy(type, fieldName);
-					if (field != null)
+					// Find the field by name from cached fields
+					FieldInfo? field = null;
+					while (fieldIndex < fields.Length && (field = fields[fieldIndex]).Name != fieldName)
+					{
+						fieldIndex++;
+					}
+
+					if (field != null && field.Name == fieldName)
 					{
 						// Use cached setter for better performance, but fallback to reflection for read-only fields
 						if (field.IsInitOnly || field.IsLiteral)
@@ -997,20 +1037,20 @@ namespace CoreRemoting.Serialization.NeoBinary
 							// Skip read-only fields (they should be handled by constructor)
 							continue;
 						}
-						
+
 						var setter = _setterCache.GetOrAdd(field, f =>
 						{
 							var objParam = Expression.Parameter(typeof(object), "obj");
 							var valueParam = Expression.Parameter(typeof(object), "value");
-							
+
 							var castObj = Expression.Convert(objParam, type);
 							var castValue = Expression.Convert(valueParam, f.FieldType);
 							var fieldAccess = Expression.Field(castObj, f);
 							var assign = Expression.Assign(fieldAccess, castValue);
-							
+
 							return Expression.Lambda<Action<object, object>>(assign, objParam, valueParam).Compile();
 						});
-						
+
 						setter(obj, value);
 					}
 				}
