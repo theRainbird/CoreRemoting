@@ -35,6 +35,26 @@ namespace CoreRemoting.Serialization.NeoBinary
 		// String pooling for frequently used strings
 		private readonly ConcurrentDictionary<string, string> _stringPool = new();
 
+		// Performance optimization: pre-populated common types cache
+		private static readonly Dictionary<string, Type> _commonTypes = new()
+		{
+			["System.String"] = typeof(string),
+			["System.Int32"] = typeof(int),
+			["System.Int64"] = typeof(long),
+			["System.Double"] = typeof(double),
+			["System.Single"] = typeof(float),
+			["System.Decimal"] = typeof(decimal),
+			["System.DateTime"] = typeof(DateTime),
+			["System.Boolean"] = typeof(bool),
+			["System.Byte"] = typeof(byte),
+			["System.Char"] = typeof(char),
+			["System.Object"] = typeof(object),
+			["System.Guid"] = typeof(Guid),
+			["System.TimeSpan"] = typeof(TimeSpan),
+			["System.Uri"] = typeof(Uri),
+			["System.Version"] = typeof(Version)
+		};
+
 		/// <summary>
 		/// Gets or sets the serializer configuration.
 		/// </summary>
@@ -354,7 +374,12 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			Type type = null;
 
-			if (!string.IsNullOrEmpty(assemblyName))
+			// Performance optimization: check common types first
+			if (_commonTypes.TryGetValue(typeName, out var commonType))
+			{
+				type = commonType;
+			}
+			else if (!string.IsNullOrEmpty(assemblyName))
 			{
 				// Try to get type from current loaded assemblies first
 				type = AppDomain.CurrentDomain.GetAssemblies()
