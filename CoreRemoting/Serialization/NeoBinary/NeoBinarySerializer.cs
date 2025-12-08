@@ -1388,11 +1388,23 @@ namespace CoreRemoting.Serialization.NeoBinary
 		{
 			// Serialize DataSet properties
 			writer.Write(dataSet.DataSetName ?? string.Empty);
-			writer.Write(dataSet.Namespace ?? string.Empty);
-			writer.Write(dataSet.Prefix ?? string.Empty);
-			writer.Write(dataSet.CaseSensitive);
-			writer.Write(dataSet.Locale != null ? dataSet.Locale.Name : string.Empty);
-			writer.Write(dataSet.EnforceConstraints);
+
+			// Calculate flags for non-default properties
+			byte flags = 0;
+			if (!string.IsNullOrEmpty(dataSet.Namespace)) flags |= 1 << 0; // default ""
+			if (!string.IsNullOrEmpty(dataSet.Prefix)) flags |= 1 << 1; // default ""
+			if (dataSet.CaseSensitive) flags |= 1 << 2; // default false
+			if (dataSet.Locale != null && dataSet.Locale != System.Globalization.CultureInfo.CurrentCulture) flags |= 1 << 3; // default CurrentCulture
+			if (!dataSet.EnforceConstraints) flags |= 1 << 4; // default true
+
+			writer.Write(flags);
+
+			// Serialize non-default values
+			if ((flags & (1 << 0)) != 0) writer.Write(dataSet.Namespace ?? string.Empty);
+			if ((flags & (1 << 1)) != 0) writer.Write(dataSet.Prefix ?? string.Empty);
+			if ((flags & (1 << 2)) != 0) writer.Write(dataSet.CaseSensitive);
+			if ((flags & (1 << 3)) != 0) writer.Write(dataSet.Locale != null ? dataSet.Locale.Name : string.Empty);
+			if ((flags & (1 << 4)) != 0) writer.Write(dataSet.EnforceConstraints);
 
 			// Serialize Tables
 			writer.Write(dataSet.Tables.Count);
@@ -1471,10 +1483,21 @@ namespace CoreRemoting.Serialization.NeoBinary
 		{
 			// Serialize DataTable properties
 			writer.Write(dataTable.TableName ?? string.Empty);
-			writer.Write(dataTable.Namespace ?? string.Empty);
-			writer.Write(dataTable.Prefix ?? string.Empty);
-			writer.Write(dataTable.CaseSensitive);
-			writer.Write(dataTable.Locale != null ? dataTable.Locale.Name : string.Empty);
+
+			// Calculate flags for non-default properties
+			byte flags = 0;
+			if (!string.IsNullOrEmpty(dataTable.Namespace)) flags |= 1 << 0; // default ""
+			if (!string.IsNullOrEmpty(dataTable.Prefix)) flags |= 1 << 1; // default ""
+			if (dataTable.CaseSensitive) flags |= 1 << 2; // default false
+			if (dataTable.Locale != null && dataTable.Locale != System.Globalization.CultureInfo.CurrentCulture) flags |= 1 << 3; // default CurrentCulture
+
+			writer.Write(flags);
+
+			// Serialize non-default values
+			if ((flags & (1 << 0)) != 0) writer.Write(dataTable.Namespace ?? string.Empty);
+			if ((flags & (1 << 1)) != 0) writer.Write(dataTable.Prefix ?? string.Empty);
+			if ((flags & (1 << 2)) != 0) writer.Write(dataTable.CaseSensitive);
+			if ((flags & (1 << 3)) != 0) writer.Write(dataTable.Locale != null ? dataTable.Locale.Name : string.Empty);
 
 			// Serialize Columns
 			writer.Write(dataTable.Columns.Count);
@@ -1482,21 +1505,37 @@ namespace CoreRemoting.Serialization.NeoBinary
 			{
 				writer.Write(column.ColumnName ?? string.Empty);
 				writer.Write(column.DataType.FullName ?? string.Empty);
-				writer.Write(column.AllowDBNull);
-				writer.Write(column.AutoIncrement);
-				writer.Write(column.AutoIncrementSeed);
-				writer.Write(column.AutoIncrementStep);
-				writer.Write(column.Caption ?? string.Empty);
-				writer.Write(column.DefaultValue != null && column.DefaultValue != DBNull.Value);
-				if (column.DefaultValue != null && column.DefaultValue != DBNull.Value)
-				{
-					SerializeObject(column.DefaultValue, writer, serializedObjects, objectMap);
-				}
 
-				writer.Write(column.Expression ?? string.Empty);
-				writer.Write(column.MaxLength);
-				writer.Write(column.ReadOnly);
-				writer.Write(column.Unique);
+				// Calculate flags for non-default properties
+				byte flags1 = 0;
+				byte flags2 = 0;
+
+				if (!column.AllowDBNull) flags1 |= 1 << 0; // default true
+				if (column.AutoIncrement) flags1 |= 1 << 1; // default false
+				if (column.AutoIncrementSeed != 0) flags1 |= 1 << 2; // default 0
+				if (column.AutoIncrementStep != 1) flags1 |= 1 << 3; // default 1
+				if (column.Caption != column.ColumnName) flags1 |= 1 << 4; // default ColumnName
+				if (column.DefaultValue != null && column.DefaultValue != DBNull.Value) flags1 |= 1 << 5; // default null
+				if (!string.IsNullOrEmpty(column.Expression)) flags1 |= 1 << 6; // default ""
+				if (column.MaxLength != -1) flags1 |= 1 << 7; // default -1
+
+				if (column.ReadOnly) flags2 |= 1 << 0; // default false
+				if (column.Unique) flags2 |= 1 << 1; // default false
+
+				writer.Write(flags1);
+				writer.Write(flags2);
+
+				// Serialize non-default values
+				if ((flags1 & (1 << 0)) != 0) writer.Write(column.AllowDBNull);
+				if ((flags1 & (1 << 1)) != 0) writer.Write(column.AutoIncrement);
+				if ((flags1 & (1 << 2)) != 0) writer.Write(column.AutoIncrementSeed);
+				if ((flags1 & (1 << 3)) != 0) writer.Write(column.AutoIncrementStep);
+				if ((flags1 & (1 << 4)) != 0) writer.Write(column.Caption ?? string.Empty);
+				if ((flags1 & (1 << 5)) != 0) SerializeObject(column.DefaultValue, writer, serializedObjects, objectMap);
+				if ((flags1 & (1 << 6)) != 0) writer.Write(column.Expression ?? string.Empty);
+				if ((flags1 & (1 << 7)) != 0) writer.Write(column.MaxLength);
+				if ((flags2 & (1 << 0)) != 0) writer.Write(column.ReadOnly);
+				if ((flags2 & (1 << 1)) != 0) writer.Write(column.Unique);
 			}
 
 			// Serialize Rows
@@ -2044,16 +2083,22 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			// Deserialize DataSet properties
 			dataSet.DataSetName = reader.ReadString();
-			dataSet.Namespace = reader.ReadString();
-			dataSet.Prefix = reader.ReadString();
-			dataSet.CaseSensitive = reader.ReadBoolean();
-			var localeName = reader.ReadString();
-			if (!string.IsNullOrEmpty(localeName))
-			{
-				dataSet.Locale = new System.Globalization.CultureInfo(localeName);
-			}
 
-			dataSet.EnforceConstraints = reader.ReadBoolean();
+			var flags = reader.ReadByte();
+
+			// Deserialize non-default values (defaults are already set by DataSet constructor)
+			if ((flags & (1 << 0)) != 0) dataSet.Namespace = reader.ReadString();
+			if ((flags & (1 << 1)) != 0) dataSet.Prefix = reader.ReadString();
+			if ((flags & (1 << 2)) != 0) dataSet.CaseSensitive = reader.ReadBoolean();
+			if ((flags & (1 << 3)) != 0)
+			{
+				var localeName = reader.ReadString();
+				if (!string.IsNullOrEmpty(localeName))
+				{
+					dataSet.Locale = new System.Globalization.CultureInfo(localeName);
+				}
+			}
+			if ((flags & (1 << 4)) != 0) dataSet.EnforceConstraints = reader.ReadBoolean();
 
 			// Deserialize Tables
 			var tableCount = reader.ReadInt32();
@@ -2159,13 +2204,26 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			// Deserialize DataTable properties
 			dataTable.TableName = reader.ReadString();
-			dataTable.Namespace = reader.ReadString();
-			dataTable.Prefix = reader.ReadString();
-			dataTable.CaseSensitive = reader.ReadBoolean();
-			var localeName = reader.ReadString();
-			if (!string.IsNullOrEmpty(localeName))
+
+			var flags = reader.ReadByte();
+
+			// Set defaults
+			dataTable.Namespace = string.Empty;
+			dataTable.Prefix = string.Empty;
+			dataTable.CaseSensitive = false;
+			dataTable.Locale = System.Globalization.CultureInfo.CurrentCulture;
+
+			// Deserialize non-default values
+			if ((flags & (1 << 0)) != 0) dataTable.Namespace = reader.ReadString();
+			if ((flags & (1 << 1)) != 0) dataTable.Prefix = reader.ReadString();
+			if ((flags & (1 << 2)) != 0) dataTable.CaseSensitive = reader.ReadBoolean();
+			if ((flags & (1 << 3)) != 0)
 			{
-				dataTable.Locale = new System.Globalization.CultureInfo(localeName);
+				var localeName = reader.ReadString();
+				if (!string.IsNullOrEmpty(localeName))
+				{
+					dataTable.Locale = new System.Globalization.CultureInfo(localeName);
+				}
 			}
 
 			// Deserialize Columns
@@ -2175,22 +2233,33 @@ namespace CoreRemoting.Serialization.NeoBinary
 				var columnName = reader.ReadString();
 				var dataTypeName = reader.ReadString();
 				var dataType = Type.GetType(dataTypeName) ?? typeof(string);
-				var allowDBNull = reader.ReadBoolean();
-				var autoIncrement = reader.ReadBoolean();
-				var autoIncrementSeed = reader.ReadInt64();
-				var autoIncrementStep = reader.ReadInt64();
-				var caption = reader.ReadString();
-				var hasDefaultValue = reader.ReadBoolean();
-				object defaultValue = null;
-				if (hasDefaultValue)
-				{
-					defaultValue = DeserializeObject(reader, deserializedObjects);
-				}
 
-				var expression = reader.ReadString();
-				var maxLength = reader.ReadInt32();
-				var readOnly = reader.ReadBoolean();
-				var unique = reader.ReadBoolean();
+				var flags1 = reader.ReadByte();
+				var flags2 = reader.ReadByte();
+
+				// Set defaults
+				var allowDBNull = true;
+				var autoIncrement = false;
+				var autoIncrementSeed = 0L;
+				var autoIncrementStep = 1L;
+				var caption = columnName;
+				object defaultValue = null;
+				var expression = string.Empty;
+				var maxLength = -1;
+				var readOnly = false;
+				var unique = false;
+
+				// Deserialize non-default values
+				if ((flags1 & (1 << 0)) != 0) allowDBNull = reader.ReadBoolean();
+				if ((flags1 & (1 << 1)) != 0) autoIncrement = reader.ReadBoolean();
+				if ((flags1 & (1 << 2)) != 0) autoIncrementSeed = reader.ReadInt64();
+				if ((flags1 & (1 << 3)) != 0) autoIncrementStep = reader.ReadInt64();
+				if ((flags1 & (1 << 4)) != 0) caption = reader.ReadString();
+				if ((flags1 & (1 << 5)) != 0) defaultValue = DeserializeObject(reader, deserializedObjects);
+				if ((flags1 & (1 << 6)) != 0) expression = reader.ReadString();
+				if ((flags1 & (1 << 7)) != 0) maxLength = reader.ReadInt32();
+				if ((flags2 & (1 << 0)) != 0) readOnly = reader.ReadBoolean();
+				if ((flags2 & (1 << 1)) != 0) unique = reader.ReadBoolean();
 
 				var column = new DataColumn(columnName, dataType)
 				{
