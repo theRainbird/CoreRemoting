@@ -206,6 +206,10 @@ namespace CoreRemoting.Serialization.NeoBinary
 			{
 				SerializeList((System.Collections.IList)obj, writer, serializedObjects, objectMap);
 			}
+			else if (obj is System.Dynamic.ExpandoObject expando)
+			{
+				SerializeExpandoObject(expando, writer, serializedObjects, objectMap);
+			}
 			else if (typeof(System.Collections.IDictionary).IsAssignableFrom(type))
 			{
 				SerializeDictionary((System.Collections.IDictionary)obj, writer, serializedObjects, objectMap);
@@ -270,7 +274,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				object obj;
 
 				if (type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(UIntPtr) ||
-				    type == typeof(IntPtr))
+				    type == typeof(IntPtr) || type == typeof(DateTime))
 				{
 					obj = DeserializePrimitive(type, reader);
 				}
@@ -285,6 +289,10 @@ namespace CoreRemoting.Serialization.NeoBinary
 				else if (typeof(System.Collections.IList).IsAssignableFrom(type))
 				{
 					obj = DeserializeList(type, reader, deserializedObjects, objectId);
+				}
+				else if (type == typeof(System.Dynamic.ExpandoObject))
+				{
+					obj = DeserializeDictionary(type, reader, deserializedObjects, objectId);
 				}
 				else if (typeof(System.Collections.IDictionary).IsAssignableFrom(type))
 				{
@@ -642,6 +650,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				case string str: writer.Write(str ?? string.Empty); break;
 				case UIntPtr up: writer.Write(up.ToUInt64()); break;
 				case IntPtr ip: writer.Write(ip.ToInt64()); break;
+				case DateTime dt: writer.Write(dt.ToBinary()); break;
 				default: throw new InvalidOperationException($"Unsupported primitive type: {obj.GetType()}");
 			}
 		}
@@ -664,6 +673,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			if (type == typeof(string)) return reader.ReadString();
 			if (type == typeof(UIntPtr)) return new UIntPtr(reader.ReadUInt64());
 			if (type == typeof(IntPtr)) return new IntPtr(reader.ReadInt64());
+			if (type == typeof(DateTime)) return DateTime.FromBinary(reader.ReadInt64());
 
 			throw new InvalidOperationException($"Unsupported primitive type: {type}");
 		}
@@ -685,7 +695,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private bool IsSimpleType(Type type)
 		{
 			return type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(UIntPtr) ||
-			       type == typeof(IntPtr);
+			       type == typeof(IntPtr) || type == typeof(DateTime);
 		}
 
 		private void SerializeArray(Array array, BinaryWriter writer, HashSet<object> serializedObjects,
@@ -840,19 +850,55 @@ namespace CoreRemoting.Serialization.NeoBinary
 			Dictionary<int, object> deserializedObjects, int objectId)
 		{
 			var count = reader.ReadInt32();
-			var dictionary = (System.Collections.IDictionary)CreateInstanceWithoutConstructor(type);
+			object dictionaryObj;
 
-			// Register the dictionary immediately to handle circular references
-			deserializedObjects[objectId] = dictionary;
-
-			for (int i = 0; i < count; i++)
+			// Special handling for ExpandoObject
+			if (type == typeof(System.Dynamic.ExpandoObject))
 			{
-				var key = DeserializeObject(reader, deserializedObjects);
-				var value = DeserializeObject(reader, deserializedObjects);
-				dictionary[key] = value;
-			}
+				var expando = new System.Dynamic.ExpandoObject();
+				var dict = (System.Collections.Generic.IDictionary<string, object>)expando;
+				
+				// Register dictionary immediately to handle circular references
+				deserializedObjects[objectId] = expando;
 
-			return dictionary;
+				for (int i = 0; i < count; i++)
+				{
+					var key = (string)DeserializeObject(reader, deserializedObjects);
+					var value = DeserializeObject(reader, deserializedObjects);
+					dict[key] = value;
+				}
+
+				return expando;
+			}
+			else
+			{
+				dictionaryObj = CreateInstanceWithoutConstructor(type);
+				var dictionary = (System.Collections.IDictionary)dictionaryObj;
+
+				// Register dictionary immediately to handle circular references
+				deserializedObjects[objectId] = dictionary;
+
+				for (int i = 0; i < count; i++)
+				{
+					var key = DeserializeObject(reader, deserializedObjects);
+					var value = DeserializeObject(reader, deserializedObjects);
+					dictionary[key] = value;
+				}
+
+				return dictionaryObj;
+			}
+		}
+
+		private void SerializeExpandoObject(System.Dynamic.ExpandoObject expando, BinaryWriter writer, HashSet<object> serializedObjects,
+			Dictionary<object, int> objectMap)
+		{
+			var dict = (System.Collections.Generic.IDictionary<string, object>)expando;
+			writer.Write(dict.Count);
+			foreach (var kvp in dict)
+			{
+				SerializeObject(kvp.Key, writer, serializedObjects, objectMap);
+				SerializeObject(kvp.Value, writer, serializedObjects, objectMap);
+			}
 		}
 
 		private void SerializeComplexObject(object obj, BinaryWriter writer, HashSet<object> serializedObjects,
@@ -890,39 +936,68 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			var fieldCount = reader.ReadInt32();
 
-			for (int i = 0; i < fieldCount; i++)
+			// For structs, we need special handling since they're value types
+			if (type.IsValueType && !type.IsEnum)
 			{
-				var fieldName = reader.ReadString();
-				var value = DeserializeObject(reader, deserializedObjects);
-
-				var field = GetFieldInHierarchy(type, fieldName);
-				if (field != null)
+				// For structs, we need to use reflection to directly set fields on the boxed instance
+				for (int i = 0; i < fieldCount; i++)
 				{
-					// Use cached setter for better performance, but fallback to reflection for read-only fields
-					if (field.IsInitOnly || field.IsLiteral)
+					var fieldName = reader.ReadString();
+					var value = DeserializeObject(reader, deserializedObjects);
+
+					var field = GetFieldInHierarchy(type, fieldName);
+					if (field != null)
 					{
 						// Skip read-only fields (they should be handled by constructor)
-						continue;
+						if (field.IsInitOnly || field.IsLiteral)
+						{
+							continue;
+						}
+						
+						// Use reflection to set the field value on the boxed struct
+						field.SetValue(obj, value);
 					}
-					
-					var setter = _setterCache.GetOrAdd(field, f =>
-					{
-						var objParam = Expression.Parameter(typeof(object), "obj");
-						var valueParam = Expression.Parameter(typeof(object), "value");
-						
-						var castObj = Expression.Convert(objParam, type);
-						var castValue = Expression.Convert(valueParam, f.FieldType);
-						var fieldAccess = Expression.Field(castObj, f);
-						var assign = Expression.Assign(fieldAccess, castValue);
-						
-						return Expression.Lambda<Action<object, object>>(assign, objParam, valueParam).Compile();
-					});
-					
-					setter(obj, value);
 				}
+				
+				return obj;
 			}
+			else
+			{
+				// Regular reference type handling
+				for (int i = 0; i < fieldCount; i++)
+				{
+					var fieldName = reader.ReadString();
+					var value = DeserializeObject(reader, deserializedObjects);
 
-			return obj;
+					var field = GetFieldInHierarchy(type, fieldName);
+					if (field != null)
+					{
+						// Use cached setter for better performance, but fallback to reflection for read-only fields
+						if (field.IsInitOnly || field.IsLiteral)
+						{
+							// Skip read-only fields (they should be handled by constructor)
+							continue;
+						}
+						
+						var setter = _setterCache.GetOrAdd(field, f =>
+						{
+							var objParam = Expression.Parameter(typeof(object), "obj");
+							var valueParam = Expression.Parameter(typeof(object), "value");
+							
+							var castObj = Expression.Convert(objParam, type);
+							var castValue = Expression.Convert(valueParam, f.FieldType);
+							var fieldAccess = Expression.Field(castObj, f);
+							var assign = Expression.Assign(fieldAccess, castValue);
+							
+							return Expression.Lambda<Action<object, object>>(assign, objParam, valueParam).Compile();
+						});
+						
+						setter(obj, value);
+					}
+				}
+
+				return obj;
+			}
 		}
 
 		private void SerializeException(Exception exception, BinaryWriter writer, HashSet<object> serializedObjects,
