@@ -1,14 +1,15 @@
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
+using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.Serialization;
 using System.Text;
-using System.Threading;
 
 namespace CoreRemoting.Serialization.NeoBinary
 {
@@ -20,20 +21,18 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private const string MAGIC_NAME = "NEOB";
 		private const ushort CURRENT_VERSION = 1;
 
-		private readonly Dictionary<Type, MethodInfo> _serializeMethods = new();
-		private readonly Dictionary<Type, MethodInfo> _deserializeMethods = new();
-
 		// Caches for performance optimization
 		private readonly ConcurrentDictionary<Type, FieldInfo[]> _fieldCache = new();
 		private readonly ConcurrentDictionary<Type, string> _typeNameCache = new();
 		private readonly ConcurrentDictionary<string, Type> _resolvedTypeCache = new();
-		private readonly ConcurrentDictionary<FieldInfo, Func<object, object>> _getterCache = new();
 
 		// Performance optimization: compiled field setter delegates
 		private readonly ConcurrentDictionary<FieldInfo, Action<object, object>> _setterCache = new();
 
 		// Performance optimization: precompiled serializers for complex types
-		private readonly ConcurrentDictionary<Type, Action<object, BinaryWriter, HashSet<object>, Dictionary<object, int>>> _compiledSerializers = new();
+		private readonly
+			ConcurrentDictionary<Type, Action<object, BinaryWriter, HashSet<object>, Dictionary<object, int>>>
+			_compiledSerializers = new();
 
 		// String pooling for frequently used strings
 		private readonly ConcurrentDictionary<string, string> _stringPool = new();
@@ -79,7 +78,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				throw new ArgumentNullException(nameof(serializationStream));
 
 			using var writer = new BinaryWriter(serializationStream, Encoding.UTF8, leaveOpen: true);
-			
+
 			// Fast path for primitive types - avoid overhead of reference tracking
 			if (graph != null && IsSimpleType(graph.GetType()))
 			{
@@ -173,8 +172,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			if (version > CURRENT_VERSION)
 				throw new InvalidOperationException($"Unsupported version: {version}");
 
-			var flags = reader.ReadUInt16();
-			// Store flags for later use if needed
+			reader.ReadUInt16();
 		}
 
 		private void SerializeObject(object obj, BinaryWriter writer, HashSet<object> serializedObjects,
@@ -224,23 +222,23 @@ namespace CoreRemoting.Serialization.NeoBinary
 			{
 				SerializeArray((Array)obj, writer, serializedObjects, objectMap);
 			}
-			else if (typeof(System.Collections.IList).IsAssignableFrom(type))
+			else if (typeof(IList).IsAssignableFrom(type))
 			{
-				SerializeList((System.Collections.IList)obj, writer, serializedObjects, objectMap);
+				SerializeList((IList)obj, writer, serializedObjects, objectMap);
 			}
-			else if (obj is System.Dynamic.ExpandoObject expando)
+			else if (obj is ExpandoObject expando)
 			{
 				SerializeExpandoObject(expando, writer, serializedObjects, objectMap);
 			}
-			else if (typeof(System.Collections.IDictionary).IsAssignableFrom(type))
+			else if (typeof(IDictionary).IsAssignableFrom(type))
 			{
-				SerializeDictionary((System.Collections.IDictionary)obj, writer, serializedObjects, objectMap);
+				SerializeDictionary((IDictionary)obj, writer, serializedObjects, objectMap);
 			}
-			else if (typeof(System.Data.DataSet).IsAssignableFrom(type))
+			else if (typeof(DataSet).IsAssignableFrom(type))
 			{
 				SerializeDataSet((DataSet)obj, writer, serializedObjects, objectMap);
 			}
-			else if (typeof(System.Data.DataTable).IsAssignableFrom(type))
+			else if (typeof(DataTable).IsAssignableFrom(type))
 			{
 				SerializeDataTable((DataTable)obj, writer, serializedObjects, objectMap);
 			}
@@ -308,23 +306,23 @@ namespace CoreRemoting.Serialization.NeoBinary
 				{
 					obj = DeserializeArray(type, reader, deserializedObjects, objectId);
 				}
-				else if (typeof(System.Collections.IList).IsAssignableFrom(type))
+				else if (typeof(IList).IsAssignableFrom(type))
 				{
 					obj = DeserializeList(type, reader, deserializedObjects, objectId);
 				}
-				else if (type == typeof(System.Dynamic.ExpandoObject))
+				else if (type == typeof(ExpandoObject))
 				{
 					obj = DeserializeDictionary(type, reader, deserializedObjects, objectId);
 				}
-				else if (typeof(System.Collections.IDictionary).IsAssignableFrom(type))
+				else if (typeof(IDictionary).IsAssignableFrom(type))
 				{
 					obj = DeserializeDictionary(type, reader, deserializedObjects, objectId);
 				}
-				else if (typeof(System.Data.DataSet).IsAssignableFrom(type))
+				else if (typeof(DataSet).IsAssignableFrom(type))
 				{
 					obj = DeserializeDataSet(type, reader, deserializedObjects, objectId);
 				}
-				else if (typeof(System.Data.DataTable).IsAssignableFrom(type))
+				else if (typeof(DataTable).IsAssignableFrom(type))
 				{
 					obj = DeserializeDataTable(type, reader, deserializedObjects, objectId);
 				}
@@ -334,7 +332,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				}
 				else if (typeof(Expression).IsAssignableFrom(type))
 				{
-					obj = DeserializeExpression(type, reader, deserializedObjects, objectId);
+					obj = DeserializeExpression(reader, deserializedObjects);
 				}
 				else
 				{
@@ -376,7 +374,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			var assemblyNameString = assemblyName.Name ?? string.Empty;
 			assemblyNameString = _stringPool.GetOrAdd(assemblyNameString, s => s);
 			writer.Write(assemblyNameString);
-			
+
 			if (Config.IncludeAssemblyVersions)
 			{
 				var versionString = assemblyName.Version?.ToString() ?? string.Empty;
@@ -397,7 +395,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			// Create cache key for type resolution
 			var cacheKey = $"{typeName}|{assemblyName}|{assemblyVersion}";
-			
+
 			// Use cached type resolution for better performance
 			if (_resolvedTypeCache.TryGetValue(cacheKey, out var cachedType))
 				return cachedType;
@@ -669,7 +667,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				case float f: writer.Write(f); break;
 				case double d: writer.Write(d); break;
 				case decimal dec: SerializeDecimal(dec, writer); break;
-				case string str: writer.Write(str ?? string.Empty); break;
+				case string str: writer.Write(str); break;
 				case UIntPtr up: writer.Write(up.ToUInt64()); break;
 				case IntPtr ip: writer.Write(ip.ToInt64()); break;
 				case DateTime dt: writer.Write(dt.ToBinary()); break;
@@ -819,7 +817,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			return array;
 		}
 
-		private void SerializeList(System.Collections.IList list, BinaryWriter writer,
+		private void SerializeList(IList list, BinaryWriter writer,
 			HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
 		{
 			writer.Write(list.Count);
@@ -833,7 +831,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			int objectId)
 		{
 			var count = reader.ReadInt32();
-			var list = (System.Collections.IList)CreateInstanceWithoutConstructor(type);
+			var list = (IList)CreateInstanceWithoutConstructor(type);
 
 			// Register the list immediately to handle circular references
 			deserializedObjects[objectId] = list;
@@ -857,11 +855,11 @@ namespace CoreRemoting.Serialization.NeoBinary
 			return list;
 		}
 
-		private void SerializeDictionary(System.Collections.IDictionary dictionary, BinaryWriter writer,
+		private void SerializeDictionary(IDictionary dictionary, BinaryWriter writer,
 			HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
 		{
 			writer.Write(dictionary.Count);
-			foreach (System.Collections.DictionaryEntry entry in dictionary)
+			foreach (DictionaryEntry entry in dictionary)
 			{
 				SerializeObject(entry.Key, writer, serializedObjects, objectMap);
 				SerializeObject(entry.Value, writer, serializedObjects, objectMap);
@@ -875,11 +873,11 @@ namespace CoreRemoting.Serialization.NeoBinary
 			object dictionaryObj;
 
 			// Special handling for ExpandoObject
-			if (type == typeof(System.Dynamic.ExpandoObject))
+			if (type == typeof(ExpandoObject))
 			{
-				var expando = new System.Dynamic.ExpandoObject();
-				var dict = (System.Collections.Generic.IDictionary<string, object>)expando;
-				
+				var expando = new ExpandoObject();
+				var dict = (IDictionary<string, object>)expando;
+
 				// Register dictionary immediately to handle circular references
 				deserializedObjects[objectId] = expando;
 
@@ -892,29 +890,28 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 				return expando;
 			}
-			else
+
+			dictionaryObj = CreateInstanceWithoutConstructor(type);
+			var dictionary = (IDictionary)dictionaryObj;
+
+			// Register dictionary immediately to handle circular references
+			deserializedObjects[objectId] = dictionary;
+
+			for (int i = 0; i < count; i++)
 			{
-				dictionaryObj = CreateInstanceWithoutConstructor(type);
-				var dictionary = (System.Collections.IDictionary)dictionaryObj;
-
-				// Register dictionary immediately to handle circular references
-				deserializedObjects[objectId] = dictionary;
-
-				for (int i = 0; i < count; i++)
-				{
-					var key = DeserializeObject(reader, deserializedObjects);
-					var value = DeserializeObject(reader, deserializedObjects);
-					dictionary[key] = value;
-				}
-
-				return dictionaryObj;
+				var key = DeserializeObject(reader, deserializedObjects);
+				var value = DeserializeObject(reader, deserializedObjects);
+				dictionary[key] = value;
 			}
+
+			return dictionaryObj;
 		}
 
-		private void SerializeExpandoObject(System.Dynamic.ExpandoObject expando, BinaryWriter writer, HashSet<object> serializedObjects,
+		private void SerializeExpandoObject(ExpandoObject expando, BinaryWriter writer,
+			HashSet<object> serializedObjects,
 			Dictionary<object, int> objectMap)
 		{
-			var dict = (System.Collections.Generic.IDictionary<string, object>)expando;
+			var dict = (IDictionary<string, object>)expando;
 			writer.Write(dict.Count);
 			foreach (var kvp in dict)
 			{
@@ -940,7 +937,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 			}
 		}
 
-		private Action<object, BinaryWriter, HashSet<object>, Dictionary<object, int>> CreateCompiledSerializer(Type type)
+		private Action<object, BinaryWriter, HashSet<object>, Dictionary<object, int>>
+			CreateCompiledSerializer(Type type)
 		{
 			var fields = GetAllFieldsInHierarchy(type);
 
@@ -954,13 +952,16 @@ namespace CoreRemoting.Serialization.NeoBinary
 			var statements = new List<Expression>();
 
 			// Write field count
-			statements.Add(Expression.Call(writerParam, typeof(BinaryWriter).GetMethod("Write", new[] { typeof(int) })!, Expression.Constant(fields.Count)));
+			statements.Add(Expression.Call(writerParam, typeof(BinaryWriter).GetMethod("Write", new[] { typeof(int) })!,
+				Expression.Constant(fields.Count)));
 
 			foreach (var field in fields)
 			{
 				// Write field name
 				var fieldName = _stringPool.GetOrAdd(field.Name, n => n);
-				statements.Add(Expression.Call(writerParam, typeof(BinaryWriter).GetMethod("Write", new[] { typeof(string) })!, Expression.Constant(fieldName)));
+				statements.Add(Expression.Call(writerParam,
+					typeof(BinaryWriter).GetMethod("Write", new[] { typeof(string) })!,
+					Expression.Constant(fieldName)));
 
 				// Get field value
 				var castObj = Expression.Convert(objParam, field.DeclaringType!);
@@ -968,11 +969,16 @@ namespace CoreRemoting.Serialization.NeoBinary
 				var valueExpr = Expression.Convert(fieldExpr, typeof(object));
 
 				// Call SerializeObject
-				statements.Add(Expression.Call(thisParam, typeof(NeoBinarySerializer).GetMethod("SerializeObject", BindingFlags.NonPublic | BindingFlags.Instance)!, valueExpr, writerParam, serializedObjectsParam, objectMapParam));
+				statements.Add(Expression.Call(thisParam,
+					typeof(NeoBinarySerializer).GetMethod("SerializeObject",
+						BindingFlags.NonPublic | BindingFlags.Instance)!, valueExpr, writerParam,
+					serializedObjectsParam, objectMapParam));
 			}
 
 			var block = Expression.Block(statements);
-			var lambda = Expression.Lambda<Action<object, BinaryWriter, HashSet<object>, Dictionary<object, int>>>(block, objParam, writerParam, serializedObjectsParam, objectMapParam);
+			var lambda =
+				Expression.Lambda<Action<object, BinaryWriter, HashSet<object>, Dictionary<object, int>>>(block,
+					objParam, writerParam, serializedObjectsParam, objectMapParam);
 			return lambda.Compile();
 		}
 
@@ -1023,7 +1029,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 					var value = DeserializeObject(reader, deserializedObjects);
 
 					// Find the field by name from cached fields
-					FieldInfo? field = null;
+					FieldInfo field = null;
 					while (fieldIndex < fields.Length && (field = fields[fieldIndex]).Name != fieldName)
 					{
 						fieldIndex++;
@@ -1080,7 +1086,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			if (exception.Data != null)
 			{
 				writer.Write(exception.Data.Count);
-				foreach (System.Collections.DictionaryEntry entry in exception.Data)
+				foreach (DictionaryEntry entry in exception.Data)
 				{
 					SerializeObject(entry.Key, writer, serializedObjects, objectMap);
 					SerializeObject(entry.Value, writer, serializedObjects, objectMap);
@@ -1182,6 +1188,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 					{
 						SerializeExpression(arg, writer, serializedObjects, objectMap);
 					}
+
 					break;
 
 				case ExpressionType.Lambda:
@@ -1194,6 +1201,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 					{
 						SerializeExpression(param, writer, serializedObjects, objectMap);
 					}
+
 					break;
 
 				case ExpressionType.Add:
@@ -1256,6 +1264,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 					{
 						SerializeExpression(arg, writer, serializedObjects, objectMap);
 					}
+
 					break;
 
 				case ExpressionType.New:
@@ -1266,6 +1275,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 					{
 						SerializeExpression(arg, writer, serializedObjects, objectMap);
 					}
+
 					if (newExpr.Members != null)
 					{
 						writer.Write(newExpr.Members.Count);
@@ -1279,6 +1289,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 					{
 						writer.Write(0);
 					}
+
 					break;
 
 				case ExpressionType.NewArrayInit:
@@ -1289,6 +1300,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 					{
 						SerializeExpression(expr, writer, serializedObjects, objectMap);
 					}
+
 					break;
 
 				case ExpressionType.ListInit:
@@ -1304,6 +1316,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 							SerializeExpression(arg, writer, serializedObjects, objectMap);
 						}
 					}
+
 					break;
 
 				case ExpressionType.MemberInit:
@@ -1324,6 +1337,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 							SerializeExpression(null, writer, serializedObjects, objectMap); // Placeholder
 						}
 					}
+
 					break;
 
 				case ExpressionType.TypeIs:
@@ -1489,7 +1503,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 			writer.Write(dataTable.Rows.Count);
 			foreach (DataRow row in dataTable.Rows)
 			{
-				writer.Write((int)row.RowState);
 				for (int i = 0; i < dataTable.Columns.Count; i++)
 				{
 					var value = row[i];
@@ -1587,7 +1600,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			// has been constructed and registered (see below).
 
 			// Create exception instance using appropriate constructor
-			Exception exception = null;
+			Exception exception;
 			try
 			{
 				if (type == typeof(ArgumentException))
@@ -1605,7 +1618,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 						: null;
 					var baseMessage = StripArgumentParameterSuffix(message, paramName);
 					// Disambiguate by explicit cast to string overload (paramName, message)
-					exception = new ArgumentNullException(paramName, (string)baseMessage);
+					exception = new ArgumentNullException(paramName, baseMessage);
 				}
 				else if (type == typeof(ArgumentOutOfRangeException))
 				{
@@ -1723,8 +1736,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 			return exception;
 		}
 
-		private object DeserializeExpression(Type type, BinaryReader reader, Dictionary<int, object> deserializedObjects,
-			int objectId)
+		private object DeserializeExpression(BinaryReader reader,
+			Dictionary<int, object> deserializedObjects)
 		{
 			var marker = reader.ReadByte();
 			if (marker == 0) // Null expression
@@ -1756,36 +1769,45 @@ namespace CoreRemoting.Serialization.NeoBinary
 					var maMemberName = reader.ReadString();
 					var maMemberTypeStr = reader.ReadString();
 					var maMemberType = (MemberTypes)Enum.Parse(typeof(MemberTypes), maMemberTypeStr);
-					var maMemberExpr = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
-					var maMemberInfo = maMemberExpr.Type.GetMember(maMemberName, maMemberType, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static).FirstOrDefault();
+					var maMemberExpr =
+						(Expression)DeserializeExpression(reader, deserializedObjects);
+					var maMemberInfo = maMemberExpr.Type.GetMember(maMemberName, maMemberType,
+							BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)
+						.FirstOrDefault();
 					if (maMemberInfo != null)
 					{
 						result = Expression.MakeMemberAccess(maMemberExpr, maMemberInfo);
 					}
+
 					break;
 
 				case ExpressionType.Call:
 					var method = (MethodInfo)DeserializeObject(reader, deserializedObjects);
-					var callObject = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
+					var callObject =
+						(Expression)DeserializeExpression(reader, deserializedObjects);
 					var argCount = reader.ReadInt32();
 					var arguments = new Expression[argCount];
 					for (int i = 0; i < argCount; i++)
 					{
-						arguments[i] = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
+						arguments[i] =
+							(Expression)DeserializeExpression(reader, deserializedObjects);
 					}
+
 					result = Expression.Call(callObject, method, arguments);
 					break;
 
 				case ExpressionType.Lambda:
 					var lambdaName = reader.ReadString();
 					var tailCall = reader.ReadBoolean();
-					var body = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
+					var body = (Expression)DeserializeExpression(reader, deserializedObjects);
 					var paramCount = reader.ReadInt32();
 					var parameters = new ParameterExpression[paramCount];
 					for (int i = 0; i < paramCount; i++)
 					{
-						parameters[i] = (ParameterExpression)DeserializeExpression(typeof(ParameterExpression), reader, deserializedObjects, -1);
+						parameters[i] = (ParameterExpression)DeserializeExpression(reader,
+							deserializedObjects);
 					}
+
 					// Replace parameters in body with the deserialized parameters
 					body = ReplaceParameters(body, parameters);
 					result = Expression.Lambda(exprType, body, lambdaName, tailCall, parameters);
@@ -1815,10 +1837,11 @@ namespace CoreRemoting.Serialization.NeoBinary
 				case ExpressionType.RightShift:
 				case ExpressionType.Subtract:
 				case ExpressionType.SubtractChecked:
-					var left = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
-					var right = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
+					var left = (Expression)DeserializeExpression(reader, deserializedObjects);
+					var right = (Expression)DeserializeExpression(reader, deserializedObjects);
 					var binaryMethod = (MethodInfo)DeserializeObject(reader, deserializedObjects);
-					var conversion = (LambdaExpression)DeserializeExpression(typeof(LambdaExpression), reader, deserializedObjects, -1);
+					var conversion = (LambdaExpression)DeserializeExpression(reader,
+						deserializedObjects);
 					result = Expression.MakeBinary(nodeType, left, right, false, binaryMethod, conversion);
 					break;
 
@@ -1831,26 +1854,31 @@ namespace CoreRemoting.Serialization.NeoBinary
 				case ExpressionType.Quote:
 				case ExpressionType.TypeAs:
 				case ExpressionType.UnaryPlus:
-					var operand = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
+					var operand =
+						(Expression)DeserializeExpression(reader, deserializedObjects);
 					var unaryMethod = (MethodInfo)DeserializeObject(reader, deserializedObjects);
 					result = Expression.MakeUnary(nodeType, operand, exprType, unaryMethod);
 					break;
 
 				case ExpressionType.Conditional:
-					var test = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
-					var ifTrue = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
-					var ifFalse = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
+					var test = (Expression)DeserializeExpression(reader, deserializedObjects);
+					var ifTrue = (Expression)DeserializeExpression(reader, deserializedObjects);
+					var ifFalse =
+						(Expression)DeserializeExpression(reader, deserializedObjects);
 					result = Expression.Condition(test, ifTrue, ifFalse);
 					break;
 
 				case ExpressionType.Invoke:
-					var invokeExpr = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
+					var invokeExpr =
+						(Expression)DeserializeExpression(reader, deserializedObjects);
 					var invokeArgCount = reader.ReadInt32();
 					var invokeArgs = new Expression[invokeArgCount];
 					for (int i = 0; i < invokeArgCount; i++)
 					{
-						invokeArgs[i] = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
+						invokeArgs[i] =
+							(Expression)DeserializeExpression(reader, deserializedObjects);
 					}
+
 					result = Expression.Invoke(invokeExpr, invokeArgs);
 					break;
 
@@ -1860,8 +1888,10 @@ namespace CoreRemoting.Serialization.NeoBinary
 					var newArgs = new Expression[newArgCount];
 					for (int i = 0; i < newArgCount; i++)
 					{
-						newArgs[i] = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
+						newArgs[i] =
+							(Expression)DeserializeExpression(reader, deserializedObjects);
 					}
+
 					var memberCount = reader.ReadInt32();
 					var members = new MemberInfo[memberCount];
 					for (int i = 0; i < memberCount; i++)
@@ -1870,8 +1900,10 @@ namespace CoreRemoting.Serialization.NeoBinary
 						var newMemberTypeStr = reader.ReadString();
 						var newMemberTypeEnum = (MemberTypes)Enum.Parse(typeof(MemberTypes), newMemberTypeStr);
 						// Simplified: assume instance members
-						members[i] = exprType.GetMember(newMemberName, newMemberTypeEnum, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).FirstOrDefault();
+						members[i] = exprType.GetMember(newMemberName, newMemberTypeEnum,
+							BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).FirstOrDefault();
 					}
+
 					result = Expression.New(constructor, newArgs, members.Length > 0 ? members : null);
 					break;
 
@@ -1881,15 +1913,18 @@ namespace CoreRemoting.Serialization.NeoBinary
 					var arrayExprs = new Expression[arrayExprCount];
 					for (int i = 0; i < arrayExprCount; i++)
 					{
-						arrayExprs[i] = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
+						arrayExprs[i] =
+							(Expression)DeserializeExpression(reader, deserializedObjects);
 					}
-					result = nodeType == ExpressionType.NewArrayInit ?
-						Expression.NewArrayInit(exprType.GetElementType(), arrayExprs) :
-						Expression.NewArrayBounds(exprType.GetElementType(), arrayExprs);
+
+					result = nodeType == ExpressionType.NewArrayInit
+						? Expression.NewArrayInit(exprType.GetElementType()!, arrayExprs)
+						: Expression.NewArrayBounds(exprType.GetElementType()!, arrayExprs);
 					break;
 
 				case ExpressionType.ListInit:
-					var listNewExpr = (NewExpression)DeserializeExpression(typeof(NewExpression), reader, deserializedObjects, -1);
+					var listNewExpr =
+						(NewExpression)DeserializeExpression(reader, deserializedObjects);
 					var initCount = reader.ReadInt32();
 					var initializers = new ElementInit[initCount];
 					for (int i = 0; i < initCount; i++)
@@ -1899,31 +1934,41 @@ namespace CoreRemoting.Serialization.NeoBinary
 						var liInitArgs = new Expression[liInitArgCount];
 						for (int j = 0; j < liInitArgCount; j++)
 						{
-							liInitArgs[j] = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
+							liInitArgs[j] = (Expression)DeserializeExpression(reader,
+								deserializedObjects);
 						}
+
 						var liAddMethod = exprType.GetMethod(liAddMethodName);
-						initializers[i] = Expression.ElementInit(liAddMethod, liInitArgs);
+						initializers[i] = Expression.ElementInit(liAddMethod!, liInitArgs);
 					}
+
 					result = Expression.ListInit(listNewExpr, initializers);
 					break;
 
 				case ExpressionType.MemberInit:
-					var memberNewExpr = (NewExpression)DeserializeExpression(typeof(NewExpression), reader, deserializedObjects, -1);
+					var memberNewExpr =
+						(NewExpression)DeserializeExpression(reader, deserializedObjects);
 					var bindingCount = reader.ReadInt32();
 					var bindings = new MemberBinding[bindingCount];
 					for (int i = 0; i < bindingCount; i++)
 					{
 						var miBindingMemberName = reader.ReadString();
-						var miBindingTypeStr = reader.ReadString();
-						var miBindingExpr = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
+						reader.ReadString();
+						
+						var miBindingExpr =
+							(Expression)DeserializeExpression(reader, deserializedObjects);
+						
 						var miBindingMember = exprType.GetMember(miBindingMemberName).FirstOrDefault();
-						bindings[i] = Expression.Bind(miBindingMember, miBindingExpr);
+						
+						bindings[i] = Expression.Bind(miBindingMember!, miBindingExpr);
 					}
+
 					result = Expression.MemberInit(memberNewExpr, bindings);
 					break;
 
 				case ExpressionType.TypeIs:
-					var typeIsExpr = (Expression)DeserializeExpression(typeof(Expression), reader, deserializedObjects, -1);
+					var typeIsExpr =
+						(Expression)DeserializeExpression(reader, deserializedObjects);
 					var typeOperand = ReadTypeInfo(reader);
 					result = Expression.TypeIs(typeIsExpr, typeOperand);
 					break;
@@ -1962,6 +2007,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				{
 					return replacement;
 				}
+
 				return base.VisitParameter(node);
 			}
 		}
@@ -2166,7 +2212,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 			var rowCount = reader.ReadInt32();
 			for (int i = 0; i < rowCount; i++)
 			{
-				var rowState = (DataRowState)reader.ReadInt32();
 				var row = dataTable.NewRow();
 				for (int j = 0; j < dataTable.Columns.Count; j++)
 				{
@@ -2242,7 +2287,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 					// constraint.UpdateRule = (Rule)Enum.Parse(typeof(Rule), updateRuleStr);
 					// dataTable.Constraints.Add(constraint);
 				}
-
 			}
 
 			// Deserialize ExtendedProperties
@@ -2460,105 +2504,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 			public ForwardReferencePlaceholder(int objectId)
 			{
 				ObjectId = objectId;
-			}
-		}
-
-		private void ResolveForwardReferences(Dictionary<int, object> deserializedObjects)
-		{
-			// Keep resolving until all placeholders are resolved
-			bool hasChanges;
-			int maxIterations = 10; // Prevent infinite loops
-			int iteration = 0;
-
-			do
-			{
-				hasChanges = false;
-				iteration++;
-
-				// Find all forward reference placeholders
-				var placeholderEntries = deserializedObjects
-					.Where(kvp => kvp.Value is ForwardReferencePlaceholder)
-					.ToList();
-
-				// Replace each placeholder with the actual object it refers to
-				foreach (var kvp in placeholderEntries)
-				{
-					var placeholderId = kvp.Key;
-					var placeholder = (ForwardReferencePlaceholder)kvp.Value;
-
-					// Find the actual object that this placeholder refers to
-					if (deserializedObjects.TryGetValue(placeholder.ObjectId, out var actualObject))
-					{
-						// Replace placeholder with actual object
-						deserializedObjects[placeholderId] = actualObject;
-						hasChanges = true;
-
-						// Skip updating references to avoid stack overflow
-					}
-				}
-
-				// Skip updating object fields to avoid stack overflow
-			} while (hasChanges && iteration < maxIterations);
-		}
-
-		private void UpdateForwardReferences(ForwardReferencePlaceholder placeholder, object actualObject,
-			Dictionary<int, object> deserializedObjects)
-		{
-			// Skip updating to avoid stack overflow
-		}
-
-		private bool ReplacePlaceholdersInObjectFields(object obj, Dictionary<int, object> deserializedObjects)
-		{
-			bool hasChanges = false;
-			var type = obj.GetType();
-
-			// Skip for DataSets and DataTables to avoid issues
-			if (typeof(DataSet).IsAssignableFrom(type) || typeof(DataTable).IsAssignableFrom(type))
-			{
-				return false;
-			}
-
-			var fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-
-			foreach (var field in fields)
-			{
-				var value = field.GetValue(obj);
-				if (value is ForwardReferencePlaceholder placeholder)
-				{
-					// Find actual object this placeholder refers to
-					if (deserializedObjects.TryGetValue(placeholder.ObjectId, out var actualObject))
-					{
-						field.SetValue(obj, actualObject);
-						hasChanges = true;
-					}
-				}
-				// No recursion to avoid stack overflow
-			}
-
-			return hasChanges;
-		}
-
-		private void ReplacePlaceholdersInObjectFields(object obj, ForwardReferencePlaceholder targetPlaceholder,
-			object replacementObject)
-		{
-			var type = obj.GetType();
-
-			// Skip for DataSets and DataTables
-			if (typeof(DataSet).IsAssignableFrom(type) || typeof(DataTable).IsAssignableFrom(type))
-			{
-				return;
-			}
-
-			var fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-
-			foreach (var field in fields)
-			{
-				var value = field.GetValue(obj);
-				if (ReferenceEquals(value, targetPlaceholder))
-				{
-					field.SetValue(obj, replacementObject);
-				}
-				// No recursion
 			}
 		}
 
