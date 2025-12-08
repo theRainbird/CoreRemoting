@@ -76,6 +76,18 @@ namespace CoreRemoting.Serialization.NeoBinary
 				throw new ArgumentNullException(nameof(serializationStream));
 
 			using var writer = new BinaryWriter(serializationStream, Encoding.UTF8, leaveOpen: true);
+			
+			// Fast path for primitive types - avoid overhead of reference tracking
+			if (graph != null && IsSimpleType(graph.GetType()))
+			{
+				WriteHeader(writer);
+				writer.Write((byte)3); // Simple object marker
+				WriteTypeInfo(writer, graph.GetType());
+				SerializePrimitive(graph, writer);
+				writer.Flush();
+				return;
+			}
+
 			var serializedObjects = new HashSet<object>(ReferenceEqualityComparer.Instance);
 			var objectMap = new Dictionary<object, int>(ReferenceEqualityComparer.Instance);
 
@@ -107,20 +119,27 @@ namespace CoreRemoting.Serialization.NeoBinary
 				throw new ArgumentNullException(nameof(serializationStream));
 
 			using var reader = new BinaryReader(serializationStream, Encoding.UTF8, leaveOpen: true);
-			var deserializedObjects = new Dictionary<int, object>();
 
 			// Read and validate header
 			ReadHeader(reader);
 
-			// Deserialize object graph
+			// Peek at the first byte to determine if it's a simple type
 			var firstByte = reader.ReadByte();
 			if (firstByte == 0)
 			{
 				return null;
 			}
 
-			// Put the byte back
+			// Fast path for primitive types - avoid overhead of reference tracking
+			if (firstByte == 3) // Simple object marker
+			{
+				var type = ReadTypeInfo(reader);
+				return DeserializePrimitive(type, reader);
+			}
+
+			// Put the byte back for complex object processing
 			serializationStream.Position = serializationStream.Position - 1;
+			var deserializedObjects = new Dictionary<int, object>();
 			var result = DeserializeObject(reader, deserializedObjects);
 
 			// Skip resolving forward references to avoid stack overflow
