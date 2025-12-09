@@ -17,7 +17,6 @@ namespace CoreRemoting.Serialization.NeoBinary
         private readonly ConcurrentDictionary<Type, ObjectSerializerDelegate> _serializers = new();
         private readonly ConcurrentDictionary<Type, ObjectDeserializerDelegate> _deserializers = new();
         private readonly ConcurrentDictionary<Type, FieldInfo[]> _fieldCache = new();
-        private readonly ConcurrentDictionary<string, string> _stringPool = new();
 
         /// <summary>
         /// Delegate for object serialization.
@@ -67,8 +66,9 @@ namespace CoreRemoting.Serialization.NeoBinary
 
             while (currentType != null && currentType != typeof(object))
             {
+                // Match NeoBinarySerializer.GetAllFieldsInHierarchy ordering/selection
                 var typeFields = currentType.GetFields(
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
                 
                 fields.AddRange(typeFields);
                 currentType = currentType.BaseType;
@@ -88,48 +88,68 @@ namespace CoreRemoting.Serialization.NeoBinary
             {
                 var fields = _fieldCache.GetOrAdd(type, GetAllFields);
 
+                // Bind the DynamicMethod to NeoBinarySerializer to allow access to its non-public instance methods
                 var dynamicMethod = new DynamicMethod(
                     $"Serialize_{type.Name}_{Guid.NewGuid():N}",
                     typeof(void),
-                    new[] { typeof(object), typeof(BinaryWriter), typeof(SerializationContext) });
+                    new[] { typeof(object), typeof(BinaryWriter), typeof(SerializationContext) },
+                    typeof(NeoBinarySerializer),
+                    true);
 
                 var il = dynamicMethod.GetILGenerator();
                 var writerLocal = il.DeclareLocal(typeof(BinaryWriter));
                 var contextLocal = il.DeclareLocal(typeof(SerializationContext));
+                var typedObjLocal = il.DeclareLocal(type);
 
-                // Load arguments
-                il.Emit(OpCodes.Ldarg_0);
+                // Store args to locals
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Stloc, writerLocal);
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Stloc, contextLocal);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Castclass, type);
+                il.Emit(OpCodes.Stloc, typedObjLocal);
 
-                // Generate IL for each field
+                // Write field count to match general serializer format
+                il.Emit(OpCodes.Ldloc, writerLocal);
+                il.Emit(OpCodes.Ldc_I4, fields.Length);
+                il.Emit(OpCodes.Callvirt, typeof(BinaryWriter).GetMethod("Write", new[] { typeof(int) }));
+
+                // For each field: write name and serialize value via NeoBinarySerializer.SerializeObject
                 foreach (var field in fields)
                 {
-                    // Write field name
+                    // writer.Write(fieldName)
                     il.Emit(OpCodes.Ldloc, writerLocal);
                     il.Emit(OpCodes.Ldstr, field.Name);
                     il.Emit(OpCodes.Callvirt, typeof(BinaryWriter).GetMethod("Write", new[] { typeof(string) }));
 
-                    // Get field value
-                    il.Emit(OpCodes.Ldarg_0);
-                    il.Emit(OpCodes.Ldfld, field);
-
-                    // Call SerializeObject method
-                    il.Emit(OpCodes.Ldloc, writerLocal);
-                    il.Emit(OpCodes.Ldloc, contextLocal);
-                    il.Emit(OpCodes.Callvirt, typeof(SerializationContext).GetProperty("SerializedObjects").GetGetMethod());
-                    il.Emit(OpCodes.Ldloc, contextLocal);
-                    il.Emit(OpCodes.Callvirt, typeof(SerializationContext).GetProperty("ObjectMap").GetGetMethod());
+                    // Load serializer instance from context
                     il.Emit(OpCodes.Ldloc, contextLocal);
                     il.Emit(OpCodes.Callvirt, typeof(SerializationContext).GetProperty("Serializer").GetGetMethod());
 
+                    // arg0: object value
+                    il.Emit(OpCodes.Ldloc, typedObjLocal);
+                    il.Emit(OpCodes.Ldfld, field);
+                    if (field.FieldType.IsValueType)
+                    {
+                        il.Emit(OpCodes.Box, field.FieldType);
+                    }
+
+                    // arg1: BinaryWriter
+                    il.Emit(OpCodes.Ldloc, writerLocal);
+
+                    // arg2: HashSet<object> serializedObjects
+                    il.Emit(OpCodes.Ldloc, contextLocal);
+                    il.Emit(OpCodes.Callvirt, typeof(SerializationContext).GetProperty("SerializedObjects").GetGetMethod());
+
+                    // arg3: Dictionary<object,int> objectMap
+                    il.Emit(OpCodes.Ldloc, contextLocal);
+                    il.Emit(OpCodes.Callvirt, typeof(SerializationContext).GetProperty("ObjectMap").GetGetMethod());
+
+                    // call NeoBinarySerializer.SerializeObject(object, BinaryWriter, HashSet<object>, Dictionary<object,int>)
                     il.Emit(OpCodes.Callvirt, typeof(NeoBinarySerializer).GetMethod(
                         "SerializeObject",
                         BindingFlags.NonPublic | BindingFlags.Instance));
-
-                    il.Emit(OpCodes.Pop);
                 }
 
                 il.Emit(OpCodes.Ret);
@@ -148,17 +168,22 @@ namespace CoreRemoting.Serialization.NeoBinary
             {
                 var fields = _fieldCache.GetOrAdd(type, GetAllFields);
 
+                // Bind the DynamicMethod to NeoBinarySerializer to allow access to its non-public instance methods
                 var dynamicMethod = new DynamicMethod(
                     $"Deserialize_{type.Name}_{Guid.NewGuid():N}",
                     typeof(object),
-                    new[] { typeof(BinaryReader), typeof(DeserializationContext) });
+                    new[] { typeof(BinaryReader), typeof(DeserializationContext) },
+                    typeof(NeoBinarySerializer),
+                    true);
 
                 var il = dynamicMethod.GetILGenerator();
                 var readerLocal = il.DeclareLocal(typeof(BinaryReader));
                 var contextLocal = il.DeclareLocal(typeof(DeserializationContext));
-                var objLocal = il.DeclareLocal(typeof(object));
+                var typedObjLocal = il.DeclareLocal(type);
+                var valueLocal = il.DeclareLocal(typeof(object));
+                var countLocal = il.DeclareLocal(typeof(int));
 
-                // Load arguments
+                // Store args to locals
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Stloc, readerLocal);
                 il.Emit(OpCodes.Ldarg_1);
@@ -167,95 +192,81 @@ namespace CoreRemoting.Serialization.NeoBinary
                 // Create instance
                 if (type.IsValueType)
                 {
-                    // For value types, create default value and box it
-                    il.Emit(OpCodes.Ldloca, objLocal);
+                    il.Emit(OpCodes.Ldloca, typedObjLocal);
                     il.Emit(OpCodes.Initobj, type);
-                    il.Emit(OpCodes.Ldloc, objLocal);
-                    il.Emit(OpCodes.Box, type);
                 }
                 else
                 {
-                    // For reference types, create instance without constructor
+                    // var obj = context.Serializer.CreateInstanceWithoutConstructor(type)
+                    il.Emit(OpCodes.Ldloc, contextLocal);
+                    il.Emit(OpCodes.Callvirt, typeof(DeserializationContext).GetProperty("Serializer").GetGetMethod());
                     il.Emit(OpCodes.Ldtoken, type);
                     il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle"));
-                    il.Emit(OpCodes.Call, typeof(NeoBinarySerializer).GetMethod(
+                    il.Emit(OpCodes.Callvirt, typeof(NeoBinarySerializer).GetMethod(
                         "CreateInstanceWithoutConstructor",
-                        BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance));
+                        BindingFlags.NonPublic | BindingFlags.Instance));
                     il.Emit(OpCodes.Castclass, type);
-                    il.Emit(OpCodes.Stloc, objLocal);
+                    il.Emit(OpCodes.Stloc, typedObjLocal);
                 }
 
-                // Register object for circular references
-                il.Emit(OpCodes.Ldloc, contextLocal);
-                il.Emit(OpCodes.Callvirt, typeof(DeserializationContext).GetProperty("DeserializedObjects").GetGetMethod());
+                // Read and ignore field count (kept for format parity and forward-compat)
                 il.Emit(OpCodes.Ldloc, readerLocal);
                 il.Emit(OpCodes.Call, typeof(BinaryReader).GetMethod("ReadInt32"));
-                il.Emit(OpCodes.Ldloc, objLocal);
-                il.Emit(OpCodes.Box, type);
-                il.Emit(OpCodes.Callvirt, typeof(Dictionary<int, object>).GetMethod("set_Item"));
+                il.Emit(OpCodes.Stloc, countLocal);
 
-                // Generate IL for each field
+                // For each field, read name, then value, then assign
                 foreach (var field in fields)
                 {
-                    // Validate field type to prevent null reference errors
-                    if (field.FieldType == null)
-                    {
-                        throw new ArgumentNullException(nameof(field.FieldType),
-                            $"Field '{field.Name}' on type '{field.DeclaringType?.Name}' has null FieldType.");
-                    }
-
-                    // Read field name (but don't use it - we read in order)
+                    // Read and discard field name
                     il.Emit(OpCodes.Ldloc, readerLocal);
                     il.Emit(OpCodes.Call, typeof(BinaryReader).GetMethod("ReadString"));
                     il.Emit(OpCodes.Pop);
 
-                    // Deserialize field value
+                    // value = context.Serializer.DeserializeObject(reader, deserializedObjects)
+                    il.Emit(OpCodes.Ldloc, contextLocal);
+                    il.Emit(OpCodes.Callvirt, typeof(DeserializationContext).GetProperty("Serializer").GetGetMethod());
                     il.Emit(OpCodes.Ldloc, readerLocal);
                     il.Emit(OpCodes.Ldloc, contextLocal);
                     il.Emit(OpCodes.Callvirt, typeof(DeserializationContext).GetProperty("DeserializedObjects").GetGetMethod());
-                    il.Emit(OpCodes.Ldloc, contextLocal);
-                    il.Emit(OpCodes.Callvirt, typeof(DeserializationContext).GetProperty("Serializer").GetGetMethod());
-
-                    // Call NeoBinarySerializer.DeserializeObject
                     il.Emit(OpCodes.Callvirt, typeof(NeoBinarySerializer).GetMethod(
                         "DeserializeObject",
                         BindingFlags.NonPublic | BindingFlags.Instance));
+                    il.Emit(OpCodes.Stloc, valueLocal);
 
-                    // Set field value
+                    // Assign field
                     if (type.IsValueType)
                     {
-                        // For value types, temporarily skip to avoid IL complexity
-                        // Fall back to reflection-based deserialization
-                        throw new NotSupportedException($"IL-based deserialization for value types is not yet implemented: {type.Name}");
+                        // Load address of value-type local
+                        il.Emit(OpCodes.Ldloca, typedObjLocal);
                     }
                     else
                     {
-                        // For reference types, set field directly
-                        il.Emit(OpCodes.Ldloc, objLocal);
-                        
-                        // Cast to field type if necessary
-                        if (field.FieldType.IsValueType)
-                        {
-                            il.Emit(OpCodes.Unbox, field.FieldType);
-                        }
-                        else
-                        {
-                            il.Emit(OpCodes.Castclass, field.FieldType);
-                        }
-
-                        il.Emit(OpCodes.Stfld, field);
+                        il.Emit(OpCodes.Ldloc, typedObjLocal);
                     }
+
+                    // Load value and cast/unbox to field type
+                    il.Emit(OpCodes.Ldloc, valueLocal);
+                    if (field.FieldType.IsValueType)
+                    {
+                        il.Emit(OpCodes.Unbox_Any, field.FieldType);
+                    }
+                    else
+                    {
+                        il.Emit(OpCodes.Castclass, field.FieldType);
+                    }
+
+                    il.Emit(OpCodes.Stfld, field);
                 }
 
-                // Return the object
+                // Return object (box if value type)
                 if (type.IsValueType)
                 {
-                    il.Emit(OpCodes.Ldloc, objLocal);
+                    il.Emit(OpCodes.Ldloc, typedObjLocal);
                     il.Emit(OpCodes.Box, type);
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldloc, objLocal);
+                    il.Emit(OpCodes.Ldloc, typedObjLocal);
                 }
 
                 il.Emit(OpCodes.Ret);
@@ -271,81 +282,6 @@ namespace CoreRemoting.Serialization.NeoBinary
             _serializers.Clear();
             _deserializers.Clear();
             _fieldCache.Clear();
-            _stringPool.Clear();
-        }
-
-        /// <summary>
-        /// Cache statistics information.
-        /// </summary>
-        public class CacheStatistics
-        {
-            public int SerializerCount { get; set; }
-            public int DeserializerCount { get; set; }
-            public int FieldCacheCount { get; set; }
-            public int StringPoolCount { get; set; }
-            public long TotalSerializations { get; set; }
-            public long TotalDeserializations { get; set; }
-            public long CacheHits { get; set; }
-            public long CacheMisses { get; set; }
-            public double HitRatio => CacheHits + CacheMisses > 0 ? (double)CacheHits / (CacheHits + CacheMisses) : 0;
-        }
-
-        /// <summary>
-        /// Cached serializer with statistics.
-        /// </summary>
-        private class CachedSerializer
-        {
-            public ObjectSerializerDelegate Serializer { get; set; }
-            public DateTime CreatedAt { get; set; }
-            public DateTime LastAccessed { get; set; }
-            public long AccessCount { get; set; }
-            public long SerializationCount { get; set; }
-            public long TotalSerializationTimeTicks { get; set; }
-
-            public void RecordAccess()
-            {
-                LastAccessed = DateTime.UtcNow;
-                AccessCount++;
-            }
-
-            public void RecordSerialization(long ticks)
-            {
-                SerializationCount++;
-                TotalSerializationTimeTicks += ticks;
-            }
-
-            public double AverageSerializationTime => SerializationCount > 0 
-                ? (double)TotalSerializationTimeTicks / SerializationCount / TimeSpan.TicksPerMillisecond 
-                : 0;
-        }
-
-        /// <summary>
-        /// Cached deserializer with statistics.
-        /// </summary>
-        private class CachedDeserializer
-        {
-            public ObjectDeserializerDelegate Deserializer { get; set; }
-            public DateTime CreatedAt { get; set; }
-            public DateTime LastAccessed { get; set; }
-            public long AccessCount { get; set; }
-            public long DeserializationCount { get; set; }
-            public long TotalDeserializationTimeTicks { get; set; }
-
-            public void RecordAccess()
-            {
-                LastAccessed = DateTime.UtcNow;
-                AccessCount++;
-            }
-
-            public void RecordDeserialization(long ticks)
-            {
-                DeserializationCount++;
-                TotalDeserializationTimeTicks += ticks;
-            }
-
-            public double AverageDeserializationTime => DeserializationCount > 0 
-                ? (double)TotalDeserializationTimeTicks / DeserializationCount / TimeSpan.TicksPerMillisecond 
-                : 0;
         }
     }
 }
