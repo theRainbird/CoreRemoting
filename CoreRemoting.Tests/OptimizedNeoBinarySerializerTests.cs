@@ -84,13 +84,13 @@ namespace CoreRemoting.Tests.Serialization.NeoBinary
             var serializer1 = cache.GetOrCreateSerializer(typeof(ComplexTestClass), type =>
             {
                 callCount++;
-                return ilSerializer.GetSerializer(type);
+                return ilSerializer.CreateSerializer(type);
             });
 
             var serializer2 = cache.GetOrCreateSerializer(typeof(ComplexTestClass), type =>
             {
                 callCount++;
-                return ilSerializer.GetSerializer(type);
+                return ilSerializer.CreateSerializer(type);
             });
 
             // Assert
@@ -107,9 +107,9 @@ namespace CoreRemoting.Tests.Serialization.NeoBinary
 
             // Act
             var serializer = cache.GetOrCreateSerializer(typeof(ComplexTestClass), 
-                type => ilSerializer.GetSerializer(type));
+                type => ilSerializer.CreateSerializer(type));
             var deserializer = cache.GetOrCreateDeserializer(typeof(ComplexTestClass), 
-                type => ilSerializer.GetDeserializer(type));
+                type => ilSerializer.CreateDeserializer(type));
 
             // Record some operations
             cache.RecordSerialization();
@@ -336,9 +336,9 @@ namespace CoreRemoting.Tests.Serialization.NeoBinary
             var ilSerializer = new IlTypeSerializer();
 
             // Act - Create more items than cache size
-            cache.GetOrCreateSerializer(typeof(ComplexTestClass), t => ilSerializer.GetSerializer(t));
-            cache.GetOrCreateSerializer(typeof(NestedClass), t => ilSerializer.GetSerializer(t));
-            cache.GetOrCreateSerializer(typeof(string), t => ilSerializer.GetSerializer(t));
+            cache.GetOrCreateSerializer(typeof(ComplexTestClass), t => ilSerializer.CreateSerializer(t));
+            cache.GetOrCreateSerializer(typeof(NestedClass), t => ilSerializer.CreateSerializer(t));
+            cache.GetOrCreateSerializer(typeof(string), t => ilSerializer.CreateSerializer(t));
 
             // Manually trigger cleanup
             cache.Dispose();
