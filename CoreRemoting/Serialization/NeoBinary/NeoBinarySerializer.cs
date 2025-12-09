@@ -936,7 +936,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			var type = obj.GetType();
 
 			// Use high-performance IL-based serializer
-			var cachedSerializer = _serializerCache.GetOrCreateSerializer(type, t => _ilSerializer.GetSerializer(t));
+			var cachedSerializer = _serializerCache.GetOrCreateSerializer(type, t => _ilSerializer.CreateSerializer(t));
 			cachedSerializer.RecordAccess();
 			
 			var context = new IlTypeSerializer.SerializationContext
@@ -1009,7 +1009,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			Dictionary<int, object> deserializedObjects, int objectId)
 		{
 			// Use high-performance IL-based deserializer
-			var cachedDeserializer = _serializerCache.GetOrCreateDeserializer(type, t => _ilSerializer.GetDeserializer(t));
+			var cachedDeserializer = _serializerCache.GetOrCreateDeserializer(type, t => _ilSerializer.CreateDeserializer(t));
 			cachedDeserializer.RecordAccess();
 
 			var context = new IlTypeSerializer.DeserializationContext
