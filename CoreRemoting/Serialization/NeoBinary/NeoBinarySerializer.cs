@@ -21,8 +21,11 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private const string MAGIC_NAME = "NEOB";
 		private const ushort CURRENT_VERSION = 1;
 
-		// Caches for performance optimization
-		private readonly ConcurrentDictionary<Type, FieldInfo[]> _fieldCache = new();
+		// High-performance IL-based serializer and cache
+		private readonly IlTypeSerializer _ilSerializer = new();
+		private readonly SerializerCache _serializerCache = new();
+
+		// Legacy caches for backward compatibility
 		private readonly ConcurrentDictionary<Type, string> _typeNameCache = new();
 		private readonly ConcurrentDictionary<string, Type> _resolvedTypeCache = new();
 
@@ -33,9 +36,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private readonly
 			ConcurrentDictionary<Type, Action<object, BinaryWriter, HashSet<object>, Dictionary<object, int>>>
 			_compiledSerializers = new();
-
-		// String pooling for frequently used strings
-		private readonly ConcurrentDictionary<string, string> _stringPool = new();
 
 		// Performance optimization: pre-populated common types cache
 		private static readonly Dictionary<string, Type> _commonTypes = new()
@@ -66,6 +66,11 @@ namespace CoreRemoting.Serialization.NeoBinary
 		/// Gets or sets the type validator for security.
 		/// </summary>
 		public NeoBinaryTypeValidator TypeValidator { get; set; } = new NeoBinaryTypeValidator();
+
+		/// <summary>
+		/// Gets the high-performance serializer cache.
+		/// </summary>
+		public SerializerCache SerializerCache => _serializerCache;
 
 		/// <summary>
 		/// Serializes an object to the specified stream.
@@ -363,7 +368,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			}
 
 			// Use string pooling for frequently used type names
-			typeName = _stringPool.GetOrAdd(typeName, t => t);
+			typeName = _serializerCache.GetOrCreatePooledString(typeName);
 
 			writer.Write(typeName);
 
@@ -372,13 +377,13 @@ namespace CoreRemoting.Serialization.NeoBinary
 			// This improves resolution for types from third-party assemblies
 			// (e.g., Serialize.Linq.Nodes) that might not yet be loaded.
 			var assemblyNameString = assemblyName.Name ?? string.Empty;
-			assemblyNameString = _stringPool.GetOrAdd(assemblyNameString, s => s);
+			assemblyNameString = _serializerCache.GetOrCreatePooledString(assemblyNameString);
 			writer.Write(assemblyNameString);
 
 			if (Config.IncludeAssemblyVersions)
 			{
 				var versionString = assemblyName.Version?.ToString() ?? string.Empty;
-				versionString = _stringPool.GetOrAdd(versionString, v => v);
+				versionString = _serializerCache.GetOrCreatePooledString(versionString);
 				writer.Write(versionString);
 			}
 			else
@@ -457,6 +462,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 		{
 			return _typeNameCache.GetOrAdd(type, t =>
 			{
+				string result;
+				
 				if (t.IsGenericType)
 				{
 					var genericDef = t.GetGenericTypeDefinition();
@@ -464,19 +471,22 @@ namespace CoreRemoting.Serialization.NeoBinary
 					var args = t.GetGenericArguments();
 					var argNames = args.Select(BuildAssemblyNeutralTypeName).ToArray();
 					var joined = string.Join("],[", argNames);
-					return $"{defName}[[{joined}]]";
+					result = $"{defName}[[{joined}]]";
 				}
-
-				if (t.IsArray)
+				else if (t.IsArray)
 				{
 					// Handle arrays by composing element type and rank suffix
 					var elem = t.GetElementType();
 					var rank = t.GetArrayRank();
 					var suffix = rank == 1 ? "[]" : "[" + new string(',', rank - 1) + "]";
-					return BuildAssemblyNeutralTypeName(elem) + suffix;
+					result = BuildAssemblyNeutralTypeName(elem) + suffix;
 				}
-
-				return t.FullName ?? t.Name;
+				else
+				{
+					result = t.FullName ?? t.Name;
+				}
+				
+				return _serializerCache.GetOrCreatePooledString(result);
 			});
 		}
 
@@ -925,15 +935,28 @@ namespace CoreRemoting.Serialization.NeoBinary
 		{
 			var type = obj.GetType();
 
-			if (_compiledSerializers.TryGetValue(type, out var compiledSerializer))
+			// Use high-performance IL-based serializer
+			var cachedSerializer = _serializerCache.GetOrCreateSerializer(type, t => _ilSerializer.GetSerializer(t));
+			cachedSerializer.RecordAccess();
+			
+			var context = new IlTypeSerializer.SerializationContext
 			{
-				compiledSerializer(obj, writer, serializedObjects, objectMap);
+				SerializedObjects = serializedObjects,
+				ObjectMap = objectMap,
+				Serializer = this,
+				StringPool = _serializerCache.StringPool
+			};
+
+			var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+			try
+			{
+				cachedSerializer.Serializer(obj, writer, context);
 			}
-			else
+			finally
 			{
-				var serializer = CreateCompiledSerializer(type);
-				_compiledSerializers[type] = serializer;
-				serializer(obj, writer, serializedObjects, objectMap);
+				stopwatch.Stop();
+				cachedSerializer.RecordSerialization(stopwatch.ElapsedTicks);
+				_serializerCache.RecordSerialization();
 			}
 		}
 
@@ -958,7 +981,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			foreach (var field in fields)
 			{
 				// Write field name
-				var fieldName = _stringPool.GetOrAdd(field.Name, n => n);
+				var fieldName = field.Name; // Will be pooled at runtime
 				statements.Add(Expression.Call(writerParam,
 					typeof(BinaryWriter).GetMethod("Write", new[] { typeof(string) })!,
 					Expression.Constant(fieldName)));
@@ -985,83 +1008,34 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private object DeserializeComplexObject(Type type, BinaryReader reader,
 			Dictionary<int, object> deserializedObjects, int objectId)
 		{
-			var obj = CreateInstanceWithoutConstructor(type);
+			// Use high-performance IL-based deserializer
+			var cachedDeserializer = _serializerCache.GetOrCreateDeserializer(type, t => _ilSerializer.GetDeserializer(t));
+			cachedDeserializer.RecordAccess();
 
-			// Register the object immediately to handle circular references
-			deserializedObjects[objectId] = obj;
-
-			var fieldCount = reader.ReadInt32();
-
-			// For structs, we need special handling since they're value types
-			if (type.IsValueType && !type.IsEnum)
+			var context = new IlTypeSerializer.DeserializationContext
 			{
-				// For structs, we need to use reflection to directly set fields on the boxed instance
-				for (int i = 0; i < fieldCount; i++)
+				DeserializedObjects = deserializedObjects,
+				Serializer = this
+			};
+
+			var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+			try
+			{
+				var result = cachedDeserializer.Deserializer(reader, context);
+				
+				// Register the object for circular references if not already done
+				if (!deserializedObjects.ContainsKey(objectId))
 				{
-					var fieldName = reader.ReadString();
-					var value = DeserializeObject(reader, deserializedObjects);
-
-					var field = GetFieldInHierarchy(type, fieldName);
-					if (field != null)
-					{
-						// Skip read-only fields (they should be handled by constructor)
-						if (field.IsInitOnly || field.IsLiteral)
-						{
-							continue;
-						}
-
-						// Use reflection to set the field value on the boxed struct
-						field.SetValue(obj, value);
-					}
+					deserializedObjects[objectId] = result;
 				}
 
-				return obj;
+				return result;
 			}
-			else
+			finally
 			{
-				// Regular reference type handling with optimized field lookup
-				var fields = _fieldCache.GetOrAdd(type, t => GetAllFieldsInHierarchy(t).ToArray());
-				var fieldIndex = 0;
-
-				for (int i = 0; i < fieldCount; i++)
-				{
-					var fieldName = reader.ReadString();
-					var value = DeserializeObject(reader, deserializedObjects);
-
-					// Find the field by name from cached fields
-					FieldInfo field = null;
-					while (fieldIndex < fields.Length && (field = fields[fieldIndex]).Name != fieldName)
-					{
-						fieldIndex++;
-					}
-
-					if (field != null && field.Name == fieldName)
-					{
-						// Use cached setter for better performance, but fallback to reflection for read-only fields
-						if (field.IsInitOnly || field.IsLiteral)
-						{
-							// Skip read-only fields (they should be handled by constructor)
-							continue;
-						}
-
-						var setter = _setterCache.GetOrAdd(field, f =>
-						{
-							var objParam = Expression.Parameter(typeof(object), "obj");
-							var valueParam = Expression.Parameter(typeof(object), "value");
-
-							var castObj = Expression.Convert(objParam, type);
-							var castValue = Expression.Convert(valueParam, f.FieldType);
-							var fieldAccess = Expression.Field(castObj, f);
-							var assign = Expression.Assign(fieldAccess, castValue);
-
-							return Expression.Lambda<Action<object, object>>(assign, objParam, valueParam).Compile();
-						});
-
-						setter(obj, value);
-					}
-				}
-
-				return obj;
+				stopwatch.Stop();
+				cachedDeserializer.RecordDeserialization(stopwatch.ElapsedTicks);
+				_serializerCache.RecordDeserialization();
 			}
 		}
 
@@ -1071,10 +1045,10 @@ namespace CoreRemoting.Serialization.NeoBinary
 			var type = exception.GetType();
 
 			// Serialize basic exception properties with string pooling
-			writer.Write(_stringPool.GetOrAdd(exception.Message ?? string.Empty, m => m));
-			writer.Write(_stringPool.GetOrAdd(exception.Source ?? string.Empty, s => s));
-			writer.Write(_stringPool.GetOrAdd(exception.StackTrace ?? string.Empty, st => st));
-			writer.Write(_stringPool.GetOrAdd(exception.HelpLink ?? string.Empty, h => h));
+			writer.Write(_serializerCache.GetOrCreatePooledString(exception.Message ?? string.Empty));
+			writer.Write(_serializerCache.GetOrCreatePooledString(exception.Source ?? string.Empty));
+			writer.Write(_serializerCache.GetOrCreatePooledString(exception.StackTrace ?? string.Empty));
+			writer.Write(_serializerCache.GetOrCreatePooledString(exception.HelpLink ?? string.Empty));
 
 			// Serialize HResult
 			writer.Write(exception.HResult);
@@ -2578,21 +2552,18 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 		private List<FieldInfo> GetAllFieldsInHierarchy(Type type)
 		{
-			return _fieldCache.GetOrAdd(type, t =>
+			var fields = new List<FieldInfo>();
+			var currentType = type;
+
+			while (currentType != null && currentType != typeof(object))
 			{
-				var fields = new List<FieldInfo>();
-				var currentType = t;
+				var typeFields = currentType.GetFields(BindingFlags.Public | BindingFlags.NonPublic |
+				                                       BindingFlags.Instance | BindingFlags.DeclaredOnly);
+				fields.AddRange(typeFields);
+				currentType = currentType.BaseType;
+			}
 
-				while (currentType != null && currentType != typeof(object))
-				{
-					var typeFields = currentType.GetFields(BindingFlags.Public | BindingFlags.NonPublic |
-					                                       BindingFlags.Instance | BindingFlags.DeclaredOnly);
-					fields.AddRange(typeFields);
-					currentType = currentType.BaseType;
-				}
-
-				return fields.ToArray();
-			}).ToList();
+			return fields;
 		}
 
 		private static FieldInfo GetFieldInHierarchy(Type type, string fieldName)
