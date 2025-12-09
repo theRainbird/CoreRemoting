@@ -18,3 +18,10 @@
 - Include null reference annotations ([NotNull], [MaybeNull])
 - Use regions to organize code sections
 - Follow existing exception handling patterns with custom exception types
+
+## QUIC CHANNEL SPECIAL INSTRUCTIONS
+⚠️ **IMPORTANT**: The Quic channel project requires .NET 9.0 due to library dependencies.
+- When working on the Quic channel, temporarily change the target framework to .NET 9.0
+- For all other development, keep it at .NET 8.0 for compatibility
+- The AI assistant should be aware of this requirement and not automatically "fix" the .NET 9.0 target
+- Only change the target framework if specifically requested or if there are build issues

@@ -5,7 +5,6 @@ using System.IO;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using System.Text;
 
 namespace CoreRemoting.Serialization.NeoBinary
 {
@@ -191,7 +190,7 @@ namespace CoreRemoting.Serialization.NeoBinary
                 il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle"));
                 il.Emit(OpCodes.Call, typeof(NeoBinarySerializer).GetMethod(
                     "CreateInstanceWithoutConstructor",
-                    BindingFlags.NonPublic | BindingFlags.Instance));
+                    BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance));
                 il.Emit(OpCodes.Castclass, type);
                 il.Emit(OpCodes.Stloc, objLocal);
 
@@ -213,6 +212,13 @@ namespace CoreRemoting.Serialization.NeoBinary
             // Generate IL for each field
             foreach (var field in fields)
             {
+                // Validate field type to prevent null reference errors
+                if (field.FieldType == null)
+                {
+                    throw new ArgumentNullException(nameof(field.FieldType),
+                        $"Field '{field.Name}' on type '{field.DeclaringType?.Name}' has null FieldType.");
+                }
+
                 // Read field name (but don't use it - we read in order)
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Call, typeof(BinaryReader).GetMethod("ReadString"));
@@ -234,11 +240,30 @@ namespace CoreRemoting.Serialization.NeoBinary
                 if (type.IsValueType)
                 {
                     // For value types, we need to work with the boxed instance
-                    il.Emit(OpCodes.Castclass, type);
-                    il.Emit(OpCodes.Stloc, objLocal);
+                    // Create a local for the deserialized value
+                    var valueLocal = il.DeclareLocal(field.FieldType);
+                    
+                    // Cast and unbox the deserialized value to the correct field type
+                    if (field.FieldType.IsValueType)
+                    {
+                        il.Emit(OpCodes.Unbox_Any, field.FieldType);
+                    }
+                    else
+                    {
+                        il.Emit(OpCodes.Castclass, field.FieldType);
+                    }
+                    
+                    // Store the deserialized value in our local
+                    il.Emit(OpCodes.Stloc, valueLocal);
+                    
+                    // Load the address of the struct local
                     il.Emit(OpCodes.Ldloca, objLocal);
-                    il.Emit(OpCodes.Ldobj, field.FieldType);
-                    il.Emit(OpCodes.Stloc, objLocal);
+                    
+                    // Load the field value from our value local
+                    il.Emit(OpCodes.Ldloc, valueLocal);
+                    
+                    // Store the value into the struct field
+                    il.Emit(OpCodes.Stfld, field);
                 }
                 else
                 {
@@ -248,8 +273,7 @@ namespace CoreRemoting.Serialization.NeoBinary
                     // Cast to field type if necessary
                     if (field.FieldType.IsValueType)
                     {
-                        il.Emit(OpCodes.Unbox, field.FieldType);
-                        il.Emit(OpCodes.Ldobj, field.FieldType);
+                        il.Emit(OpCodes.Unbox_Any, field.FieldType);
                     }
                     else
                     {
@@ -304,6 +328,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 
             return fields.ToArray();
         }
+
+
 
         /// <summary>
         /// Checks if a field is compiler-generated.
