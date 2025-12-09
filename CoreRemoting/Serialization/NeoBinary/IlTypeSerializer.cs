@@ -131,11 +131,11 @@ namespace CoreRemoting.Serialization.NeoBinary
                 // Call SerializeObject method
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Ldloc, contextLocal);
-                il.Emit(OpCodes.Ldfld, typeof(SerializationContext).GetField("SerializedObjects"));
+                il.Emit(OpCodes.Callvirt, typeof(SerializationContext).GetProperty("SerializedObjects").GetGetMethod());
                 il.Emit(OpCodes.Ldloc, contextLocal);
-                il.Emit(OpCodes.Ldfld, typeof(SerializationContext).GetField("ObjectMap"));
+                il.Emit(OpCodes.Callvirt, typeof(SerializationContext).GetProperty("ObjectMap").GetGetMethod());
                 il.Emit(OpCodes.Ldloc, contextLocal);
-                il.Emit(OpCodes.Ldfld, typeof(SerializationContext).GetField("Serializer"));
+                il.Emit(OpCodes.Callvirt, typeof(SerializationContext).GetProperty("Serializer").GetGetMethod());
 
                 // Call NeoBinarySerializer.SerializeObject
                 il.Emit(OpCodes.Callvirt, typeof(NeoBinarySerializer).GetMethod(
@@ -196,7 +196,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 
                 // Register object for circular references
                 il.Emit(OpCodes.Ldloc, contextLocal);
-                il.Emit(OpCodes.Ldfld, typeof(DeserializationContext).GetField("DeserializedObjects"));
+                il.Emit(OpCodes.Callvirt, typeof(DeserializationContext).GetProperty("DeserializedObjects").GetGetMethod());
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Call, typeof(BinaryReader).GetMethod("ReadInt32"));
                 il.Emit(OpCodes.Ldloc, objLocal);
@@ -227,9 +227,9 @@ namespace CoreRemoting.Serialization.NeoBinary
                 // Deserialize field value
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Ldloc, contextLocal);
-                il.Emit(OpCodes.Ldfld, typeof(DeserializationContext).GetField("DeserializedObjects"));
+                il.Emit(OpCodes.Callvirt, typeof(DeserializationContext).GetProperty("DeserializedObjects").GetGetMethod());
                 il.Emit(OpCodes.Ldloc, contextLocal);
-                il.Emit(OpCodes.Ldfld, typeof(DeserializationContext).GetField("Serializer"));
+                il.Emit(OpCodes.Callvirt, typeof(DeserializationContext).GetProperty("Serializer").GetGetMethod());
 
                 // Call NeoBinarySerializer.DeserializeObject
                 il.Emit(OpCodes.Callvirt, typeof(NeoBinarySerializer).GetMethod(
@@ -240,9 +240,6 @@ namespace CoreRemoting.Serialization.NeoBinary
                 if (type.IsValueType)
                 {
                     // For value types, we need to work with the boxed instance
-                    // Create a local for the deserialized value
-                    var valueLocal = il.DeclareLocal(field.FieldType);
-                    
                     // Cast and unbox the deserialized value to the correct field type
                     if (field.FieldType.IsValueType)
                     {
@@ -253,14 +250,10 @@ namespace CoreRemoting.Serialization.NeoBinary
                         il.Emit(OpCodes.Castclass, field.FieldType);
                     }
                     
-                    // Store the deserialized value in our local
-                    il.Emit(OpCodes.Stloc, valueLocal);
-                    
-                    // Load the address of the struct local
-                    il.Emit(OpCodes.Ldloca, objLocal);
-                    
-                    // Load the field value from our value local
-                    il.Emit(OpCodes.Ldloc, valueLocal);
+                    // Load the address of the struct local (objLocal is the boxed struct)
+                    il.Emit(OpCodes.Ldloc, objLocal);
+                    il.Emit(OpCodes.Castclass, type);
+                    il.Emit(OpCodes.Unbox, type);
                     
                     // Store the value into the struct field
                     il.Emit(OpCodes.Stfld, field);
