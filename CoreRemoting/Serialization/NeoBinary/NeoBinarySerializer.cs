@@ -279,10 +279,13 @@ namespace CoreRemoting.Serialization.NeoBinary
 				if (!deserializedObjects.ContainsKey(objectId))
 				{
 					// Create a forward reference placeholder
+					Console.WriteLine($"[DEBUG] Creating ForwardReferencePlaceholder for object ID {objectId}");
 					deserializedObjects[objectId] = new ForwardReferencePlaceholder(objectId);
 				}
 
-				return deserializedObjects[objectId];
+				var result = deserializedObjects[objectId];
+				Console.WriteLine($"[DEBUG] Returning from reference marker: {result?.GetType().Name ?? "null"} for ID {objectId}");
+				return result;
 			}
 
 			if (marker == 3) // Simple object marker
@@ -1018,16 +1021,20 @@ namespace CoreRemoting.Serialization.NeoBinary
 				Serializer = this
 			};
 
+			// Register a placeholder immediately to handle self-references during IL deserialization
+			var placeholder = new ForwardReferencePlaceholder(objectId);
+			deserializedObjects[objectId] = placeholder;
+
 			var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 			try
 			{
 				var result = cachedDeserializer.Deserializer(reader, context);
 				
-				// Register the object for circular references if not already done
-				if (!deserializedObjects.ContainsKey(objectId))
-				{
-					deserializedObjects[objectId] = result;
-				}
+				// Replace placeholder with actual result
+				deserializedObjects[objectId] = result;
+
+				// Resolve forward references after deserialization
+				IlTypeSerializer.ResolveForwardReferences(context);
 
 				return result;
 			}

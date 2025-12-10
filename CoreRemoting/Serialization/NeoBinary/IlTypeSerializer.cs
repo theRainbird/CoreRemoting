@@ -52,6 +52,7 @@ namespace CoreRemoting.Serialization.NeoBinary
         {
             public Dictionary<int, object> DeserializedObjects { get; set; }
             public NeoBinarySerializer Serializer { get; set; }
+            public List<(object targetObject, FieldInfo field, int placeholderObjectId)> ForwardReferences { get; set; } = new();
         }
 
         /// <summary>
@@ -97,6 +98,7 @@ namespace CoreRemoting.Serialization.NeoBinary
                     true);
 
                 var il = dynamicMethod.GetILGenerator();
+
                 var writerLocal = il.DeclareLocal(typeof(BinaryWriter));
                 var contextLocal = il.DeclareLocal(typeof(SerializationContext));
                 var typedObjLocal = il.DeclareLocal(type);
@@ -107,7 +109,15 @@ namespace CoreRemoting.Serialization.NeoBinary
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Stloc, contextLocal);
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Castclass, type);
+                if (type.IsValueType)
+                {
+                    // Unbox the boxed struct to the value-type local
+                    il.Emit(OpCodes.Unbox_Any, type);
+                }
+                else
+                {
+                    il.Emit(OpCodes.Castclass, type);
+                }
                 il.Emit(OpCodes.Stloc, typedObjLocal);
 
                 // Write field count to match general serializer format
@@ -128,7 +138,15 @@ namespace CoreRemoting.Serialization.NeoBinary
                     il.Emit(OpCodes.Callvirt, typeof(SerializationContext).GetProperty("Serializer").GetGetMethod());
 
                     // arg0: object value
-                    il.Emit(OpCodes.Ldloc, typedObjLocal);
+                    if (type.IsValueType)
+                    {
+                        // For value-type container, load address before Ldfld
+                        il.Emit(OpCodes.Ldloca, typedObjLocal);
+                    }
+                    else
+                    {
+                        il.Emit(OpCodes.Ldloc, typedObjLocal);
+                    }
                     il.Emit(OpCodes.Ldfld, field);
                     if (field.FieldType.IsValueType)
                     {
@@ -158,7 +176,7 @@ namespace CoreRemoting.Serialization.NeoBinary
         }
 
         /// <summary>
-        /// Creates a deserializer delegate for the specified type.
+        /// Creates a deserializer delegate for specified type.
         /// </summary>
         /// <param name="type">Type to create deserializer for</param>
         /// <returns>Deserializer delegate</returns>
@@ -217,6 +235,9 @@ namespace CoreRemoting.Serialization.NeoBinary
                 // For each field, read name, then value, then assign
                 foreach (var field in fields)
                 {
+                    // Label to jump to end of this field handling when special-case path is taken
+                    var endOfFieldLabel = il.DefineLabel();
+
                     // Read and discard field name
                     il.Emit(OpCodes.Ldloc, readerLocal);
                     il.Emit(OpCodes.Call, typeof(BinaryReader).GetMethod("ReadString"));
@@ -233,6 +254,90 @@ namespace CoreRemoting.Serialization.NeoBinary
                         BindingFlags.NonPublic | BindingFlags.Instance));
                     il.Emit(OpCodes.Stloc, valueLocal);
 
+                    // Check if value is ForwardReferencePlaceholder
+                    var isPlaceholderLabel = il.DefineLabel();
+                    var afterPlaceholderCheckLabel = il.DefineLabel();
+                    var placeholderLocal = il.DeclareLocal(typeof(NeoBinarySerializer.ForwardReferencePlaceholder));
+                    
+                    il.Emit(OpCodes.Ldloc, valueLocal);
+                    il.Emit(OpCodes.Isinst, typeof(NeoBinarySerializer.ForwardReferencePlaceholder));
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Stloc, placeholderLocal);
+                    il.Emit(OpCodes.Brfalse_S, afterPlaceholderCheckLabel);
+
+                    // Handle ForwardReferencePlaceholder - check for self-reference or track for later resolution
+                    if (!type.IsValueType)
+                    {
+                        // Check if this is a self-reference by comparing placeholder ID with current object ID
+                        var selfRefLabel = il.DefineLabel();
+                        var trackRefLabel = il.DefineLabel();
+                        var afterRefHandlingLabel = il.DefineLabel();
+                        
+                        // Get current object's ID from deserializedObjects
+                        il.Emit(OpCodes.Ldloc, contextLocal);
+                        il.Emit(OpCodes.Callvirt, typeof(DeserializationContext).GetProperty("DeserializedObjects").GetGetMethod());
+                        
+                        // We need to find the key for our current object - iterate through dictionary
+                        il.Emit(OpCodes.Ldloc, typedObjLocal);
+                        il.Emit(OpCodes.Call, typeof(IlTypeSerializer).GetMethod("FindObjectId", BindingFlags.NonPublic | BindingFlags.Static));
+                        il.Emit(OpCodes.Ldloc, placeholderLocal);
+                        il.Emit(OpCodes.Callvirt, typeof(NeoBinarySerializer.ForwardReferencePlaceholder).GetProperty("ObjectId").GetGetMethod());
+                        il.Emit(OpCodes.Beq_S, selfRefLabel);
+                        
+                        // Not a self-reference - track for later resolution
+                        il.Emit(OpCodes.Br_S, trackRefLabel);
+                        
+                        // Self-reference: set field to the object itself
+                        il.MarkLabel(selfRefLabel);
+                        il.Emit(OpCodes.Ldloc, typedObjLocal);
+                        il.Emit(OpCodes.Ldloc, typedObjLocal);
+                        il.Emit(OpCodes.Stfld, field);
+                        il.Emit(OpCodes.Br_S, afterRefHandlingLabel);
+                        
+                        // Track forward reference for later resolution
+                        il.MarkLabel(trackRefLabel);
+                        il.Emit(OpCodes.Ldloc, contextLocal);
+                        il.Emit(OpCodes.Ldloc, typedObjLocal);
+                        il.Emit(OpCodes.Ldtoken, field);
+                        il.Emit(OpCodes.Call, typeof(FieldInfo).GetMethod("GetFieldFromHandle", new[] { typeof(RuntimeFieldHandle) }));
+                        il.Emit(OpCodes.Ldloc, placeholderLocal);
+                        il.Emit(OpCodes.Callvirt, typeof(NeoBinarySerializer.ForwardReferencePlaceholder).GetProperty("ObjectId").GetGetMethod());
+                        il.Emit(OpCodes.Call, typeof(IlTypeSerializer).GetMethod("TrackForwardReference", BindingFlags.NonPublic | BindingFlags.Static));
+                        
+                        // Initialize field to a safe default for now (will be resolved later)
+                        if (field.FieldType.IsValueType)
+                        {
+                            // For value-type fields in a reference-type object: initobj on field address
+                            il.Emit(OpCodes.Ldloc, typedObjLocal);
+                            il.Emit(OpCodes.Ldflda, field);
+                            il.Emit(OpCodes.Initobj, field.FieldType);
+                        }
+                        else
+                        {
+                            // For reference-type fields: set to null
+                            il.Emit(OpCodes.Ldloc, typedObjLocal);
+                            il.Emit(OpCodes.Ldnull);
+                            il.Emit(OpCodes.Stfld, field);
+                        }
+                        
+                        il.MarkLabel(afterRefHandlingLabel);
+                        // Skip normal assignment for this field when placeholder encountered
+                        il.Emit(OpCodes.Br_S, endOfFieldLabel);
+                    }
+                    else
+                    {
+                        // For value types, set the field to its default value.
+                        // Need the address of the struct local, then the address of the field, then initobj on the field type.
+                        il.Emit(OpCodes.Ldloca, typedObjLocal);
+                        il.Emit(OpCodes.Ldflda, field);
+                        il.Emit(OpCodes.Initobj, field.FieldType);
+                        // Skip normal assignment for this field when placeholder encountered
+                        il.Emit(OpCodes.Br_S, endOfFieldLabel);
+                    }
+                    
+                    // Normal value handling
+                    il.MarkLabel(afterPlaceholderCheckLabel);
+                    
                     // Assign field
                     if (type.IsValueType)
                     {
@@ -256,6 +361,9 @@ namespace CoreRemoting.Serialization.NeoBinary
                     }
 
                     il.Emit(OpCodes.Stfld, field);
+
+                    // End of field handling
+                    il.MarkLabel(endOfFieldLabel);
                 }
 
                 // Return object (box if value type)
@@ -272,6 +380,90 @@ namespace CoreRemoting.Serialization.NeoBinary
                 il.Emit(OpCodes.Ret);
                 return (ObjectDeserializerDelegate)dynamicMethod.CreateDelegate(typeof(ObjectDeserializerDelegate));
             });
+        }
+
+        /// <summary>
+        /// Helper method to track forward references for later resolution.
+        /// </summary>
+        /// <param name="context">Deserialization context</param>
+        /// <param name="targetObject">Object containing the field</param>
+        /// <param name="field">Field info</param>
+        /// <param name="placeholderObjectId">Placeholder object ID</param>
+        private static void TrackForwardReference(DeserializationContext context, object targetObject, FieldInfo field, int placeholderObjectId)
+        {
+            context.ForwardReferences.Add((targetObject, field, placeholderObjectId));
+        }
+
+        /// <summary>
+        /// Helper method to find the object ID for a given object in the deserialized objects dictionary.
+        /// </summary>
+        /// <param name="deserializedObjects">Dictionary of deserialized objects</param>
+        /// <param name="targetObject">Object to find ID for</param>
+        /// <returns>Object ID if found, otherwise -1</returns>
+        private static int FindObjectId(Dictionary<int, object> deserializedObjects, object targetObject)
+        {
+            foreach (var kvp in deserializedObjects)
+            {
+                if (ReferenceEquals(kvp.Value, targetObject))
+                {
+                    return kvp.Key;
+                }
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// Resolves all tracked forward references.
+        /// </summary>
+        /// <param name="context">Deserialization context</param>
+        public static void ResolveForwardReferences(DeserializationContext context)
+        {
+            var maxIterations = context.ForwardReferences.Count + 1;
+            
+            for (int iteration = 0; iteration < maxIterations; iteration++)
+            {
+                var remainingReferences = new List<(object targetObject, FieldInfo field, int placeholderObjectId)>();
+                
+                foreach (var (targetObject, field, placeholderObjectId) in context.ForwardReferences)
+                {
+                    if (context.DeserializedObjects.TryGetValue(placeholderObjectId, out var resolvedObject))
+                    {
+                        // Reference resolved - set the field value
+                        field.SetValue(targetObject, resolvedObject);
+                    }
+                    else
+                    {
+                        remainingReferences.Add((targetObject, field, placeholderObjectId));
+                    }
+                }
+                
+                // Replace with only unresolved references
+                context.ForwardReferences.Clear();
+                foreach (var remaining in remainingReferences)
+                {
+                    context.ForwardReferences.Add(remaining);
+                }
+                
+                if (context.ForwardReferences.Count == 0)
+                    break;
+            }
+            
+            if (context.ForwardReferences.Count > 0)
+            {
+                // For unresolved references, check if they are self-references
+                foreach (var (targetObject, field, placeholderObjectId) in context.ForwardReferences)
+                {
+                    // Check if target object itself has the same ID by looking up all objects
+                    foreach (var kvp in context.DeserializedObjects)
+                    {
+                        if (ReferenceEquals(kvp.Value, targetObject) && kvp.Key == placeholderObjectId)
+                        {
+                            field.SetValue(targetObject, targetObject);
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         /// <summary>
