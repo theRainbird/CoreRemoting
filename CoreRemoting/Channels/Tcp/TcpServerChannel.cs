@@ -85,7 +85,7 @@ public class TcpServerChannel : IServerChannel
             // https://github.com/dotnet/WatsonTcp/issues/303
             await Task.Delay(100).ConfigureAwait(false);
 
-            _tcpServer.Dispose();
+            _tcpServer?.Dispose();
             _tcpServer = null;
         }
     }

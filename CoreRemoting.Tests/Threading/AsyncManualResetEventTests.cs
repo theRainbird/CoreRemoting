@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
+using CoreRemoting.Channels.Null;
 using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
 using Xunit;
@@ -7,9 +8,29 @@ using Xunit;
 namespace CoreRemoting.Tests.Threading;
 
 /// <summary>
+/// Fixture for cleaning up static state between tests.
+/// </summary>
+public class NullMessageQueueCleanupFixture : IDisposable
+{
+    public void Dispose()
+    {
+        NullMessageQueue.ClearAll();
+    }
+}
+
+/// <summary>
+/// Collection for AsyncManualResetEvent tests with cleanup.
+/// </summary>
+[CollectionDefinition("AsyncManualResetEventTests")]
+public class AsyncManualResetEventTestsCollection : ICollectionFixture<NullMessageQueueCleanupFixture>
+{
+}
+
+/// <summary>
 /// Unit tests based on Nito.AsyncEx unit tests for the AsyncManualResetEvent class by Stephen Cleary:
 /// https://github.com/StephenCleary/AsyncEx/blob/master/test/AsyncEx.Coordination.UnitTests/AsyncManualResetEventUnitTests.cs
 /// </summary>
+[Collection("AsyncManualResetEventTests")]
 public class AsyncManualResetEventTests
 {
     private async Task NeverCompletes(Task task, double sec = 0.5) =>

@@ -27,8 +27,8 @@ public class AsyncTests : IClassFixture<ServerFixture>
             MessageEncryption = false,
             ServerPort = _serverFixture.Server.Config.NetworkPort
         });
-
-        client.Connect();
+        
+        await client.ConnectAsync();
         var proxy = client.CreateProxy<IAsyncService>();
 
         var base64String = await proxy.ConvertToBase64Async("Yay");

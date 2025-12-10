@@ -255,37 +255,6 @@ namespace CoreRemoting.Benchmark
                 GC.KeepAlive(data);
             });
         }
-
-        // Large object graph tests
-        [Benchmark]
-        public byte[] NeoBinary_LargeObject_Serialize()
-        {
-            var serializer = new NeoBinarySerializerAdapter();
-            return serializer.Serialize(_largeObjectArray);
-        }
-
-        [Benchmark]
-        public byte[] BinaryFormatter_LargeObject_Serialize()
-        {
-            var serializer = new BinarySerializerAdapter();
-            return serializer.Serialize(_largeObjectArray);
-        }
-
-        [Benchmark]
-        public TestObject[] NeoBinary_LargeObject_Deserialize()
-        {
-            var serializer = new NeoBinarySerializerAdapter();
-            var data = serializer.Serialize(_largeObjectArray);
-            return serializer.Deserialize<TestObject[]>(data);
-        }
-
-        [Benchmark]
-        public TestObject[] BinaryFormatter_LargeObject_Deserialize()
-        {
-            var serializer = new BinarySerializerAdapter();
-            var data = serializer.Serialize(_largeObjectArray);
-            return serializer.Deserialize<TestObject[]>(data);
-        }
     }
 
     class Program

@@ -15,17 +15,21 @@ public class ServerFixture : IDisposable
 
     public Exception LastServerError;
 
+    private static int _nextNetworkPort = 9099;
+    
     public ServerFixture()
     {
         TestService = new TestService();
 
+        Interlocked.Increment(ref _nextNetworkPort);
+        
         ServerConfig =
             new ServerConfig()
             {
                 UniqueServerInstanceName = "DefaultServer",
                 IsDefault = true,
                 MessageEncryption = false,
-                NetworkPort = 9094,
+                NetworkPort = _nextNetworkPort,
                 KeySize = 1024,
                 RegisterServicesAction = container =>
                 {
@@ -111,7 +115,16 @@ public class ServerFixture : IDisposable
             ServerErrorCount++;
         };
 
-        Server.Start();
+        try
+        {
+            Server.Start();    
+        }
+        catch (System.Net.Sockets.SocketException e) when (e.Message == "Address already in use")
+        {
+            Interlocked.Increment(ref _nextNetworkPort);
+            ServerConfig.NetworkPort = _nextNetworkPort;
+            Server.Start();
+        }
     }
 
     public RemotingServer Server { get; private set;  }

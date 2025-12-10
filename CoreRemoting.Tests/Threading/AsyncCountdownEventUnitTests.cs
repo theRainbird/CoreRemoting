@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using CoreRemoting.Threading;
 using Xunit;
@@ -9,6 +9,7 @@ namespace CoreRemoting.Tests.Threading;
 /// Unit tests based on Nito.AsyncEx unit tests for the AsyncCountdownEvent class by Stephen Cleary:
 /// https://github.com/StephenCleary/AsyncEx/blob/master/test/AsyncEx.Coordination.UnitTests/AsyncCountdownEventUnitTests.cs
 /// </summary>
+[Collection("AsyncManualResetEventTests")]
 public class AsyncCountdownEventUnitTests
 {
     [Fact]

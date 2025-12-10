@@ -16,7 +16,7 @@ namespace CoreRemoting.Serialization.Hyperion
 		/// Initializes a new instance of the HyperionSerializerAdapter class.
 		/// </summary>
 		/// <param name="config">Configuration settings for the serializer</param>
-		public HyperionSerializerAdapter(HyperionSerializerConfig config = null)
+		public HyperionSerializerAdapter(HyperionSerializerConfig config = null!)
 		{
 			_config = config ?? new HyperionSerializerConfig();
 			
@@ -45,7 +45,7 @@ namespace CoreRemoting.Serialization.Hyperion
 		/// <returns>Serialized data</returns>
 		public byte[] Serialize<T>(T graph)
 		{
-			return Serialize(typeof(T), graph);
+			return Serialize(typeof(T), graph!);
 		}
 
 		/// <summary>
@@ -119,7 +119,7 @@ namespace CoreRemoting.Serialization.Hyperion
 
 			// Handle null values - empty byte array represents null
 			if (rawData.Length == 0)
-				return null;
+				return null!;
 
 			// Check size limits
 			if (rawData.Length > _config.MaxSerializedSize)
@@ -164,7 +164,7 @@ namespace CoreRemoting.Serialization.Hyperion
 				}
 
 				// Check if deserialized type is allowed
-				if (!_config.IsTypeAllowed(result.GetType()))
+				if (!_config.IsTypeAllowed(result!.GetType()))
 				{
 					throw new InvalidOperationException($"Deserialized object type '{result.GetType().FullName}' is not allowed.");
 				}
@@ -266,7 +266,7 @@ namespace CoreRemoting.Serialization.Hyperion
 				}
 
 				// Check if deserialized type is allowed
-				if (!_config.IsTypeAllowed(result.GetType()))
+				if (!_config.IsTypeAllowed(result!.GetType()))
 				{
 					throw new InvalidOperationException($"Deserialized object type '{result.GetType().FullName}' is not allowed.");
 				}
@@ -288,7 +288,7 @@ namespace CoreRemoting.Serialization.Hyperion
 		public T Clone<T>(T obj)
 		{
 			if (obj == null)
-				return default(T);
+				return default(T)!;
 
 			var serialized = Serialize(obj);
 			return Deserialize<T>(serialized);

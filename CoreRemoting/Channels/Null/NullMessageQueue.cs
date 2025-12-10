@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using CoreRemoting.Threading;
@@ -40,6 +40,16 @@ public class NullMessageQueue
     /// <param name="endpoint">Listening endpoint.</param>
     public static void StopListener(string endpoint) =>
         Listeners.TryRemove(endpoint, out _);
+
+    /// <summary>
+    /// Clears all static state. Useful for test cleanup.
+    /// </summary>
+    public static void ClearAll()
+    {
+        Events.Clear();
+        Queues.Clear();
+        Listeners.Clear();
+    }
 
     /// <summary>
     /// Connects to the specified listener endpoint.
