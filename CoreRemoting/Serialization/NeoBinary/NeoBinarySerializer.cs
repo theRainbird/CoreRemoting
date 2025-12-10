@@ -18,6 +18,11 @@ namespace CoreRemoting.Serialization.NeoBinary
 	/// </summary>
 	public class NeoBinarySerializer
 	{
+        // Pending forward references collected during nested deserializations
+        // that could not be resolved immediately (e.g., child -> parent back-references).
+        // They will be resolved after the full object graph has been materialized.
+        private readonly List<(object targetObject, System.Reflection.FieldInfo field, int placeholderObjectId)>
+            _pendingForwardReferences = new();
 		private const string MAGIC_NAME = "NEOB";
 		private const ushort CURRENT_VERSION = 1;
 
@@ -149,7 +154,9 @@ namespace CoreRemoting.Serialization.NeoBinary
 			var deserializedObjects = new Dictionary<int, object>();
 			var result = DeserializeObject(reader, deserializedObjects);
 
-			// Skip resolving forward references to avoid stack overflow
+			// After the full graph is constructed, resolve any remaining forward references
+			// that couldn't be set during nested deserialization (e.g., back-references).
+			ResolvePendingForwardReferences(deserializedObjects);
 
 			return result;
 		}
@@ -279,13 +286,10 @@ namespace CoreRemoting.Serialization.NeoBinary
 				if (!deserializedObjects.ContainsKey(objectId))
 				{
 					// Create a forward reference placeholder
-					Console.WriteLine($"[DEBUG] Creating ForwardReferencePlaceholder for object ID {objectId}");
 					deserializedObjects[objectId] = new ForwardReferencePlaceholder(objectId);
 				}
 
-				var result = deserializedObjects[objectId];
-				Console.WriteLine($"[DEBUG] Returning from reference marker: {result?.GetType().Name ?? "null"} for ID {objectId}");
-				return result;
+				return deserializedObjects[objectId];
 			}
 
 			if (marker == 3) // Simple object marker
@@ -1033,7 +1037,9 @@ namespace CoreRemoting.Serialization.NeoBinary
 				// Replace placeholder with actual result
 				deserializedObjects[objectId] = result;
 
-				// Resolve forward references after deserialization
+				// Resolve forward references after deserialization. Any still-unresolved
+				// references (e.g., to parents not yet materialized) will be queued on the
+				// serializer and resolved after the full graph is read.
 				IlTypeSerializer.ResolveForwardReferences(context);
 
 				return result;
@@ -2556,6 +2562,52 @@ namespace CoreRemoting.Serialization.NeoBinary
 				ObjectId = objectId;
 			}
 		}
+
+        /// <summary>
+        /// Add a forward reference that couldn't be resolved yet for later resolution.
+        /// </summary>
+        /// <param name="targetObject">Object containing the field</param>
+        /// <param name="field">Field to set</param>
+        /// <param name="placeholderObjectId">Referenced object id</param>
+        internal void AddPendingForwardReference(object targetObject, System.Reflection.FieldInfo field, int placeholderObjectId)
+        {
+            if (targetObject == null || field == null) return;
+            _pendingForwardReferences.Add((targetObject, field, placeholderObjectId));
+        }
+
+        /// <summary>
+        /// Resolve all pending forward references collected during nested deserialization calls.
+        /// </summary>
+        /// <param name="deserializedObjects">Map of object ids to instances</param>
+        private void ResolvePendingForwardReferences(Dictionary<int, object> deserializedObjects)
+        {
+            // Try multiple passes in case of chains; cap iterations to avoid infinite loops.
+            var maxIterations = _pendingForwardReferences.Count + 1;
+            for (int iteration = 0; iteration < maxIterations; iteration++)
+            {
+                if (_pendingForwardReferences.Count == 0) break;
+
+                var remaining = new List<(object targetObject, System.Reflection.FieldInfo field, int placeholderObjectId)>();
+
+                foreach (var (targetObject, field, placeholderObjectId) in _pendingForwardReferences)
+                {
+                    if (deserializedObjects.TryGetValue(placeholderObjectId, out var resolved)
+                        && resolved is not ForwardReferencePlaceholder)
+                    {
+                        field.SetValue(targetObject, resolved);
+                    }
+                    else
+                    {
+                        remaining.Add((targetObject, field, placeholderObjectId));
+                    }
+                }
+
+                _pendingForwardReferences.Clear();
+                _pendingForwardReferences.AddRange(remaining);
+
+                if (_pendingForwardReferences.Count == 0) break;
+            }
+        }
 
 		private List<FieldInfo> GetAllFieldsInHierarchy(Type type)
 		{

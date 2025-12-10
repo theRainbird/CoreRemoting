@@ -426,7 +426,8 @@ namespace CoreRemoting.Serialization.NeoBinary
                 
                 foreach (var (targetObject, field, placeholderObjectId) in context.ForwardReferences)
                 {
-                    if (context.DeserializedObjects.TryGetValue(placeholderObjectId, out var resolvedObject))
+                    if (context.DeserializedObjects.TryGetValue(placeholderObjectId, out var resolvedObject)
+                        && resolvedObject is not NeoBinarySerializer.ForwardReferencePlaceholder)
                     {
                         // Reference resolved - set the field value
                         field.SetValue(targetObject, resolvedObject);
@@ -450,18 +451,10 @@ namespace CoreRemoting.Serialization.NeoBinary
             
             if (context.ForwardReferences.Count > 0)
             {
-                // For unresolved references, check if they are self-references
+                // Hand unresolved references to the owning serializer for final resolution
                 foreach (var (targetObject, field, placeholderObjectId) in context.ForwardReferences)
                 {
-                    // Check if target object itself has the same ID by looking up all objects
-                    foreach (var kvp in context.DeserializedObjects)
-                    {
-                        if (ReferenceEquals(kvp.Value, targetObject) && kvp.Key == placeholderObjectId)
-                        {
-                            field.SetValue(targetObject, targetObject);
-                            break;
-                        }
-                    }
+                    context.Serializer.AddPendingForwardReference(targetObject, field, placeholderObjectId);
                 }
             }
         }
