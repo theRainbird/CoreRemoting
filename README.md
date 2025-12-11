@@ -21,9 +21,11 @@ Documentation: https://github.com/theRainbird/CoreRemoting/wiki
 - Creates proxy objects for remote services at runtime (uses Castle.DynamicProxy under the hood)
 - Services can have `SingleCall` or `Singeton` lifetime
 - Uses duplex TCP network communication by default (based on WatsonTcp library)
+- Supports Named Pipe channel for inter-process communication
 - Custom transport channels can be plugged in (Just implement `IServerChannel` and `IClientChannel`)
 - Used Bson serialization by default (via Json.NET)
-- Also supports classic BinaryFormatter for best possible DataSet / DataTable support
+- Includes NeoBinaryFormatter as built-in binary serializer
+- BinaryFormatter support is available in separate CoreRemoting.Serialization.Binary package
 - BinaryFormatter is hardened against known deserialization attack patterns
 - Custom serializers can be plugged in (Just implement `ISerializerAdapter`)
 - Support for custom authentication (Just implement `IAuthenticationProvider`)
@@ -161,3 +163,32 @@ Source code of this example is also available in the repository at https://githu
 
 To test the hello world solution, start the server (HelloWorld.Server) and then multiple clients (HelloWorld.Client).
 Have fun.
+
+## Breaking Changes in Version 1.3
+
+### BinaryFormatter Moved to Separate Assembly
+Starting with version 1.3, the classic BinaryFormatter support has been moved to a separate assembly:
+- **Package**: `CoreRemoting.Serialization.Binary`
+- **Purpose**: Maintains compatibility for applications requiring DataSet/DataTable serialization
+- **Security**: Includes hardened BinaryFormatter implementation against deserialization attacks
+
+### NeoBinaryFormatter Added to Core System
+A new binary serializer is now included in the core system:
+- **Name**: NeoBinaryFormatter
+- **Location**: Built into CoreRemoting core assembly
+- **Benefits**: Better security than classic BinaryFormatter, also supports DataSets/DataTables if needed
+- **Performance**: Currently slower than BinaryFormatter but faster than Hyperion (performance improvements in progress)
+- **Usage**: Recommended binary serializer when binary serialization is desired (BSON from Newtonsoft remains default)
+
+### New Named Pipe Channel
+Version 1.3 introduces a new Named Pipe channel for inter-process communication:
+- **Purpose**: High-performance communication between processes on the same machine
+- **Benefits**: Faster than TCP for local inter-process communication
+- **Usage**: Ideal for client-server applications running on the same host
+
+### Migration Guide
+If you were using BinaryFormatter in version 1.2 or earlier:
+1. For new applications requiring binary serialization, use NeoBinaryFormatter (recommended)
+2. For existing .NET Remoting applications requiring 100% compatibility, add the `CoreRemoting.Serialization.Binary` NuGet package
+3. Update your serializer configuration to use the appropriate serializer adapter
+4. Note: BSON from Newtonsoft remains the default serializer
