@@ -65,44 +65,45 @@ public class RemotingServicesTests
     [Fact]
     public void Connect_should_create_a_proxy_for_a_remote_service()
     {
-        var testService = 
-            new TestService 
+        var testService =
+            new TestService
             {
-                TestMethodFake = arg => 
+                TestMethodFake = arg =>
                     arg
             };
 
-        using var server = 
-            new RemotingServer(new ServerConfig
-            {
-                NetworkPort = 9199, 
-                IsDefault = true
-            });
-        
-        RemotingServices.Marshal(testService, "test", typeof(ITestService));
+        // Use a non-default server with a unique instance name to avoid cross-test interference
+        var serverConfig = new ServerConfig
+        {
+            NetworkPort = 9199,
+            IsDefault = false,
+            UniqueServerInstanceName = $"RS_Server_{Guid.NewGuid()}"
+        };
+
+        using var server = new RemotingServer(serverConfig);
+
+        // Explicitly marshal to this server instance (do not rely on default server)
+        RemotingServices.Marshal(testService, "test", typeof(ITestService), server.UniqueServerInstanceName);
         server.Start();
 
-        var clientThread = new Thread(() =>
+        // Create a dedicated, non-default client instance and reference it by name
+        using var client = new RemotingClient(new ClientConfig
         {
-            // ReSharper disable once ObjectCreationAsStatement
-            new RemotingClient(new ClientConfig {ServerPort = 9199, MessageEncryption = false, IsDefault = true});
-            
-            var proxy = 
-                RemotingServices.Connect(
-                    typeof(ITestService),
-                    "test",
-                    string.Empty);
-            
-            Assert.True(RemotingServices.IsTransparentProxy(proxy));
-
-            object result = ((ITestService) proxy).TestMethod(1);
-            
-            RemotingClient.DefaultRemotingClient.Dispose();
-            
-            Assert.Equal(1, Convert.ToInt32(result));
+            ServerPort = 9199,
+            MessageEncryption = false,
+            IsDefault = false,
+            UniqueClientInstanceName = $"RS_Client_{Guid.NewGuid()}"
         });
-        
-        clientThread.Start();
-        clientThread.Join();
+
+        var proxy = RemotingServices.Connect(
+            typeof(ITestService),
+            "test",
+            client.Config.UniqueClientInstanceName);
+
+        Assert.True(RemotingServices.IsTransparentProxy(proxy));
+
+        object result = ((ITestService)proxy).TestMethod(1);
+
+        Assert.Equal(1, Convert.ToInt32(result));
     }
 }

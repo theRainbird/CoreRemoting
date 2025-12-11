@@ -6,6 +6,8 @@ using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Tests.Tools;
 using CoreRemoting.Threading;
 using Xunit;
+using CoreRemoting; // RemotingClient
+using CoreRemoting.ClassicRemotingApi; // RemotingConfiguration
 
 namespace CoreRemoting.Tests;
 
@@ -138,6 +140,26 @@ public class ServerFixture : IDisposable
         if (Server != null)
         {
             Server.Dispose();
+        }
+
+        // Ensure no default client/server state leaks to other tests
+        try
+        {
+            RemotingClient.DefaultRemotingClient?.Dispose();
+            RemotingClient.DefaultRemotingClient = null;
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            RemotingConfiguration.ShutdownAll();
+        }
+        catch
+        {
+            // ignore
         }
 
         if (ServerErrorCount > 0 && LastServerError != null)
