@@ -15,8 +15,16 @@ namespace CoreRemoting.Serialization.NeoBinary
     /// </summary>
     public class IlTypeSerializer
     {
+        /// <summary>
+        /// Subformat tag indicating the compact IL layout (no field names/count).
+        /// Written immediately after type info for complex objects.
+        /// </summary>
+        public const byte CompactLayoutTag = 0xFE;
+
         private readonly ConcurrentDictionary<Type, ObjectSerializerDelegate> _serializers = new();
         private readonly ConcurrentDictionary<Type, ObjectDeserializerDelegate> _deserializers = new();
+        private readonly ConcurrentDictionary<Type, ObjectSerializerDelegate> _compactSerializers = new();
+        private readonly ConcurrentDictionary<Type, ObjectDeserializerDelegate> _compactDeserializers = new();
         private readonly ConcurrentDictionary<Type, FieldInfo[]> _fieldCache = new();
 
         /// <summary>
@@ -221,6 +229,88 @@ namespace CoreRemoting.Serialization.NeoBinary
         }
 
         /// <summary>
+        /// Creates a compact-layout serializer delegate for the specified type (no field names/count).
+        /// </summary>
+        public ObjectSerializerDelegate CreateCompactSerializer(Type type)
+        {
+            return _compactSerializers.GetOrAdd(type, t =>
+            {
+                var fields = _fieldCache.GetOrAdd(type, GetAllFields);
+
+                var dynamicMethod = new DynamicMethod(
+                    $"SerializeCompact_{type.Name}_{Guid.NewGuid():N}",
+                    typeof(void),
+                    new[] { typeof(object), typeof(BinaryWriter), typeof(SerializationContext) },
+                    typeof(NeoBinarySerializer),
+                    true);
+
+                var il = dynamicMethod.GetILGenerator();
+
+                var writerLocal = il.DeclareLocal(typeof(BinaryWriter));
+                var contextLocal = il.DeclareLocal(typeof(SerializationContext));
+                var typedObjLocal = il.DeclareLocal(type);
+
+                // Store args to locals
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Stloc, writerLocal);
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Stloc, contextLocal);
+                il.Emit(OpCodes.Ldarg_0);
+                if (type.IsValueType)
+                {
+                    il.Emit(OpCodes.Unbox_Any, type);
+                }
+                else
+                {
+                    il.Emit(OpCodes.Castclass, type);
+                }
+                il.Emit(OpCodes.Stloc, typedObjLocal);
+
+                // For each field: directly serialize value (no field names/count)
+                foreach (var field in fields)
+                {
+                    // Load serializer instance from context
+                    il.Emit(OpCodes.Ldloc, contextLocal);
+                    il.Emit(OpCodes.Callvirt, typeof(SerializationContext).GetProperty("Serializer").GetGetMethod());
+
+                    // arg0: object value
+                    if (type.IsValueType)
+                    {
+                        il.Emit(OpCodes.Ldloca, typedObjLocal);
+                    }
+                    else
+                    {
+                        il.Emit(OpCodes.Ldloc, typedObjLocal);
+                    }
+                    il.Emit(OpCodes.Ldfld, field);
+                    if (field.FieldType.IsValueType)
+                    {
+                        il.Emit(OpCodes.Box, field.FieldType);
+                    }
+
+                    // arg1: BinaryWriter
+                    il.Emit(OpCodes.Ldloc, writerLocal);
+
+                    // arg2: HashSet<object> serializedObjects
+                    il.Emit(OpCodes.Ldloc, contextLocal);
+                    il.Emit(OpCodes.Callvirt, typeof(SerializationContext).GetProperty("SerializedObjects").GetGetMethod());
+
+                    // arg3: Dictionary<object,int> objectMap
+                    il.Emit(OpCodes.Ldloc, contextLocal);
+                    il.Emit(OpCodes.Callvirt, typeof(SerializationContext).GetProperty("ObjectMap").GetGetMethod());
+
+                    // call NeoBinarySerializer.SerializeObject(object, BinaryWriter, HashSet<object>, Dictionary<object,int>)
+                    il.Emit(OpCodes.Callvirt, typeof(NeoBinarySerializer).GetMethod(
+                        "SerializeObject",
+                        BindingFlags.NonPublic | BindingFlags.Instance));
+                }
+
+                il.Emit(OpCodes.Ret);
+                return (ObjectSerializerDelegate)dynamicMethod.CreateDelegate(typeof(ObjectSerializerDelegate));
+            });
+        }
+
+        /// <summary>
         /// Creates a deserializer delegate for specified type.
         /// </summary>
         /// <param name="type">Type to create deserializer for</param>
@@ -318,12 +408,10 @@ namespace CoreRemoting.Serialization.NeoBinary
                         var trackRefLabel = il.DefineLabel();
                         var afterRefHandlingLabel = il.DefineLabel();
                         
-                        // Get current object's ID from deserializedObjects
-                        // We need to find key for our current object - iterate through dictionary
+                        // Get current object's ID using optimized reverse mapping
                         il.Emit(OpCodes.Ldloc, contextLocal);
-                        il.Emit(OpCodes.Callvirt, typeof(DeserializationContext).GetProperty("DeserializedObjects").GetGetMethod());
                         il.Emit(OpCodes.Ldloc, typedObjLocal);
-                        il.Emit(OpCodes.Call, typeof(IlTypeSerializer).GetMethod("FindObjectId", BindingFlags.NonPublic | BindingFlags.Static));
+                        il.Emit(OpCodes.Call, typeof(IlTypeSerializer).GetMethod("FindObjectIdOptimized", BindingFlags.Public | BindingFlags.Static));
                         il.Emit(OpCodes.Ldloc, placeholderLocal);
                         il.Emit(OpCodes.Callvirt, typeof(NeoBinarySerializer.ForwardReferencePlaceholder).GetProperty("ObjectId").GetGetMethod());
                         il.Emit(OpCodes.Beq_S, selfRefLabel);
@@ -411,6 +499,176 @@ namespace CoreRemoting.Serialization.NeoBinary
                 }
 
                 // Return object (box if value type)
+                if (type.IsValueType)
+                {
+                    il.Emit(OpCodes.Ldloc, typedObjLocal);
+                    il.Emit(OpCodes.Box, type);
+                }
+                else
+                {
+                    il.Emit(OpCodes.Ldloc, typedObjLocal);
+                }
+
+                il.Emit(OpCodes.Ret);
+                return (ObjectDeserializerDelegate)dynamicMethod.CreateDelegate(typeof(ObjectDeserializerDelegate));
+            });
+        }
+
+        /// <summary>
+        /// Creates a compact-layout deserializer delegate for specified type (no field names/count).
+        /// </summary>
+        public ObjectDeserializerDelegate CreateCompactDeserializer(Type type)
+        {
+            return _compactDeserializers.GetOrAdd(type, t =>
+            {
+                var fields = _fieldCache.GetOrAdd(type, GetAllFields);
+
+                var dynamicMethod = new DynamicMethod(
+                    $"DeserializeCompact_{type.Name}_{Guid.NewGuid():N}",
+                    typeof(object),
+                    new[] { typeof(BinaryReader), typeof(DeserializationContext) },
+                    typeof(NeoBinarySerializer),
+                    true);
+
+                var il = dynamicMethod.GetILGenerator();
+                var readerLocal = il.DeclareLocal(typeof(BinaryReader));
+                var contextLocal = il.DeclareLocal(typeof(DeserializationContext));
+                var typedObjLocal = il.DeclareLocal(type);
+                var valueLocal = il.DeclareLocal(typeof(object));
+
+                // Store args to locals
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Stloc, readerLocal);
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Stloc, contextLocal);
+
+                // Create instance
+                if (type.IsValueType)
+                {
+                    il.Emit(OpCodes.Ldloca, typedObjLocal);
+                    il.Emit(OpCodes.Initobj, type);
+                }
+                else
+                {
+                    il.Emit(OpCodes.Ldloc, contextLocal);
+                    il.Emit(OpCodes.Callvirt, typeof(DeserializationContext).GetProperty("Serializer").GetGetMethod());
+                    il.Emit(OpCodes.Ldtoken, type);
+                    il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle"));
+                    il.Emit(OpCodes.Callvirt, typeof(NeoBinarySerializer).GetMethod(
+                        "CreateInstanceWithoutConstructor",
+                        BindingFlags.NonPublic | BindingFlags.Instance));
+                    il.Emit(OpCodes.Castclass, type);
+                    il.Emit(OpCodes.Stloc, typedObjLocal);
+                }
+
+                // For each field in fixed order: read value and assign
+                foreach (var field in fields)
+                {
+                    var endOfFieldLabel = il.DefineLabel();
+
+                    // value = context.Serializer.DeserializeObject(reader, deserializedObjects)
+                    il.Emit(OpCodes.Ldloc, contextLocal);
+                    il.Emit(OpCodes.Callvirt, typeof(DeserializationContext).GetProperty("Serializer").GetGetMethod());
+                    il.Emit(OpCodes.Ldloc, readerLocal);
+                    il.Emit(OpCodes.Ldloc, contextLocal);
+                    il.Emit(OpCodes.Callvirt, typeof(DeserializationContext).GetProperty("DeserializedObjects").GetGetMethod());
+                    il.Emit(OpCodes.Callvirt, typeof(NeoBinarySerializer).GetMethod(
+                        "DeserializeObject",
+                        BindingFlags.NonPublic | BindingFlags.Instance));
+                    il.Emit(OpCodes.Stloc, valueLocal);
+
+                    // Check placeholder
+                    var afterPlaceholderCheckLabel = il.DefineLabel();
+                    var placeholderLocal = il.DeclareLocal(typeof(NeoBinarySerializer.ForwardReferencePlaceholder));
+                    var selfRefLabel = il.DefineLabel();
+                    var trackRefLabel = il.DefineLabel();
+                    var afterRefHandlingLabel = il.DefineLabel();
+
+                    il.Emit(OpCodes.Ldloc, valueLocal);
+                    il.Emit(OpCodes.Isinst, typeof(NeoBinarySerializer.ForwardReferencePlaceholder));
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Stloc, placeholderLocal);
+                    il.Emit(OpCodes.Brfalse_S, afterPlaceholderCheckLabel);
+
+                    if (!type.IsValueType)
+                    {
+                        // Compare current object id with placeholder id
+                        il.Emit(OpCodes.Ldloc, contextLocal);
+                        il.Emit(OpCodes.Ldloc, typedObjLocal);
+                        il.Emit(OpCodes.Call, typeof(IlTypeSerializer).GetMethod("FindObjectIdOptimized", BindingFlags.Public | BindingFlags.Static));
+                        il.Emit(OpCodes.Ldloc, placeholderLocal);
+                        il.Emit(OpCodes.Callvirt, typeof(NeoBinarySerializer.ForwardReferencePlaceholder).GetProperty("ObjectId").GetGetMethod());
+                        il.Emit(OpCodes.Beq_S, selfRefLabel);
+
+                        il.Emit(OpCodes.Br_S, trackRefLabel);
+
+                        il.MarkLabel(selfRefLabel);
+                        il.Emit(OpCodes.Ldloc, typedObjLocal);
+                        il.Emit(OpCodes.Ldloc, typedObjLocal);
+                        il.Emit(OpCodes.Stfld, field);
+                        il.Emit(OpCodes.Br_S, afterRefHandlingLabel);
+
+                        il.MarkLabel(trackRefLabel);
+                        il.Emit(OpCodes.Ldloc, contextLocal);
+                        il.Emit(OpCodes.Ldloc, typedObjLocal);
+                        il.Emit(OpCodes.Ldtoken, field);
+                        il.Emit(OpCodes.Call, typeof(FieldInfo).GetMethod("GetFieldFromHandle", new[] { typeof(RuntimeFieldHandle) }));
+                        il.Emit(OpCodes.Ldloc, placeholderLocal);
+                        il.Emit(OpCodes.Callvirt, typeof(NeoBinarySerializer.ForwardReferencePlaceholder).GetProperty("ObjectId").GetGetMethod());
+                        il.Emit(OpCodes.Call, typeof(IlTypeSerializer).GetMethod("TrackForwardReference", BindingFlags.NonPublic | BindingFlags.Static));
+
+                        if (field.FieldType.IsValueType)
+                        {
+                            il.Emit(OpCodes.Ldloc, typedObjLocal);
+                            il.Emit(OpCodes.Ldflda, field);
+                            il.Emit(OpCodes.Initobj, field.FieldType);
+                        }
+                        else
+                        {
+                            il.Emit(OpCodes.Ldloc, typedObjLocal);
+                            il.Emit(OpCodes.Ldnull);
+                            il.Emit(OpCodes.Stfld, field);
+                        }
+
+                        il.MarkLabel(afterRefHandlingLabel);
+                        il.Emit(OpCodes.Br_S, endOfFieldLabel);
+                    }
+                    else
+                    {
+                        // value type container: set field default
+                        il.Emit(OpCodes.Ldloca, typedObjLocal);
+                        il.Emit(OpCodes.Ldflda, field);
+                        il.Emit(OpCodes.Initobj, field.FieldType);
+                        il.Emit(OpCodes.Br_S, endOfFieldLabel);
+                    }
+
+                    il.MarkLabel(afterPlaceholderCheckLabel);
+
+                    // Assign field
+                    if (type.IsValueType)
+                    {
+                        il.Emit(OpCodes.Ldloca, typedObjLocal);
+                    }
+                    else
+                    {
+                        il.Emit(OpCodes.Ldloc, typedObjLocal);
+                    }
+
+                    il.Emit(OpCodes.Ldloc, valueLocal);
+                    if (field.FieldType.IsValueType)
+                    {
+                        il.Emit(OpCodes.Unbox_Any, field.FieldType);
+                    }
+                    else
+                    {
+                        il.Emit(OpCodes.Castclass, field.FieldType);
+                    }
+                    il.Emit(OpCodes.Stfld, field);
+
+                    il.MarkLabel(endOfFieldLabel);
+                }
+
+                // Return object
                 if (type.IsValueType)
                 {
                     il.Emit(OpCodes.Ldloc, typedObjLocal);
@@ -538,6 +796,8 @@ namespace CoreRemoting.Serialization.NeoBinary
         {
             _serializers.Clear();
             _deserializers.Clear();
+            _compactSerializers.Clear();
+            _compactDeserializers.Clear();
             _fieldCache.Clear();
         }
     }

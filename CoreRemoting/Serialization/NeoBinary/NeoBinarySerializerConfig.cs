@@ -6,21 +6,22 @@ namespace CoreRemoting.Serialization.NeoBinary
 	/// <summary>
 	/// Configuration settings for NeoBinary serializer.
 	/// </summary>
-	public class NeoBinarySerializerConfig
-	{
+		public class NeoBinarySerializerConfig
+		{
 		/// <summary>
 		/// Creates a new instance of the NeoBinarySerializerConfig class.
 		/// </summary>
-		public NeoBinarySerializerConfig()
-		{
-			IncludeAssemblyVersions = false;
-			UseTypeReferences = true;
-			MaxObjectGraphDepth = 100;
-			MaxSerializedSize = 100 * 1024 * 1024; // 100MB
-			AllowedTypes = new HashSet<Type>();
-			BlockedTypes = new HashSet<Type>();
-			AllowUnknownTypes = true;
-		}
+			public NeoBinarySerializerConfig()
+			{
+				IncludeAssemblyVersions = false;
+				UseTypeReferences = true;
+				MaxObjectGraphDepth = 100;
+				MaxSerializedSize = 100 * 1024 * 1024; // 100MB
+				AllowedTypes = new HashSet<Type>();
+				BlockedTypes = new HashSet<Type>();
+				AllowUnknownTypes = true;
+				UseIlCompactLayout = true;
+			}
 
 		/// <summary>
 		/// Gets or sets whether assembly versions should be included in type metadata.
@@ -73,6 +74,14 @@ namespace CoreRemoting.Serialization.NeoBinary
 		public bool IncludeFieldNames { get; set; } = true;
 
 		/// <summary>
+		/// Enables the IL compact layout for complex objects: no field names/count in the payload, fixed field order.
+		/// When enabled, the serializer writes a compact subformat tag (0xFE) after TypeInfo and uses
+		/// specialized IL readers/writers for fields. This significantly improves throughput for complex graphs.
+		/// Sender and receiver must both enable this flag for the same stream.
+		/// </summary>
+		public bool UseIlCompactLayout { get; set; }
+
+		/// <summary>
 		/// Gets or sets whether to compress serialized data.
 		/// </summary>
 		public bool EnableCompression { get; set; } = false;
@@ -108,7 +117,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 				EnableCompression = this.EnableCompression,
 				CompressionLevel = this.CompressionLevel,
 				EnableBinaryDataSetSerialization = this.EnableBinaryDataSetSerialization,
-				AllowExpressions = this.AllowExpressions
+				AllowExpressions = this.AllowExpressions,
+				UseIlCompactLayout = this.UseIlCompactLayout
 			};
 		}
 

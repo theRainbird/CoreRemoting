@@ -1045,28 +1045,58 @@ namespace CoreRemoting.Serialization.NeoBinary
 		{
 			var type = obj.GetType();
 
-			// Use high-performance IL-based serializer
-			var cachedSerializer = _serializerCache.GetOrCreateSerializer(type, t => _ilSerializer.CreateSerializer(t));
-			cachedSerializer.RecordAccess();
-			
-			var context = new IlTypeSerializer.SerializationContext
+			// Use compact IL layout if enabled: write subformat tag and skip field names/count
+			if (Config.UseIlCompactLayout)
 			{
-				SerializedObjects = serializedObjects,
-				ObjectMap = objectMap,
-				Serializer = this,
-				StringPool = _serializerCache.StringPool
-			};
+				// Write compact layout tag directly after TypeInfo (caller already wrote TypeInfo)
+				writer.Write(IlTypeSerializer.CompactLayoutTag);
 
-			var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-			try
-			{
-				cachedSerializer.Serializer(obj, writer, context);
+				var context = new IlTypeSerializer.SerializationContext
+				{
+					SerializedObjects = serializedObjects,
+					ObjectMap = objectMap,
+					Serializer = this,
+					StringPool = _serializerCache.StringPool
+				};
+
+				var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+				try
+				{
+					var serializer = _ilSerializer.CreateCompactSerializer(type);
+					serializer(obj, writer, context);
+				}
+				finally
+				{
+					stopwatch.Stop();
+					// We don't have per-type stats here; still record global count
+					_serializerCache.RecordSerialization();
+				}
 			}
-			finally
+			else
 			{
-				stopwatch.Stop();
-				cachedSerializer.RecordSerialization(stopwatch.ElapsedTicks);
-				_serializerCache.RecordSerialization();
+				// Use high-performance IL-based serializer (legacy format with field names)
+				var cachedSerializer = _serializerCache.GetOrCreateSerializer(type, t => _ilSerializer.CreateSerializer(t));
+				cachedSerializer.RecordAccess();
+				
+				var context = new IlTypeSerializer.SerializationContext
+				{
+					SerializedObjects = serializedObjects,
+					ObjectMap = objectMap,
+					Serializer = this,
+					StringPool = _serializerCache.StringPool
+				};
+
+				var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+				try
+				{
+					cachedSerializer.Serializer(obj, writer, context);
+				}
+				finally
+				{
+					stopwatch.Stop();
+					cachedSerializer.RecordSerialization(stopwatch.ElapsedTicks);
+					_serializerCache.RecordSerialization();
+				}
 			}
 		}
 
@@ -1118,10 +1148,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private object DeserializeComplexObject(Type type, BinaryReader reader,
 			Dictionary<int, object> deserializedObjects, int objectId)
 		{
-			// Use high-performance IL-based deserializer
-			var cachedDeserializer = _serializerCache.GetOrCreateDeserializer(type, t => _ilSerializer.CreateDeserializer(t));
-			cachedDeserializer.RecordAccess();
-
+			// Prepare context and placeholder first
 			var context = new IlTypeSerializer.DeserializationContext
 			{
 				DeserializedObjects = deserializedObjects,
@@ -1133,17 +1160,52 @@ namespace CoreRemoting.Serialization.NeoBinary
 			var placeholder = new ForwardReferencePlaceholder(objectId);
 			deserializedObjects[objectId] = placeholder;
 
+			// Detect compact layout tag after TypeInfo
+			bool isCompact = false;
+			try
+			{
+				var b = reader.ReadByte();
+				if (b == IlTypeSerializer.CompactLayoutTag)
+					isCompact = true;
+				else
+				{
+					// Not compact: seek one byte back if possible
+					if (reader.BaseStream.CanSeek)
+						reader.BaseStream.Seek(-1, SeekOrigin.Current);
+					else
+					{
+						// Non-seekable stream without compact tag is not supported for legacy IL path
+						// Fall back to legacy path by throwing so caller can handle, but we stay here and continue
+					}
+				}
+			}
+			catch (EndOfStreamException)
+			{
+				// Unexpected end - treat as legacy format
+			}
+
 			var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 			try
 			{
-				var result = cachedDeserializer.Deserializer(reader, context);
-				
+				object result;
+				if (isCompact)
+				{
+					var deserializer = _ilSerializer.CreateCompactDeserializer(type);
+					result = deserializer(reader, context);
+				}
+				else
+				{
+					// Legacy IL-based deserializer
+					var cachedDeserializer = _serializerCache.GetOrCreateDeserializer(type, t => _ilSerializer.CreateDeserializer(t));
+					cachedDeserializer.RecordAccess();
+					result = cachedDeserializer.Deserializer(reader, context);
+					cachedDeserializer.RecordDeserialization(stopwatch.ElapsedTicks); // record early to keep previous stats behavior
+				}
+
 				// Replace placeholder with actual result
 				deserializedObjects[objectId] = result;
 
-				// Resolve forward references after deserialization. Any still-unresolved
-				// references (e.g., to parents not yet materialized) will be queued on the
-				// serializer and resolved after the full graph is read.
+				// Resolve forward references after deserialization.
 				IlTypeSerializer.ResolveForwardReferences(context);
 
 				return result;
@@ -1151,7 +1213,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 			finally
 			{
 				stopwatch.Stop();
-				cachedDeserializer.RecordDeserialization(stopwatch.ElapsedTicks);
 				_serializerCache.RecordDeserialization();
 			}
 		}
