@@ -34,6 +34,10 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private readonly ConcurrentDictionary<Type, string> _typeNameCache = new();
 		private readonly ConcurrentDictionary<string, Type> _resolvedTypeCache = new();
 
+		// Performance optimization: assembly type cache to avoid expensive GetTypes() calls
+		private readonly ConcurrentDictionary<Assembly, Type[]> _assemblyTypeCache = new();
+		private readonly ConcurrentDictionary<string, Assembly> _assemblyNameCache = new();
+
 		// Performance optimization: compiled field setter delegates
 		private readonly ConcurrentDictionary<FieldInfo, Action<object, object>> _setterCache = new();
 
@@ -421,22 +425,22 @@ namespace CoreRemoting.Serialization.NeoBinary
 			}
 			else if (!string.IsNullOrEmpty(assemblyName))
 			{
-				// Try to get type from current loaded assemblies first
-				type = AppDomain.CurrentDomain.GetAssemblies()
-					.SelectMany(a => a.GetTypes())
-					.FirstOrDefault(t => t.FullName == typeName || t.Name == typeName);
+				// Performance optimization: use cached assembly-wide type search
+				type = FindTypeInLoadedAssembliesCached(typeName);
 
-				// If not found in loaded assemblies, try Assembly.Load
+				// If not found in loaded assemblies, try cached assembly loading
 				if (type == null)
 				{
-					try
+					var assembly = GetAssemblyCached(assemblyName);
+					if (assembly != null)
 					{
-						var assembly = Assembly.Load(assemblyName);
-						type = assembly.GetType(typeName);
+						var assemblyTypes = GetAssemblyTypesCached(assembly);
+						type = assemblyTypes.FirstOrDefault(t => t.FullName == typeName || t.Name == typeName);
 					}
-					catch
+
+					// Last resort: try Type.GetType
+					if (type == null)
 					{
-						// If assembly loading fails, try Type.GetType
 						type = Type.GetType(typeName);
 					}
 				}
@@ -458,6 +462,85 @@ namespace CoreRemoting.Serialization.NeoBinary
 			_resolvedTypeCache[cacheKey] = type;
 
 			return type;
+		}
+
+		/// <summary>
+		/// Performance-optimized method to get types from an assembly with caching.
+		/// </summary>
+		/// <param name="assembly">The assembly to get types from</param>
+		/// <returns>Array of types in the assembly</returns>
+		private Type[] GetAssemblyTypesCached(Assembly assembly)
+		{
+			return _assemblyTypeCache.GetOrAdd(assembly, asm =>
+			{
+				try
+				{
+					return asm.GetTypes();
+				}
+				catch (ReflectionTypeLoadException ex)
+				{
+					// Handle partial loading - return only successfully loaded types
+					return ex.Types.Where(t => t != null).ToArray();
+				}
+			});
+		}
+
+		/// <summary>
+		/// Performance-optimized method to load assembly with caching.
+		/// </summary>
+		/// <param name="assemblyName">The assembly name to load</param>
+		/// <returns>The loaded assembly or null if not found</returns>
+		private Assembly GetAssemblyCached(string assemblyName)
+		{
+			if (string.IsNullOrEmpty(assemblyName))
+				return null;
+
+			return _assemblyNameCache.GetOrAdd(assemblyName, name =>
+			{
+				try
+				{
+					return Assembly.Load(name);
+				}
+				catch
+				{
+					// Try to find in currently loaded assemblies
+					return AppDomain.CurrentDomain.GetAssemblies()
+						.FirstOrDefault(a => a.GetName().Name == name || a.FullName == name);
+				}
+			});
+		}
+
+		/// <summary>
+		/// Performance-optimized type search across loaded assemblies with caching.
+		/// </summary>
+		/// <param name="typeName">The type name to search for</param>
+		/// <returns>The found type or null</returns>
+		private Type FindTypeInLoadedAssembliesCached(string typeName)
+		{
+			// Create a cache key for assembly-wide type search
+			var searchCacheKey = $"search_{typeName}";
+			
+			// Check if we've already searched for this type recently
+			if (_resolvedTypeCache.TryGetValue(searchCacheKey, out var cachedResult))
+				return cachedResult;
+
+			Type foundType = null;
+			var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+			// Search through assemblies with cached type arrays
+			foreach (var assembly in loadedAssemblies)
+			{
+				var assemblyTypes = GetAssemblyTypesCached(assembly);
+				foundType = assemblyTypes.FirstOrDefault(t => 
+					t.FullName == typeName || t.Name == typeName);
+				
+				if (foundType != null)
+					break;
+			}
+
+			// Cache the search result (null is also cached to avoid repeated searches)
+			_resolvedTypeCache[searchCacheKey] = foundType;
+			return foundType;
 		}
 
 		/// <summary>
@@ -2642,6 +2725,45 @@ namespace CoreRemoting.Serialization.NeoBinary
 			}
 
 			return null;
+		}
+
+		/// <summary>
+		/// Clears the assembly type cache to free memory.
+		/// Should be called when memory pressure is high or when assemblies are unloaded.
+		/// </summary>
+		public void ClearAssemblyTypeCache()
+		{
+			_assemblyTypeCache.Clear();
+			_assemblyNameCache.Clear();
+			
+			// Also clear search cache entries
+			var keysToRemove = _resolvedTypeCache.Keys
+				.Where(key => key.StartsWith("search_"))
+				.ToList();
+			
+			foreach (var key in keysToRemove)
+			{
+				_resolvedTypeCache.TryRemove(key, out _);
+			}
+		}
+
+		/// <summary>
+		/// Gets cache statistics for monitoring performance.
+		/// </summary>
+		/// <returns>Tuple with assembly cache count and name cache count</returns>
+		public (int AssemblyTypeCacheCount, int AssemblyNameCacheCount, int SearchCacheCount) GetCacheStatistics()
+		{
+			var searchCacheCount = _resolvedTypeCache.Keys.Count(key => key.StartsWith("search_"));
+			return (_assemblyTypeCache.Count, _assemblyNameCache.Count, searchCacheCount);
+		}
+
+		/// <summary>
+		/// Disposes the serializer and cleans up caches.
+		/// </summary>
+		public void Dispose()
+		{
+			ClearAssemblyTypeCache();
+			_serializerCache?.Dispose();
 		}
 	}
 }
