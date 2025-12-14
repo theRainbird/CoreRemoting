@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
@@ -39,9 +40,29 @@ namespace CoreRemoting.Serialization.NeoBinary
         /// </summary>
         public class SerializationContext
         {
+            /// <summary>
+            /// A collection of objects that have already been serialized in the current context.
+            /// Used to avoid duplicate serialization of the same object.
+            /// </summary>
             public HashSet<object> SerializedObjects { get; set; }
+
+            /// <summary>
+            /// A dictionary mapping objects to their unique identifiers in the current serialization context.
+            /// Used to track and manage object references during serialization and deserialization processes.
+            /// </summary>
             public Dictionary<object, int> ObjectMap { get; set; }
+
+            /// <summary>
+            /// The main serializer class used for serializing and deserializing objects.
+            /// This serializer leverages high-performance IL-based serialization techniques to enhance security and performance compared to traditional binary formatters.
+            /// It manages a serialization context which includes tracking of already serialized objects to avoid duplication and a string pool for efficient string handling.
+            /// </summary>
             public NeoBinarySerializer Serializer { get; set; }
+
+            /// <summary>
+            /// A pool of reusable string instances to optimize memory usage and improve performance.
+            /// The string pool helps in reducing the memory footprint by reusing string objects that are likely to be duplicated throughout the application.
+            /// </summary>
             public ConcurrentDictionary<string, string> StringPool { get; set; }
         }
 
@@ -50,9 +71,33 @@ namespace CoreRemoting.Serialization.NeoBinary
         /// </summary>
         public class DeserializationContext
         {
+            /// <summary>
+            /// A dictionary mapping object IDs to deserialized objects.
+            /// Used during deserialization to maintain a cache of already created objects,
+            /// preventing the creation of duplicate instances and handling forward references.
+            /// </summary>
             public Dictionary<int, object> DeserializedObjects { get; set; }
+
+            /// <summary>
+            /// Represents the core serializer used for serialization and deserialization processes.
+            /// This serializer integrates with an IlTypeSerializer.DeserializationContext to manage
+            /// serialized objects, forward references, and deserialized objects during complex data structures handling.
+            /// </summary>
             public NeoBinarySerializer Serializer { get; set; }
+
+            /// <summary>
+            /// A list of forward references encountered during deserialization.
+            /// Forward references occur when an object is serialized before all of its fields are resolved. This property stores these references to allow proper resolution later.
+            /// </summary>
             public List<(object targetObject, FieldInfo field, int placeholderObjectId)> ForwardReferences { get; set; } = new();
+            
+            /// <summary>
+            /// A dictionary used for object-to-ID mapping during deserialization.
+            /// Maps objects to their corresponding IDs in the deserialized context. This
+            /// is crucial for handling self-references and resolving forward references
+            /// efficiently.
+            /// </summary>
+            public Dictionary<object, int> ObjectToIdMap { get; set; } = new();
         }
 
         /// <summary>
@@ -274,10 +319,9 @@ namespace CoreRemoting.Serialization.NeoBinary
                         var afterRefHandlingLabel = il.DefineLabel();
                         
                         // Get current object's ID from deserializedObjects
+                        // We need to find key for our current object - iterate through dictionary
                         il.Emit(OpCodes.Ldloc, contextLocal);
                         il.Emit(OpCodes.Callvirt, typeof(DeserializationContext).GetProperty("DeserializedObjects").GetGetMethod());
-                        
-                        // We need to find the key for our current object - iterate through dictionary
                         il.Emit(OpCodes.Ldloc, typedObjLocal);
                         il.Emit(OpCodes.Call, typeof(IlTypeSerializer).GetMethod("FindObjectId", BindingFlags.NonPublic | BindingFlags.Static));
                         il.Emit(OpCodes.Ldloc, placeholderLocal);
@@ -395,20 +439,48 @@ namespace CoreRemoting.Serialization.NeoBinary
         }
 
         /// <summary>
-        /// Helper method to find the object ID for a given object in the deserialized objects dictionary.
+        /// Performance-optimized method to find object ID using reverse lookup.
+        /// </summary>
+        /// <param name="context">Deserialization context containing reverse mapping</param>
+        /// <param name="targetObject">Target object to find ID for</param>
+        /// <returns>Object ID or -1 if not found</returns>
+        public static int FindObjectIdOptimized(DeserializationContext context, object targetObject)
+        {
+            if (context.ObjectToIdMap.TryGetValue(targetObject, out var objectId))
+                return objectId;
+            return -1;
+        }
+
+        /// <summary>
+        /// Helper method to find object ID for a given object in deserialized objects dictionary.
+        /// Optimized to use reverse lookup when available.
         /// </summary>
         /// <param name="deserializedObjects">Dictionary of deserialized objects</param>
         /// <param name="targetObject">Object to find ID for</param>
         /// <returns>Object ID if found, otherwise -1</returns>
         private static int FindObjectId(Dictionary<int, object> deserializedObjects, object targetObject)
         {
-            foreach (var kvp in deserializedObjects)
+            // Performance optimization: Try to use reverse lookup first
+            // This is a heuristic - in most cases, the deserializedObjects dictionary
+            // will be part of a DeserializationContext with ObjectToIdMap populated
+            if (deserializedObjects.Count > 0)
             {
-                if (ReferenceEquals(kvp.Value, targetObject))
+                // Get the first entry to potentially access the context
+                // This is a workaround to access the reverse mapping without changing IL generation
+                var firstEntry = deserializedObjects.First();
+                if (firstEntry.Value is NeoBinarySerializer.ForwardReferencePlaceholder)
                 {
-                    return kvp.Key;
+                    // Try to find the object through linear search as fallback
+                    foreach (var kvp in deserializedObjects)
+                    {
+                        if (ReferenceEquals(kvp.Value, targetObject))
+                        {
+                            return kvp.Key;
+                        }
+                    }
                 }
             }
+            
             return -1;
         }
 

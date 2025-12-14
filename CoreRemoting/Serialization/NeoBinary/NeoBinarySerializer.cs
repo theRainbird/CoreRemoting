@@ -38,6 +38,9 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private readonly ConcurrentDictionary<Assembly, Type[]> _assemblyTypeCache = new();
 		private readonly ConcurrentDictionary<string, Assembly> _assemblyNameCache = new();
 
+		// Performance optimization: reverse lookup for O(1) object-to-ID mapping in forward reference resolution
+		private readonly Dictionary<object, int> _objectToIdMap = new();
+
 		// Performance optimization: compiled field setter delegates
 		private readonly ConcurrentDictionary<FieldInfo, Action<object, object>> _setterCache = new();
 
@@ -355,7 +358,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 					obj = DeserializeComplexObject(type, reader, deserializedObjects, objectId);
 				}
 
-				deserializedObjects[objectId] = obj;
+				RegisterObjectWithReverseMapping(deserializedObjects, objectId, obj);
 				return obj;
 			}
 
@@ -462,6 +465,23 @@ namespace CoreRemoting.Serialization.NeoBinary
 			_resolvedTypeCache[cacheKey] = type;
 
 			return type;
+		}
+
+		/// <summary>
+		/// Performance-optimized method to register objects with reverse lookup mapping.
+		/// </summary>
+		/// <param name="deserializedObjects">The main object dictionary</param>
+		/// <param name="objectId">The object ID</param>
+		/// <param name="obj">The object to register</param>
+		private void RegisterObjectWithReverseMapping(Dictionary<int, object> deserializedObjects, int objectId, object obj)
+		{
+			deserializedObjects[objectId] = obj;
+			
+			// Only add to reverse mapping if it's not a placeholder (to avoid conflicts)
+			if (!(obj is ForwardReferencePlaceholder))
+			{
+				_objectToIdMap[obj] = objectId;
+			}
 		}
 
 		/// <summary>
@@ -1105,7 +1125,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 			var context = new IlTypeSerializer.DeserializationContext
 			{
 				DeserializedObjects = deserializedObjects,
-				Serializer = this
+				Serializer = this,
+				ObjectToIdMap = _objectToIdMap
 			};
 
 			// Register a placeholder immediately to handle self-references during IL deserialization

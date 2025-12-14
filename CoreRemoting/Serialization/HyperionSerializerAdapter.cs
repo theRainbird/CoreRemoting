@@ -23,10 +23,12 @@ namespace CoreRemoting.Serialization
 			// Validate configuration
 			_config.Validate();
 
+#pragma warning disable CS0618 // Type or member is obsolete
 			var options = new SerializerOptions(
 				preserveObjectReferences: _config.PreserveObjectReferences,
 				ignoreISerializable: _config.IgnoreISerializable,
 				versionTolerance: _config.VersionTolerance);
+#pragma warning restore CS0618 // Type or member is obsolete
 
 			_serializer = new Serializer(options);
 		}
