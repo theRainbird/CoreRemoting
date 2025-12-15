@@ -18,11 +18,12 @@ namespace CoreRemoting.Serialization.NeoBinary
 	/// </summary>
 	public class NeoBinarySerializer
 	{
-        // Pending forward references collected during nested deserializations
-        // that could not be resolved immediately (e.g., child -> parent back-references).
-        // They will be resolved after the full object graph has been materialized.
-        private readonly List<(object targetObject, System.Reflection.FieldInfo field, int placeholderObjectId)>
-            _pendingForwardReferences = new();
+		// Pending forward references collected during nested deserializations
+		// that could not be resolved immediately (e.g., child -> parent back-references).
+		// They will be resolved after the full object graph has been materialized.
+		private readonly List<(object targetObject, System.Reflection.FieldInfo field, int placeholderObjectId)>
+			_pendingForwardReferences = new();
+
 		private const string MAGIC_NAME = "NEOB";
 		private const ushort CURRENT_VERSION = 1;
 
@@ -69,6 +70,19 @@ namespace CoreRemoting.Serialization.NeoBinary
 			["System.Version"] = typeof(Version)
 		};
 
+		// --- NEW: Type reference table state (per operation) ---
+		// These are initialized at the beginning of Serialize/Deserialize when
+		// Config.UseTypeReferences is enabled and used by WriteTypeInfo/ReadTypeInfo.
+		private List<Type> _typeTable; // only valid during an active (de)serialization
+		private Dictionary<string, int> _typeKeyToId; // key: typeName|asmName|version
+		private bool _typeRefActive; // marks active session using type refs
+
+		// --- NEW: Assembly type index cache (per process) ---
+		private readonly ConcurrentDictionary<Assembly, Dictionary<string, Type>> _assemblyTypeIndex = new();
+
+		// --- NEW: Validated types cache ---
+		private readonly ConcurrentDictionary<Type, bool> _validatedTypes = new();
+
 		/// <summary>
 		/// Gets or sets the serializer configuration.
 		/// </summary>
@@ -96,6 +110,14 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			using var writer = new BinaryWriter(serializationStream, Encoding.UTF8, leaveOpen: true);
 
+			// Initialize type-ref tables for this session if enabled
+			if (Config.UseTypeReferences)
+			{
+				_typeTable = new List<Type>(64);
+				_typeKeyToId = new Dictionary<string, int>(128);
+				_typeRefActive = true;
+			}
+
 			// Fast path for primitive types - avoid overhead of reference tracking
 			if (graph != null && IsSimpleType(graph.GetType()))
 			{
@@ -104,6 +126,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				WriteTypeInfo(writer, graph.GetType());
 				SerializePrimitive(graph, writer);
 				writer.Flush();
+				_typeRefActive = false;
 				return;
 			}
 
@@ -125,6 +148,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			}
 
 			writer.Flush();
+			_typeRefActive = false;
 		}
 
 		/// <summary>
@@ -138,6 +162,14 @@ namespace CoreRemoting.Serialization.NeoBinary
 				throw new ArgumentNullException(nameof(serializationStream));
 
 			using var reader = new BinaryReader(serializationStream, Encoding.UTF8, leaveOpen: true);
+
+			// Initialize type-ref tables for this session if enabled
+			if (Config.UseTypeReferences)
+			{
+				_typeTable = new List<Type>(64);
+				_typeKeyToId = new Dictionary<string, int>(128);
+				_typeRefActive = true;
+			}
 
 			// Read and validate header
 			ReadHeader(reader);
@@ -165,6 +197,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			// that couldn't be set during nested deserialization (e.g., back-references).
 			ResolvePendingForwardReferences(deserializedObjects);
 
+			_typeRefActive = false;
 			return result;
 		}
 
@@ -183,9 +216,10 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private void ReadHeader(BinaryReader reader)
 		{
 			var magicBytes = reader.ReadBytes(4);
-			var magic = Encoding.ASCII.GetString(magicBytes);
-			if (magic != MAGIC_NAME)
-				throw new InvalidOperationException($"Invalid magic number: {magic}");
+			// Compare directly against ASCII constants: 'N','E','O','B'
+			if (magicBytes.Length != 4 || magicBytes[0] != (byte)'N' || magicBytes[1] != (byte)'E' ||
+			    magicBytes[2] != (byte)'O' || magicBytes[3] != (byte)'B')
+				throw new InvalidOperationException("Invalid magic number: expected NEOB");
 
 			var version = reader.ReadUInt16();
 			if (version > CURRENT_VERSION)
@@ -370,6 +404,45 @@ namespace CoreRemoting.Serialization.NeoBinary
 			var assemblyName = type.Assembly.GetName();
 			string typeName;
 
+			if (_typeRefActive)
+			{
+				// With type references enabled, write a compact reference entry
+				// Build type key based on config
+				typeName = Config.IncludeAssemblyVersions
+					? (type.FullName ?? type.Name)
+					: BuildAssemblyNeutralTypeName(type);
+				var asmName = assemblyName.Name ?? string.Empty;
+				var versionString = Config.IncludeAssemblyVersions
+					? (assemblyName.Version?.ToString() ?? string.Empty)
+					: string.Empty;
+				var key = typeName + "|" + asmName + "|" + versionString;
+
+				if (_typeKeyToId.TryGetValue(key, out var existingId))
+				{
+					// Write reference marker and ID
+					writer.Write((byte)1);
+					writer.Write(existingId);
+					return;
+				}
+
+				// New type definition
+				var newId = _typeTable.Count;
+				_typeKeyToId[key] = newId;
+				_typeTable.Add(type);
+
+				writer.Write((byte)0); // new type definition
+				// Store pooled strings to reduce allocations
+				typeName = _serializerCache.GetOrCreatePooledString(typeName);
+				var asmNamePooled = _serializerCache.GetOrCreatePooledString(asmName);
+				var versionPooled = _serializerCache.GetOrCreatePooledString(versionString);
+				writer.Write(typeName);
+				writer.Write(asmNamePooled);
+				writer.Write(versionPooled);
+				writer.Write(newId);
+				return;
+			}
+
+			// Legacy path without type references
 			// When assembly versions are excluded, we must also avoid embedding
 			// assembly-qualified generic argument type names inside the type name.
 			if (Config.IncludeAssemblyVersions)
@@ -383,13 +456,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			// Use string pooling for frequently used type names
 			typeName = _serializerCache.GetOrCreatePooledString(typeName);
-
 			writer.Write(typeName);
 
-			// Always persist the simple assembly name to allow the deserializer to
-			// load the defining assembly, even if we omit version information.
-			// This improves resolution for types from third-party assemblies
-			// (e.g., Serialize.Linq.Nodes) that might not yet be loaded.
 			var assemblyNameString = assemblyName.Name ?? string.Empty;
 			assemblyNameString = _serializerCache.GetOrCreatePooledString(assemblyNameString);
 			writer.Write(assemblyNameString);
@@ -402,54 +470,105 @@ namespace CoreRemoting.Serialization.NeoBinary
 			}
 			else
 			{
-				writer.Write(string.Empty); // omit version to keep assembly-neutral diffs stable
+				writer.Write(string.Empty);
 			}
 		}
 
 		private Type ReadTypeInfo(BinaryReader reader)
 		{
+			if (_typeRefActive)
+			{
+				var kind = reader.ReadByte();
+				if (kind == 1)
+				{
+					var id = reader.ReadInt32();
+					var t = _typeTable[id];
+					return t;
+				}
+
+				// New type definition
+				var typeNameNew = reader.ReadString();
+				var assemblyNameNew = reader.ReadString();
+				var assemblyVersionNew = reader.ReadString();
+				var newId = reader.ReadInt32();
+
+				var tResolved = ResolveTypeCore(typeNameNew, assemblyNameNew, assemblyVersionNew);
+				// ensure table size/order correctness
+				if (newId != _typeTable.Count)
+				{
+					// fill any gaps (shouldn't happen) to maintain index safety
+					while (_typeTable.Count < newId)
+						_typeTable.Add(typeof(object));
+				}
+
+				_typeTable.Add(tResolved);
+				var keyNew = $"{typeNameNew}|{assemblyNameNew}|{assemblyVersionNew}";
+				_typeKeyToId[keyNew] = newId;
+				return tResolved;
+			}
+
+			// Legacy path
 			var typeName = reader.ReadString();
 			var assemblyName = reader.ReadString();
 			var assemblyVersion = reader.ReadString();
+			return ResolveTypeCore(typeName, assemblyName, assemblyVersion);
+		}
 
+		private Type ResolveTypeCore(string typeName, string assemblyName, string assemblyVersion)
+		{
 			// Create cache key for type resolution
 			var cacheKey = $"{typeName}|{assemblyName}|{assemblyVersion}";
-
-			// Use cached type resolution for better performance
 			if (_resolvedTypeCache.TryGetValue(cacheKey, out var cachedType))
 				return cachedType;
 
 			Type type = null;
 
-			// Performance optimization: check common types first
-			if (_commonTypes.TryGetValue(typeName, out var commonType))
+			// Fast path for common types
+			if (!string.IsNullOrEmpty(typeName) && _commonTypes.TryGetValue(typeName, out var commonType))
 			{
 				type = commonType;
 			}
 			else if (!string.IsNullOrEmpty(assemblyName))
 			{
-				// Performance optimization: use cached assembly-wide type search
+				// First try in loaded assemblies (cached search)
 				type = FindTypeInLoadedAssembliesCached(typeName);
-
-				// If not found in loaded assemblies, try cached assembly loading
 				if (type == null)
 				{
 					var assembly = GetAssemblyCached(assemblyName);
 					if (assembly != null)
 					{
-						var assemblyTypes = GetAssemblyTypesCached(assembly);
-						type = assemblyTypes.FirstOrDefault(t => t.FullName == typeName || t.Name == typeName);
+						var map = _assemblyTypeIndex.GetOrAdd(assembly, a =>
+						{
+							Dictionary<string, Type> dict;
+							try
+							{
+								dict = a.GetTypes()
+									.Where(t => t != null && t.FullName != null)
+									.GroupBy(t => t.FullName!)
+									.ToDictionary(g => g.Key, g => g.First());
+							}
+							catch (ReflectionTypeLoadException ex)
+							{
+								dict = ex.Types
+									.Where(t => t != null && t.FullName != null)
+									.GroupBy(t => t!.FullName!)
+									.ToDictionary(g => g.Key, g => g.First()!);
+							}
+
+							return dict;
+						});
+						if (!map.TryGetValue(typeName, out type))
+						{
+							// Try short name as a weak fallback
+							type = map.Values.FirstOrDefault(t => t.Name == typeName);
+						}
 					}
 
-					// Last resort: try Type.GetType
 					if (type == null)
-					{
 						type = Type.GetType(typeName);
-					}
 				}
 			}
 
-			// If still not found, try assembly-neutral resolution
 			if (type == null)
 			{
 				type = ResolveAssemblyNeutralType(typeName);
@@ -458,12 +577,14 @@ namespace CoreRemoting.Serialization.NeoBinary
 			if (type == null)
 				throw new TypeLoadException($"Cannot load type: {typeName}, Assembly: {assemblyName}");
 
-			// Validate type for security
-			TypeValidator.ValidateType(type);
+			// Validate once per type safely
+			if (!_validatedTypes.ContainsKey(type))
+			{
+				TypeValidator.ValidateType(type);
+				_validatedTypes[type] = true;
+			}
 
-			// Cache the resolved type for future use
 			_resolvedTypeCache[cacheKey] = type;
-
 			return type;
 		}
 
@@ -473,10 +594,11 @@ namespace CoreRemoting.Serialization.NeoBinary
 		/// <param name="deserializedObjects">The main object dictionary</param>
 		/// <param name="objectId">The object ID</param>
 		/// <param name="obj">The object to register</param>
-		private void RegisterObjectWithReverseMapping(Dictionary<int, object> deserializedObjects, int objectId, object obj)
+		private void RegisterObjectWithReverseMapping(Dictionary<int, object> deserializedObjects, int objectId,
+			object obj)
 		{
 			deserializedObjects[objectId] = obj;
-			
+
 			// Only add to reverse mapping if it's not a placeholder (to avoid conflicts)
 			if (!(obj is ForwardReferencePlaceholder))
 			{
@@ -539,7 +661,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 		{
 			// Create a cache key for assembly-wide type search
 			var searchCacheKey = $"search_{typeName}";
-			
+
 			// Check if we've already searched for this type recently
 			if (_resolvedTypeCache.TryGetValue(searchCacheKey, out var cachedResult))
 				return cachedResult;
@@ -551,9 +673,9 @@ namespace CoreRemoting.Serialization.NeoBinary
 			foreach (var assembly in loadedAssemblies)
 			{
 				var assemblyTypes = GetAssemblyTypesCached(assembly);
-				foundType = assemblyTypes.FirstOrDefault(t => 
+				foundType = assemblyTypes.FirstOrDefault(t =>
 					t.FullName == typeName || t.Name == typeName);
-				
+
 				if (foundType != null)
 					break;
 			}
@@ -573,7 +695,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			return _typeNameCache.GetOrAdd(type, t =>
 			{
 				string result;
-				
+
 				if (t.IsGenericType)
 				{
 					var genericDef = t.GetGenericTypeDefinition();
@@ -595,7 +717,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				{
 					result = t.FullName ?? t.Name;
 				}
-				
+
 				return _serializerCache.GetOrCreatePooledString(result);
 			});
 		}
@@ -1075,9 +1197,10 @@ namespace CoreRemoting.Serialization.NeoBinary
 			else
 			{
 				// Use high-performance IL-based serializer (legacy format with field names)
-				var cachedSerializer = _serializerCache.GetOrCreateSerializer(type, t => _ilSerializer.CreateSerializer(t));
+				var cachedSerializer =
+					_serializerCache.GetOrCreateSerializer(type, t => _ilSerializer.CreateSerializer(t));
 				cachedSerializer.RecordAccess();
-				
+
 				var context = new IlTypeSerializer.SerializationContext
 				{
 					SerializedObjects = serializedObjects,
@@ -1196,10 +1319,12 @@ namespace CoreRemoting.Serialization.NeoBinary
 				else
 				{
 					// Legacy IL-based deserializer
-					var cachedDeserializer = _serializerCache.GetOrCreateDeserializer(type, t => _ilSerializer.CreateDeserializer(t));
+					var cachedDeserializer =
+						_serializerCache.GetOrCreateDeserializer(type, t => _ilSerializer.CreateDeserializer(t));
 					cachedDeserializer.RecordAccess();
 					result = cachedDeserializer.Deserializer(reader, context);
-					cachedDeserializer.RecordDeserialization(stopwatch.ElapsedTicks); // record early to keep previous stats behavior
+					cachedDeserializer.RecordDeserialization(stopwatch
+						.ElapsedTicks); // record early to keep previous stats behavior
 				}
 
 				// Replace placeholder with actual result
@@ -1546,7 +1671,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 			if (!string.IsNullOrEmpty(dataSet.Namespace)) flags |= 1 << 0; // default ""
 			if (!string.IsNullOrEmpty(dataSet.Prefix)) flags |= 1 << 1; // default ""
 			if (dataSet.CaseSensitive) flags |= 1 << 2; // default false
-			if (dataSet.Locale != null && dataSet.Locale != System.Globalization.CultureInfo.CurrentCulture) flags |= 1 << 3; // default CurrentCulture
+			if (dataSet.Locale != null && dataSet.Locale != System.Globalization.CultureInfo.CurrentCulture)
+				flags |= 1 << 3; // default CurrentCulture
 			if (!dataSet.EnforceConstraints) flags |= 1 << 4; // default true
 
 			writer.Write(flags);
@@ -1641,7 +1767,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 			if (!string.IsNullOrEmpty(dataTable.Namespace)) flags |= 1 << 0; // default ""
 			if (!string.IsNullOrEmpty(dataTable.Prefix)) flags |= 1 << 1; // default ""
 			if (dataTable.CaseSensitive) flags |= 1 << 2; // default false
-			if (dataTable.Locale != null && dataTable.Locale != System.Globalization.CultureInfo.CurrentCulture) flags |= 1 << 3; // default CurrentCulture
+			if (dataTable.Locale != null && dataTable.Locale != System.Globalization.CultureInfo.CurrentCulture)
+				flags |= 1 << 3; // default CurrentCulture
 
 			writer.Write(flags);
 
@@ -1667,7 +1794,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 				if (column.AutoIncrementSeed != 0) flags1 |= 1 << 2; // default 0
 				if (column.AutoIncrementStep != 1) flags1 |= 1 << 3; // default 1
 				if (column.Caption != column.ColumnName) flags1 |= 1 << 4; // default ColumnName
-				if (column.DefaultValue != null && column.DefaultValue != DBNull.Value) flags1 |= 1 << 5; // default null
+				if (column.DefaultValue != null && column.DefaultValue != DBNull.Value)
+					flags1 |= 1 << 5; // default null
 				if (!string.IsNullOrEmpty(column.Expression)) flags1 |= 1 << 6; // default ""
 				if (column.MaxLength != -1) flags1 |= 1 << 7; // default -1
 
@@ -1683,7 +1811,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 				if ((flags1 & (1 << 2)) != 0) writer.Write(column.AutoIncrementSeed);
 				if ((flags1 & (1 << 3)) != 0) writer.Write(column.AutoIncrementStep);
 				if ((flags1 & (1 << 4)) != 0) writer.Write(column.Caption ?? string.Empty);
-				if ((flags1 & (1 << 5)) != 0) SerializeObject(column.DefaultValue, writer, serializedObjects, objectMap);
+				if ((flags1 & (1 << 5)) != 0)
+					SerializeObject(column.DefaultValue, writer, serializedObjects, objectMap);
 				if ((flags1 & (1 << 6)) != 0) writer.Write(column.Expression ?? string.Empty);
 				if ((flags1 & (1 << 7)) != 0) writer.Write(column.MaxLength);
 				if ((flags2 & (1 << 0)) != 0) writer.Write(column.ReadOnly);
@@ -2145,12 +2274,12 @@ namespace CoreRemoting.Serialization.NeoBinary
 					{
 						var miBindingMemberName = reader.ReadString();
 						reader.ReadString();
-						
+
 						var miBindingExpr =
 							(Expression)DeserializeExpression(reader, deserializedObjects);
-						
+
 						var miBindingMember = exprType.GetMember(miBindingMemberName).FirstOrDefault();
-						
+
 						bindings[i] = Expression.Bind(miBindingMember!, miBindingExpr);
 					}
 
@@ -2250,6 +2379,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 					dataSet.Locale = new System.Globalization.CultureInfo(localeName);
 				}
 			}
+
 			if ((flags & (1 << 4)) != 0) dataSet.EnforceConstraints = reader.ReadBoolean();
 
 			// Deserialize Tables
@@ -2728,51 +2858,53 @@ namespace CoreRemoting.Serialization.NeoBinary
 			}
 		}
 
-        /// <summary>
-        /// Add a forward reference that couldn't be resolved yet for later resolution.
-        /// </summary>
-        /// <param name="targetObject">Object containing the field</param>
-        /// <param name="field">Field to set</param>
-        /// <param name="placeholderObjectId">Referenced object id</param>
-        internal void AddPendingForwardReference(object targetObject, System.Reflection.FieldInfo field, int placeholderObjectId)
-        {
-            if (targetObject == null || field == null) return;
-            _pendingForwardReferences.Add((targetObject, field, placeholderObjectId));
-        }
+		/// <summary>
+		/// Add a forward reference that couldn't be resolved yet for later resolution.
+		/// </summary>
+		/// <param name="targetObject">Object containing the field</param>
+		/// <param name="field">Field to set</param>
+		/// <param name="placeholderObjectId">Referenced object id</param>
+		internal void AddPendingForwardReference(object targetObject, System.Reflection.FieldInfo field,
+			int placeholderObjectId)
+		{
+			if (targetObject == null || field == null) return;
+			_pendingForwardReferences.Add((targetObject, field, placeholderObjectId));
+		}
 
-        /// <summary>
-        /// Resolve all pending forward references collected during nested deserialization calls.
-        /// </summary>
-        /// <param name="deserializedObjects">Map of object ids to instances</param>
-        private void ResolvePendingForwardReferences(Dictionary<int, object> deserializedObjects)
-        {
-            // Try multiple passes in case of chains; cap iterations to avoid infinite loops.
-            var maxIterations = _pendingForwardReferences.Count + 1;
-            for (int iteration = 0; iteration < maxIterations; iteration++)
-            {
-                if (_pendingForwardReferences.Count == 0) break;
+		/// <summary>
+		/// Resolve all pending forward references collected during nested deserialization calls.
+		/// </summary>
+		/// <param name="deserializedObjects">Map of object ids to instances</param>
+		private void ResolvePendingForwardReferences(Dictionary<int, object> deserializedObjects)
+		{
+			// Try multiple passes in case of chains; cap iterations to avoid infinite loops.
+			var maxIterations = _pendingForwardReferences.Count + 1;
+			for (int iteration = 0; iteration < maxIterations; iteration++)
+			{
+				if (_pendingForwardReferences.Count == 0) break;
 
-                var remaining = new List<(object targetObject, System.Reflection.FieldInfo field, int placeholderObjectId)>();
+				var remaining =
+					new List<(object targetObject, System.Reflection.FieldInfo field, int placeholderObjectId)>();
 
-                foreach (var (targetObject, field, placeholderObjectId) in _pendingForwardReferences)
-                {
-                    if (deserializedObjects.TryGetValue(placeholderObjectId, out var resolved)
-                        && resolved is not ForwardReferencePlaceholder)
-                    {
-                        field.SetValue(targetObject, resolved);
-                    }
-                    else
-                    {
-                        remaining.Add((targetObject, field, placeholderObjectId));
-                    }
-                }
+				foreach (var (targetObject, field, placeholderObjectId) in _pendingForwardReferences)
+				{
+					if (deserializedObjects.TryGetValue(placeholderObjectId, out var resolved)
+					    && resolved is not ForwardReferencePlaceholder)
+					{
+						field.SetValue(targetObject, resolved);
+					}
+					else
+					{
+						remaining.Add((targetObject, field, placeholderObjectId));
+					}
+				}
 
-                _pendingForwardReferences.Clear();
-                _pendingForwardReferences.AddRange(remaining);
+				_pendingForwardReferences.Clear();
+				_pendingForwardReferences.AddRange(remaining);
 
-                if (_pendingForwardReferences.Count == 0) break;
-            }
-        }
+				if (_pendingForwardReferences.Count == 0) break;
+			}
+		}
 
 		private List<FieldInfo> GetAllFieldsInHierarchy(Type type)
 		{
@@ -2817,12 +2949,12 @@ namespace CoreRemoting.Serialization.NeoBinary
 		{
 			_assemblyTypeCache.Clear();
 			_assemblyNameCache.Clear();
-			
+
 			// Also clear search cache entries
 			var keysToRemove = _resolvedTypeCache.Keys
 				.Where(key => key.StartsWith("search_"))
 				.ToList();
-			
+
 			foreach (var key in keysToRemove)
 			{
 				_resolvedTypeCache.TryRemove(key, out _);
