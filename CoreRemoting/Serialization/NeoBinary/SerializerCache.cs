@@ -59,29 +59,61 @@ namespace CoreRemoting.Serialization.NeoBinary
 		/// </summary>
 		public class CachedSerializer
 		{
+			/// <summary>
+			/// Serializer used for object serialization in the NeoBinary protocol.
+			/// </summary>
 			public IlTypeSerializer.ObjectSerializerDelegate Serializer { get; set; }
+
+			/// <summary>
+			/// Timestamp when the cached serializer was created.
+			/// </summary>
 			public DateTime CreatedAt { get; set; }
+
+			/// <summary>
+			/// Timestamp when the cached serializer was last accessed.
+			/// </summary>
 			public DateTime LastAccessed { get; set; }
 			internal long _accessCount;
 			internal long _serializationCount;
 			internal long _totalSerializationTimeTicks;
 
+			/// <summary>
+			/// Number of times this serializer has been accessed.
+			/// </summary>
 			public long AccessCount => _accessCount;
+
+			/// <summary>
+			/// Number of serialization operations performed with this serializer.
+			/// </summary>
 			public long SerializationCount => _serializationCount;
+
+			/// <summary>
+			/// Total time spent in serialization operations for this serializer (in ticks).
+			/// </summary>
 			public long TotalSerializationTimeTicks => _totalSerializationTimeTicks;
 
+			/// <summary>
+			/// Records an access to this cached serializer.
+			/// </summary>
 			public void RecordAccess()
 			{
 				LastAccessed = DateTime.UtcNow;
 				Interlocked.Increment(ref _accessCount);
 			}
 
+			/// <summary>
+			/// Records a serialization operation with the elapsed time.
+			/// </summary>
+			/// <param name="elapsedTicks">Time elapsed for the serialization operation in ticks</param>
 			public void RecordSerialization(long elapsedTicks)
 			{
 				Interlocked.Increment(ref _serializationCount);
 				Interlocked.Add(ref _totalSerializationTimeTicks, elapsedTicks);
 			}
 
+			/// <summary>
+			/// Average time spent in serialization operations for this serializer.
+			/// </summary>
 			public TimeSpan AverageSerializationTime =>
 				SerializationCount > 0 ? new TimeSpan(TotalSerializationTimeTicks / SerializationCount) : TimeSpan.Zero;
 		}
@@ -91,29 +123,61 @@ namespace CoreRemoting.Serialization.NeoBinary
 		/// </summary>
 		public class CachedDeserializer
 		{
+			/// <summary>
+			/// Deserializer used for object deserialization in the NeoBinary protocol.
+			/// </summary>
 			public IlTypeSerializer.ObjectDeserializerDelegate Deserializer { get; set; }
+
+			/// <summary>
+			/// Timestamp when the cached deserializer was created.
+			/// </summary>
 			public DateTime CreatedAt { get; set; }
+
+			/// <summary>
+			/// Timestamp when the cached deserializer was last accessed.
+			/// </summary>
 			public DateTime LastAccessed { get; set; }
 			internal long _accessCount;
 			internal long _deserializationCount;
 			internal long _totalDeserializationTimeTicks;
 
+			/// <summary>
+			/// Number of times this deserializer has been accessed.
+			/// </summary>
 			public long AccessCount => _accessCount;
+
+			/// <summary>
+			/// Number of deserialization operations performed with this deserializer.
+			/// </summary>
 			public long DeserializationCount => _deserializationCount;
+
+			/// <summary>
+			/// Total time spent in deserialization operations for this deserializer (in ticks).
+			/// </summary>
 			public long TotalDeserializationTimeTicks => _totalDeserializationTimeTicks;
 
+			/// <summary>
+			/// Records an access to this cached deserializer.
+			/// </summary>
 			public void RecordAccess()
 			{
 				LastAccessed = DateTime.UtcNow;
 				Interlocked.Increment(ref _accessCount);
 			}
 
+			/// <summary>
+			/// Records a deserialization operation with the elapsed time.
+			/// </summary>
+			/// <param name="elapsedTicks">Time elapsed for the deserialization operation in ticks</param>
 			public void RecordDeserialization(long elapsedTicks)
 			{
 				Interlocked.Increment(ref _deserializationCount);
 				Interlocked.Add(ref _totalDeserializationTimeTicks, elapsedTicks);
 			}
 
+			/// <summary>
+			/// Average time spent in deserialization operations for this deserializer.
+			/// </summary>
 			public TimeSpan AverageDeserializationTime =>
 				DeserializationCount > 0
 					? new TimeSpan(TotalDeserializationTimeTicks / DeserializationCount)
@@ -125,20 +189,61 @@ namespace CoreRemoting.Serialization.NeoBinary
 		/// </summary>
 		public class CacheStatistics
 		{
+			/// <summary>
+			/// Number of cached serializers.
+			/// </summary>
 			public int SerializerCount { get; set; }
+
+			/// <summary>
+			/// Number of cached deserializers.
+			/// </summary>
 			public int DeserializerCount { get; set; }
+
+			/// <summary>
+			/// Number of cached field information entries.
+			/// </summary>
 			public int FieldCacheCount { get; set; }
+
+			/// <summary>
+			/// Number of strings in the string pool.
+			/// </summary>
 			public int StringPoolCount { get; set; }
+
+			/// <summary>
+			/// Total number of serialization operations performed.
+			/// </summary>
 			public long TotalSerializations { get; set; }
+
+			/// <summary>
+			/// Total number of deserialization operations performed.
+			/// </summary>
 			public long TotalDeserializations { get; set; }
+
+			/// <summary>
+			/// Total number of cache hits.
+			/// </summary>
 			public long CacheHits { get; set; }
+
+			/// <summary>
+			/// Total number of cache misses.
+			/// </summary>
 			public long CacheMisses { get; set; }
 
+			/// <summary>
+			/// Cache hit ratio (0.0 to 1.0).
+			/// </summary>
 			public double HitRatio => TotalSerializations + TotalDeserializations > 0
 				? (double)CacheHits / (TotalSerializations + TotalDeserializations)
 				: 0.0;
 
+			/// <summary>
+			/// Top 10 most accessed serializers by type.
+			/// </summary>
 			public Dictionary<Type, CachedSerializer> TopSerializers { get; set; } = new();
+
+			/// <summary>
+			/// Top 10 most accessed deserializers by type.
+			/// </summary>
 			public Dictionary<Type, CachedDeserializer> TopDeserializers { get; set; } = new();
 		}
 
@@ -418,13 +523,13 @@ namespace CoreRemoting.Serialization.NeoBinary
 		}
 
 		/// <summary>
-		/// Evicts least used items when cache is full.
+		/// Evicts least used items when cache is full using LFU/LRU hybrid scoring.
 		/// </summary>
 		private void EvictLeastUsedItems()
 		{
 			// Remove least used serializers
 			var serializersToRemove = _serializerCache
-				.OrderBy(kvp => kvp.Value.AccessCount)
+				.OrderByDescending(kvp => CalculateEvictionScore(kvp.Value))
 				.Take(Math.Max(1, _serializerCache.Count / 10))
 				.Select(kvp => kvp.Key)
 				.ToList();
@@ -436,7 +541,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			// Remove least used deserializers
 			var deserializersToRemove = _deserializerCache
-				.OrderBy(kvp => kvp.Value.AccessCount)
+				.OrderByDescending(kvp => CalculateEvictionScore(kvp.Value))
 				.Take(Math.Max(1, _deserializerCache.Count / 10))
 				.Select(kvp => kvp.Key)
 				.ToList();
@@ -445,6 +550,44 @@ namespace CoreRemoting.Serialization.NeoBinary
 			{
 				_deserializerCache.TryRemove(key, out _);
 			}
+		}
+
+		/// <summary>
+		/// Calculates an eviction score for serializer cache items (higher = more likely to be evicted).
+		/// Combines recency (LRU) and frequency (LFU) factors.
+		/// </summary>
+		/// <param name="cachedItem">The cached serializer to score</param>
+		/// <returns>Eviction score (higher = evict first)</returns>
+		private double CalculateEvictionScore(CachedSerializer cachedItem)
+		{
+			// Recency factor: How long since last access (normalized to 0-1)
+			var timeSinceAccess = (DateTime.UtcNow - cachedItem.LastAccessed).TotalMinutes;
+			var recencyScore = Math.Min(timeSinceAccess / Config.MaxCacheAgeMinutes, 1.0);
+
+			// Frequency factor: Inverse of access count (lower access = higher score)
+			var frequencyScore = 1.0 / (cachedItem.AccessCount + 1.0); // +1 prevents division by zero
+
+			// Weighted combination: 70% recency, 30% frequency
+			return recencyScore * 0.7 + frequencyScore * 0.3;
+		}
+
+		/// <summary>
+		/// Calculates an eviction score for deserializer cache items (higher = more likely to be evicted).
+		/// Combines recency (LRU) and frequency (LFU) factors.
+		/// </summary>
+		/// <param name="cachedItem">The cached deserializer to score</param>
+		/// <returns>Eviction score (higher = evict first)</returns>
+		private double CalculateEvictionScore(CachedDeserializer cachedItem)
+		{
+			// Recency factor: How long since last access (normalized to 0-1)
+			var timeSinceAccess = (DateTime.UtcNow - cachedItem.LastAccessed).TotalMinutes;
+			var recencyScore = Math.Min(timeSinceAccess / Config.MaxCacheAgeMinutes, 1.0);
+
+			// Frequency factor: Inverse of access count (lower access = higher score)
+			var frequencyScore = 1.0 / (cachedItem.AccessCount + 1.0); // +1 prevents division by zero
+
+			// Weighted combination: 70% recency, 30% frequency
+			return recencyScore * 0.7 + frequencyScore * 0.3;
 		}
 
 		/// <summary>

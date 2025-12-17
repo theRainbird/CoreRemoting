@@ -7,7 +7,9 @@ using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Numerics;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 using System.Text;
 
@@ -22,7 +24,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 		// that could not be resolved immediately (e.g., child -> parent back-references).
 		// They will be resolved after the full object graph has been materialized.
 		private readonly List<(object targetObject, System.Reflection.FieldInfo field, int placeholderObjectId)>
-			_pendingForwardReferences = new();
+			_pendingForwardReferences = [];
 
 		private const string MAGIC_NAME = "NEOB";
 		private const ushort CURRENT_VERSION = 1;
@@ -42,15 +44,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 		// Performance optimization: reverse lookup for O(1) object-to-ID mapping in forward reference resolution
 		private readonly Dictionary<object, int> _objectToIdMap = new();
 
-		// Performance optimization: compiled field setter delegates
-		private readonly ConcurrentDictionary<FieldInfo, Action<object, object>> _setterCache = new();
-
-		// Performance optimization: precompiled serializers for complex types
-		private readonly
-			ConcurrentDictionary<Type, Action<object, BinaryWriter, HashSet<object>, Dictionary<object, int>>>
-			_compiledSerializers = new();
-
 		// Performance optimization: pre-populated common types cache
+		// ReSharper disable once InconsistentNaming
 		private static readonly Dictionary<string, Type> _commonTypes = new()
 		{
 			["System.String"] = typeof(string),
@@ -77,11 +72,15 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private Dictionary<string, int> _typeKeyToId; // key: typeName|asmName|version
 		private bool _typeRefActive; // marks active session using type refs
 
-		// --- NEW: Assembly type index cache (per process) ---
-		private readonly ConcurrentDictionary<Assembly, Dictionary<string, Type>> _assemblyTypeIndex = new();
+		// --- NEW: Assembly type index cache (shared across all instances) ---
+		private static readonly ConcurrentDictionary<Assembly, Dictionary<string, Type>> _assemblyTypeIndex = new();
 
 		// --- NEW: Validated types cache ---
 		private readonly ConcurrentDictionary<Type, bool> _validatedTypes = new();
+
+		// --- NEW: Object pools for performance optimization ---
+		private readonly ObjectPool<HashSet<object>> _hashSetPool = new ObjectPool<HashSet<object>>(() => new HashSet<object>(ReferenceEqualityComparer.Instance), set => set.Clear());
+		private readonly ObjectPool<Dictionary<object, int>> _objectMapPool = new ObjectPool<Dictionary<object, int>>(() => new Dictionary<object, int>(ReferenceEqualityComparer.Instance), dict => dict.Clear());
 
 		/// <summary>
 		/// Gets or sets the serializer configuration.
@@ -97,6 +96,43 @@ namespace CoreRemoting.Serialization.NeoBinary
 		/// Gets the high-performance serializer cache.
 		/// </summary>
 		public SerializerCache SerializerCache => _serializerCache;
+
+		/// <summary>
+		/// Pre-builds type indexes for loaded assemblies to avoid expensive reflection calls during serialization.
+		/// Call this method at application startup for optimal performance. This is shared across all NeoBinarySerializer instances.
+		/// </summary>
+		public static void BuildAssemblyTypeIndexes()
+		{
+			var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+			foreach (var assembly in assemblies)
+			{
+				// This will populate the _assemblyTypeIndex cache
+				_assemblyTypeIndex.GetOrAdd(assembly, BuildTypeIndexForAssembly);
+			}
+		}
+
+		/// <summary>
+		/// Builds a type index dictionary for a given assembly.
+		/// </summary>
+		/// <param name="assembly">The assembly to build the index for</param>
+		/// <returns>Dictionary mapping type full names to Type objects</returns>
+		private static Dictionary<string, Type> BuildTypeIndexForAssembly(Assembly assembly)
+		{
+			try
+			{
+				return assembly.GetTypes()
+					.Where(t => t != null && t.FullName != null)
+					.GroupBy(t => t.FullName!)
+					.ToDictionary(g => g.Key, g => g.First());
+			}
+			catch (ReflectionTypeLoadException ex)
+			{
+				return ex.Types
+					.Where(t => t != null && t.FullName != null)
+					.GroupBy(t => t!.FullName!)
+					.ToDictionary(g => g.Key, g => g.First()!);
+			}
+		}
 
 		/// <summary>
 		/// Serializes an object to the specified stream.
@@ -130,25 +166,33 @@ namespace CoreRemoting.Serialization.NeoBinary
 				return;
 			}
 
-			var serializedObjects = new HashSet<object>(ReferenceEqualityComparer.Instance);
-			var objectMap = new Dictionary<object, int>(ReferenceEqualityComparer.Instance);
+			var serializedObjects = _hashSetPool.Get();
+			var objectMap = _objectMapPool.Get();
 
-			// Write header
-			WriteHeader(writer);
-
-			// Serialize object graph
-			if (graph != null)
+			try
 			{
-				SerializeObject(graph, writer, serializedObjects, objectMap);
-			}
-			else
-			{
-				// Write null marker
-				writer.Write((byte)0);
-			}
+				// Write header
+				WriteHeader(writer);
 
-			writer.Flush();
-			_typeRefActive = false;
+				// Serialize object graph
+				if (graph != null)
+				{
+					SerializeObject(graph, writer, serializedObjects, objectMap);
+				}
+				else
+				{
+					// Write null marker
+					writer.Write((byte)0);
+				}
+
+				writer.Flush();
+			}
+			finally
+			{
+				_hashSetPool.Return(serializedObjects);
+				_objectMapPool.Return(objectMap);
+				_typeRefActive = false;
+			}
 		}
 
 		/// <summary>
@@ -537,26 +581,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 					var assembly = GetAssemblyCached(assemblyName);
 					if (assembly != null)
 					{
-						var map = _assemblyTypeIndex.GetOrAdd(assembly, a =>
-						{
-							Dictionary<string, Type> dict;
-							try
-							{
-								dict = a.GetTypes()
-									.Where(t => t != null && t.FullName != null)
-									.GroupBy(t => t.FullName!)
-									.ToDictionary(g => g.Key, g => g.First());
-							}
-							catch (ReflectionTypeLoadException ex)
-							{
-								dict = ex.Types
-									.Where(t => t != null && t.FullName != null)
-									.GroupBy(t => t!.FullName!)
-									.ToDictionary(g => g.Key, g => g.First()!);
-							}
-
-							return dict;
-						});
+						var map = _assemblyTypeIndex.GetOrAdd(assembly, BuildTypeIndexForAssembly);
 						if (!map.TryGetValue(typeName, out type))
 						{
 							// Try short name as a weak fallback
@@ -702,8 +727,13 @@ namespace CoreRemoting.Serialization.NeoBinary
 					var defName = genericDef.FullName; // e.g. System.Collections.Generic.List`1
 					var args = t.GetGenericArguments();
 					var argNames = args.Select(BuildAssemblyNeutralTypeName).ToArray();
-					var joined = string.Join("],[", argNames);
-					result = $"{defName}[[{joined}]]";
+					var sb = new StringBuilder();
+					for (int i = 0; i < argNames.Length; i++)
+					{
+						if (i > 0) sb.Append("],[");
+						sb.Append(argNames[i]);
+					}
+					result = $"{defName}[[{sb}]]";
 				}
 				else if (t.IsArray)
 				{
@@ -960,6 +990,162 @@ namespace CoreRemoting.Serialization.NeoBinary
 			       type == typeof(IntPtr) || type == typeof(DateTime);
 		}
 
+		/// <summary>
+		/// SIMD-optimized serialization for int arrays.
+		/// </summary>
+		private static void SerializeIntArraySimd(int[] array, BinaryWriter writer)
+		{
+#if NET5_0_OR_GREATER
+			if (Vector.IsHardwareAccelerated && array.Length >= Vector<int>.Count)
+			{
+				// SIMD path: Process in vector chunks
+				var vectors = MemoryMarshal.Cast<int, Vector<int>>(array);
+				foreach (var vector in vectors)
+				{
+					for (int i = 0; i < Vector<int>.Count; i++)
+						writer.Write(vector[i]);
+				}
+				// Handle remainder
+				int remainder = array.Length % Vector<int>.Count;
+				for (int i = array.Length - remainder; i < array.Length; i++)
+					writer.Write(array[i]);
+			}
+			else
+#endif
+			{
+				// Fallback: Standard loop
+				foreach (var item in array) writer.Write(item);
+			}
+		}
+
+		/// <summary>
+		/// SIMD-optimized serialization for float arrays.
+		/// </summary>
+		private static void SerializeFloatArraySimd(float[] array, BinaryWriter writer)
+		{
+#if NET5_0_OR_GREATER
+			if (Vector.IsHardwareAccelerated && array.Length >= Vector<float>.Count)
+			{
+				var vectors = MemoryMarshal.Cast<float, Vector<float>>(array);
+				foreach (var vector in vectors)
+				{
+					for (int i = 0; i < Vector<float>.Count; i++)
+						writer.Write(vector[i]);
+				}
+				int remainder = array.Length % Vector<float>.Count;
+				for (int i = array.Length - remainder; i < array.Length; i++)
+					writer.Write(array[i]);
+			}
+			else
+#endif
+			{
+				foreach (var item in array) writer.Write(item);
+			}
+		}
+
+		/// <summary>
+		/// SIMD-optimized serialization for double arrays.
+		/// </summary>
+		private static void SerializeDoubleArraySimd(double[] array, BinaryWriter writer)
+		{
+#if NET5_0_OR_GREATER
+			if (Vector.IsHardwareAccelerated && array.Length >= Vector<double>.Count)
+			{
+				var vectors = MemoryMarshal.Cast<double, Vector<double>>(array);
+				foreach (var vector in vectors)
+				{
+					for (int i = 0; i < Vector<double>.Count; i++)
+						writer.Write(vector[i]);
+				}
+				int remainder = array.Length % Vector<double>.Count;
+				for (int i = array.Length - remainder; i < array.Length; i++)
+					writer.Write(array[i]);
+			}
+			else
+#endif
+			{
+				foreach (var item in array) writer.Write(item);
+			}
+		}
+
+		/// <summary>
+		/// SIMD-optimized deserialization for int arrays.
+		/// </summary>
+		private static void DeserializeIntArraySimd(int[] array, BinaryReader reader)
+		{
+#if NET5_0_OR_GREATER
+			if (Vector.IsHardwareAccelerated && array.Length >= Vector<int>.Count)
+			{
+				var vectors = MemoryMarshal.Cast<int, Vector<int>>(array);
+				int vectorIndex = 0;
+				foreach (var vector in vectors)
+				{
+					for (int i = 0; i < Vector<int>.Count; i++)
+						array[vectorIndex++] = reader.ReadInt32();
+				}
+				int remainder = array.Length % Vector<int>.Count;
+				for (int i = array.Length - remainder; i < array.Length; i++)
+					array[i] = reader.ReadInt32();
+			}
+			else
+#endif
+			{
+				for (int i = 0; i < array.Length; i++) array[i] = reader.ReadInt32();
+			}
+		}
+
+		/// <summary>
+		/// SIMD-optimized deserialization for float arrays.
+		/// </summary>
+		private static void DeserializeFloatArraySimd(float[] array, BinaryReader reader)
+		{
+#if NET5_0_OR_GREATER
+			if (Vector.IsHardwareAccelerated && array.Length >= Vector<float>.Count)
+			{
+				var vectors = MemoryMarshal.Cast<float, Vector<float>>(array);
+				int vectorIndex = 0;
+				foreach (var vector in vectors)
+				{
+					for (int i = 0; i < Vector<float>.Count; i++)
+						array[vectorIndex++] = reader.ReadSingle();
+				}
+				int remainder = array.Length % Vector<float>.Count;
+				for (int i = array.Length - remainder; i < array.Length; i++)
+					array[i] = reader.ReadSingle();
+			}
+			else
+#endif
+			{
+				for (int i = 0; i < array.Length; i++) array[i] = reader.ReadSingle();
+			}
+		}
+
+		/// <summary>
+		/// SIMD-optimized deserialization for double arrays.
+		/// </summary>
+		private static void DeserializeDoubleArraySimd(double[] array, BinaryReader reader)
+		{
+#if NET5_0_OR_GREATER
+			if (Vector.IsHardwareAccelerated && array.Length >= Vector<double>.Count)
+			{
+				var vectors = MemoryMarshal.Cast<double, Vector<double>>(array);
+				int vectorIndex = 0;
+				foreach (var vector in vectors)
+				{
+					for (int i = 0; i < Vector<double>.Count; i++)
+						array[vectorIndex++] = reader.ReadDouble();
+				}
+				int remainder = array.Length % Vector<double>.Count;
+				for (int i = array.Length - remainder; i < array.Length; i++)
+					array[i] = reader.ReadDouble();
+			}
+			else
+#endif
+			{
+				for (int i = 0; i < array.Length; i++) array[i] = reader.ReadDouble();
+			}
+		}
+
 		private void SerializeArray(Array array, BinaryWriter writer, HashSet<object> serializedObjects,
 			Dictionary<object, int> objectMap)
 		{
@@ -977,6 +1163,27 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			if (array.Rank == 1)
 			{
+				// SIMD optimization for primitive arrays
+				if (isSimpleElement)
+				{
+					if (elementType == typeof(int))
+					{
+						SerializeIntArraySimd((int[])array, writer);
+						return;
+					}
+					else if (elementType == typeof(float))
+					{
+						SerializeFloatArraySimd((float[])array, writer);
+						return;
+					}
+					else if (elementType == typeof(double))
+					{
+						SerializeDoubleArraySimd((double[])array, writer);
+						return;
+					}
+				}
+
+				// Fallback: Element-wise serialization
 				for (int i = 0; i < length; i++)
 				{
 					var element = array.GetValue(i);
@@ -1040,6 +1247,27 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			var isSimpleElement = IsSimpleType(elementType);
 
+			// SIMD optimization for primitive 1D arrays
+			if (rank == 1 && isSimpleElement)
+			{
+				if (elementType == typeof(int))
+				{
+					DeserializeIntArraySimd((int[])array, reader);
+					return array;
+				}
+				else if (elementType == typeof(float))
+				{
+					DeserializeFloatArraySimd((float[])array, reader);
+					return array;
+				}
+				else if (elementType == typeof(double))
+				{
+					DeserializeDoubleArraySimd((double[])array, reader);
+					return array;
+				}
+			}
+
+			// Fallback: Element-wise deserialization
 			for (int i = 0; i < totalLength; i++)
 			{
 				var indices = GetIndicesFromLinearIndex(i, lengths);
@@ -1221,51 +1449,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 					_serializerCache.RecordSerialization();
 				}
 			}
-		}
-
-		private Action<object, BinaryWriter, HashSet<object>, Dictionary<object, int>>
-			CreateCompiledSerializer(Type type)
-		{
-			var fields = GetAllFieldsInHierarchy(type);
-
-			var objParam = Expression.Parameter(typeof(object), "obj");
-			var writerParam = Expression.Parameter(typeof(BinaryWriter), "writer");
-			var serializedObjectsParam = Expression.Parameter(typeof(HashSet<object>), "serializedObjects");
-			var objectMapParam = Expression.Parameter(typeof(Dictionary<object, int>), "objectMap");
-
-			var thisParam = Expression.Constant(this);
-
-			var statements = new List<Expression>();
-
-			// Write field count
-			statements.Add(Expression.Call(writerParam, typeof(BinaryWriter).GetMethod("Write", new[] { typeof(int) })!,
-				Expression.Constant(fields.Count)));
-
-			foreach (var field in fields)
-			{
-				// Write field name
-				var fieldName = field.Name; // Will be pooled at runtime
-				statements.Add(Expression.Call(writerParam,
-					typeof(BinaryWriter).GetMethod("Write", new[] { typeof(string) })!,
-					Expression.Constant(fieldName)));
-
-				// Get field value
-				var castObj = Expression.Convert(objParam, field.DeclaringType!);
-				var fieldExpr = Expression.Field(castObj, field);
-				var valueExpr = Expression.Convert(fieldExpr, typeof(object));
-
-				// Call SerializeObject
-				statements.Add(Expression.Call(thisParam,
-					typeof(NeoBinarySerializer).GetMethod("SerializeObject",
-						BindingFlags.NonPublic | BindingFlags.Instance)!, valueExpr, writerParam,
-					serializedObjectsParam, objectMapParam));
-			}
-
-			var block = Expression.Block(statements);
-			var lambda =
-				Expression.Lambda<Action<object, BinaryWriter, HashSet<object>, Dictionary<object, int>>>(block,
-					objParam, writerParam, serializedObjectsParam, objectMapParam);
-			return lambda.Compile();
 		}
 
 		private object DeserializeComplexObject(Type type, BinaryReader reader,
@@ -2643,6 +2826,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 			// Deserialize ExtendedProperties
 			var extProps = (System.Collections.IDictionary)DeserializeDictionary(typeof(System.Collections.Hashtable),
 				reader, deserializedObjects, -1);
+			
 			foreach (System.Collections.DictionaryEntry entry in extProps)
 			{
 				dataTable.ExtendedProperties[entry.Key] = entry.Value;
@@ -2906,41 +3090,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 			}
 		}
 
-		private List<FieldInfo> GetAllFieldsInHierarchy(Type type)
-		{
-			var fields = new List<FieldInfo>();
-			var currentType = type;
-
-			while (currentType != null && currentType != typeof(object))
-			{
-				var typeFields = currentType.GetFields(BindingFlags.Public | BindingFlags.NonPublic |
-				                                       BindingFlags.Instance | BindingFlags.DeclaredOnly);
-				fields.AddRange(typeFields);
-				currentType = currentType.BaseType;
-			}
-
-			return fields;
-		}
-
-		private static FieldInfo GetFieldInHierarchy(Type type, string fieldName)
-		{
-			var currentType = type;
-
-			while (currentType != null && currentType != typeof(object))
-			{
-				var field = currentType.GetField(fieldName,
-					BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-				if (field != null)
-				{
-					return field;
-				}
-
-				currentType = currentType.BaseType;
-			}
-
-			return null;
-		}
-
 		/// <summary>
 		/// Clears the assembly type cache to free memory.
 		/// Should be called when memory pressure is high or when assemblies are unloaded.
@@ -2978,6 +3127,50 @@ namespace CoreRemoting.Serialization.NeoBinary
 		{
 			ClearAssemblyTypeCache();
 			_serializerCache?.Dispose();
+		}
+
+		/// <summary>
+		/// Simple object pool for performance optimization.
+		/// </summary>
+		private class ObjectPool<T> where T : class
+		{
+			private readonly Func<T> _factory;
+			private readonly Action<T> _reset;
+			private readonly object _lock = new object();
+			private readonly List<T> _pool = new List<T>();
+
+			public ObjectPool(Func<T> factory, Action<T> reset)
+			{
+				_factory = factory;
+				_reset = reset;
+			}
+
+			public T Get()
+			{
+				lock (_lock)
+				{
+					if (_pool.Count > 0)
+					{
+						var item = _pool[_pool.Count - 1];
+						_pool.RemoveAt(_pool.Count - 1);
+						return item;
+					}
+				}
+				return _factory();
+			}
+
+			public void Return(T item)
+			{
+				if (item == null) return;
+				_reset(item);
+				lock (_lock)
+				{
+					if (_pool.Count < 10) // Limit pool size
+					{
+						_pool.Add(item);
+					}
+				}
+			}
 		}
 	}
 }
