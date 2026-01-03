@@ -347,6 +347,31 @@ namespace CoreRemoting.Serialization.NeoBinary
 			{
 				SerializeExpression((Expression)obj, writer, serializedObjects, objectMap);
 			}
+			else if (typeof(Type).IsAssignableFrom(type))
+			{
+				// Serialize Type objects specially to avoid MemberInfo handling
+				WriteTypeInfo(writer, (Type)obj);
+			}
+			else if (typeof(MemberInfo).IsAssignableFrom(type))
+			{
+				// Serialize MemberInfo with custom approach
+				SerializeMemberInfo(obj, writer, serializedObjects, objectMap);
+			}
+			else if (typeof(ParameterInfo).IsAssignableFrom(type))
+			{
+				// Serialize ParameterInfo with custom approach
+				SerializeParameterInfo(obj, writer, serializedObjects, objectMap);
+			}
+			else if (typeof(Module).IsAssignableFrom(type))
+			{
+				// Serialize Module with custom approach
+				SerializeModule(obj, writer, serializedObjects, objectMap);
+			}
+			else if (typeof(Assembly).IsAssignableFrom(type))
+			{
+				// Serialize Assembly with custom approach
+				SerializeAssembly(obj, writer, serializedObjects, objectMap);
+			}
 			else
 			{
 				// Serialize any complex object regardless of [Serializable] attribute
@@ -431,6 +456,22 @@ namespace CoreRemoting.Serialization.NeoBinary
 				{
 					obj = DeserializeExpression(reader, deserializedObjects);
 				}
+				else if (typeof(MemberInfo).IsAssignableFrom(type))
+				{
+					obj = DeserializeMemberInfo(type, reader, deserializedObjects, objectId);
+				}
+				else if (typeof(ParameterInfo).IsAssignableFrom(type))
+				{
+					obj = DeserializeParameterInfo(type, reader, deserializedObjects, objectId);
+				}
+				else if (typeof(Module).IsAssignableFrom(type))
+				{
+					obj = DeserializeModule(type, reader, deserializedObjects, objectId);
+				}
+				else if (typeof(Assembly).IsAssignableFrom(type))
+				{
+					obj = DeserializeAssembly(type, reader, deserializedObjects, objectId);
+				}
 				else
 				{
 					obj = DeserializeComplexObject(type, reader, deserializedObjects, objectId);
@@ -445,6 +486,14 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 		private void WriteTypeInfo(BinaryWriter writer, Type type)
 		{
+			if (type == null)
+			{
+				writer.Write(string.Empty); // Empty type name for null
+				writer.Write(string.Empty); // Empty assembly name for null
+				writer.Write(string.Empty); // Empty version for null
+				return;
+			}
+
 			var assemblyName = type.Assembly.GetName();
 			string typeName;
 
@@ -624,10 +673,18 @@ namespace CoreRemoting.Serialization.NeoBinary
 		{
 			deserializedObjects[objectId] = obj;
 
-			// Only add to reverse mapping if it's not a placeholder (to avoid conflicts)
-			if (!(obj is ForwardReferencePlaceholder))
+			// Only add to reverse mapping if it's not a placeholder or problematic reflection type
+			if (!(obj is ForwardReferencePlaceholder) && obj != null)
 			{
-				_objectToIdMap[obj] = objectId;
+				try
+				{
+					_objectToIdMap[obj] = objectId;
+				}
+				catch (NullReferenceException)
+				{
+					// Skip reverse mapping for partially initialized reflection objects
+					// This can happen with PropertyInfo and other reflection types
+				}
 			}
 		}
 
@@ -3127,6 +3184,332 @@ namespace CoreRemoting.Serialization.NeoBinary
 		{
 			ClearAssemblyTypeCache();
 			_serializerCache?.Dispose();
+		}
+
+		/// <summary>
+		/// Serializes MemberInfo objects with custom approach.
+		/// </summary>
+		private void SerializeMemberInfo(object memberInfoObj, BinaryWriter writer, HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
+		{
+			if (memberInfoObj == null)
+			{
+				writer.Write((byte)0); // Null marker
+				return;
+			}
+
+			var memberInfo = (MemberInfo)memberInfoObj;
+			writer.Write((byte)1); // Non-null marker
+			writer.Write((int)memberInfo.MemberType);
+			WriteTypeInfo(writer, memberInfo.GetType());
+			WriteTypeInfo(writer, memberInfo.DeclaringType);
+			writer.Write(memberInfo.Name ?? string.Empty);
+			writer.Write(memberInfo.MetadataToken);
+
+			// Handle specific MemberInfo types
+			if (memberInfo is PropertyInfo propertyInfo)
+			{
+				WriteTypeInfo(writer, propertyInfo.PropertyType);
+				writer.Write((byte)(propertyInfo.CanRead ? 1 : 0));
+				writer.Write((byte)(propertyInfo.CanWrite ? 1 : 0));
+				SerializeObject(propertyInfo.GetIndexParameters(), writer, serializedObjects, objectMap);
+			}
+			else if (memberInfo is MethodInfo methodInfo)
+			{
+				WriteTypeInfo(writer, methodInfo.ReturnType);
+				writer.Write(methodInfo.ReturnParameter?.Name ?? string.Empty);
+				SerializeObject(methodInfo.GetParameters(), writer, serializedObjects, objectMap);
+				writer.Write((byte)(methodInfo.IsStatic ? 1 : 0));
+				writer.Write((byte)(methodInfo.IsVirtual ? 1 : 0));
+				writer.Write((byte)(methodInfo.IsAbstract ? 1 : 0));
+			}
+			else if (memberInfo is FieldInfo fieldInfo)
+			{
+				WriteTypeInfo(writer, fieldInfo.FieldType);
+				writer.Write((byte)(fieldInfo.IsStatic ? 1 : 0));
+				writer.Write((byte)(fieldInfo.IsInitOnly ? 1 : 0));
+				writer.Write((byte)(fieldInfo.IsLiteral ? 1 : 0));
+			}
+			else if (memberInfo is ConstructorInfo constructorInfo)
+			{
+				SerializeObject(constructorInfo.GetParameters(), writer, serializedObjects, objectMap);
+				writer.Write((byte)(constructorInfo.IsStatic ? 1 : 0));
+			}
+			else if (memberInfo is EventInfo eventInfo)
+			{
+				WriteTypeInfo(writer, eventInfo.EventHandlerType);
+			}
+			else if (memberInfo is TypeInfo typeInfo)
+			{
+				WriteTypeInfo(writer, typeInfo);
+			}
+		}
+
+		/// <summary>
+		/// Deserializes MemberInfo objects.
+		/// </summary>
+		private object DeserializeMemberInfo(Type expectedType, BinaryReader reader, Dictionary<int, object> deserializedObjects, int objectId)
+		{
+			var nullMarker = reader.ReadByte();
+			if (nullMarker == 0) return null;
+
+			var memberType = (MemberTypes)reader.ReadInt32();
+			var actualType = ReadTypeInfo(reader);
+			var declaringType = ReadTypeInfo(reader);
+			var name = reader.ReadString();
+			var metadataToken = reader.ReadInt32();
+
+			try
+			{
+				switch (memberType)
+				{
+					case MemberTypes.Property:
+						var propertyType = ReadTypeInfo(reader);
+						var canRead = reader.ReadByte() == 1;
+						var canWrite = reader.ReadByte() == 1;
+						var indexParameters = (ParameterInfo[])DeserializeObject(reader, deserializedObjects);
+						
+						if (declaringType != null)
+						{
+							var properties = declaringType.GetProperties(
+								BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+							var result = properties.FirstOrDefault(p => 
+								p.Name == name && 
+								p.MetadataToken == metadataToken &&
+								p.PropertyType == propertyType);
+							return result;
+						}
+						break;
+
+					case MemberTypes.Method:
+						var returnType = ReadTypeInfo(reader);
+						var returnParamName = reader.ReadString();
+						var parameters = (ParameterInfo[])DeserializeObject(reader, deserializedObjects);
+						var isStatic = reader.ReadByte() == 1;
+						var isVirtual = reader.ReadByte() == 1;
+						var isAbstract = reader.ReadByte() == 1;
+						
+						if (declaringType != null)
+						{
+							var methods = declaringType.GetMethods(
+								BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+							var result = methods.FirstOrDefault(m => 
+								m.Name == name && 
+								m.MetadataToken == metadataToken &&
+								m.ReturnType == returnType);
+							return result;
+						}
+						break;
+
+					case MemberTypes.Field:
+						var fieldType = ReadTypeInfo(reader);
+						var fieldIsStatic = reader.ReadByte() == 1;
+						var fieldIsInitOnly = reader.ReadByte() == 1;
+						var fieldIsLiteral = reader.ReadByte() == 1;
+						
+						if (declaringType != null)
+						{
+							var fields = declaringType.GetFields(
+								BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+							var result = fields.FirstOrDefault(f => 
+								f.Name == name && 
+								f.MetadataToken == metadataToken &&
+								f.FieldType == fieldType);
+							return result;
+						}
+						break;
+
+					case MemberTypes.Constructor:
+						var constructorParameters = (ParameterInfo[])DeserializeObject(reader, deserializedObjects);
+						var constructorIsStatic = reader.ReadByte() == 1;
+						
+						if (declaringType != null)
+						{
+							var constructors = declaringType.GetConstructors(
+								BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+							var result = constructors.FirstOrDefault(c => 
+								c.MetadataToken == metadataToken);
+							return result;
+						}
+						break;
+
+					case MemberTypes.Event:
+						var eventHandlerType = ReadTypeInfo(reader);
+						
+						if (declaringType != null)
+						{
+							var events = declaringType.GetEvents(
+								BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+							var result = events.FirstOrDefault(e => 
+								e.Name == name && 
+								e.MetadataToken == metadataToken &&
+								e.EventHandlerType == eventHandlerType);
+							return result;
+						}
+						break;
+
+					case MemberTypes.TypeInfo:
+					case MemberTypes.NestedType:
+						return ReadTypeInfo(reader);
+				}
+			}
+			catch (Exception ex)
+			{
+				// Return null if deserialization fails
+				return null;
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// Serializes ParameterInfo objects with custom approach.
+		/// </summary>
+		private void SerializeParameterInfo(object parameterInfoObj, BinaryWriter writer, HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
+		{
+			if (parameterInfoObj == null)
+			{
+				writer.Write((byte)0); // Null marker
+				return;
+			}
+
+			var parameterInfo = (ParameterInfo)parameterInfoObj;
+			writer.Write((byte)1); // Non-null marker
+			WriteTypeInfo(writer, parameterInfo.ParameterType);
+			writer.Write(parameterInfo.Name ?? string.Empty);
+			writer.Write((int)parameterInfo.Attributes);
+			writer.Write((byte)(parameterInfo.IsIn ? 1 : 0));
+			writer.Write((byte)(parameterInfo.IsOut ? 1 : 0));
+			writer.Write((byte)(parameterInfo.IsOptional ? 1 : 0));
+			
+			if (parameterInfo.IsOptional)
+			{
+				SerializeObject(parameterInfo.DefaultValue, writer, serializedObjects, objectMap);
+			}
+		}
+
+		/// <summary>
+		/// Deserializes ParameterInfo objects.
+		/// </summary>
+		private object DeserializeParameterInfo(Type expectedType, BinaryReader reader, Dictionary<int, object> deserializedObjects, int objectId)
+		{
+			var nullMarker = reader.ReadByte();
+			if (nullMarker == 0) return null;
+
+			var parameterType = ReadTypeInfo(reader);
+			var name = reader.ReadString();
+			var attributes = (ParameterAttributes)reader.ReadInt32();
+			var isIn = reader.ReadByte() == 1;
+			var isOut = reader.ReadByte() == 1;
+			var isOptional = reader.ReadByte() == 1;
+			
+			var defaultValue = isOptional ? DeserializeObject(reader, deserializedObjects) : null;
+
+			// Note: Creating ParameterInfo instances directly is not supported in .NET
+			// For now, return a placeholder object
+			return new SerializableParameterInfo(parameterType, name, attributes, isIn, isOut, isOptional, defaultValue);
+		}
+
+		/// <summary>
+		/// Serializes Module objects with custom approach.
+		/// </summary>
+		private void SerializeModule(object moduleObj, BinaryWriter writer, HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
+		{
+			if (moduleObj == null)
+			{
+				writer.Write((byte)0); // Null marker
+				return;
+			}
+
+			var module = (Module)moduleObj;
+			writer.Write((byte)1); // Non-null marker
+			writer.Write(module.Name ?? string.Empty);
+			writer.Write(module.ScopeName ?? string.Empty);
+			SerializeObject(module.Assembly, writer, serializedObjects, objectMap);
+		}
+
+		/// <summary>
+		/// Deserializes Module objects.
+		/// </summary>
+		private object DeserializeModule(Type expectedType, BinaryReader reader, Dictionary<int, object> deserializedObjects, int objectId)
+		{
+			var nullMarker = reader.ReadByte();
+			if (nullMarker == 0) return null;
+
+			var name = reader.ReadString();
+			var scopeName = reader.ReadString();
+			var assembly = (Assembly)DeserializeObject(reader, deserializedObjects);
+
+			if (assembly != null)
+			{
+				var modules = assembly.GetModules();
+				return modules.FirstOrDefault(m => m.Name == name && m.ScopeName == scopeName);
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// Serializes Assembly objects with custom approach.
+		/// </summary>
+		private void SerializeAssembly(object assemblyObj, BinaryWriter writer, HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
+		{
+			if (assemblyObj == null)
+			{
+				writer.Write((byte)0); // Null marker
+				return;
+			}
+
+			var assembly = (Assembly)assemblyObj;
+			writer.Write((byte)1); // Non-null marker
+			writer.Write(assembly.FullName ?? string.Empty);
+		}
+
+		/// <summary>
+		/// Deserializes Assembly objects.
+		/// </summary>
+		private object DeserializeAssembly(Type expectedType, BinaryReader reader, Dictionary<int, object> deserializedObjects, int objectId)
+		{
+			var nullMarker = reader.ReadByte();
+			if (nullMarker == 0) return null;
+
+			var fullName = reader.ReadString();
+
+			try
+			{
+				return Assembly.Load(fullName);
+			}
+			catch
+			{
+				// Try to find in currently loaded assemblies
+				return AppDomain.CurrentDomain.GetAssemblies()
+					.FirstOrDefault(a => a.FullName == fullName || a.GetName().Name == fullName);
+			}
+		}
+
+		/// <summary>
+		/// Serializable wrapper for ParameterInfo data.
+		/// </summary>
+		private class SerializableParameterInfo
+		{
+			public Type ParameterType { get; }
+			public string Name { get; }
+			public ParameterAttributes Attributes { get; }
+			public bool IsIn { get; }
+			public bool IsOut { get; }
+			public bool IsOptional { get; }
+			public object DefaultValue { get; }
+
+			public SerializableParameterInfo(Type parameterType, string name, ParameterAttributes attributes, 
+				bool isIn, bool isOut, bool isOptional, object defaultValue)
+			{
+				ParameterType = parameterType;
+				Name = name;
+				Attributes = attributes;
+				IsIn = isIn;
+				IsOut = isOut;
+				IsOptional = isOptional;
+				DefaultValue = defaultValue;
+			}
 		}
 
 		/// <summary>

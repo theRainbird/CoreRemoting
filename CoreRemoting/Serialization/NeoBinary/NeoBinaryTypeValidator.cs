@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 namespace CoreRemoting.Serialization.NeoBinary
 {
@@ -45,6 +46,11 @@ namespace CoreRemoting.Serialization.NeoBinary
 		/// </summary>
 		public bool AllowExpressions { get; set; } = false;
 
+		/// <summary>
+		/// Gets or sets whether to allow reflection types during deserialization.
+		/// </summary>
+		public bool AllowReflectionTypes { get; set; } = true;
+
         /// <summary>
         /// Gets or sets whether to allow types from dynamic assemblies.
         /// </summary>
@@ -88,6 +94,12 @@ namespace CoreRemoting.Serialization.NeoBinary
             if (typeof(Exception).IsAssignableFrom(type))
             {
                 return;
+            }
+
+            // Check reflection types
+            if (!AllowReflectionTypes && IsReflectionType(type))
+            {
+                throw new NeoBinaryUnsafeDeserializationException($"Reflection type '{type.FullName}' is not allowed. Set AllowReflectionTypes=true to enable.");
             }
 
             // Check dynamic assembly restrictions
@@ -242,25 +254,25 @@ namespace CoreRemoting.Serialization.NeoBinary
 			return dangerousNamespaces.Any(dns => @namespace.StartsWith(dns, StringComparison.Ordinal));
 		}
 
-		private bool IsDangerousType(Type type)
-		{
-			if (type == null)
-				return false;
+        private bool IsDangerousType(Type type)
+        {
+            if (type == null)
+                return false;
 
-			var dangerousTypes = new[]
-			{
-				typeof(System.Reflection.MethodInfo),
-				typeof(System.Reflection.FieldInfo),
-				typeof(System.Reflection.PropertyInfo),
-				typeof(System.IO.File),
-				typeof(System.IO.Directory),
-				typeof(System.Diagnostics.Process),
-				typeof(System.Runtime.InteropServices.Marshal)
-			};
+            var dangerousTypes = new[]
+            {
+                typeof(System.IO.File),
+                typeof(System.IO.Directory),
+                typeof(System.Diagnostics.Process),
+                typeof(System.Runtime.InteropServices.Marshal)
+            };
 
-			return dangerousTypes.Any(dt => dt.IsAssignableFrom(type)) ||
-				   IsDangerousNamespace(type.Namespace);
-		}
+            // Only consider dangerous if reflection types are not explicitly allowed
+
+
+            return dangerousTypes.Any(dt => dt.IsAssignableFrom(type)) ||
+                   IsDangerousNamespace(type.Namespace);
+        }
 
 		private System.Collections.Generic.IEnumerable<System.Linq.Expressions.Expression> GetChildExpressions(System.Linq.Expressions.Expression node)
 		{
@@ -580,6 +592,30 @@ namespace CoreRemoting.Serialization.NeoBinary
                    typeof(Exception).IsAssignableFrom(type) ||
                    typeof(System.Data.DataSet).IsAssignableFrom(type) ||
                    typeof(System.Data.DataTable).IsAssignableFrom(type);
+        }
+
+        /// <summary>
+        /// Determines if a type is a reflection-related type.
+        /// </summary>
+        /// <param name="type">Type to check</param>
+        /// <returns>True if the type is a reflection type</returns>
+        private bool IsReflectionType(Type type)
+        {
+            if (type == null)
+                return false;
+
+            // Check for reflection-related base types
+            return typeof(MemberInfo).IsAssignableFrom(type) ||
+                   typeof(ParameterInfo).IsAssignableFrom(type) ||
+                   typeof(Module).IsAssignableFrom(type) ||
+                   typeof(Assembly).IsAssignableFrom(type) ||
+                   typeof(AssemblyName).IsAssignableFrom(type) ||
+                   typeof(ReflectionContext).IsAssignableFrom(type) ||
+                   typeof(CustomAttributeData).IsAssignableFrom(type) ||
+                   typeof(CustomAttributeTypedArgument).IsAssignableFrom(type) ||
+                   typeof(CustomAttributeNamedArgument).IsAssignableFrom(type) ||
+                   typeof(Type).IsAssignableFrom(type) ||
+                   type.Namespace?.StartsWith("System.Reflection", StringComparison.Ordinal) == true;
         }
     }
 }

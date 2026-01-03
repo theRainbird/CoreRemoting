@@ -22,7 +22,8 @@ namespace CoreRemoting.Serialization.NeoBinary
             {
                 AllowUnknownTypes = effectiveConfig.AllowUnknownTypes,
                 AllowExpressions = effectiveConfig.AllowExpressions,
-                AllowDelegates = effectiveConfig.AllowExpressions // Allow delegates if expressions are allowed
+                AllowDelegates = effectiveConfig.AllowExpressions, // Allow delegates if expressions are allowed
+                AllowReflectionTypes = effectiveConfig.AllowReflectionTypes
             };
             
             // Transfer allowed and blocked types from config to validator

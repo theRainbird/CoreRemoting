@@ -68,6 +68,13 @@ namespace CoreRemoting.Serialization.NeoBinary
 		public bool AllowExpressions { get; set; } = false;
 
 		/// <summary>
+		/// Gets or sets whether reflection types should be allowed during serialization/deserialization.
+		/// When true, types like MethodInfo, PropertyInfo, FieldInfo, etc. are supported.
+		/// When false, reflection types are blocked for security reasons.
+		/// </summary>
+		public bool AllowReflectionTypes { get; set; } = true;
+
+		/// <summary>
 		/// Gets or sets whether to include field names during serialization.
 		/// When true, field names are included for better compatibility.
 		/// </summary>
@@ -101,7 +108,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 		/// <summary>
 		/// Creates a copy of this configuration.
 		/// </summary>
-		/// <returns>A new NeoBinarySerializerConfig instance with the same settings</returns>
+		/// <returns>A new NeoBinarySerializerConfig instance with same settings</returns>
 		public NeoBinarySerializerConfig Clone()
 		{
 			return new NeoBinarySerializerConfig
@@ -118,6 +125,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				CompressionLevel = this.CompressionLevel,
 				EnableBinaryDataSetSerialization = this.EnableBinaryDataSetSerialization,
 				AllowExpressions = this.AllowExpressions,
+				AllowReflectionTypes = this.AllowReflectionTypes,
 				UseIlCompactLayout = this.UseIlCompactLayout
 			};
 		}

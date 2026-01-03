@@ -114,6 +114,16 @@ namespace CoreRemoting.Serialization.NeoBinary
         /// <returns>Array of all fields</returns>
         private FieldInfo[] GetAllFields(Type type)
         {
+            // Skip IL generation for reflection types to avoid IL generation issues
+            if (typeof(MemberInfo).IsAssignableFrom(type) ||
+                typeof(ParameterInfo).IsAssignableFrom(type) ||
+                typeof(Module).IsAssignableFrom(type) ||
+                typeof(Assembly).IsAssignableFrom(type) ||
+                typeof(System.Reflection.AssemblyName).IsAssignableFrom(type))
+            {
+                return new FieldInfo[0]; // No field serialization for reflection types
+            }
+
             var fields = new List<FieldInfo>();
             var currentType = type;
 
