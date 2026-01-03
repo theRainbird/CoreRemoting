@@ -175,4 +175,9 @@ public class TestService : ITestService
 
     public bool CheckLastSavedInstance() => LastInstance == this;
 
+    public ComplexEchoObject EchoComplex(ComplexEchoObject obj)
+    {
+        return obj;
+    }
+
 }

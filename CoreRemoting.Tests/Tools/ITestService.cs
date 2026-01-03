@@ -54,4 +54,6 @@ public interface ITestService : IBaseService
     void SaveLastInstance();
 
     bool CheckLastSavedInstance();
+
+    ComplexEchoObject EchoComplex(ComplexEchoObject obj);
 }
