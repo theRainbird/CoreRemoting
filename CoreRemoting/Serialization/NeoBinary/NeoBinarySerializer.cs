@@ -20,6 +20,53 @@ namespace CoreRemoting.Serialization.NeoBinary
 	/// </summary>
 	public partial class NeoBinarySerializer
 	{
+		#region Declarations
+
+		/// <summary>
+		/// Simple object pool for performance optimization.
+		/// </summary>
+		private class ObjectPool<T> where T : class
+		{
+			private readonly Func<T> _factory;
+			private readonly Action<T> _reset;
+			private readonly object _lock = new object();
+			private readonly List<T> _pool = new List<T>();
+
+			public ObjectPool(Func<T> factory, Action<T> reset)
+			{
+				_factory = factory;
+				_reset = reset;
+			}
+
+			public T Get()
+			{
+				lock (_lock)
+				{
+					if (_pool.Count > 0)
+					{
+						var item = _pool[_pool.Count - 1];
+						_pool.RemoveAt(_pool.Count - 1);
+						return item;
+					}
+				}
+
+				return _factory();
+			}
+
+			public void Return(T item)
+			{
+				if (item == null) return;
+				_reset(item);
+				lock (_lock)
+				{
+					if (_pool.Count < 10) // Limit pool size
+					{
+						_pool.Add(item);
+					}
+				}
+			}
+		}
+
 		// Pending forward references collected during nested deserializations
 		// that could not be resolved immediately (e.g., child -> parent back-references).
 		// They will be resolved after the full object graph has been materialized.
@@ -79,8 +126,15 @@ namespace CoreRemoting.Serialization.NeoBinary
 		private readonly ConcurrentDictionary<Type, bool> _validatedTypes = new();
 
 		// --- NEW: Object pools for performance optimization ---
-		private readonly ObjectPool<HashSet<object>> _hashSetPool = new ObjectPool<HashSet<object>>(() => new HashSet<object>(ReferenceEqualityComparer.Instance), set => set.Clear());
-		private readonly ObjectPool<Dictionary<object, int>> _objectMapPool = new ObjectPool<Dictionary<object, int>>(() => new Dictionary<object, int>(ReferenceEqualityComparer.Instance), dict => dict.Clear());
+		private readonly ObjectPool<HashSet<object>> _hashSetPool =
+			new ObjectPool<HashSet<object>>(() => new HashSet<object>(ReferenceEqualityComparer.Instance),
+				set => set.Clear());
+
+		private readonly ObjectPool<Dictionary<object, int>> _objectMapPool =
+			new ObjectPool<Dictionary<object, int>>(
+				() => new Dictionary<object, int>(ReferenceEqualityComparer.Instance), dict => dict.Clear());
+
+		#endregion
 
 		/// <summary>
 		/// Gets or sets the serializer configuration.
@@ -96,43 +150,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 		/// Gets the high-performance serializer cache.
 		/// </summary>
 		public SerializerCache SerializerCache => _serializerCache;
-
-		/// <summary>
-		/// Pre-builds type indexes for loaded assemblies to avoid expensive reflection calls during serialization.
-		/// Call this method at application startup for optimal performance. This is shared across all NeoBinarySerializer instances.
-		/// </summary>
-		public static void BuildAssemblyTypeIndexes()
-		{
-			var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-			foreach (var assembly in assemblies)
-			{
-				// This will populate the _assemblyTypeIndex cache
-				_assemblyTypeIndex.GetOrAdd(assembly, BuildTypeIndexForAssembly);
-			}
-		}
-
-		/// <summary>
-		/// Builds a type index dictionary for a given assembly.
-		/// </summary>
-		/// <param name="assembly">The assembly to build the index for</param>
-		/// <returns>Dictionary mapping type full names to Type objects</returns>
-		private static Dictionary<string, Type> BuildTypeIndexForAssembly(Assembly assembly)
-		{
-			try
-			{
-				return assembly.GetTypes()
-					.Where(t => t != null && t.FullName != null)
-					.GroupBy(t => t.FullName!)
-					.ToDictionary(g => g.Key, g => g.First());
-			}
-			catch (ReflectionTypeLoadException ex)
-			{
-				return ex.Types
-					.Where(t => t != null && t.FullName != null)
-					.GroupBy(t => t!.FullName!)
-					.ToDictionary(g => g.Key, g => g.First()!);
-			}
-		}
 
 		/// <summary>
 		/// Serializes an object to the specified stream.
@@ -302,7 +319,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				writer.Write((byte)1); // Object marker
 				writer.Write(arrayObjectId);
 				WriteTypeInfo(writer, type);
-				
+
 				SerializeArray((Array)obj, writer, serializedObjects, objectMap);
 				return;
 			}
@@ -714,207 +731,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 			}
 		}
 
-		/// <summary>
-		/// Performance-optimized method to get types from an assembly with caching.
-		/// </summary>
-		/// <param name="assembly">The assembly to get types from</param>
-		/// <returns>Array of types in the assembly</returns>
-		private Type[] GetAssemblyTypesCached(Assembly assembly)
-		{
-			return _assemblyTypeCache.GetOrAdd(assembly, asm =>
-			{
-				try
-				{
-					return asm.GetTypes();
-				}
-				catch (ReflectionTypeLoadException ex)
-				{
-					// Handle partial loading - return only successfully loaded types
-					return ex.Types.Where(t => t != null).ToArray();
-				}
-			});
-		}
-
-		/// <summary>
-		/// Performance-optimized method to load assembly with caching.
-		/// </summary>
-		/// <param name="assemblyName">The assembly name to load</param>
-		/// <returns>The loaded assembly or null if not found</returns>
-		private Assembly GetAssemblyCached(string assemblyName)
-		{
-			if (string.IsNullOrEmpty(assemblyName))
-				return null;
-
-			return _assemblyNameCache.GetOrAdd(assemblyName, name =>
-			{
-				try
-				{
-					return Assembly.Load(name);
-				}
-				catch
-				{
-					// Try to find in currently loaded assemblies
-					return AppDomain.CurrentDomain.GetAssemblies()
-						.FirstOrDefault(a => a.GetName().Name == name || a.FullName == name);
-				}
-			});
-		}
-
-		/// <summary>
-		/// Performance-optimized type search across loaded assemblies with caching.
-		/// </summary>
-		/// <param name="typeName">The type name to search for</param>
-		/// <returns>The found type or null</returns>
-		private Type FindTypeInLoadedAssembliesCached(string typeName)
-		{
-			// Create a cache key for assembly-wide type search
-			var searchCacheKey = $"search_{typeName}";
-
-			// Check if we've already searched for this type recently
-			if (_resolvedTypeCache.TryGetValue(searchCacheKey, out var cachedResult))
-				return cachedResult;
-
-			Type foundType = null;
-			var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-
-			// Search through assemblies with cached type arrays
-			foreach (var assembly in loadedAssemblies)
-			{
-				var assemblyTypes = GetAssemblyTypesCached(assembly);
-				foundType = assemblyTypes.FirstOrDefault(t =>
-					t.FullName == typeName || t.Name == typeName);
-
-				if (foundType != null)
-					break;
-			}
-
-			// Cache the search result (null is also cached to avoid repeated searches)
-			_resolvedTypeCache[searchCacheKey] = foundType;
-			return foundType;
-		}
-
-		/// <summary>
-		/// Builds a type name string without embedding assembly information for generic argument types.
-		/// The format is compatible with Type.GetType style generic notation, e.g.:
-		/// Namespace.Generic`1[[Arg.Namespace.Type]]
-		/// </summary>
-		private string BuildAssemblyNeutralTypeName(Type type)
-		{
-			return _typeNameCache.GetOrAdd(type, t =>
-			{
-				string result;
-
-				if (t.IsGenericType)
-				{
-					var genericDef = t.GetGenericTypeDefinition();
-					var defName = genericDef.FullName; // e.g. System.Collections.Generic.List`1
-					var args = t.GetGenericArguments();
-					var argNames = args.Select(BuildAssemblyNeutralTypeName).ToArray();
-					var sb = new StringBuilder();
-					for (int i = 0; i < argNames.Length; i++)
-					{
-						if (i > 0) sb.Append("],[");
-						sb.Append(argNames[i]);
-					}
-					result = $"{defName}[[{sb}]]";
-				}
-				else if (t.IsArray)
-				{
-					// Handle arrays by composing element type and rank suffix
-					var elem = t.GetElementType();
-					var rank = t.GetArrayRank();
-					var suffix = rank == 1 ? "[]" : "[" + new string(',', rank - 1) + "]";
-					result = BuildAssemblyNeutralTypeName(elem) + suffix;
-				}
-				else
-				{
-					result = t.FullName ?? t.Name;
-				}
-
-				return _serializerCache.GetOrCreatePooledString(result);
-			});
-		}
-
-		/// <summary>
-		/// Resolves a type name written without assembly qualifiers for generic arguments.
-		/// Tries Type.GetType, then searches loaded assemblies, and for generics parses and resolves recursively.
-		/// </summary>
-		private Type ResolveAssemblyNeutralType(string typeName)
-		{
-			return _resolvedTypeCache.GetOrAdd(typeName, tn =>
-			{
-				// Fast path
-				var t = Type.GetType(tn);
-				if (t != null) return t;
-
-				// If looks like a generic with our [[...]] notation
-				int idx = tn.IndexOf("[[", StringComparison.Ordinal);
-				if (idx > 0)
-				{
-					var defName = tn.Substring(0, idx);
-					var argsPart = tn.Substring(idx);
-
-					var defType = FindTypeInLoadedAssemblies(defName) ?? Type.GetType(defName);
-					if (defType == null)
-						return null;
-
-					var argNames = ParseGenericArgumentNames(argsPart);
-					var argTypes = new Type[argNames.Count];
-					for (int i = 0; i < argNames.Count; i++)
-					{
-						var at = ResolveAssemblyNeutralType(argNames[i]);
-						if (at == null) return null;
-						argTypes[i] = at;
-					}
-
-					try
-					{
-						return defType.MakeGenericType(argTypes);
-					}
-					catch
-					{
-						return null;
-					}
-				}
-
-				// Non-generic: search loaded assemblies by FullName then by Name
-				return FindTypeInLoadedAssemblies(tn);
-			});
-		}
-
-		private static Type FindTypeInLoadedAssemblies(string fullOrSimpleName)
-		{
-			foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-			{
-				try
-				{
-					var t = asm.GetType(fullOrSimpleName, throwOnError: false, ignoreCase: false);
-					if (t != null) return t;
-				}
-				catch
-				{
-					/* ignore problematic assemblies */
-				}
-			}
-
-			// Fallback: search by simple name across all types (could be expensive)
-			foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-			{
-				try
-				{
-					var t = asm.GetTypes()
-						.FirstOrDefault(x => x.FullName == fullOrSimpleName || x.Name == fullOrSimpleName);
-					if (t != null) return t;
-				}
-				catch
-				{
-					/* ignore */
-				}
-			}
-
-			return null;
-		}
-
 		private static List<string> ParseGenericArgumentNames(string argsPart)
 		{
 			// argsPart starts with [[ and ends with ]] possibly; we extract inside and split at top-level '],['
@@ -1035,7 +851,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 			// Additional validation: This should NEVER be called for complex types
 			if (type.IsClass && !type.IsEnum && type != typeof(string))
 			{
-				throw new InvalidOperationException($"DeserializePrimitive called for complex type: {type.FullName}. This indicates a serious bug in type resolution or serialization.");
+				throw new InvalidOperationException(
+					$"DeserializePrimitive called for complex type: {type.FullName}. This indicates a serious bug in type resolution or serialization.");
 			}
 
 			if (type == typeof(bool)) return reader.ReadBoolean();
@@ -1077,392 +894,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 		{
 			return type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(UIntPtr) ||
 			       type == typeof(IntPtr) || type == typeof(DateTime);
-		}
-
-		/// <summary>
-		/// SIMD-optimized serialization for int arrays.
-		/// </summary>
-		private static void SerializeIntArraySimd(int[] array, BinaryWriter writer)
-		{
-#if NET5_0_OR_GREATER
-			if (Vector.IsHardwareAccelerated && array.Length >= Vector<int>.Count)
-			{
-				// SIMD path: Process in vector chunks
-				var vectors = MemoryMarshal.Cast<int, Vector<int>>(array);
-				foreach (var vector in vectors)
-				{
-					for (int i = 0; i < Vector<int>.Count; i++)
-						writer.Write(vector[i]);
-				}
-				// Handle remainder
-				int remainder = array.Length % Vector<int>.Count;
-				for (int i = array.Length - remainder; i < array.Length; i++)
-					writer.Write(array[i]);
-			}
-			else
-#endif
-			{
-				// Fallback: Standard loop
-				foreach (var item in array) writer.Write(item);
-			}
-		}
-
-		/// <summary>
-		/// SIMD-optimized serialization for float arrays.
-		/// </summary>
-		private static void SerializeFloatArraySimd(float[] array, BinaryWriter writer)
-		{
-#if NET5_0_OR_GREATER
-			if (Vector.IsHardwareAccelerated && array.Length >= Vector<float>.Count)
-			{
-				var vectors = MemoryMarshal.Cast<float, Vector<float>>(array);
-				foreach (var vector in vectors)
-				{
-					for (int i = 0; i < Vector<float>.Count; i++)
-						writer.Write(vector[i]);
-				}
-				int remainder = array.Length % Vector<float>.Count;
-				for (int i = array.Length - remainder; i < array.Length; i++)
-					writer.Write(array[i]);
-			}
-			else
-#endif
-			{
-				foreach (var item in array) writer.Write(item);
-			}
-		}
-
-		/// <summary>
-		/// SIMD-optimized serialization for double arrays.
-		/// </summary>
-		private static void SerializeDoubleArraySimd(double[] array, BinaryWriter writer)
-		{
-#if NET5_0_OR_GREATER
-			if (Vector.IsHardwareAccelerated && array.Length >= Vector<double>.Count)
-			{
-				var vectors = MemoryMarshal.Cast<double, Vector<double>>(array);
-				foreach (var vector in vectors)
-				{
-					for (int i = 0; i < Vector<double>.Count; i++)
-						writer.Write(vector[i]);
-				}
-				int remainder = array.Length % Vector<double>.Count;
-				for (int i = array.Length - remainder; i < array.Length; i++)
-					writer.Write(array[i]);
-			}
-			else
-#endif
-			{
-				foreach (var item in array) writer.Write(item);
-			}
-		}
-
-		/// <summary>
-		/// SIMD-optimized deserialization for int arrays.
-		/// </summary>
-		private static void DeserializeIntArraySimd(int[] array, BinaryReader reader)
-		{
-#if NET5_0_OR_GREATER
-			if (Vector.IsHardwareAccelerated && array.Length >= Vector<int>.Count)
-			{
-				var vectors = MemoryMarshal.Cast<int, Vector<int>>(array);
-				int vectorIndex = 0;
-				foreach (var vector in vectors)
-				{
-					for (int i = 0; i < Vector<int>.Count; i++)
-						array[vectorIndex++] = reader.ReadInt32();
-				}
-				int remainder = array.Length % Vector<int>.Count;
-				for (int i = array.Length - remainder; i < array.Length; i++)
-					array[i] = reader.ReadInt32();
-			}
-			else
-#endif
-			{
-				for (int i = 0; i < array.Length; i++) array[i] = reader.ReadInt32();
-			}
-		}
-
-		/// <summary>
-		/// SIMD-optimized deserialization for float arrays.
-		/// </summary>
-		private static void DeserializeFloatArraySimd(float[] array, BinaryReader reader)
-		{
-#if NET5_0_OR_GREATER
-			if (Vector.IsHardwareAccelerated && array.Length >= Vector<float>.Count)
-			{
-				var vectors = MemoryMarshal.Cast<float, Vector<float>>(array);
-				int vectorIndex = 0;
-				foreach (var vector in vectors)
-				{
-					for (int i = 0; i < Vector<float>.Count; i++)
-						array[vectorIndex++] = reader.ReadSingle();
-				}
-				int remainder = array.Length % Vector<float>.Count;
-				for (int i = array.Length - remainder; i < array.Length; i++)
-					array[i] = reader.ReadSingle();
-			}
-			else
-#endif
-			{
-				for (int i = 0; i < array.Length; i++) array[i] = reader.ReadSingle();
-			}
-		}
-
-		/// <summary>
-		/// SIMD-optimized deserialization for double arrays.
-		/// </summary>
-		private static void DeserializeDoubleArraySimd(double[] array, BinaryReader reader)
-		{
-#if NET5_0_OR_GREATER
-			if (Vector.IsHardwareAccelerated && array.Length >= Vector<double>.Count)
-			{
-				var vectors = MemoryMarshal.Cast<double, Vector<double>>(array);
-				int vectorIndex = 0;
-				foreach (var vector in vectors)
-				{
-					for (int i = 0; i < Vector<double>.Count; i++)
-						array[vectorIndex++] = reader.ReadDouble();
-				}
-				int remainder = array.Length % Vector<double>.Count;
-				for (int i = array.Length - remainder; i < array.Length; i++)
-					array[i] = reader.ReadDouble();
-			}
-			else
-#endif
-			{
-				for (int i = 0; i < array.Length; i++) array[i] = reader.ReadDouble();
-			}
-		}
-
-		private void SerializeArray(Array array, BinaryWriter writer, HashSet<object> serializedObjects,
-			Dictionary<object, int> objectMap)
-		{
-			writer.Write(array.Rank);
-			for (int i = 0; i < array.Rank; i++)
-			{
-				writer.Write(array.GetLength(i));
-			}
-
-			var length = array.Length;
-			writer.Write(length);
-
-			var elementType = array.GetType().GetElementType()!;
-			var isSimpleElement = IsSimpleType(elementType);
-
-			if (array.Rank == 1)
-			{
-				// SIMD optimization for primitive arrays
-				if (isSimpleElement)
-				{
-					if (elementType == typeof(int))
-					{
-						SerializeIntArraySimd((int[])array, writer);
-						return;
-					}
-					else if (elementType == typeof(float))
-					{
-						SerializeFloatArraySimd((float[])array, writer);
-						return;
-					}
-					else if (elementType == typeof(double))
-					{
-						SerializeDoubleArraySimd((double[])array, writer);
-						return;
-					}
-				}
-
-				// Fallback: Element-wise serialization
-				for (int i = 0; i < length; i++)
-				{
-					var element = array.GetValue(i);
-					if (isSimpleElement)
-					{
-						SerializePrimitive(element, writer);
-					}
-					else
-					{
-						SerializeObject(element, writer, serializedObjects, objectMap);
-					}
-				}
-			}
-			else
-			{
-				var indices = new int[array.Rank];
-				for (int i = 0; i < length; i++)
-				{
-					var element = array.GetValue(indices);
-					if (isSimpleElement)
-					{
-						SerializePrimitive(element, writer);
-					}
-					else
-					{
-						SerializeObject(element, writer, serializedObjects, objectMap);
-					}
-
-					IncrementArrayIndices(indices, array);
-				}
-			}
-		}
-
-		private void IncrementArrayIndices(int[] indices, Array array)
-		{
-			for (int dim = array.Rank - 1; dim >= 0; dim--)
-			{
-				indices[dim]++;
-				if (indices[dim] < array.GetLength(dim))
-					break;
-				indices[dim] = 0;
-			}
-		}
-
-		private Array DeserializeArray(Type type, BinaryReader reader, Dictionary<int, object> deserializedObjects,
-			int objectId)
-		{
-			var rank = reader.ReadInt32();
-			var lengths = new int[rank];
-			for (int i = 0; i < rank; i++)
-			{
-				lengths[i] = reader.ReadInt32();
-			}
-
-			var totalLength = reader.ReadInt32();
-			var elementType = type.GetElementType()!;
-			var array = Array.CreateInstance(elementType, lengths);
-
-			// Register array immediately to handle circular references
-			deserializedObjects[objectId] = array;
-
-			var isSimpleElement = IsSimpleType(elementType);
-
-			// SIMD optimization for primitive 1D arrays
-			if (rank == 1 && isSimpleElement)
-			{
-				if (elementType == typeof(int))
-				{
-					DeserializeIntArraySimd((int[])array, reader);
-					return array;
-				}
-				else if (elementType == typeof(float))
-				{
-					DeserializeFloatArraySimd((float[])array, reader);
-					return array;
-				}
-				else if (elementType == typeof(double))
-				{
-					DeserializeDoubleArraySimd((double[])array, reader);
-					return array;
-				}
-			}
-
-			// Fallback: Element-wise deserialization
-			for (int i = 0; i < totalLength; i++)
-			{
-				var indices = GetIndicesFromLinearIndex(i, lengths);
-				object element;
-				if (isSimpleElement)
-				{
-					element = DeserializePrimitive(elementType, reader);
-				}
-				else
-				{
-					element = DeserializeObject(reader, deserializedObjects);
-				}
-
-				array.SetValue(element, indices);
-			}
-
-			return array;
-		}
-
-		private void SerializeList(IList list, BinaryWriter writer,
-			HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
-		{
-			writer.Write(list.Count);
-			for (int i = 0; i < list.Count; i++)
-			{
-				SerializeObject(list[i], writer, serializedObjects, objectMap);
-			}
-		}
-
-		private object DeserializeList(Type type, BinaryReader reader, Dictionary<int, object> deserializedObjects,
-			int objectId)
-		{
-			var count = reader.ReadInt32();
-			var list = (IList)CreateInstanceWithoutConstructor(type);
-
-			// Register the list immediately to handle circular references
-			deserializedObjects[objectId] = list;
-
-			for (int i = 0; i < count; i++)
-			{
-				var item = DeserializeObject(reader, deserializedObjects);
-
-				// If item is a forward reference placeholder, add null for now
-				// It will be resolved later
-				if (item is ForwardReferencePlaceholder)
-				{
-					list.Add(null);
-				}
-				else
-				{
-					list.Add(item);
-				}
-			}
-
-			return list;
-		}
-
-		private void SerializeDictionary(IDictionary dictionary, BinaryWriter writer,
-			HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
-		{
-			writer.Write(dictionary.Count);
-			foreach (DictionaryEntry entry in dictionary)
-			{
-				SerializeObject(entry.Key, writer, serializedObjects, objectMap);
-				SerializeObject(entry.Value, writer, serializedObjects, objectMap);
-			}
-		}
-
-		private object DeserializeDictionary(Type type, BinaryReader reader,
-			Dictionary<int, object> deserializedObjects, int objectId)
-		{
-			var count = reader.ReadInt32();
-
-			// Special handling for ExpandoObject
-			if (type == typeof(ExpandoObject))
-			{
-				var expando = new ExpandoObject();
-				var dict = (IDictionary<string, object>)expando;
-
-				// Register dictionary immediately to handle circular references
-				deserializedObjects[objectId] = expando;
-
-				for (int i = 0; i < count; i++)
-				{
-					var key = (string)DeserializeObject(reader, deserializedObjects);
-					var value = DeserializeObject(reader, deserializedObjects);
-					dict[key] = value;
-				}
-
-				return expando;
-			}
-
-			var dictionaryObj = CreateInstanceWithoutConstructor(type);
-			var dictionary = (IDictionary)dictionaryObj;
-
-			// Register dictionary immediately to handle circular references
-			deserializedObjects[objectId] = dictionary;
-
-			for (int i = 0; i < count; i++)
-			{
-				var key = DeserializeObject(reader, deserializedObjects);
-				var value = DeserializeObject(reader, deserializedObjects);
-				dictionary[key] = value;
-			}
-
-			return dictionaryObj;
 		}
 
 		private void SerializeExpandoObject(ExpandoObject expando, BinaryWriter writer,
@@ -1767,20 +1198,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 				$"Cannot create instance of type '{type.FullName}' without a parameterless constructor. Consider adding a parameterless constructor or marking the type with [Serializable].");
 		}
 
-		private int[] GetIndicesFromLinearIndex(int linearIndex, int[] lengths)
-		{
-			var indices = new int[lengths.Length];
-			var remaining = linearIndex;
-
-			for (int i = lengths.Length - 1; i >= 0; i--)
-			{
-				indices[i] = remaining % lengths[i];
-				remaining /= lengths[i];
-			}
-
-			return indices;
-		}
-
 		private class ReferenceEqualityComparer : IEqualityComparer<object>
 		{
 			public static readonly ReferenceEqualityComparer Instance = new ReferenceEqualityComparer();
@@ -1848,144 +1265,12 @@ namespace CoreRemoting.Serialization.NeoBinary
 		}
 
 		/// <summary>
-		/// Clears the assembly type cache to free memory.
-		/// Should be called when memory pressure is high or when assemblies are unloaded.
-		/// </summary>
-		public void ClearAssemblyTypeCache()
-		{
-			_assemblyTypeCache.Clear();
-			_assemblyNameCache.Clear();
-
-			// Also clear search cache entries
-			var keysToRemove = _resolvedTypeCache.Keys
-				.Where(key => key.StartsWith("search_"))
-				.ToList();
-
-			foreach (var key in keysToRemove)
-			{
-				_resolvedTypeCache.TryRemove(key, out _);
-			}
-		}
-
-		/// <summary>
-		/// Gets cache statistics for monitoring performance.
-		/// </summary>
-		/// <returns>Tuple with assembly cache count and name cache count</returns>
-		public (int AssemblyTypeCacheCount, int AssemblyNameCacheCount, int SearchCacheCount) GetCacheStatistics()
-		{
-			var searchCacheCount = _resolvedTypeCache.Keys.Count(key => key.StartsWith("search_"));
-			return (_assemblyTypeCache.Count, _assemblyNameCache.Count, searchCacheCount);
-		}
-
-		/// <summary>
 		/// Disposes the serializer and cleans up caches.
 		/// </summary>
 		public void Dispose()
 		{
 			ClearAssemblyTypeCache();
 			_serializerCache?.Dispose();
-		}
-
-		/// <summary>
-		/// Serializes MemberInfo objects with custom approach.
-		/// </summary>
-		private void SerializeMemberInfo(object memberInfoObj, BinaryWriter writer, HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
-		{
-			if (memberInfoObj == null)
-			{
-				writer.Write((byte)0); // Null marker
-				return;
-			}
-
-			var memberInfo = (MemberInfo)memberInfoObj;
-			writer.Write((byte)1); // Non-null marker
-			writer.Write((int)memberInfo.MemberType);
-			WriteTypeInfo(writer, memberInfo.GetType());
-			WriteTypeInfo(writer, memberInfo.DeclaringType);
-			writer.Write(memberInfo.Name ?? string.Empty);
-			writer.Write(memberInfo.MetadataToken);
-
-			// Handle specific MemberInfo types
-			if (memberInfo is PropertyInfo propertyInfo)
-			{
-				WriteTypeInfo(writer, propertyInfo.PropertyType);
-				writer.Write((byte)(propertyInfo.CanRead ? 1 : 0));
-				writer.Write((byte)(propertyInfo.CanWrite ? 1 : 0));
-				SerializeObject(propertyInfo.GetIndexParameters(), writer, serializedObjects, objectMap);
-			}
-			else if (memberInfo is MethodInfo methodInfo)
-			{
-				WriteTypeInfo(writer, methodInfo.ReturnType);
-				writer.Write(methodInfo.ReturnParameter?.Name ?? string.Empty);
-				SerializeObject(methodInfo.GetParameters(), writer, serializedObjects, objectMap);
-				writer.Write((byte)(methodInfo.IsStatic ? 1 : 0));
-				writer.Write((byte)(methodInfo.IsVirtual ? 1 : 0));
-				writer.Write((byte)(methodInfo.IsAbstract ? 1 : 0));
-			}
-			else if (memberInfo is FieldInfo fieldInfo)
-			{
-				WriteTypeInfo(writer, fieldInfo.FieldType);
-				writer.Write((byte)(fieldInfo.IsStatic ? 1 : 0));
-				writer.Write((byte)(fieldInfo.IsInitOnly ? 1 : 0));
-				writer.Write((byte)(fieldInfo.IsLiteral ? 1 : 0));
-			}
-			else if (memberInfo is ConstructorInfo constructorInfo)
-			{
-				SerializeObject(constructorInfo.GetParameters(), writer, serializedObjects, objectMap);
-				writer.Write((byte)(constructorInfo.IsStatic ? 1 : 0));
-			}
-			else if (memberInfo is EventInfo eventInfo)
-			{
-				WriteTypeInfo(writer, eventInfo.EventHandlerType);
-			}
-			else if (memberInfo is TypeInfo typeInfo)
-			{
-				WriteTypeInfo(writer, typeInfo);
-			}
-		}
-
-		/// <summary>
-		/// Simple object pool for performance optimization.
-		/// </summary>
-		private class ObjectPool<T> where T : class
-		{
-			private readonly Func<T> _factory;
-			private readonly Action<T> _reset;
-			private readonly object _lock = new object();
-			private readonly List<T> _pool = new List<T>();
-
-			public ObjectPool(Func<T> factory, Action<T> reset)
-			{
-				_factory = factory;
-				_reset = reset;
-			}
-
-			public T Get()
-			{
-				lock (_lock)
-				{
-					if (_pool.Count > 0)
-					{
-						var item = _pool[_pool.Count - 1];
-						_pool.RemoveAt(_pool.Count - 1);
-						return item;
-					}
-				}
-				return _factory();
-			}
-
-			public void Return(T item)
-			{
-				if (item == null) return;
-				_reset(item);
-				lock (_lock)
-				{
-					if (_pool.Count < 10) // Limit pool size
-					{
-						_pool.Add(item);
-					}
-				}
-			}
 		}
 	}
 }

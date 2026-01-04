@@ -58,6 +58,64 @@ namespace CoreRemoting.Serialization.NeoBinary
 		}
 		
 		/// <summary>
+		/// Serializes MemberInfo objects with custom approach.
+		/// </summary>
+		private void SerializeMemberInfo(object memberInfoObj, BinaryWriter writer, HashSet<object> serializedObjects, Dictionary<object, int> objectMap)
+		{
+			if (memberInfoObj == null)
+			{
+				writer.Write((byte)0); // Null marker
+				return;
+			}
+
+			var memberInfo = (MemberInfo)memberInfoObj;
+			writer.Write((byte)1); // Non-null marker
+			writer.Write((int)memberInfo.MemberType);
+			WriteTypeInfo(writer, memberInfo.GetType());
+			WriteTypeInfo(writer, memberInfo.DeclaringType);
+			writer.Write(memberInfo.Name ?? string.Empty);
+			writer.Write(memberInfo.MetadataToken);
+
+			// Handle specific MemberInfo types
+			if (memberInfo is PropertyInfo propertyInfo)
+			{
+				WriteTypeInfo(writer, propertyInfo.PropertyType);
+				writer.Write((byte)(propertyInfo.CanRead ? 1 : 0));
+				writer.Write((byte)(propertyInfo.CanWrite ? 1 : 0));
+				SerializeObject(propertyInfo.GetIndexParameters(), writer, serializedObjects, objectMap);
+			}
+			else if (memberInfo is MethodInfo methodInfo)
+			{
+				WriteTypeInfo(writer, methodInfo.ReturnType);
+				writer.Write(methodInfo.ReturnParameter?.Name ?? string.Empty);
+				SerializeObject(methodInfo.GetParameters(), writer, serializedObjects, objectMap);
+				writer.Write((byte)(methodInfo.IsStatic ? 1 : 0));
+				writer.Write((byte)(methodInfo.IsVirtual ? 1 : 0));
+				writer.Write((byte)(methodInfo.IsAbstract ? 1 : 0));
+			}
+			else if (memberInfo is FieldInfo fieldInfo)
+			{
+				WriteTypeInfo(writer, fieldInfo.FieldType);
+				writer.Write((byte)(fieldInfo.IsStatic ? 1 : 0));
+				writer.Write((byte)(fieldInfo.IsInitOnly ? 1 : 0));
+				writer.Write((byte)(fieldInfo.IsLiteral ? 1 : 0));
+			}
+			else if (memberInfo is ConstructorInfo constructorInfo)
+			{
+				SerializeObject(constructorInfo.GetParameters(), writer, serializedObjects, objectMap);
+				writer.Write((byte)(constructorInfo.IsStatic ? 1 : 0));
+			}
+			else if (memberInfo is EventInfo eventInfo)
+			{
+				WriteTypeInfo(writer, eventInfo.EventHandlerType);
+			}
+			else if (memberInfo is TypeInfo typeInfo)
+			{
+				WriteTypeInfo(writer, typeInfo);
+			}
+		}
+		
+		/// <summary>
 		/// Deserializes MemberInfo objects.
 		/// </summary>
 		private object DeserializeMemberInfo(Type expectedType, BinaryReader reader, Dictionary<int, object> deserializedObjects, int objectId)
