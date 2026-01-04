@@ -444,8 +444,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				{
 					obj = DeserializeArray(type, reader, deserializedObjects, objectId);
 				}
-				else if (type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(UIntPtr) ||
-				    type == typeof(IntPtr) || type == typeof(DateTime))
+				else if (IsSimpleType(type))
 				{
 					obj = DeserializePrimitive(type, reader);
 				}
@@ -1033,6 +1032,12 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 		private object DeserializePrimitive(Type type, BinaryReader reader)
 		{
+			// Additional validation: This should NEVER be called for complex types
+			if (type.IsClass && !type.IsEnum && type != typeof(string))
+			{
+				throw new InvalidOperationException($"DeserializePrimitive called for complex type: {type.FullName}. This indicates a serious bug in type resolution or serialization.");
+			}
+
 			if (type == typeof(bool)) return reader.ReadBoolean();
 			if (type == typeof(byte)) return reader.ReadByte();
 			if (type == typeof(sbyte)) return reader.ReadSByte();
@@ -1424,7 +1429,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 			Dictionary<int, object> deserializedObjects, int objectId)
 		{
 			var count = reader.ReadInt32();
-			object dictionaryObj;
 
 			// Special handling for ExpandoObject
 			if (type == typeof(ExpandoObject))
@@ -1445,7 +1449,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				return expando;
 			}
 
-			dictionaryObj = CreateInstanceWithoutConstructor(type);
+			var dictionaryObj = CreateInstanceWithoutConstructor(type);
 			var dictionary = (IDictionary)dictionaryObj;
 
 			// Register dictionary immediately to handle circular references

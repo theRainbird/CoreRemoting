@@ -37,10 +37,6 @@ public class NeoBinaryWebsocketIntegrationTests : IDisposable
         var testObject = CreateComplexTestObject();
         var port = System.Threading.Interlocked.Increment(ref _nextPort);
         
-        _testOutputHelper.WriteLine($"Testobjekt erstellt: {testObject.Identifier}");
-        _testOutputHelper.WriteLine($"IL Compact Format: AKTIVIERT");
-        _testOutputHelper.WriteLine($"Port: {port}");
-
         // Erstelle Server-Konfiguration
         var serverConfig = new ServerConfig
         {
@@ -85,9 +81,7 @@ public class NeoBinaryWebsocketIntegrationTests : IDisposable
         // Assert
         Assert.NotNull(result);
         Assert.Equal(testObject, result);
-        Assert.NotSame(testObject, result); // Sollte eine Kopie sein
-        
-        _testOutputHelper.WriteLine("Echo mit IL Compact Format erfolgreich");
+        Assert.NotSame(testObject, result); // Must be a copy
     }
 
     [Fact]
@@ -97,10 +91,6 @@ public class NeoBinaryWebsocketIntegrationTests : IDisposable
         var testObject = CreateComplexTestObject();
         var port = System.Threading.Interlocked.Increment(ref _nextPort);
         
-        _testOutputHelper.WriteLine($"Testobjekt erstellt: {testObject.Identifier}");
-        _testOutputHelper.WriteLine($"IL Compact Format: DEAKTIVIERT");
-        _testOutputHelper.WriteLine($"Port: {port}");
-
         // Erstelle Server-Konfiguration
         var serverConfig = new ServerConfig
         {
@@ -146,8 +136,6 @@ public class NeoBinaryWebsocketIntegrationTests : IDisposable
         Assert.NotNull(result);
         Assert.Equal(testObject, result);
         Assert.NotSame(testObject, result); // Sollte eine Kopie sein
-        
-        _testOutputHelper.WriteLine("Echo ohne IL Compact Format erfolgreich");
     }
 
     [Fact]
@@ -155,8 +143,6 @@ public class NeoBinaryWebsocketIntegrationTests : IDisposable
     {
         // Arrange
         var testObject = CreateComplexTestObject();
-        
-        _testOutputHelper.WriteLine($"Testobjekt erstellt: {testObject.Identifier}");
 
         // Starte Server mit Websocket-Kanal
         var serverConfig = new ServerConfig
@@ -195,8 +181,6 @@ public class NeoBinaryWebsocketIntegrationTests : IDisposable
         // Act & Assert
         var result = proxy.EchoComplex(null);
         Assert.Null(result);
-        
-        _testOutputHelper.WriteLine("Null-Objekt wird korrekt behandelt");
     }
 
     [Fact]
@@ -206,8 +190,6 @@ public class NeoBinaryWebsocketIntegrationTests : IDisposable
         var testObject = CreateComplexTestObject();
         var iterations = 100;
         
-        _testOutputHelper.WriteLine($"Performance-Test mit {iterations} Iterationen");
-
         // Starte Server mit Websocket-Kanal
         var serverConfig = new ServerConfig
         {
@@ -288,7 +270,6 @@ public class NeoBinaryWebsocketIntegrationTests : IDisposable
             _testOutputHelper.WriteLine($"Performance-Vorteil: {performanceRatio:F2}x");
         }
 
-        // Beide sollten erfolgreich sein, Performance kann variieren
         Assert.True(stopwatchCompact.ElapsedMilliseconds > 0);
         Assert.True(stopwatchStandard.ElapsedMilliseconds > 0);
     }
