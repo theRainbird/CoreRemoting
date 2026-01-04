@@ -283,6 +283,30 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			var type = obj.GetType();
 
+			// Arrays should be handled first - they are not simple types
+			if (type.IsArray)
+			{
+				// Check for circular references
+				if (serializedObjects.Contains(obj))
+				{
+					writer.Write((byte)2); // Reference marker
+					writer.Write(objectMap[obj]);
+					return;
+				}
+
+				// Register object for reference tracking
+				var arrayObjectId = objectMap.Count;
+				objectMap[obj] = arrayObjectId;
+				serializedObjects.Add(obj);
+
+				writer.Write((byte)1); // Object marker
+				writer.Write(arrayObjectId);
+				WriteTypeInfo(writer, type);
+				
+				SerializeArray((Array)obj, writer, serializedObjects, objectMap);
+				return;
+			}
+
 			if (IsSimpleType(type))
 			{
 				writer.Write((byte)3); // Simple object marker
@@ -415,7 +439,12 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 				object obj;
 
-				if (type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(UIntPtr) ||
+				// Arrays should be checked first - they have highest priority
+				if (type.IsArray)
+				{
+					obj = DeserializeArray(type, reader, deserializedObjects, objectId);
+				}
+				else if (type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(UIntPtr) ||
 				    type == typeof(IntPtr) || type == typeof(DateTime))
 				{
 					obj = DeserializePrimitive(type, reader);
@@ -423,10 +452,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 				else if (type.IsEnum)
 				{
 					obj = DeserializeEnum(type, reader);
-				}
-				else if (type.IsArray)
-				{
-					obj = DeserializeArray(type, reader, deserializedObjects, objectId);
 				}
 				else if (typeof(IList).IsAssignableFrom(type))
 				{
@@ -3389,7 +3414,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 						return ReadTypeInfo(reader);
 				}
 			}
-			catch (Exception ex)
+			catch
 			{
 				// Return null if deserialization fails
 				return null;
