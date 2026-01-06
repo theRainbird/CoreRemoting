@@ -474,7 +474,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				}
 				else
 				{
-					throw new InvalidOperationException($"Type {type.FullName} is marked as simple but is not a simple type");
+					return DeserializeComplexObject(type, reader, deserializedObjects, -1);
 				}
 			}
 
