@@ -75,6 +75,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 		private const string MAGIC_NAME = "NEOB";
 		private const ushort CURRENT_VERSION = 1;
+		private static readonly string COREMOTING_VERSION = typeof(NeoBinarySerializer).Assembly.GetName().Version?.ToString() ?? "Unknown";
 
 		// High-performance IL-based serializer and cache
 		private readonly IlTypeSerializer _ilSerializer = new();
@@ -222,7 +223,10 @@ namespace CoreRemoting.Serialization.NeoBinary
 			if (serializationStream == null)
 				throw new ArgumentNullException(nameof(serializationStream));
 
-			using var reader = new BinaryReader(serializationStream, Encoding.UTF8, leaveOpen: true);
+	using var reader = new BinaryReader(serializationStream, Encoding.UTF8, leaveOpen: true);
+
+			// Initial stream validation
+			ValidateStreamState(reader, "Deserialize start");
 
 			// Initialize type-ref tables for this session if enabled
 			if (Config.UseTypeReferences)
@@ -234,6 +238,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			// Read and validate header
 			ReadHeader(reader);
+			ValidateStreamState(reader, "After header read");
 
 			// Peek at the first byte to determine if it's a simple type
 			var firstByte = reader.ReadByte();
@@ -267,6 +272,9 @@ namespace CoreRemoting.Serialization.NeoBinary
 			writer.Write(Encoding.ASCII.GetBytes(MAGIC_NAME));
 			writer.Write(CURRENT_VERSION);
 
+			// Write CoreRemoting version string for debugging version mismatches
+			writer.Write(COREMOTING_VERSION);
+
 			// Write flags
 			ushort flags = 0;
 			if (Config.IncludeAssemblyVersions) flags |= 0x01;
@@ -276,17 +284,72 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 		private void ReadHeader(BinaryReader reader)
 		{
+			var startPosition = reader.BaseStream.CanSeek ? reader.BaseStream.Position : -1;
+			
 			var magicBytes = reader.ReadBytes(4);
 			// Compare directly against ASCII constants: 'N','E','O','B'
 			if (magicBytes.Length != 4 || magicBytes[0] != (byte)'N' || magicBytes[1] != (byte)'E' ||
 			    magicBytes[2] != (byte)'O' || magicBytes[3] != (byte)'B')
-				throw new InvalidOperationException("Invalid magic number: expected NEOB");
+			{
+				var error = "Invalid magic number: expected NEOB";
+				if (startPosition >= 0)
+					error += $" at stream position {startPosition}";
+				if (magicBytes.Length > 0)
+					error += $", got: {BitConverter.ToString(magicBytes)}";
+				throw new InvalidOperationException(error);
+			}
 
 			var version = reader.ReadUInt16();
 			if (version > CURRENT_VERSION)
-				throw new InvalidOperationException($"Unsupported version: {version}");
+			{
+				var error = $"Unsupported version: {version} (current: {CURRENT_VERSION})";
+				if (startPosition >= 0)
+					error += $" at stream position {reader.BaseStream.Position - 2}";
+				throw new InvalidOperationException(error);
+			}
 
-			reader.ReadUInt16();
+			// Read CoreRemoting version for compatibility checking
+			var remoteVersion = reader.ReadString();
+			var localVersion = COREMOTING_VERSION;
+			var flags = reader.ReadUInt16();
+			
+			// Enhanced version negotiation
+			var versionMismatch = !string.IsNullOrEmpty(remoteVersion) && remoteVersion != localVersion;
+			if (versionMismatch)
+			{
+				// Parse versions to compare major/minor versions
+				if (Version.TryParse(localVersion, out var localVer) && 
+				    Version.TryParse(remoteVersion, out var remoteVer))
+				{
+					// Check for major version incompatibility
+					if (localVer.Major != remoteVer.Major)
+					{
+						throw new InvalidOperationException(
+							$"Major version mismatch detected. Local: {localVersion}, Remote: {remoteVersion}. " +
+							$"This indicates incompatible CoreRemoting versions.");
+					}
+					
+					// Minor version differences are warnings
+					if (localVer.Minor != remoteVer.Minor)
+					{
+						Console.WriteLine($"WARNING: Minor CoreRemoting version difference detected:");
+						Console.WriteLine($"  Local version:  {localVersion}");
+						Console.WriteLine($"  Remote version: {remoteVersion}");
+						Console.WriteLine($"  This should be compatible but may cause minor issues.");
+					}
+				}
+				else
+				{
+					// Fallback for unparseable version strings
+					Console.WriteLine($"WARNING: CoreRemoting version mismatch detected (could not parse versions):");
+					Console.WriteLine($"  Local version:  {localVersion}");
+					Console.WriteLine($"  Remote version: {remoteVersion}");
+					Console.WriteLine($"  This may cause serialization compatibility issues.");
+				}
+			}
+
+			// Validate flag compatibility
+			ValidateFlagCompatibility(flags, remoteVersion, localVersion);
 		}
 
 		private void SerializeObject(object obj, BinaryWriter writer, HashSet<object> serializedObjects,
@@ -422,6 +485,9 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 		private object DeserializeObject(BinaryReader reader, Dictionary<int, object> deserializedObjects)
 		{
+			ValidateStreamState(reader, "DeserializeObject start");
+			var streamPosition = reader.BaseStream.CanSeek ? reader.BaseStream.Position : -1;
+			var checkpoint = CreateStreamCheckpoint(reader, "Read marker");
 			var marker = reader.ReadByte();
 
 			if (marker == 0) // Null marker
@@ -445,6 +511,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			if (marker == 3) // Simple object marker
 			{
+				ValidateStreamState(reader, "Simple object marker type info");
 				var type = ReadTypeInfo(reader);
 				
 				// Defensive: apply same type checking order as object marker
@@ -480,6 +547,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 			if (marker == 1) // Object marker
 			{
+				ValidateStreamState(reader, "Object marker ID and type info");
 				var objectId = reader.ReadInt32();
 				var type = ReadTypeInfo(reader);
 
@@ -551,9 +619,42 @@ namespace CoreRemoting.Serialization.NeoBinary
 				return obj;
 			}
 
-			// For complex reflection object graphs, some markers might not be handled
-			// This is a graceful fallback to prevent test failures
-			throw new InvalidOperationException($"Invalid marker: {marker}");
+		// For complex reflection object graphs, some markers might not be handled
+		// This is a graceful fallback to prevent test failures, but with enhanced debugging
+		var errorMessage = $"Invalid marker: {marker} (0x{marker:X2})";
+		
+		if (streamPosition >= 0)
+		{
+			errorMessage += $"\nDeserializeObject called at stream position: {streamPosition - 1}";
+		}
+			
+			// Add hex dump for debugging corruption issues
+			if (reader.BaseStream.CanSeek)
+			{
+				var originalPosition = reader.BaseStream.Position;
+				try
+				{
+					// Try to read context around the invalid marker
+					var contextStart = Math.Max(0, originalPosition - 16);
+					var contextEnd = Math.Min(reader.BaseStream.Length, originalPosition + 16);
+					var contextLength = (int)(contextEnd - contextStart);
+					
+					reader.BaseStream.Position = contextStart;
+					var contextBytes = reader.ReadBytes(contextLength);
+					
+					errorMessage += $"\nStream context (hex dump):\n{FormatHexDump(contextBytes, contextStart)}";
+					errorMessage += $"\nMarker position: {originalPosition - 1} (marked with >> <<)";
+					
+					// Reset position
+					reader.BaseStream.Position = originalPosition;
+				}
+				catch (Exception ex)
+				{
+					errorMessage += $"\nFailed to capture stream context: {ex.Message}";
+				}
+			}
+			
+			throw new InvalidOperationException(errorMessage);
 		}
 
 		private void WriteTypeInfo(BinaryWriter writer, Type type)
@@ -891,15 +992,12 @@ namespace CoreRemoting.Serialization.NeoBinary
 			// Additional validation: This should NEVER be called for complex types or arrays
 			if ((type.IsClass && !type.IsEnum && type != typeof(string)) || type.IsArray)
 			{
-				// Log details for debugging
-				Console.WriteLine($"DEBUG: DeserializePrimitive called for non-simple type: {type.FullName}");
-				Console.WriteLine($"  IsClass: {type.IsClass}");
-				Console.WriteLine($"  IsEnum: {type.IsEnum}");
-				Console.WriteLine($"  IsArray: {type.IsArray}");
-				Console.WriteLine($"  IsPrimitive: {type.IsPrimitive}");
-				
+				// This indicates a serious logic error in the serialization pipeline
+				// Create detailed error with stream position for debugging
+				var streamPosition = reader.BaseStream.CanSeek ? reader.BaseStream.Position : -1;
 				throw new InvalidOperationException(
-					$"DeserializePrimitive called for complex type: {type.FullName}. This indicates a serious bug in type resolution or serialization.");
+					$"DeserializePrimitive called for non-simple type: {type.FullName} at stream position {streamPosition}. " +
+					"This indicates a serialization logic error.");
 			}
 
 			if (type == typeof(bool)) return reader.ReadBoolean();
@@ -920,7 +1018,11 @@ namespace CoreRemoting.Serialization.NeoBinary
 			if (type == typeof(IntPtr)) return new IntPtr(reader.ReadInt64());
 			if (type == typeof(DateTime)) return DateTime.FromBinary(reader.ReadInt64());
 
-			throw new InvalidOperationException($"Unsupported primitive type: {type}");
+			var errorPosition = reader.BaseStream.CanSeek ? reader.BaseStream.Position : -1;
+			var errorMessage = $"Unsupported primitive type: {type}";
+			if (errorPosition >= 0)
+				errorMessage += $" at stream position {errorPosition}";
+			throw new InvalidOperationException(errorMessage);
 		}
 
 		private void SerializeEnum(object obj, BinaryWriter writer)
@@ -939,18 +1041,9 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 		private bool IsSimpleType(Type type)
 		{
-			// Log all calls for debugging
-			Console.WriteLine($"DEBUG: IsSimpleType called for type: {type.FullName}");
-			Console.WriteLine($"  IsArray: {type.IsArray}");
-			Console.WriteLine($"  IsPrimitive: {type.IsPrimitive}");
-			Console.WriteLine($"  IsClass: {type.IsClass}");
-			Console.WriteLine($"  IsEnum: {type.IsEnum}");
-			Console.WriteLine($"  typeof(ICollection).IsAssignableFrom: {typeof(ICollection).IsAssignableFrom(type)}");
-			
 			// Arrays and collections are never simple types
 			if (type.IsArray || typeof(ICollection).IsAssignableFrom(type))
 			{
-				Console.WriteLine($"DEBUG: Returning false (array/collection)");
 				return false;
 			}
 				
@@ -958,17 +1051,15 @@ namespace CoreRemoting.Serialization.NeoBinary
 			var isSimple = type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(UIntPtr) ||
 			       type == typeof(IntPtr) || type == typeof(DateTime);
 			
-			Console.WriteLine($"DEBUG: Base isSimple check result: {isSimple}");
-			
-			// Defensive check: never treat class types (except string) as simple
-			if (isSimple && type.IsClass && type != typeof(string))
+			// Defensive check: ensure class types are not accidentally marked as simple
+			if (isSimple && type.IsClass && !type.IsEnum && type != typeof(string))
 			{
-				// Log this for debugging - this should never happen for class types
+				#if DEBUG
 				Console.WriteLine($"DEBUG: Class type {type.FullName} was incorrectly identified as simple. IsPrimitive={type.IsPrimitive}");
+				#endif
 				return false;
 			}
-			
-			Console.WriteLine($"DEBUG: Returning {isSimple} for {type.FullName}");
+
 			return isSimple;
 		}
 
@@ -1338,6 +1429,166 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 				if (_pendingForwardReferences.Count == 0) break;
 			}
+		}
+
+		/// <summary>
+		/// Formats byte array as hex dump for debugging corruption issues.
+		/// </summary>
+		/// <param name="bytes">Byte array to format</param>
+		/// <param name="startOffset">Starting offset in the stream</param>
+		/// <returns>Formatted hex dump string</returns>
+		/// <summary>
+		/// Validates stream state and detects potential corruption.
+		/// </summary>
+		/// <param name="reader">BinaryReader to validate</param>
+		/// <param name="context">Context description for error messages</param>
+		private void ValidateStreamState(BinaryReader reader, string context)
+		{
+			if (!reader.BaseStream.CanSeek) return;
+
+			var position = reader.BaseStream.Position;
+			var length = reader.BaseStream.Length;
+
+			// Check for stream position corruption
+			if (position < 0 || position > length)
+			{
+				throw new InvalidOperationException($"Stream corruption detected in {context}: Invalid position {position} (stream length: {length})");
+			}
+
+			// Check if we're at the end when we expect to read more data
+			if (position >= length && context.Contains("Read"))
+			{
+				throw new InvalidOperationException($"Stream corruption detected in {context}: Attempting to read at end of stream (position: {position}, length: {length})");
+			}
+		}
+
+		/// <summary>
+		/// Creates a stream checkpoint for debugging purposes.
+		/// </summary>
+		/// <param name="reader">BinaryReader to checkpoint</param>
+		/// <param name="operation">Operation being performed</param>
+		/// <returns>Checkpoint information</returns>
+		private (long position, string operation) CreateStreamCheckpoint(BinaryReader reader, string operation)
+		{
+			var position = reader.BaseStream.CanSeek ? reader.BaseStream.Position : -1;
+			return (position, operation);
+		}
+
+		/// <summary>
+		/// Validates flag compatibility between serializer configurations.
+		/// </summary>
+		/// <param name="remoteFlags">Flags from remote endpoint</param>
+		/// <param name="remoteVersion">Remote version string</param>
+		/// <param name="localVersion">Local version string</param>
+		private void ValidateFlagCompatibility(ushort remoteFlags, string remoteVersion, string localVersion)
+		{
+			const ushort VERSION_FLAG = 0x01; // Include assembly versions
+			const ushort TYPEREF_FLAG = 0x02; // Use type references
+			
+			var localFlags = 0;
+			if (Config.IncludeAssemblyVersions) localFlags |= VERSION_FLAG;
+			if (Config.UseTypeReferences) localFlags |= TYPEREF_FLAG;
+			
+			// Check for incompatible flag combinations
+			var incompatibleFlags = (remoteFlags ^ localFlags);
+			
+			if ((incompatibleFlags & VERSION_FLAG) != 0)
+			{
+				var remoteHasVersion = (remoteFlags & VERSION_FLAG) != 0;
+				var localHasVersion = (localFlags & VERSION_FLAG) != 0;
+				
+				if (remoteHasVersion != localHasVersion)
+				{
+					Console.WriteLine($"WARNING: Assembly version inclusion mismatch:");
+					Console.WriteLine($"  Local includes assembly versions: {localHasVersion}");
+					Console.WriteLine($"  Remote includes assembly versions: {remoteHasVersion}");
+					Console.WriteLine($"  This may cause type resolution issues.");
+				}
+			}
+			
+			if ((incompatibleFlags & TYPEREF_FLAG) != 0)
+			{
+				var remoteHasTypeRef = (remoteFlags & TYPEREF_FLAG) != 0;
+				var localHasTypeRef = (localFlags & TYPEREF_FLAG) != 0;
+				
+				if (remoteHasTypeRef != localHasTypeRef)
+				{
+					Console.WriteLine($"WARNING: Type reference usage mismatch:");
+					Console.WriteLine($"  Local uses type references: {localHasTypeRef}");
+					Console.WriteLine($"  Remote uses type references: {remoteHasTypeRef}");
+					Console.WriteLine($"  This may affect serialization performance and compatibility.");
+				}
+			}
+		}
+
+		private static string FormatHexDump(byte[] bytes, long startOffset)
+		{
+			var sb = new System.Text.StringBuilder();
+			var bytesPerLine = 16;
+			
+			for (int i = 0; i < bytes.Length; i += bytesPerLine)
+			{
+				var lineBytes = Math.Min(bytesPerLine, bytes.Length - i);
+				var offset = startOffset + i;
+				
+				// Offset column
+				sb.Append($"{offset:X8}: ");
+				
+				// Hex bytes
+				for (int j = 0; j < lineBytes; j++)
+				{
+					var byteValue = bytes[i + j];
+					var isMarkerPosition = (offset + j) == (startOffset - 1);
+					
+					if (isMarkerPosition)
+						sb.Append(">>"); // Mark the invalid marker
+					
+					sb.Append($"{byteValue:X2}");
+					
+					if (isMarkerPosition)
+						sb.Append("<<"); // Mark the invalid marker
+					
+					sb.Append(" ");
+				}
+				
+				// Padding for incomplete lines
+				for (int j = lineBytes; j < bytesPerLine; j++)
+				{
+					sb.Append("   ");
+				}
+				
+				// ASCII representation
+				sb.Append(" |");
+				for (int j = 0; j < lineBytes; j++)
+				{
+					var b = bytes[i + j];
+					sb.Append(b >= 32 && b <= 126 ? (char)b : '.');
+				}
+				sb.Append("|\n");
+			}
+			
+			return sb.ToString();
+		}
+
+		/// <summary>
+		/// Analyzes the current serialization stream for debugging and corruption detection.
+		/// </summary>
+		/// <param name="stream">Stream to analyze</param>
+		/// <returns>Detailed analysis report</returns>
+		public static StreamAnalysisReport AnalyzeStream(Stream stream)
+		{
+			return NeoBinaryStreamAnalyzer.AnalyzeStream(stream);
+		}
+
+		/// <summary>
+		/// Creates a hex dump of the stream for debugging purposes.
+		/// </summary>
+		/// <param name="stream">Stream to dump</param>
+		/// <param name="maxBytes">Maximum bytes to include in dump</param>
+		/// <returns>Hex dump string</returns>
+		public static string CreateHexDump(Stream stream, int maxBytes = 1024)
+		{
+			return NeoBinaryStreamAnalyzer.CreateHexDump(stream, maxBytes);
 		}
 
 		/// <summary>
