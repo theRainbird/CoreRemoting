@@ -691,8 +691,19 @@ namespace CoreRemoting.Serialization.NeoBinary
 				type = ResolveAssemblyNeutralType(typeName);
 			}
 
+			// Final fallback: handle simple array types (highest priority fallback)
+			if (type == null && !string.IsNullOrEmpty(typeName) && typeName.EndsWith("[]", StringComparison.Ordinal))
+			{
+				var elementTypeName = typeName.Substring(0, typeName.Length - 2);
+				var elementType = ResolveTypeCore(elementTypeName, assemblyName, assemblyVersion);
+				if (elementType != null)
+				{
+					type = elementType.MakeArrayType();
+				}
+			}
+
 			if (type == null)
-				throw new TypeLoadException($"Cannot load type: {typeName}, Assembly: {assemblyName}");
+				throw new TypeLoadException($"Cannot load type: '{typeName}', Assembly: '{assemblyName}', Version: '{assemblyVersion}'");
 
 			// Validate once per type safely
 			if (!_validatedTypes.ContainsKey(type))
