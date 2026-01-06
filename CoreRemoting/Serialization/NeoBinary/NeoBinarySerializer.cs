@@ -862,6 +862,13 @@ namespace CoreRemoting.Serialization.NeoBinary
 			// Additional validation: This should NEVER be called for complex types or arrays
 			if ((type.IsClass && !type.IsEnum && type != typeof(string)) || type.IsArray)
 			{
+				// Log details for debugging
+				Console.WriteLine($"DEBUG: DeserializePrimitive called for non-simple type: {type.FullName}");
+				Console.WriteLine($"  IsClass: {type.IsClass}");
+				Console.WriteLine($"  IsEnum: {type.IsEnum}");
+				Console.WriteLine($"  IsArray: {type.IsArray}");
+				Console.WriteLine($"  IsPrimitive: {type.IsPrimitive}");
+				
 				throw new InvalidOperationException(
 					$"DeserializePrimitive called for complex type: {type.FullName}. This indicates a serious bug in type resolution or serialization.");
 			}
@@ -903,12 +910,23 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 		private bool IsSimpleType(Type type)
 		{
-			// Arrays are never simple types
-			if (type.IsArray)
+			// Arrays and collections are never simple types
+			if (type.IsArray || typeof(ICollection).IsAssignableFrom(type))
 				return false;
 				
-			return type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(UIntPtr) ||
+			// Only true primitive types and well-known value types are simple
+			var isSimple = type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(UIntPtr) ||
 			       type == typeof(IntPtr) || type == typeof(DateTime);
+			
+			// Defensive check: never treat class types (except string) as simple
+			if (isSimple && type.IsClass && type != typeof(string))
+			{
+				// Log this for debugging - this should never happen for class types
+				Console.WriteLine($"DEBUG: Class type {type.FullName} was incorrectly identified as simple. IsPrimitive={type.IsPrimitive}");
+				return false;
+			}
+			
+			return isSimple;
 		}
 
 		private void SerializeExpandoObject(ExpandoObject expando, BinaryWriter writer,
