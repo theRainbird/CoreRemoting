@@ -446,7 +446,36 @@ namespace CoreRemoting.Serialization.NeoBinary
 			if (marker == 3) // Simple object marker
 			{
 				var type = ReadTypeInfo(reader);
-				return DeserializePrimitive(type, reader);
+				
+				// Defensive: apply same type checking order as object marker
+				if (type.IsArray)
+				{
+					return DeserializeArray(type, reader, deserializedObjects, -1);
+				}
+				else if (typeof(IList).IsAssignableFrom(type))
+				{
+					return DeserializeList(type, reader, deserializedObjects, -1);
+				}
+				else if (typeof(IDictionary).IsAssignableFrom(type))
+				{
+					return DeserializeDictionary(type, reader, deserializedObjects, -1);
+				}
+				else if (type == typeof(ExpandoObject))
+				{
+					return DeserializeDictionary(type, reader, deserializedObjects, -1);
+				}
+				else if (type.IsEnum)
+				{
+					return DeserializeEnum(type, reader);
+				}
+				else if (IsSimpleType(type))
+				{
+					return DeserializePrimitive(type, reader);
+				}
+				else
+				{
+					throw new InvalidOperationException($"Type {type.FullName} is marked as simple but is not a simple type");
+				}
 			}
 
 			if (marker == 1) // Object marker
