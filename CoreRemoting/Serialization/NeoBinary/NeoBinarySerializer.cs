@@ -910,13 +910,26 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 		private bool IsSimpleType(Type type)
 		{
+			// Log all calls for debugging
+			Console.WriteLine($"DEBUG: IsSimpleType called for type: {type.FullName}");
+			Console.WriteLine($"  IsArray: {type.IsArray}");
+			Console.WriteLine($"  IsPrimitive: {type.IsPrimitive}");
+			Console.WriteLine($"  IsClass: {type.IsClass}");
+			Console.WriteLine($"  IsEnum: {type.IsEnum}");
+			Console.WriteLine($"  typeof(ICollection).IsAssignableFrom: {typeof(ICollection).IsAssignableFrom(type)}");
+			
 			// Arrays and collections are never simple types
 			if (type.IsArray || typeof(ICollection).IsAssignableFrom(type))
+			{
+				Console.WriteLine($"DEBUG: Returning false (array/collection)");
 				return false;
+			}
 				
 			// Only true primitive types and well-known value types are simple
 			var isSimple = type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(UIntPtr) ||
 			       type == typeof(IntPtr) || type == typeof(DateTime);
+			
+			Console.WriteLine($"DEBUG: Base isSimple check result: {isSimple}");
 			
 			// Defensive check: never treat class types (except string) as simple
 			if (isSimple && type.IsClass && type != typeof(string))
@@ -926,6 +939,7 @@ namespace CoreRemoting.Serialization.NeoBinary
 				return false;
 			}
 			
+			Console.WriteLine($"DEBUG: Returning {isSimple} for {type.FullName}");
 			return isSimple;
 		}
 
