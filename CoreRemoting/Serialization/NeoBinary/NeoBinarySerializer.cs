@@ -848,8 +848,8 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 		private object DeserializePrimitive(Type type, BinaryReader reader)
 		{
-			// Additional validation: This should NEVER be called for complex types
-			if (type.IsClass && !type.IsEnum && type != typeof(string))
+			// Additional validation: This should NEVER be called for complex types or arrays
+			if ((type.IsClass && !type.IsEnum && type != typeof(string)) || type.IsArray)
 			{
 				throw new InvalidOperationException(
 					$"DeserializePrimitive called for complex type: {type.FullName}. This indicates a serious bug in type resolution or serialization.");
@@ -892,6 +892,10 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 		private bool IsSimpleType(Type type)
 		{
+			// Arrays are never simple types
+			if (type.IsArray)
+				return false;
+				
 			return type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(UIntPtr) ||
 			       type == typeof(IntPtr) || type == typeof(DateTime);
 		}

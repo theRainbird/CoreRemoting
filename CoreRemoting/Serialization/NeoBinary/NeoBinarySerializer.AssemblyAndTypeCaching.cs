@@ -204,6 +204,15 @@ partial class NeoBinarySerializer
 			var t = Type.GetType(tn);
 			if (t != null) return t;
 
+			// Handle simple array types (single dimension)
+			if (tn.EndsWith("[]", StringComparison.Ordinal))
+			{
+				var elementTypeName = tn.Substring(0, tn.Length - 2);
+				var elementType = ResolveAssemblyNeutralType(elementTypeName);
+				if (elementType != null)
+					return elementType.MakeArrayType();
+			}
+
 			// If looks like a generic with our [[...]] notation
 			var idx = tn.IndexOf("[[", StringComparison.Ordinal);
 			if (idx > 0)
