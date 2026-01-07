@@ -668,6 +668,12 @@ namespace CoreRemoting.Serialization.NeoBinary
 			}
 
 			var assemblyName = type.Assembly.GetName();
+
+			// Validate type information before writing
+			if (string.IsNullOrEmpty(type.FullName) && string.IsNullOrEmpty(type.Name))
+			{
+				throw new InvalidOperationException($"Cannot serialize type '{type}' - both FullName and Name are null or empty");
+			}
 			string typeName;
 
 			if (_typeRefActive)
@@ -681,6 +687,13 @@ namespace CoreRemoting.Serialization.NeoBinary
 				var versionString = Config.IncludeAssemblyVersions
 					? (assemblyName.Version?.ToString() ?? string.Empty)
 					: string.Empty;
+				
+				// Validate before creating key
+				if (string.IsNullOrEmpty(typeName))
+				{
+					throw new InvalidOperationException($"Cannot serialize type '{type}' - resolved type name is empty");
+				}
+				
 				var key = typeName + "|" + asmName + "|" + versionString;
 
 				if (_typeKeyToId.TryGetValue(key, out var existingId))
@@ -720,6 +733,12 @@ namespace CoreRemoting.Serialization.NeoBinary
 				typeName = BuildAssemblyNeutralTypeName(type);
 			}
 
+			// Validate before writing
+			if (string.IsNullOrEmpty(typeName))
+			{
+				throw new InvalidOperationException($"Cannot serialize type '{type}' - resolved type name is empty");
+			}
+
 			// Use string pooling for frequently used type names
 			typeName = _serializerCache.GetOrCreatePooledString(typeName);
 			writer.Write(typeName);
@@ -748,6 +767,10 @@ namespace CoreRemoting.Serialization.NeoBinary
 				if (kind == 1)
 				{
 					var id = reader.ReadInt32();
+					if (id < 0 || id >= _typeTable.Count)
+					{
+						throw new InvalidOperationException($"Invalid type reference ID: {id} (type table size: {_typeTable.Count})");
+					}
 					var t = _typeTable[id];
 					return t;
 				}
@@ -757,6 +780,11 @@ namespace CoreRemoting.Serialization.NeoBinary
 				var assemblyNameNew = reader.ReadString();
 				var assemblyVersionNew = reader.ReadString();
 				var newId = reader.ReadInt32();
+
+				// Debug: Log type info for troubleshooting corruption
+				#if DEBUG
+				Console.WriteLine($"DEBUG: ReadTypeInfo - Type: '{typeNameNew}', Assembly: '{assemblyNameNew}', Version: '{assemblyVersionNew}', ID: {newId}");
+				#endif
 
 				var tResolved = ResolveTypeCore(typeNameNew, assemblyNameNew, assemblyVersionNew);
 				// ensure table size/order correctness
@@ -777,11 +805,25 @@ namespace CoreRemoting.Serialization.NeoBinary
 			var typeName = reader.ReadString();
 			var assemblyName = reader.ReadString();
 			var assemblyVersion = reader.ReadString();
+
+			// Debug: Log type info for troubleshooting corruption
+			#if DEBUG
+			Console.WriteLine($"DEBUG: ReadTypeInfo (Legacy) - Type: '{typeName}', Assembly: '{assemblyName}', Version: '{assemblyVersion}'");
+			#endif
+
 			return ResolveTypeCore(typeName, assemblyName, assemblyVersion);
 		}
 
 		private Type ResolveTypeCore(string typeName, string assemblyName, string assemblyVersion)
 		{
+			// Validate inputs and detect corrupted data
+			if (string.IsNullOrEmpty(typeName))
+			{
+				throw new InvalidOperationException(
+					$"Invalid type information received: TypeName='{typeName}', AssemblyName='{assemblyName}', Version='{assemblyVersion}'. " +
+					"This indicates corrupted serialization data or incompatible serializer versions.");
+			}
+
 			// Create cache key for type resolution
 			var cacheKey = $"{typeName}|{assemblyName}|{assemblyVersion}";
 			if (_resolvedTypeCache.TryGetValue(cacheKey, out var cachedType))
