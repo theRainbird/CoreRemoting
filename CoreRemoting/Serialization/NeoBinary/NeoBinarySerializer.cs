@@ -490,6 +490,17 @@ namespace CoreRemoting.Serialization.NeoBinary
 			var checkpoint = CreateStreamCheckpoint(reader, "Read marker");
 			var marker = reader.ReadByte();
 
+			// Enhanced marker validation
+			if (!IsValidMarker(marker))
+			{
+				// Try to interpret as potential type name or other data
+				var potentialString = TryReadStringFromMarker(reader, marker);
+				throw new InvalidOperationException(
+					$"Invalid marker: {marker} (0x{marker:X2}) at position {streamPosition}. " +
+					$"This appears to be raw data '{potentialString}' where a marker was expected. " +
+					$"Common causes: version mismatch, protocol corruption, or mixed serialization formats.");
+			}
+
 			if (marker == 0) // Null marker
 			{
 				return null;
@@ -659,6 +670,11 @@ namespace CoreRemoting.Serialization.NeoBinary
 
 		private void WriteTypeInfo(BinaryWriter writer, Type type)
 		{
+			#if DEBUG
+			var streamPos = writer.BaseStream.CanSeek ? writer.BaseStream.Position : -1;
+			Console.WriteLine($"DEBUG: WriteTypeInfo called for type: {type?.FullName ?? "null"} at position {streamPos}");
+			#endif
+
 			if (type == null)
 			{
 				writer.Write(string.Empty); // Empty type name for null
@@ -743,6 +759,11 @@ namespace CoreRemoting.Serialization.NeoBinary
 			typeName = _serializerCache.GetOrCreatePooledString(typeName);
 			writer.Write(typeName);
 
+			#if DEBUG
+			var afterTypeNamePos = writer.BaseStream.CanSeek ? writer.BaseStream.Position : -1;
+			Console.WriteLine($"DEBUG: WriteTypeInfo wrote typeName: '{typeName}' at position {afterTypeNamePos}");
+			#endif
+
 			var assemblyNameString = assemblyName.Name ?? string.Empty;
 			assemblyNameString = _serializerCache.GetOrCreatePooledString(assemblyNameString);
 			writer.Write(assemblyNameString);
@@ -757,6 +778,11 @@ namespace CoreRemoting.Serialization.NeoBinary
 			{
 				writer.Write(string.Empty);
 			}
+
+			#if DEBUG
+			var endPos = writer.BaseStream.CanSeek ? writer.BaseStream.Position : -1;
+			Console.WriteLine($"DEBUG: WriteTypeInfo completed for type: {type?.FullName ?? "null"} - End position: {endPos}");
+			#endif
 		}
 
 		private Type ReadTypeInfo(BinaryReader reader)
@@ -1474,12 +1500,6 @@ namespace CoreRemoting.Serialization.NeoBinary
 		}
 
 		/// <summary>
-		/// Formats byte array as hex dump for debugging corruption issues.
-		/// </summary>
-		/// <param name="bytes">Byte array to format</param>
-		/// <param name="startOffset">Starting offset in the stream</param>
-		/// <returns>Formatted hex dump string</returns>
-		/// <summary>
 		/// Validates stream state and detects potential corruption.
 		/// </summary>
 		/// <param name="reader">BinaryReader to validate</param>
@@ -1563,6 +1583,63 @@ namespace CoreRemoting.Serialization.NeoBinary
 			}
 		}
 
+		/// <summary>
+		/// Validates if a byte is a valid object marker in NeoBinary protocol.
+		/// </summary>
+		/// <param name="marker">Marker byte to validate</param>
+		/// <returns>True if valid marker, false otherwise</returns>
+		private static bool IsValidMarker(byte marker)
+		{
+			return marker switch
+			{
+				0 => true,  // Null marker
+				1 => true,  // Object marker  
+				2 => true,  // Reference marker
+				3 => true,  // Simple object marker
+				0xFE => true, // Compact layout tag
+				_ => false
+			};
+		}
+
+		/// <summary>
+		/// Attempts to read a string starting from an invalid marker for debugging.
+		/// </summary>
+		/// <param name="reader">Binary reader positioned after invalid marker</param>
+		/// <param name="firstByte">First byte that was invalid marker</param>
+		/// <returns>Potential string interpretation of the data</returns>
+		private static string TryReadStringFromMarker(BinaryReader reader, byte firstByte)
+		{
+			try
+			{
+				// Try to read as if this was start of a string
+				var bytes = new List<byte> { firstByte };
+				var originalPos = reader.BaseStream.Position;
+				
+				// Read up to 50 more bytes to get context
+				for (int i = 0; i < 50; i++)
+				{
+					if (reader.BaseStream.Position >= reader.BaseStream.Length) break;
+					var b = reader.ReadByte();
+					if (b == 0) break; // Null terminator
+					if (b < 32 || b > 126) break; // Non-printable character
+					bytes.Add(b);
+				}
+				
+				reader.BaseStream.Position = originalPos;
+				return Encoding.ASCII.GetString(bytes.ToArray());
+			}
+			catch
+			{
+				return $"<cannot read: {firstByte:X2}>";
+			}
+		}
+
+		/// <summary>
+		/// Formats byte array as hex dump for debugging corruption issues.
+		/// </summary>
+		/// <param name="bytes">Byte array to format</param>
+		/// <param name="startOffset">Starting offset in the stream</param>
+		/// <returns>Formatted hex dump string</returns>
 		private static string FormatHexDump(byte[] bytes, long startOffset)
 		{
 			var sb = new System.Text.StringBuilder();
