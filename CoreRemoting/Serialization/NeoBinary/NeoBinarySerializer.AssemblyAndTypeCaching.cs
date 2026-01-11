@@ -166,17 +166,13 @@ partial class NeoBinarySerializer
 				var defName = genericDef.FullName; // e.g. System.Collections.Generic.List`1
 				var args = t.GetGenericArguments();
 				var argNames = args.Select(BuildAssemblyNeutralTypeName).ToArray();
-				
+
 				// Validate generic arguments before serializing
-				for (int i = 0; i < argNames.Length; i++)
-				{
+				for (var i = 0; i < argNames.Length; i++)
 					if (string.IsNullOrEmpty(argNames[i]))
-					{
 						throw new InvalidOperationException(
 							$"Cannot serialize generic type '{t.FullName}' - generic argument {i} resolved to empty string");
-					}
-				}
-				
+
 				var sb = new StringBuilder();
 				for (var i = 0; i < argNames.Length; i++)
 				{
@@ -264,7 +260,7 @@ partial class NeoBinarySerializer
 		foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
 			try
 			{
-				var t = asm.GetType(fullOrSimpleName, throwOnError: false, ignoreCase: false);
+				var t = asm.GetType(fullOrSimpleName, false, false);
 				if (t != null) return t;
 			}
 			catch

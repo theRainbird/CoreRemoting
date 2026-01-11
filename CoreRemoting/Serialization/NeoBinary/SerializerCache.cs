@@ -1,602 +1,418 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
 
-namespace CoreRemoting.Serialization.NeoBinary
+namespace CoreRemoting.Serialization.NeoBinary;
+
+/// <summary>
+/// High-performance cache for generated serializers with memory management and statistics.
+/// </summary>
+public partial class SerializerCache
 {
+	private readonly ConcurrentDictionary<Type, CachedSerializer> _serializerCache = new();
+	private readonly ConcurrentDictionary<Type, CachedDeserializer> _deserializerCache = new();
+	private readonly ConcurrentDictionary<Type, FieldInfo[]> _fieldCache = new();
+	private readonly ConcurrentDictionary<string, string> _stringPool = new();
+	private readonly Timer _cleanupTimer;
+	private readonly object _lockObject = new();
+	private long _totalSerializations;
+	private long _totalDeserializations;
+	private long _cacheHits;
+	private long _cacheMisses;
+
 	/// <summary>
-	/// High-performance cache for generated serializers with memory management and statistics.
+	/// Cached serializer with metadata.
 	/// </summary>
-	public class SerializerCache
+	public class CachedSerializer
 	{
-		private readonly ConcurrentDictionary<Type, CachedSerializer> _serializerCache = new();
-		private readonly ConcurrentDictionary<Type, CachedDeserializer> _deserializerCache = new();
-		private readonly ConcurrentDictionary<Type, FieldInfo[]> _fieldCache = new();
-		private readonly ConcurrentDictionary<string, string> _stringPool = new();
-		private readonly Timer _cleanupTimer;
-		private readonly object _lockObject = new object();
-		private long _totalSerializations;
-		private long _totalDeserializations;
-		private long _cacheHits;
-		private long _cacheMisses;
+		/// <summary>
+		/// Serializer used for object serialization in the NeoBinary protocol.
+		/// </summary>
+		public IlTypeSerializer.ObjectSerializerDelegate Serializer { get; set; }
 
 		/// <summary>
-		/// Configuration for cache behavior.
+		/// Timestamp when the cached serializer was created.
 		/// </summary>
-		public class CacheConfiguration
+		public DateTime CreatedAt { get; set; }
+
+		/// <summary>
+		/// Timestamp when the cached serializer was last accessed.
+		/// </summary>
+		public DateTime LastAccessed { get; set; }
+
+		internal long _accessCount;
+		internal long _serializationCount;
+		internal long _totalSerializationTimeTicks;
+
+		/// <summary>
+		/// Number of times this serializer has been accessed.
+		/// </summary>
+		public long AccessCount => _accessCount;
+
+		/// <summary>
+		/// Number of serialization operations performed with this serializer.
+		/// </summary>
+		public long SerializationCount => _serializationCount;
+
+		/// <summary>
+		/// Total time spent in serialization operations for this serializer (in ticks).
+		/// </summary>
+		public long TotalSerializationTimeTicks => _totalSerializationTimeTicks;
+
+		/// <summary>
+		/// Records an access to this cached serializer.
+		/// </summary>
+		public void RecordAccess()
 		{
-			/// <summary>
-			/// Maximum number of cached serializers (default: 1000).
-			/// </summary>
-			public int MaxCacheSize { get; set; } = 1000;
-
-			/// <summary>
-			/// Cleanup interval in seconds (default: 300 = 5 minutes).
-			/// </summary>
-			public int CleanupIntervalSeconds { get; set; } = 300;
-
-			/// <summary>
-			/// Minimum access count to keep in cache during cleanup (default: 10).
-			/// </summary>
-			public int MinAccessCount { get; set; } = 10;
-
-			/// <summary>
-			/// Maximum age of cached items in minutes (default: 60 minutes).
-			/// </summary>
-			public int MaxCacheAgeMinutes { get; set; } = 60;
-
-			/// <summary>
-			/// Whether to enable automatic cleanup (default: true).
-			/// </summary>
-			public bool EnableAutoCleanup { get; set; } = true;
+			LastAccessed = DateTime.UtcNow;
+			Interlocked.Increment(ref _accessCount);
 		}
 
 		/// <summary>
-		/// Cached serializer with metadata.
+		/// Records a serialization operation with the elapsed time.
 		/// </summary>
-		public class CachedSerializer
+		/// <param name="elapsedTicks">Time elapsed for the serialization operation in ticks</param>
+		public void RecordSerialization(long elapsedTicks)
 		{
-			/// <summary>
-			/// Serializer used for object serialization in the NeoBinary protocol.
-			/// </summary>
-			public IlTypeSerializer.ObjectSerializerDelegate Serializer { get; set; }
-
-			/// <summary>
-			/// Timestamp when the cached serializer was created.
-			/// </summary>
-			public DateTime CreatedAt { get; set; }
-
-			/// <summary>
-			/// Timestamp when the cached serializer was last accessed.
-			/// </summary>
-			public DateTime LastAccessed { get; set; }
-			internal long _accessCount;
-			internal long _serializationCount;
-			internal long _totalSerializationTimeTicks;
-
-			/// <summary>
-			/// Number of times this serializer has been accessed.
-			/// </summary>
-			public long AccessCount => _accessCount;
-
-			/// <summary>
-			/// Number of serialization operations performed with this serializer.
-			/// </summary>
-			public long SerializationCount => _serializationCount;
-
-			/// <summary>
-			/// Total time spent in serialization operations for this serializer (in ticks).
-			/// </summary>
-			public long TotalSerializationTimeTicks => _totalSerializationTimeTicks;
-
-			/// <summary>
-			/// Records an access to this cached serializer.
-			/// </summary>
-			public void RecordAccess()
-			{
-				LastAccessed = DateTime.UtcNow;
-				Interlocked.Increment(ref _accessCount);
-			}
-
-			/// <summary>
-			/// Records a serialization operation with the elapsed time.
-			/// </summary>
-			/// <param name="elapsedTicks">Time elapsed for the serialization operation in ticks</param>
-			public void RecordSerialization(long elapsedTicks)
-			{
-				Interlocked.Increment(ref _serializationCount);
-				Interlocked.Add(ref _totalSerializationTimeTicks, elapsedTicks);
-			}
-
-			/// <summary>
-			/// Average time spent in serialization operations for this serializer.
-			/// </summary>
-			public TimeSpan AverageSerializationTime =>
-				SerializationCount > 0 ? new TimeSpan(TotalSerializationTimeTicks / SerializationCount) : TimeSpan.Zero;
+			Interlocked.Increment(ref _serializationCount);
+			Interlocked.Add(ref _totalSerializationTimeTicks, elapsedTicks);
 		}
 
 		/// <summary>
-		/// Cached deserializer with metadata.
+		/// Average time spent in serialization operations for this serializer.
 		/// </summary>
-		public class CachedDeserializer
+		public TimeSpan AverageSerializationTime =>
+			SerializationCount > 0 ? new TimeSpan(TotalSerializationTimeTicks / SerializationCount) : TimeSpan.Zero;
+	}
+
+	/// <summary>
+	/// Gets the cache configuration.
+	/// </summary>
+	public CacheConfiguration Config { get; }
+
+	/// <summary>
+	/// Creates a new SerializerCache with default configuration.
+	/// </summary>
+	public SerializerCache() : this(new CacheConfiguration())
+	{
+	}
+
+	/// <summary>
+	/// Creates a new SerializerCache with specified configuration.
+	/// </summary>
+	/// <param name="config">Cache configuration</param>
+	public SerializerCache(CacheConfiguration config)
+	{
+		Config = config ?? throw new ArgumentNullException(nameof(config));
+
+		if (Config.EnableAutoCleanup)
+			_cleanupTimer = new Timer(PerformCleanup, null,
+				TimeSpan.FromSeconds(Config.CleanupIntervalSeconds),
+				TimeSpan.FromSeconds(Config.CleanupIntervalSeconds));
+	}
+
+	/// <summary>
+	/// Gets or creates a cached serializer for the specified type.
+	/// </summary>
+	/// <param name="type">Type to get serializer for</param>
+	/// <param name="factory">Factory function to create serializer if not cached</param>
+	/// <returns>Cached serializer</returns>
+	public CachedSerializer GetOrCreateSerializer(Type type,
+		Func<Type, IlTypeSerializer.ObjectSerializerDelegate> factory)
+	{
+		if (_serializerCache.TryGetValue(type, out var cached))
 		{
-			/// <summary>
-			/// Deserializer used for object deserialization in the NeoBinary protocol.
-			/// </summary>
-			public IlTypeSerializer.ObjectDeserializerDelegate Deserializer { get; set; }
-
-			/// <summary>
-			/// Timestamp when the cached deserializer was created.
-			/// </summary>
-			public DateTime CreatedAt { get; set; }
-
-			/// <summary>
-			/// Timestamp when the cached deserializer was last accessed.
-			/// </summary>
-			public DateTime LastAccessed { get; set; }
-			internal long _accessCount;
-			internal long _deserializationCount;
-			internal long _totalDeserializationTimeTicks;
-
-			/// <summary>
-			/// Number of times this deserializer has been accessed.
-			/// </summary>
-			public long AccessCount => _accessCount;
-
-			/// <summary>
-			/// Number of deserialization operations performed with this deserializer.
-			/// </summary>
-			public long DeserializationCount => _deserializationCount;
-
-			/// <summary>
-			/// Total time spent in deserialization operations for this deserializer (in ticks).
-			/// </summary>
-			public long TotalDeserializationTimeTicks => _totalDeserializationTimeTicks;
-
-			/// <summary>
-			/// Records an access to this cached deserializer.
-			/// </summary>
-			public void RecordAccess()
-			{
-				LastAccessed = DateTime.UtcNow;
-				Interlocked.Increment(ref _accessCount);
-			}
-
-			/// <summary>
-			/// Records a deserialization operation with the elapsed time.
-			/// </summary>
-			/// <param name="elapsedTicks">Time elapsed for the deserialization operation in ticks</param>
-			public void RecordDeserialization(long elapsedTicks)
-			{
-				Interlocked.Increment(ref _deserializationCount);
-				Interlocked.Add(ref _totalDeserializationTimeTicks, elapsedTicks);
-			}
-
-			/// <summary>
-			/// Average time spent in deserialization operations for this deserializer.
-			/// </summary>
-			public TimeSpan AverageDeserializationTime =>
-				DeserializationCount > 0
-					? new TimeSpan(TotalDeserializationTimeTicks / DeserializationCount)
-					: TimeSpan.Zero;
+			cached.RecordAccess();
+			Interlocked.Increment(ref _cacheHits);
+			return cached;
 		}
 
-		/// <summary>
-		/// Cache statistics.
-		/// </summary>
-		public class CacheStatistics
+		lock (_lockObject)
 		{
-			/// <summary>
-			/// Number of cached serializers.
-			/// </summary>
-			public int SerializerCount { get; set; }
-
-			/// <summary>
-			/// Number of cached deserializers.
-			/// </summary>
-			public int DeserializerCount { get; set; }
-
-			/// <summary>
-			/// Number of cached field information entries.
-			/// </summary>
-			public int FieldCacheCount { get; set; }
-
-			/// <summary>
-			/// Number of strings in the string pool.
-			/// </summary>
-			public int StringPoolCount { get; set; }
-
-			/// <summary>
-			/// Total number of serialization operations performed.
-			/// </summary>
-			public long TotalSerializations { get; set; }
-
-			/// <summary>
-			/// Total number of deserialization operations performed.
-			/// </summary>
-			public long TotalDeserializations { get; set; }
-
-			/// <summary>
-			/// Total number of cache hits.
-			/// </summary>
-			public long CacheHits { get; set; }
-
-			/// <summary>
-			/// Total number of cache misses.
-			/// </summary>
-			public long CacheMisses { get; set; }
-
-			/// <summary>
-			/// Cache hit ratio (0.0 to 1.0).
-			/// </summary>
-			public double HitRatio => TotalSerializations + TotalDeserializations > 0
-				? (double)CacheHits / (TotalSerializations + TotalDeserializations)
-				: 0.0;
-
-			/// <summary>
-			/// Top 10 most accessed serializers by type.
-			/// </summary>
-			public Dictionary<Type, CachedSerializer> TopSerializers { get; set; } = new();
-
-			/// <summary>
-			/// Top 10 most accessed deserializers by type.
-			/// </summary>
-			public Dictionary<Type, CachedDeserializer> TopDeserializers { get; set; } = new();
-		}
-
-		/// <summary>
-		/// Gets the cache configuration.
-		/// </summary>
-		public CacheConfiguration Config { get; }
-
-		/// <summary>
-		/// Creates a new SerializerCache with default configuration.
-		/// </summary>
-		public SerializerCache() : this(new CacheConfiguration())
-		{
-		}
-
-		/// <summary>
-		/// Creates a new SerializerCache with specified configuration.
-		/// </summary>
-		/// <param name="config">Cache configuration</param>
-		public SerializerCache(CacheConfiguration config)
-		{
-			Config = config ?? throw new ArgumentNullException(nameof(config));
-
-			if (Config.EnableAutoCleanup)
-			{
-				_cleanupTimer = new Timer(PerformCleanup, null,
-					TimeSpan.FromSeconds(Config.CleanupIntervalSeconds),
-					TimeSpan.FromSeconds(Config.CleanupIntervalSeconds));
-			}
-		}
-
-		/// <summary>
-		/// Gets or creates a cached serializer for the specified type.
-		/// </summary>
-		/// <param name="type">Type to get serializer for</param>
-		/// <param name="factory">Factory function to create serializer if not cached</param>
-		/// <returns>Cached serializer</returns>
-		public CachedSerializer GetOrCreateSerializer(Type type,
-			Func<Type, IlTypeSerializer.ObjectSerializerDelegate> factory)
-		{
-			if (_serializerCache.TryGetValue(type, out var cached))
+			// Double-check pattern
+			if (_serializerCache.TryGetValue(type, out cached))
 			{
 				cached.RecordAccess();
 				Interlocked.Increment(ref _cacheHits);
 				return cached;
 			}
 
-			lock (_lockObject)
+			// Check cache size limit
+			if (_serializerCache.Count >= Config.MaxCacheSize) EvictLeastUsedItems();
+
+			var serializer = factory(type);
+			cached = new CachedSerializer
 			{
-				// Double-check pattern
-				if (_serializerCache.TryGetValue(type, out cached))
-				{
-					cached.RecordAccess();
-					Interlocked.Increment(ref _cacheHits);
-					return cached;
-				}
-
-				// Check cache size limit
-				if (_serializerCache.Count >= Config.MaxCacheSize)
-				{
-					EvictLeastUsedItems();
-				}
-
-				var serializer = factory(type);
-				cached = new CachedSerializer
-				{
-					Serializer = serializer,
-					CreatedAt = DateTime.UtcNow,
-					LastAccessed = DateTime.UtcNow
-				};
-				Interlocked.Increment(ref cached._accessCount);
-
-				_serializerCache[type] = cached;
-				Interlocked.Increment(ref _cacheMisses);
-				return cached;
-			}
-		}
-
-		/// <summary>
-		/// Gets or creates a cached deserializer for the specified type.
-		/// </summary>
-		/// <param name="type">Type to get deserializer for</param>
-		/// <param name="factory">Factory function to create deserializer if not cached</param>
-		/// <returns>Cached deserializer</returns>
-		public CachedDeserializer GetOrCreateDeserializer(Type type,
-			Func<Type, IlTypeSerializer.ObjectDeserializerDelegate> factory)
-		{
-			if (_deserializerCache.TryGetValue(type, out var cached))
-			{
-				cached.RecordAccess();
-				Interlocked.Increment(ref _cacheHits);
-				return cached;
-			}
-
-			lock (_lockObject)
-			{
-				// Double-check pattern
-				if (_deserializerCache.TryGetValue(type, out cached))
-				{
-					cached.RecordAccess();
-					Interlocked.Increment(ref _cacheHits);
-					return cached;
-				}
-
-				// Check cache size limit
-				if (_deserializerCache.Count >= Config.MaxCacheSize)
-				{
-					EvictLeastUsedItems();
-				}
-
-				var deserializer = factory(type);
-				cached = new CachedDeserializer
-				{
-					Deserializer = deserializer,
-					CreatedAt = DateTime.UtcNow,
-					LastAccessed = DateTime.UtcNow
-				};
-				Interlocked.Increment(ref cached._accessCount);
-
-				_deserializerCache[type] = cached;
-				Interlocked.Increment(ref _cacheMisses);
-				return cached;
-			}
-		}
-
-		/// <summary>
-		/// Gets or creates cached field information for the specified type.
-		/// </summary>
-		/// <param name="type">Type to get fields for</param>
-		/// <param name="factory">Factory function to get fields if not cached</param>
-		/// <returns>Array of field information</returns>
-		public FieldInfo[] GetOrCreateFields(Type type, Func<Type, FieldInfo[]> factory)
-		{
-			return _fieldCache.GetOrAdd(type, factory);
-		}
-
-		/// <summary>
-		/// Gets or creates a pooled string.
-		/// </summary>
-		/// <param name="value">String value to pool</param>
-		/// <returns>Pooled string instance</returns>
-		public string GetOrCreatePooledString(string value)
-		{
-			return _stringPool.GetOrAdd(value, v => v);
-		}
-
-		/// <summary>
-		/// Gets the internal string pool for advanced usage.
-		/// </summary>
-		internal ConcurrentDictionary<string, string> StringPool => _stringPool;
-
-		/// <summary>
-		/// Records a serialization operation.
-		/// </summary>
-		public void RecordSerialization()
-		{
-			Interlocked.Increment(ref _totalSerializations);
-		}
-
-		/// <summary>
-		/// Records a deserialization operation.
-		/// </summary>
-		public void RecordDeserialization()
-		{
-			Interlocked.Increment(ref _totalDeserializations);
-		}
-
-		/// <summary>
-		/// Gets comprehensive cache statistics.
-		/// </summary>
-		/// <returns>Cache statistics</returns>
-		public CacheStatistics GetStatistics()
-		{
-			return new CacheStatistics
-			{
-				SerializerCount = _serializerCache.Count,
-				DeserializerCount = _deserializerCache.Count,
-				FieldCacheCount = _fieldCache.Count,
-				StringPoolCount = _stringPool.Count,
-				TotalSerializations = _totalSerializations,
-				TotalDeserializations = _totalDeserializations,
-				CacheHits = _cacheHits,
-				CacheMisses = _cacheMisses,
-				TopSerializers = _serializerCache
-					.OrderByDescending(kvp => kvp.Value.AccessCount)
-					.Take(10)
-					.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-				TopDeserializers = _deserializerCache
-					.OrderByDescending(kvp => kvp.Value.AccessCount)
-					.Take(10)
-					.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+				Serializer = serializer,
+				CreatedAt = DateTime.UtcNow,
+				LastAccessed = DateTime.UtcNow
 			};
+			Interlocked.Increment(ref cached._accessCount);
+
+			_serializerCache[type] = cached;
+			Interlocked.Increment(ref _cacheMisses);
+			return cached;
+		}
+	}
+
+	/// <summary>
+	/// Gets or creates a cached deserializer for the specified type.
+	/// </summary>
+	/// <param name="type">Type to get deserializer for</param>
+	/// <param name="factory">Factory function to create deserializer if not cached</param>
+	/// <returns>Cached deserializer</returns>
+	public CachedDeserializer GetOrCreateDeserializer(Type type,
+		Func<Type, IlTypeSerializer.ObjectDeserializerDelegate> factory)
+	{
+		if (_deserializerCache.TryGetValue(type, out var cached))
+		{
+			cached.RecordAccess();
+			Interlocked.Increment(ref _cacheHits);
+			return cached;
 		}
 
-		/// <summary>
-		/// Clears all cached items.
-		/// </summary>
-		public void Clear()
+		lock (_lockObject)
+		{
+			// Double-check pattern
+			if (_deserializerCache.TryGetValue(type, out cached))
+			{
+				cached.RecordAccess();
+				Interlocked.Increment(ref _cacheHits);
+				return cached;
+			}
+
+			// Check cache size limit
+			if (_deserializerCache.Count >= Config.MaxCacheSize) EvictLeastUsedItems();
+
+			var deserializer = factory(type);
+			cached = new CachedDeserializer
+			{
+				Deserializer = deserializer,
+				CreatedAt = DateTime.UtcNow,
+				LastAccessed = DateTime.UtcNow
+			};
+			Interlocked.Increment(ref cached._accessCount);
+
+			_deserializerCache[type] = cached;
+			Interlocked.Increment(ref _cacheMisses);
+			return cached;
+		}
+	}
+
+	/// <summary>
+	/// Gets or creates cached field information for the specified type.
+	/// </summary>
+	/// <param name="type">Type to get fields for</param>
+	/// <param name="factory">Factory function to get fields if not cached</param>
+	/// <returns>Array of field information</returns>
+	public FieldInfo[] GetOrCreateFields(Type type, Func<Type, FieldInfo[]> factory)
+	{
+		return _fieldCache.GetOrAdd(type, factory);
+	}
+
+	/// <summary>
+	/// Gets or creates a pooled string.
+	/// </summary>
+	/// <param name="value">String value to pool</param>
+	/// <returns>Pooled string instance</returns>
+	public string GetOrCreatePooledString(string value)
+	{
+		return _stringPool.GetOrAdd(value, v => v);
+	}
+
+	/// <summary>
+	/// Gets the internal string pool for advanced usage.
+	/// </summary>
+	internal ConcurrentDictionary<string, string> StringPool => _stringPool;
+
+	/// <summary>
+	/// Records a serialization operation.
+	/// </summary>
+	public void RecordSerialization()
+	{
+		Interlocked.Increment(ref _totalSerializations);
+	}
+
+	/// <summary>
+	/// Records a deserialization operation.
+	/// </summary>
+	public void RecordDeserialization()
+	{
+		Interlocked.Increment(ref _totalDeserializations);
+	}
+
+	/// <summary>
+	/// Gets comprehensive cache statistics.
+	/// </summary>
+	/// <returns>Cache statistics</returns>
+	public CacheStatistics GetStatistics()
+	{
+		return new CacheStatistics
+		{
+			SerializerCount = _serializerCache.Count,
+			DeserializerCount = _deserializerCache.Count,
+			FieldCacheCount = _fieldCache.Count,
+			StringPoolCount = _stringPool.Count,
+			TotalSerializations = _totalSerializations,
+			TotalDeserializations = _totalDeserializations,
+			CacheHits = _cacheHits,
+			CacheMisses = _cacheMisses,
+			TopSerializers = _serializerCache
+				.OrderByDescending(kvp => kvp.Value.AccessCount)
+				.Take(10)
+				.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+			TopDeserializers = _deserializerCache
+				.OrderByDescending(kvp => kvp.Value.AccessCount)
+				.Take(10)
+				.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+		};
+	}
+
+	/// <summary>
+	/// Clears all cached items.
+	/// </summary>
+	public void Clear()
+	{
+		lock (_lockObject)
+		{
+			_serializerCache.Clear();
+			_deserializerCache.Clear();
+			_fieldCache.Clear();
+			_stringPool.Clear();
+
+			// Reset statistics
+			Interlocked.Exchange(ref _totalSerializations, 0);
+			Interlocked.Exchange(ref _totalDeserializations, 0);
+			Interlocked.Exchange(ref _cacheHits, 0);
+			Interlocked.Exchange(ref _cacheMisses, 0);
+		}
+	}
+
+	/// <summary>
+	/// Performs cleanup of old and unused cache items.
+	/// </summary>
+	/// <param name="state">Timer state (unused)</param>
+	private void PerformCleanup(object state)
+	{
+		if (!Config.EnableAutoCleanup)
+			return;
+
+		try
 		{
 			lock (_lockObject)
 			{
-				_serializerCache.Clear();
-				_deserializerCache.Clear();
-				_fieldCache.Clear();
-				_stringPool.Clear();
+				var now = DateTime.UtcNow;
+				var maxAge = TimeSpan.FromMinutes(Config.MaxCacheAgeMinutes);
 
-				// Reset statistics
-				Interlocked.Exchange(ref _totalSerializations, 0);
-				Interlocked.Exchange(ref _totalDeserializations, 0);
-				Interlocked.Exchange(ref _cacheHits, 0);
-				Interlocked.Exchange(ref _cacheMisses, 0);
-			}
-		}
+				// Clean up serializers
+				var serializersToRemove = _serializerCache
+					.Where(kvp =>
+						kvp.Value.AccessCount < Config.MinAccessCount ||
+						now - kvp.Value.LastAccessed > maxAge)
+					.Select(kvp => kvp.Key)
+					.ToList();
 
-		/// <summary>
-		/// Performs cleanup of old and unused cache items.
-		/// </summary>
-		/// <param name="state">Timer state (unused)</param>
-		private void PerformCleanup(object state)
-		{
-			if (!Config.EnableAutoCleanup)
-				return;
+				foreach (var key in serializersToRemove) _serializerCache.TryRemove(key, out _);
 
-			try
-			{
-				lock (_lockObject)
+				// Clean up deserializers
+				var deserializersToRemove = _deserializerCache
+					.Where(kvp =>
+						kvp.Value.AccessCount < Config.MinAccessCount ||
+						now - kvp.Value.LastAccessed > maxAge)
+					.Select(kvp => kvp.Key)
+					.ToList();
+
+				foreach (var key in deserializersToRemove) _deserializerCache.TryRemove(key, out _);
+
+				// Clean up string pool (keep only frequently used strings)
+				if (_stringPool.Count > Config.MaxCacheSize / 2)
 				{
-					var now = DateTime.UtcNow;
-					var maxAge = TimeSpan.FromMinutes(Config.MaxCacheAgeMinutes);
-
-					// Clean up serializers
-					var serializersToRemove = _serializerCache
-						.Where(kvp =>
-							kvp.Value.AccessCount < Config.MinAccessCount ||
-							now - kvp.Value.LastAccessed > maxAge)
-						.Select(kvp => kvp.Key)
+					// This is a simple cleanup strategy - in practice, string pool cleanup
+					// might need more sophisticated logic based on usage patterns
+					var stringsToRemove = _stringPool.Keys
+						.Take(Math.Max(0, _stringPool.Count - Config.MaxCacheSize / 2))
 						.ToList();
 
-					foreach (var key in serializersToRemove)
-					{
-						_serializerCache.TryRemove(key, out _);
-					}
-
-					// Clean up deserializers
-					var deserializersToRemove = _deserializerCache
-						.Where(kvp =>
-							kvp.Value.AccessCount < Config.MinAccessCount ||
-							now - kvp.Value.LastAccessed > maxAge)
-						.Select(kvp => kvp.Key)
-						.ToList();
-
-					foreach (var key in deserializersToRemove)
-					{
-						_deserializerCache.TryRemove(key, out _);
-					}
-
-					// Clean up string pool (keep only frequently used strings)
-					if (_stringPool.Count > Config.MaxCacheSize / 2)
-					{
-						// This is a simple cleanup strategy - in practice, string pool cleanup
-						// might need more sophisticated logic based on usage patterns
-						var stringsToRemove = _stringPool.Keys
-							.Take(Math.Max(0, _stringPool.Count - Config.MaxCacheSize / 2))
-							.ToList();
-
-						foreach (var key in stringsToRemove)
-						{
-							_stringPool.TryRemove(key, out _);
-						}
-					}
+					foreach (var key in stringsToRemove) _stringPool.TryRemove(key, out _);
 				}
 			}
-			catch
-			{
-				// Ignore cleanup errors to avoid disrupting serialization
-			}
 		}
-
-		/// <summary>
-		/// Evicts least used items when cache is full using LFU/LRU hybrid scoring.
-		/// </summary>
-		private void EvictLeastUsedItems()
+		catch
 		{
-			// Remove least used serializers
-			var serializersToRemove = _serializerCache
-				.OrderByDescending(kvp => CalculateEvictionScore(kvp.Value))
-				.Take(Math.Max(1, _serializerCache.Count / 10))
-				.Select(kvp => kvp.Key)
-				.ToList();
-
-			foreach (var key in serializersToRemove)
-			{
-				_serializerCache.TryRemove(key, out _);
-			}
-
-			// Remove least used deserializers
-			var deserializersToRemove = _deserializerCache
-				.OrderByDescending(kvp => CalculateEvictionScore(kvp.Value))
-				.Take(Math.Max(1, _deserializerCache.Count / 10))
-				.Select(kvp => kvp.Key)
-				.ToList();
-
-			foreach (var key in deserializersToRemove)
-			{
-				_deserializerCache.TryRemove(key, out _);
-			}
+			// Ignore cleanup errors to avoid disrupting serialization
 		}
+	}
 
-		/// <summary>
-		/// Calculates an eviction score for serializer cache items (higher = more likely to be evicted).
-		/// Combines recency (LRU) and frequency (LFU) factors.
-		/// </summary>
-		/// <param name="cachedItem">The cached serializer to score</param>
-		/// <returns>Eviction score (higher = evict first)</returns>
-		private double CalculateEvictionScore(CachedSerializer cachedItem)
-		{
-			// Recency factor: How long since last access (normalized to 0-1)
-			var timeSinceAccess = (DateTime.UtcNow - cachedItem.LastAccessed).TotalMinutes;
-			var recencyScore = Math.Min(timeSinceAccess / Config.MaxCacheAgeMinutes, 1.0);
+	/// <summary>
+	/// Evicts least used items when cache is full using LFU/LRU hybrid scoring.
+	/// </summary>
+	private void EvictLeastUsedItems()
+	{
+		// Remove least used serializers
+		var serializersToRemove = _serializerCache
+			.OrderByDescending(kvp => CalculateEvictionScore(kvp.Value))
+			.Take(Math.Max(1, _serializerCache.Count / 10))
+			.Select(kvp => kvp.Key)
+			.ToList();
 
-			// Frequency factor: Inverse of access count (lower access = higher score)
-			var frequencyScore = 1.0 / (cachedItem.AccessCount + 1.0); // +1 prevents division by zero
+		foreach (var key in serializersToRemove) _serializerCache.TryRemove(key, out _);
 
-			// Weighted combination: 70% recency, 30% frequency
-			return recencyScore * 0.7 + frequencyScore * 0.3;
-		}
+		// Remove least used deserializers
+		var deserializersToRemove = _deserializerCache
+			.OrderByDescending(kvp => CalculateEvictionScore(kvp.Value))
+			.Take(Math.Max(1, _deserializerCache.Count / 10))
+			.Select(kvp => kvp.Key)
+			.ToList();
 
-		/// <summary>
-		/// Calculates an eviction score for deserializer cache items (higher = more likely to be evicted).
-		/// Combines recency (LRU) and frequency (LFU) factors.
-		/// </summary>
-		/// <param name="cachedItem">The cached deserializer to score</param>
-		/// <returns>Eviction score (higher = evict first)</returns>
-		private double CalculateEvictionScore(CachedDeserializer cachedItem)
-		{
-			// Recency factor: How long since last access (normalized to 0-1)
-			var timeSinceAccess = (DateTime.UtcNow - cachedItem.LastAccessed).TotalMinutes;
-			var recencyScore = Math.Min(timeSinceAccess / Config.MaxCacheAgeMinutes, 1.0);
+		foreach (var key in deserializersToRemove) _deserializerCache.TryRemove(key, out _);
+	}
 
-			// Frequency factor: Inverse of access count (lower access = higher score)
-			var frequencyScore = 1.0 / (cachedItem.AccessCount + 1.0); // +1 prevents division by zero
+	/// <summary>
+	/// Calculates an eviction score for serializer cache items (higher = more likely to be evicted).
+	/// Combines recency (LRU) and frequency (LFU) factors.
+	/// </summary>
+	/// <param name="cachedItem">The cached serializer to score</param>
+	/// <returns>Eviction score (higher = evict first)</returns>
+	private double CalculateEvictionScore(CachedSerializer cachedItem)
+	{
+		// Recency factor: How long since last access (normalized to 0-1)
+		var timeSinceAccess = (DateTime.UtcNow - cachedItem.LastAccessed).TotalMinutes;
+		var recencyScore = Math.Min(timeSinceAccess / Config.MaxCacheAgeMinutes, 1.0);
 
-			// Weighted combination: 70% recency, 30% frequency
-			return recencyScore * 0.7 + frequencyScore * 0.3;
-		}
+		// Frequency factor: Inverse of access count (lower access = higher score)
+		var frequencyScore = 1.0 / (cachedItem.AccessCount + 1.0); // +1 prevents division by zero
 
-		/// <summary>
-		/// Disposes the cache and cleanup timer.
-		/// </summary>
-		public void Dispose()
-		{
-			_cleanupTimer?.Dispose();
-			Clear();
-		}
+		// Weighted combination: 70% recency, 30% frequency
+		return recencyScore * 0.7 + frequencyScore * 0.3;
+	}
+
+	/// <summary>
+	/// Calculates an eviction score for deserializer cache items (higher = more likely to be evicted).
+	/// Combines recency (LRU) and frequency (LFU) factors.
+	/// </summary>
+	/// <param name="cachedItem">The cached deserializer to score</param>
+	/// <returns>Eviction score (higher = evict first)</returns>
+	private double CalculateEvictionScore(CachedDeserializer cachedItem)
+	{
+		// Recency factor: How long since last access (normalized to 0-1)
+		var timeSinceAccess = (DateTime.UtcNow - cachedItem.LastAccessed).TotalMinutes;
+		var recencyScore = Math.Min(timeSinceAccess / Config.MaxCacheAgeMinutes, 1.0);
+
+		// Frequency factor: Inverse of access count (lower access = higher score)
+		var frequencyScore = 1.0 / (cachedItem.AccessCount + 1.0); // +1 prevents division by zero
+
+		// Weighted combination: 70% recency, 30% frequency
+		return recencyScore * 0.7 + frequencyScore * 0.3;
+	}
+
+	/// <summary>
+	/// Disposes the cache and cleanup timer.
+	/// </summary>
+	public void Dispose()
+	{
+		_cleanupTimer?.Dispose();
+		Clear();
 	}
 }
