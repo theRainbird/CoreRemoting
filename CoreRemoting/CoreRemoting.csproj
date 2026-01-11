@@ -38,7 +38,6 @@
 
     <ItemGroup>
       <PackageReference Include="Castle.Windsor" Version="6.0.0" />
-      <PackageReference Include="Hyperion" Version="0.12.2" />
       <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.10" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.10" />
       <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />

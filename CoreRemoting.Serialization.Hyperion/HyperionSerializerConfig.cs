@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO.Compression;
-using System.Linq;
 
 namespace CoreRemoting.Serialization.Hyperion
 {
@@ -10,215 +8,167 @@ namespace CoreRemoting.Serialization.Hyperion
 	/// </summary>
 	public class HyperionSerializerConfig
 	{
-		private readonly HashSet<string> _allowedTypes = new HashSet<string>();
-		private readonly HashSet<string> _allowedNamespaces = new HashSet<string>();
-		private readonly HashSet<string> _blockedTypes = new HashSet<string>();
-		private readonly HashSet<string> _blockedNamespaces = new HashSet<string>();
+		/// <summary>
+		/// Creates a new instance of the HyperionSerializerConfig class.
+		/// </summary>
+		public HyperionSerializerConfig()
+		{
+			PreserveObjectReferences = true;
+			IgnoreISerializable = false;
+			VersionTolerance = true;
+			MaxSerializedSize = 100 * 1024 * 1024; // 100MB
+			AllowedTypes = new HashSet<Type>();
+			BlockedTypes = new HashSet<Type>();
+			AllowUnknownTypes = true;
+			AllowExpressions = false;
+			EnableCompression = false;
+			CompressionLevel = System.IO.Compression.CompressionLevel.Optimal;
+		}
 
 		/// <summary>
-		/// Gets or sets whether object references should be preserved.
-		/// Default: true
+		/// Gets or sets whether object references should be preserved for circular reference handling.
 		/// </summary>
-		public bool PreserveObjectReferences { get; set; } = true;
+		public bool PreserveObjectReferences { get; set; }
 
 		/// <summary>
 		/// Gets or sets whether ISerializable interface should be ignored.
-		/// Default: false
 		/// </summary>
-		public bool IgnoreISerializable { get; set; } = false;
+		public bool IgnoreISerializable { get; set; }
 
 		/// <summary>
-		/// Gets or sets whether version tolerance should be enabled.
-		/// Default: true
+		/// Gets or sets whether version tolerance should be enabled for compatibility across versions.
 		/// </summary>
-		public bool VersionTolerance { get; set; } = true;
-
-		/// <summary>
-		/// Gets or sets whether compression should be enabled.
-		/// Default: false
-		/// </summary>
-		public bool EnableCompression { get; set; } = false;
-
-		/// <summary>
-		/// Gets or sets the compression level when compression is enabled.
-		/// Default: Optimal
-		/// </summary>
-		public CompressionLevel CompressionLevel { get; set; } = CompressionLevel.Optimal;
+		public bool VersionTolerance { get; set; }
 
 		/// <summary>
 		/// Gets or sets the maximum allowed serialized data size in bytes.
-		/// Default: 100 MB
 		/// </summary>
-		public long MaxSerializedSize { get; set; } = 100 * 1024 * 1024;
+		public long MaxSerializedSize { get; set; }
 
 		/// <summary>
-		/// Gets or sets whether type safety should be enforced.
-		/// Default: true
+		/// Gets or sets the set of explicitly allowed types.
+		/// If this set is not empty, only these types can be deserialized.
 		/// </summary>
-		public bool EnforceTypeSafety { get; set; } = true;
+		public HashSet<Type> AllowedTypes { get; set; }
 
 		/// <summary>
-		/// Gets or sets whether only known types should be allowed.
-		/// Default: false
+		/// Gets or sets the set of explicitly blocked types.
+		/// These types cannot be deserialized even if they would otherwise be allowed.
 		/// </summary>
-		public bool AllowOnlyKnownTypes { get; set; } = false;
+		public HashSet<Type> BlockedTypes { get; set; }
 
 		/// <summary>
-		/// Gets the collection of allowed type names.
+		/// Gets or sets whether unknown types should be allowed during deserialization.
+		/// When false, only known and allowed types can be deserialized.
 		/// </summary>
-		public IReadOnlyCollection<string> AllowedTypes => _allowedTypes;
+		public bool AllowUnknownTypes { get; set; }
 
 		/// <summary>
-		/// Gets the collection of allowed namespace names.
+		/// Gets or sets whether LINQ expressions should be allowed during serialization/deserialization.
+		/// When false, expressions are not supported for security reasons.
 		/// </summary>
-		public IReadOnlyCollection<string> AllowedNamespaces => _allowedNamespaces;
+		public bool AllowExpressions { get; set; }
 
 		/// <summary>
-		/// Gets the collection of blocked type names.
+		/// Gets or sets whether to compress serialized data.
 		/// </summary>
-		public IReadOnlyCollection<string> BlockedTypes => _blockedTypes;
+		public bool EnableCompression { get; set; }
 
 		/// <summary>
-		/// Gets the collection of blocked namespace names.
+		/// Gets or sets the compression level when compression is enabled.
 		/// </summary>
-		public IReadOnlyCollection<string> BlockedNamespaces => _blockedNamespaces;
+		public System.IO.Compression.CompressionLevel CompressionLevel { get; set; }
 
 		/// <summary>
-		/// Adds an allowed type name.
+		/// Creates a copy of this configuration.
 		/// </summary>
-		/// <param name="typeName">Full type name</param>
-		/// <returns>Configuration instance for method chaining</returns>
-		public HyperionSerializerConfig AddAllowedType(string typeName)
+		/// <returns>A new HyperionSerializerConfig instance with the same settings</returns>
+		public HyperionSerializerConfig Clone()
 		{
-			if (!string.IsNullOrEmpty(typeName))
-				_allowedTypes.Add(typeName);
-			return this;
-		}
-
-		/// <summary>
-		/// Adds an allowed namespace name.
-		/// </summary>
-		/// <param name="namespaceName">Namespace name</param>
-		/// <returns>Configuration instance for method chaining</returns>
-		public HyperionSerializerConfig AddAllowedNamespace(string namespaceName)
-		{
-			if (!string.IsNullOrEmpty(namespaceName))
-				_allowedNamespaces.Add(namespaceName);
-			return this;
-		}
-
-		/// <summary>
-		/// Adds a blocked type name.
-		/// </summary>
-		/// <param name="typeName">Full type name</param>
-		/// <returns>Configuration instance for method chaining</returns>
-		public HyperionSerializerConfig AddBlockedType(string typeName)
-		{
-			if (!string.IsNullOrEmpty(typeName))
-				_blockedTypes.Add(typeName);
-			return this;
-		}
-
-		/// <summary>
-		/// Adds a blocked namespace name.
-		/// </summary>
-		/// <param name="namespaceName">Namespace name</param>
-		/// <returns>Configuration instance for method chaining</returns>
-		public HyperionSerializerConfig AddBlockedNamespace(string namespaceName)
-		{
-			if (!string.IsNullOrEmpty(namespaceName))
-				_blockedNamespaces.Add(namespaceName);
-			return this;
-		}
-
-		/// <summary>
-		/// Checks if a type is allowed for serialization/deserialization.
-		/// </summary>
-		/// <param name="type">Type to check</param>
-		/// <returns>True if type is allowed, false otherwise</returns>
-		public bool IsTypeAllowed(Type type)
-		{
-			if (type == null)
-				return false;
-
-			var typeName = type.FullName ?? type.Name;
-
-			// Check blocked types first
-			if (_blockedTypes.Contains(typeName))
-				return false;
-
-			// Check blocked namespaces
-			if (_blockedNamespaces.Any(ns => typeName.StartsWith(ns + ".")))
-				return false;
-
-			// If type safety is not enforced, allow by default
-			if (!EnforceTypeSafety)
-				return true;
-
-			// If only known types are allowed, check allowed lists
-			if (AllowOnlyKnownTypes)
+			return new HyperionSerializerConfig
 			{
-				// Check allowed types
-				if (_allowedTypes.Contains(typeName))
-					return true;
-
-				// Check allowed namespaces
-				if (_allowedNamespaces.Any(ns => typeName.StartsWith(ns + ".")))
-					return true;
-
-				return false;
-			}
-
-			// Default allow if no restrictions are set
-			return true;
+				PreserveObjectReferences = this.PreserveObjectReferences,
+				IgnoreISerializable = this.IgnoreISerializable,
+				VersionTolerance = this.VersionTolerance,
+				MaxSerializedSize = this.MaxSerializedSize,
+				AllowedTypes = new HashSet<Type>(this.AllowedTypes),
+				BlockedTypes = new HashSet<Type>(this.BlockedTypes),
+				AllowUnknownTypes = this.AllowUnknownTypes,
+				AllowExpressions = this.AllowExpressions,
+				EnableCompression = this.EnableCompression,
+				CompressionLevel = this.CompressionLevel
+			};
 		}
 
 		/// <summary>
 		/// Validates the configuration settings.
 		/// </summary>
-		/// <exception cref="InvalidOperationException">Thrown when configuration is invalid</exception>
+		/// <exception cref="ArgumentException">Thrown when configuration is invalid</exception>
 		public void Validate()
 		{
 			if (MaxSerializedSize <= 0)
-				throw new InvalidOperationException("MaxSerializedSize must be greater than 0.");
+				throw new ArgumentException("MaxSerializedSize must be greater than 0");
 
-			if (AllowOnlyKnownTypes && !_allowedTypes.Any() && !_allowedNamespaces.Any())
-				throw new InvalidOperationException("When AllowOnlyKnownTypes is enabled, at least one allowed type or namespace must be specified.");
+			// Check for conflicts between allowed and blocked types
+			foreach (var blockedType in BlockedTypes)
+			{
+				if (AllowedTypes.Contains(blockedType))
+				{
+					throw new ArgumentException($"Type '{blockedType.FullName}' cannot be both allowed and blocked");
+				}
+			}
 		}
 
 		/// <summary>
-		/// Creates a default configuration with common safe settings.
+		/// Adds a type to the allowed types list.
 		/// </summary>
-		/// <returns>Default configuration</returns>
-		public static HyperionSerializerConfig Default()
+		/// <typeparam name="T">Type to allow</typeparam>
+		public void AllowType<T>()
 		{
-			return new HyperionSerializerConfig
-			{
-				PreserveObjectReferences = true,
-				IgnoreISerializable = false,
-				VersionTolerance = true,
-				EnableCompression = false,
-				EnforceTypeSafety = true,
-				AllowOnlyKnownTypes = false
-			};
+			AllowedTypes.Add(typeof(T));
 		}
 
 		/// <summary>
-		/// Creates a secure configuration with strict type safety.
+		/// Adds a type to the blocked types list.
 		/// </summary>
-		/// <returns>Secure configuration</returns>
-		public static HyperionSerializerConfig Secure()
+		/// <typeparam name="T">Type to block</typeparam>
+		public void BlockType<T>()
 		{
-			return new HyperionSerializerConfig
-			{
-				PreserveObjectReferences = true,
-				IgnoreISerializable = false,
-				VersionTolerance = true,
-				EnableCompression = false,
-				EnforceTypeSafety = true,
-				AllowOnlyKnownTypes = true,
-				MaxSerializedSize = 10 * 1024 * 1024 // 10 MB
-			};
+			BlockedTypes.Add(typeof(T));
+		}
+
+		/// <summary>
+		/// Removes a type from the allowed types list.
+		/// </summary>
+		/// <typeparam name="T">Type to remove from allowed list</typeparam>
+		public void RemoveAllowedType<T>()
+		{
+			AllowedTypes.Remove(typeof(T));
+		}
+
+		/// <summary>
+		/// Removes a type from the blocked types list.
+		/// </summary>
+		/// <typeparam name="T">Type to remove from blocked list</typeparam>
+		public void RemoveBlockedType<T>()
+		{
+			BlockedTypes.Remove(typeof(T));
+		}
+
+		/// <summary>
+		/// Checks if a type is allowed according to the current configuration.
+		/// </summary>
+		/// <param name="type">Type to check</param>
+		/// <returns>True if the type is allowed, false otherwise</returns>
+		public bool IsTypeAllowed(Type type)
+		{
+			if (BlockedTypes.Contains(type))
+				return false;
+
+			if (AllowedTypes.Count == 0)
+				return AllowUnknownTypes;
+
+			return AllowedTypes.Contains(type);
 		}
 	}
 }
