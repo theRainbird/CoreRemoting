@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 using CoreRemoting.ClassicRemotingApi;
 using CoreRemoting.Tests.Tools;
 using Xunit;

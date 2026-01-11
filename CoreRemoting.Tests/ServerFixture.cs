@@ -6,7 +6,7 @@ using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Tests.Tools;
 using CoreRemoting.Threading;
 using Xunit;
-using CoreRemoting; // RemotingClient
+// RemotingClient
 using CoreRemoting.ClassicRemotingApi; // RemotingConfiguration
 
 namespace CoreRemoting.Tests;

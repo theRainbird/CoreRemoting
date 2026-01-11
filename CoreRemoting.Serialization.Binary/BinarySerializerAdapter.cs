@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.Serialization.Formatters.Binary;
 
 namespace CoreRemoting.Serialization.Binary
 {

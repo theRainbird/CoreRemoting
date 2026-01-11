@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
-using Castle.MicroKernel.SubSystems.Conversion;
 using CoreRemoting.Channels.Websocket;
 using static CoreRemoting.Channels.Null.NullMessageQueue;
 

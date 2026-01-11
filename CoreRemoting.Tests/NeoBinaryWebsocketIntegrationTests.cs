@@ -1,7 +1,4 @@
 using System;
-using System.Threading.Tasks;
-using CoreRemoting.Authentication;
-using CoreRemoting.Channels;
 using CoreRemoting.Channels.Websocket;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Serialization.NeoBinary;

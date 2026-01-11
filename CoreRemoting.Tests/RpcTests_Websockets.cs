@@ -1,6 +1,5 @@
 using CoreRemoting.Channels;
 using CoreRemoting.Channels.Websocket;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace CoreRemoting.Tests;

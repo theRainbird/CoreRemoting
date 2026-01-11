@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using CoreRemoting.Channels;
 using CoreRemoting.Channels.Websocket;
 

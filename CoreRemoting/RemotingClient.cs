@@ -17,7 +17,6 @@ using CoreRemoting.RemoteDelegates;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Bson;
-using CoreRemoting.Serialization.NeoBinary;
 using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
 using CancellationTokenSource = System.Threading.CancellationTokenSource;

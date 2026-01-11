@@ -1,4 +1,3 @@
-using System;
 using System.Collections;
 using CoreRemoting.Serialization.Bson;
 using Xunit;
