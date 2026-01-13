@@ -268,7 +268,7 @@ public partial class NeoBinarySerializer
 		// Read CoreRemoting version for compatibility checking
 		var remoteVersion = reader.ReadString();
 		var localVersion = COREMOTING_VERSION;
-		var flags = reader.ReadUInt16();
+		reader.ReadUInt16(); // Read flags
 
 		// Enhanced version negotiation
 		var versionMismatch = !string.IsNullOrEmpty(remoteVersion) && remoteVersion != localVersion;
@@ -283,28 +283,8 @@ public partial class NeoBinarySerializer
 					throw new InvalidOperationException(
 						$"Major version mismatch detected. Local: {localVersion}, Remote: {remoteVersion}. " +
 						$"This indicates incompatible CoreRemoting versions.");
-
-				// Minor version differences are warnings
-				if (localVer.Minor != remoteVer.Minor)
-				{
-					Console.WriteLine($"WARNING: Minor CoreRemoting version difference detected:");
-					Console.WriteLine($"  Local version:  {localVersion}");
-					Console.WriteLine($"  Remote version: {remoteVersion}");
-					Console.WriteLine($"  This should be compatible but may cause minor issues.");
-				}
-			}
-			else
-			{
-				// Fallback for unparseable version strings
-				Console.WriteLine($"WARNING: CoreRemoting version mismatch detected (could not parse versions):");
-				Console.WriteLine($"  Local version:  {localVersion}");
-				Console.WriteLine($"  Remote version: {remoteVersion}");
-				Console.WriteLine($"  This may cause serialization compatibility issues.");
 			}
 		}
-
-		// Validate flag compatibility
-		ValidateFlagCompatibility(flags, remoteVersion, localVersion);
 	}
 
 	private void SerializeObject(object obj, BinaryWriter writer, HashSet<object> serializedObjects,
@@ -661,12 +641,6 @@ public partial class NeoBinarySerializer
 
 	private void WriteTypeInfo(BinaryWriter writer, Type type)
 	{
-#if DEBUG
-		var streamPos = writer.BaseStream.CanSeek ? writer.BaseStream.Position : -1;
-		Console.WriteLine(
-			$"DEBUG: WriteTypeInfo called for type: {type?.FullName ?? "null"} at position {streamPos}");
-#endif
-
 		if (type == null)
 		{
 			// Special handling for null type to keep stream alignment consistent
@@ -769,11 +743,6 @@ public partial class NeoBinarySerializer
 		// Use string pooling for frequently used type names
 		typeName = _serializerCache.GetOrCreatePooledString(typeName);
 		writer.Write(typeName);
-
-#if DEBUG
-		var afterTypeNamePos = writer.BaseStream.CanSeek ? writer.BaseStream.Position : -1;
-		Console.WriteLine($"DEBUG: WriteTypeInfo wrote typeName: '{typeName}' at position {afterTypeNamePos}");
-#endif
 
 		var assemblyNameString = assemblyName.Name ?? string.Empty;
 		assemblyNameString = _serializerCache.GetOrCreatePooledString(assemblyNameString);
@@ -1220,10 +1189,6 @@ public partial class NeoBinarySerializer
 		// Defensive check: ensure class types are not accidentally marked as simple
 		if (isSimple && type.IsClass && !type.IsEnum && type != typeof(string))
 		{
-#if DEBUG
-			Console.WriteLine(
-				$"DEBUG: Class type {type.FullName} was incorrectly identified as simple. IsPrimitive={type.IsPrimitive}");
-#endif
 			return false;
 		}
 
@@ -1508,6 +1473,7 @@ public partial class NeoBinarySerializer
 				}
 
 				if (canCreate)
+				{
 					try
 					{
 						return ctor.Invoke(args);
@@ -1516,6 +1482,7 @@ public partial class NeoBinarySerializer
 					{
 						// Try next constructor
 					}
+				}
 			}
 		}
 
@@ -1611,54 +1578,6 @@ public partial class NeoBinarySerializer
 		if (position >= length && context.Contains("Read"))
 			throw new InvalidOperationException(
 				$"Stream corruption detected in {context}: Attempting to read at end of stream (position: {position}, length: {length})");
-	}
-
-
-	/// <summary>
-	/// Validates flag compatibility between serializer configurations.
-	/// </summary>
-	/// <param name="remoteFlags">Flags from remote endpoint</param>
-	/// <param name="remoteVersion">Remote version string</param>
-	/// <param name="localVersion">Local version string</param>
-	private void ValidateFlagCompatibility(ushort remoteFlags, string remoteVersion, string localVersion)
-	{
-		const ushort VERSION_FLAG = 0x01; // Include assembly versions
-		const ushort TYPEREF_FLAG = 0x02; // Use type references
-
-		var localFlags = 0;
-		if (Config.IncludeAssemblyVersions) localFlags |= VERSION_FLAG;
-		if (Config.UseTypeReferences) localFlags |= TYPEREF_FLAG;
-
-		// Check for incompatible flag combinations
-		var incompatibleFlags = remoteFlags ^ localFlags;
-
-		if ((incompatibleFlags & VERSION_FLAG) != 0)
-		{
-			var remoteHasVersion = (remoteFlags & VERSION_FLAG) != 0;
-			var localHasVersion = (localFlags & VERSION_FLAG) != 0;
-
-			if (remoteHasVersion != localHasVersion)
-			{
-				Console.WriteLine($"WARNING: Assembly version inclusion mismatch:");
-				Console.WriteLine($"  Local includes assembly versions: {localHasVersion}");
-				Console.WriteLine($"  Remote includes assembly versions: {remoteHasVersion}");
-				Console.WriteLine($"  This may cause type resolution issues.");
-			}
-		}
-
-		if ((incompatibleFlags & TYPEREF_FLAG) != 0)
-		{
-			var remoteHasTypeRef = (remoteFlags & TYPEREF_FLAG) != 0;
-			var localHasTypeRef = (localFlags & TYPEREF_FLAG) != 0;
-
-			if (remoteHasTypeRef != localHasTypeRef)
-			{
-				Console.WriteLine($"WARNING: Type reference usage mismatch:");
-				Console.WriteLine($"  Local uses type references: {localHasTypeRef}");
-				Console.WriteLine($"  Remote uses type references: {remoteHasTypeRef}");
-				Console.WriteLine($"  This may affect serialization performance and compatibility.");
-			}
-		}
 	}
 
 	/// <summary>
@@ -1763,27 +1682,6 @@ public partial class NeoBinarySerializer
 		}
 
 		return sb.ToString();
-	}
-
-	/// <summary>
-	/// Analyzes the current serialization stream for debugging and corruption detection.
-	/// </summary>
-	/// <param name="stream">Stream to analyze</param>
-	/// <returns>Detailed analysis report</returns>
-	public static StreamAnalysisReport AnalyzeStream(Stream stream)
-	{
-		return NeoBinaryStreamAnalyzer.AnalyzeStream(stream);
-	}
-
-	/// <summary>
-	/// Creates a hex dump of the stream for debugging purposes.
-	/// </summary>
-	/// <param name="stream">Stream to dump</param>
-	/// <param name="maxBytes">Maximum bytes to include in dump</param>
-	/// <returns>Hex dump string</returns>
-	public static string CreateHexDump(Stream stream, int maxBytes = 1024)
-	{
-		return NeoBinaryStreamAnalyzer.CreateHexDump(stream, maxBytes);
 	}
 
 	/// <summary>
