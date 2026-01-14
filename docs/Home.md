@@ -8,13 +8,7 @@
 **[Sessions](Sessions.md)<br>**
 **[Events and Callbacks](Events-and-Callbacks.md)<br>**
 **[Implicit data flow via CallContext](Implicit-data-flow-via-CallContext.md)<br>**
-**[Migrate a .NET Remoting Application]<br>**
+**[Migrate a .NET Remoting Application](Migrate-NetRemoting-Application.md)<br>**
 
 ## Reference
 **[API Reference](API-Reference.md)<br>**
-
-## Advanced Topics
-**[[Integrate custom DI Container]]<br>**
-**[[Integrate custom Serializer]]<br>**
-**[[Write custom Session Repository]]<br>**
-**[[Write custom Communication Channels]]<br>**
