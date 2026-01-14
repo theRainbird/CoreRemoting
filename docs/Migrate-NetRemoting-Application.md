@@ -74,6 +74,8 @@ var proxy = client.CreateProxy<IService>();
 ## Step-by-Step Migration Guide
 
 This guide walks through migrating a complete .NET Remoting application using the provided example.
+You can find the original .NET Remoting example and the migrated example here:
+[Migration Example Code](https://github.com/theRainbird/CoreRemoting/tree/master/Examples/MigrateNetRemoting)
 
 ### Example: Todo Service Migration
 
