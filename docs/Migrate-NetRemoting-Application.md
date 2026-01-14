@@ -335,17 +335,17 @@ namespace MigratedTaskDemoAppNetRemoting.Shared
 ### Serialization Options
 
 - **Default**: BSON (JSON-based, widely compatible)
-- **Binary**: Set `serializer="binary"` for binary serialization
+- **Binary**: Set `serializer="binary"` for binary serialization (**Depreated!** Needs additional CoreRemoting.Serialization.Binary nuget package)
 - **NeoBinary**: Use `serializer="neobinary"` for modern binary format
 
 ### Channel Options
 
-| Channel | Config Value | Use Case                         |
-|---------|-------------|----------------------------------|
-| TCP | `channel="tcp"` | Default, reliable TCP connection |
-| WebSocket | `channel="ws"` | Modern standard |                 |
-| NamedPipe | `channel="namedpipe"` | Inter-process communication      |
-| QUIC | `channel="quic"` | Modern protocol (.NET 9.0 only)  |
+| Channel | Config Value | Use Case                                                                                            |
+|---------|-------------|-----------------------------------------------------------------------------------------------------|
+| TCP | `channel="tcp"` | Default, reliable TCP connection                                                                    |
+| WebSocket | `channel="ws"` | Modern standard                                                                                     |                 |
+| NamedPipe | `channel="namedpipe"` | Inter-process communication                                                                         |
+| QUIC | `channel="quic"` | Modern protocol (.NET 9.0 only; Windows only! Needs additional CoreRemoting.Channels.Quic assembly) |
 
 ## Code Migration Patterns
 
