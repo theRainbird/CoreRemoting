@@ -57,4 +57,4 @@ The diagram below shows the RPC call flow of the **["Hello World"](https://githu
 
 ![Hello World Application as Diagram](https://raw.githubusercontent.com/theRainbird/CoreRemoting/master/docs/images/HelloWorld_AsDiagram.png)
 
-Please also read the [security documentation page](https://github.com/theRainbird/CoreRemoting/wiki/Security) to learn how to secure your CoreRemoting application.
+Please also read the [security documentation page](Security.md) to learn how to secure your CoreRemoting application.
