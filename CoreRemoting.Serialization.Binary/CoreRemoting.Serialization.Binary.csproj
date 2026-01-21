@@ -7,7 +7,7 @@
     <OutputPath>bin\$(Configuration)\</OutputPath>
     <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>1.3.0</Version>
+    <Version>1.3.1.0</Version>
     <Title>CoreRemoting.Serialization.Binary</Title>
     <Authors>Hagen Siegel</Authors>
     <Description>Classic BinaryFormatter support for CoreRemoting</Description>
@@ -15,9 +15,10 @@
     <PackageLicenseUrl>https://github.com/theRainbird/CoreRemoting/blob/master/LICENSE</PackageLicenseUrl>
     <RepositoryUrl>https://github.com/theRainbird/CoreRemoting/tree/master/CoreRemoting.Serialization.Binary</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <AssemblyVersion>1.3.0.0</AssemblyVersion>
-    <FileVersion>1.3.0.0</FileVersion>
+    <AssemblyVersion>1.3.1.0</AssemblyVersion>
+    <FileVersion>1.3.1.0</FileVersion>
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <PackageReleaseNotes>Support for .net8.0</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
