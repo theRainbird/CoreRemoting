@@ -128,7 +128,7 @@ public sealed class RemotingClient : IRemotingClient
         if (!config.IsDefault)
             return;
 
-        RemotingClient.DefaultRemotingClient ??= this;
+        DefaultRemotingClient ??= this;
     }
 
     private void OnDisconnected()
@@ -918,8 +918,8 @@ public sealed class RemotingClient : IRemotingClient
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
-        if (RemotingClient.DefaultRemotingClient == this)
-            RemotingClient.DefaultRemotingClient = null;
+        if (DefaultRemotingClient == this)
+            DefaultRemotingClient = null;
 
         _clientInstances.TryRemove(_config.UniqueClientInstanceName, out _);
 

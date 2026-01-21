@@ -24,7 +24,7 @@ namespace CoreRemoting.RemoteDelegates
 					throw new ArgumentNullException(nameof(callInterceptionHandler));
 
 		    var interceptMethod = 
-			    this.GetType()
+			    GetType()
 					.GetMethod(
 						name: nameof(Intercept), 
 						bindingAttr: BindingFlags.NonPublic | BindingFlags.InvokeMethod | BindingFlags.Instance);

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -13,7 +14,7 @@ public class NeoBinaryTypeValidator
 {
 	private readonly HashSet<Type> _allowedTypes;
 	private readonly HashSet<Type> _blockedTypes;
-	private readonly HashSet<string> _allowedNamespaces;
+	[SuppressMessage("ReSharper", "CollectionNeverUpdated.Local")] private readonly HashSet<string> _allowedNamespaces;
 	private readonly HashSet<string> _blockedNamespaces;
 	private readonly HashSet<string> _blockedTypeNames;
 
@@ -35,17 +36,17 @@ public class NeoBinaryTypeValidator
 	/// <summary>
 	/// Gets or sets whether unknown types should be allowed.
 	/// </summary>
-	public bool AllowUnknownTypes { get; set; } = false;
+	public bool AllowUnknownTypes { get; set; }
 
 	/// <summary>
 	/// Gets or sets whether to allow delegates during deserialization.
 	/// </summary>
-	public bool AllowDelegates { get; set; } = false;
+	public bool AllowDelegates { get; set; }
 
 	/// <summary>
 	/// Gets or sets whether to allow LINQ expressions during deserialization.
 	/// </summary>
-	public bool AllowExpressions { get; set; } = false;
+	public bool AllowExpressions { get; set; }
 
 	/// <summary>
 	/// Gets or sets whether to allow reflection types during deserialization.
@@ -485,62 +486,12 @@ public class NeoBinaryTypeValidator
 		return _blockedNamespaces.Any(blockedNs => typeNamespace.StartsWith(blockedNs, StringComparison.Ordinal));
 	}
 
-	private bool IsDangerousTypeCombination(Type type)
-	{
-		// Check for combinations that could be exploited
-		var hasSerializableAttribute = type.GetCustomAttributes(typeof(SerializableAttribute), false).Length > 0;
-		var HasISerializable = typeof(System.Runtime.Serialization.ISerializable).IsAssignableFrom(type);
-		var HasDeserializationCallback =
-			typeof(System.Runtime.Serialization.IDeserializationCallback).IsAssignableFrom(type);
-
-		// Known safe types are never dangerous
-		if (IsKnownSafeISerializableType(type))
-			return false;
-
-		// Decimal is safe - it's a primitive type
-		if (type == typeof(decimal))
-			return false;
-
-		return hasSerializableAttribute && (HasISerializable || HasDeserializationCallback);
-	}
-
-	private bool IsKnownSafeISerializableType(Type type)
-	{
-		// List of known safe ISerializable types
-		var safeTypes = new[]
-		{
-			typeof(string),
-			typeof(DateTime),
-			typeof(DateTimeOffset),
-			typeof(TimeSpan),
-			typeof(Guid),
-			typeof(Uri),
-			typeof(Version),
-			typeof(System.Text.StringBuilder),
-			typeof(System.Collections.BitArray),
-			typeof(System.Collections.Hashtable),
-			typeof(System.Collections.ArrayList),
-			typeof(System.Collections.Queue),
-			typeof(System.Collections.Stack),
-			typeof(System.Collections.SortedList),
-			typeof(Exception),
-			typeof(System.Data.DataSet),
-			typeof(System.Data.DataTable)
-		};
-
-		return safeTypes.Any(t => t.IsAssignableFrom(type)) ||
-		       type.Namespace?.StartsWith("System", StringComparison.Ordinal) == true ||
-		       typeof(Exception).IsAssignableFrom(type) ||
-		       typeof(System.Data.DataSet).IsAssignableFrom(type) ||
-		       typeof(System.Data.DataTable).IsAssignableFrom(type);
-	}
-
 	/// <summary>
 	/// Determines if a type is a reflection-related type.
 	/// </summary>
 	/// <param name="type">Type to check</param>
 	/// <returns>True if the type is a reflection type</returns>
-	private bool IsReflectionType(Type type)
+	private static bool IsReflectionType(Type type)
 	{
 		if (type == null)
 			return false;

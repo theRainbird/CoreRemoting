@@ -3,6 +3,8 @@
  * Many thanks to yallie for this great extensions to make BinaryFormatter a lot safer.
  */
 
+#pragma warning disable SYSLIB0003
+#pragma warning disable SYSLIB0050
 namespace CoreRemoting.Serialization.Binary
 {
     using System;

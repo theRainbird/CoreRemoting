@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace CoreRemoting.Serialization;
@@ -6,6 +7,7 @@ namespace CoreRemoting.Serialization;
 /// <summary>
 /// Provides tools to support serialization between different .NET frameworks (i.e. .NET 6.x and .NET Framework 4.x)
 /// </summary>
+[SuppressMessage("ReSharper", "UnusedType.Global")]
 public static class CrossFrameworkSerialization
 {
     /// <summary>
@@ -13,6 +15,7 @@ public static class CrossFrameworkSerialization
     /// </summary>
     /// <param name="assemblyShortName">Name of the assembly that should be redirected</param>
     /// <param name="replacementAssemblyShortName">Name of the assembly that should be used as replacement</param>
+    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
     public static void RedirectAssembly(string assemblyShortName, string replacementAssemblyShortName)
     {
         Assembly HandleAssemblyResolve(object _, ResolveEventArgs args)

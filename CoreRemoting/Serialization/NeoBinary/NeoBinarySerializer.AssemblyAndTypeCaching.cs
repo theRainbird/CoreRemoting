@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -12,6 +13,7 @@ partial class NeoBinarySerializer
 	/// Pre-builds type indexes for loaded assemblies to avoid expensive reflection calls during serialization.
 	/// Call this method at application startup for optimal performance. This is shared across all NeoBinarySerializer instances.
 	/// </summary>
+	[SuppressMessage("ReSharper", "UnusedMember.Global")]
 	public static void BuildAssemblyTypeIndexes()
 	{
 		var assemblies = AppDomain.CurrentDomain.GetAssemblies();
@@ -47,6 +49,7 @@ partial class NeoBinarySerializer
 	/// Clears the assembly type cache to free memory.
 	/// Should be called when memory pressure is high or when assemblies are unloaded.
 	/// </summary>
+	[SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
 	public void ClearAssemblyTypeCache()
 	{
 		_assemblyTypeCache.Clear();
@@ -199,7 +202,8 @@ partial class NeoBinarySerializer
 		{
 			// Fast path
 			var t = Type.GetType(tn);
-			if (t != null) return t;
+			if (t != null) 
+				return t;
 
 			// Handle simple array types (single dimension)
 			if (tn.EndsWith("[]", StringComparison.Ordinal))
@@ -242,9 +246,6 @@ partial class NeoBinarySerializer
 			{
 				return null;
 			}
-
-			// Non-generic: search loaded assemblies by FullName then by Name
-			return FindTypeInLoadedAssemblies(tn);
 		});
 	}
 

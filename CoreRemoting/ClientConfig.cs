@@ -94,7 +94,7 @@ public class ClientConfig
     /// <summary>
     /// Gets or set whether this is the default client.
     /// </summary>
-    public bool IsDefault { get; set; } = false;
+    public bool IsDefault { get; set; }
 
     /// <summary>
     /// Gets or sets an utility class to create remoting proxies.

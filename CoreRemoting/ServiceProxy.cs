@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -23,7 +24,6 @@ namespace CoreRemoting;
 /// <typeparam name="TServiceInterface">Type of the remote service's interface (also known as contract of the service)</typeparam>
 public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
 {
-    private readonly string _serviceName;
     private RemotingClient _client;
 
     /// <summary>
@@ -37,7 +37,7 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
 
         var serviceInterfaceType = typeof(TServiceInterface);
 
-        _serviceName =
+        ServiceName =
             string.IsNullOrWhiteSpace(serviceName)
                 ? serviceInterfaceType.FullName
                 : serviceName;
@@ -68,12 +68,14 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
     /// <summary>
     /// Gets the type of the service interface.
     /// </summary>
+    [SuppressMessage("ReSharper", "UnusedMember.Global")]
     public Type ServiceInterfaceType => typeof(TServiceInterface);
 
     /// <summary>
     /// Gets the name of the service;
     /// </summary>
-    public string ServiceName => _serviceName;
+    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
+    public string ServiceName { get; }
 
     /// <summary>
     /// Intercepts a synchronous call of a member on the proxy object.
@@ -96,7 +98,7 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
         var remoteMethodCallMessage =
             _client.MethodCallMessageBuilder.BuildMethodCallMessage(
                 serializer: _client.Serializer,
-                remoteServiceName: _serviceName,
+                remoteServiceName: ServiceName,
                 targetMethod: method,
                 args: arguments);
 
@@ -186,7 +188,7 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
         var remoteMethodCallMessage =
             _client.MethodCallMessageBuilder.BuildMethodCallMessage(
                 serializer: _client.Serializer,
-                remoteServiceName: _serviceName,
+                remoteServiceName: ServiceName,
                 targetMethod: method,
                 args: arguments);
 
@@ -274,7 +276,7 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
     /// <param name="argument">Argument to be wrapped</param>
     /// <param name="mappedArgument">Out: Mapped argument</param>
     /// <returns>True if mapping applied, otherwise false</returns>
-    private bool MapLinqExpressionArgument(Type argumentType, object argument, out object mappedArgument)
+    private static bool MapLinqExpressionArgument(Type argumentType, object argument, out object mappedArgument)
     {
         if (!argumentType.IsLinqExpressionType())
         {

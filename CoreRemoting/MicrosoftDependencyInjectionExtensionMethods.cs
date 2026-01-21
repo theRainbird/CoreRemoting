@@ -8,6 +8,7 @@ namespace CoreRemoting;
 /// <summary>
 /// Provides extension methods for adding CoreRemoting as service to Microsoft dependency injection container.
 /// </summary>
+[SuppressMessage("ReSharper", "UnusedType.Global")]
 public static class MicrosoftDependencyInjectionExtensionMethods
 {
     /// <summary>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace CoreRemoting.Serialization.NeoBinary;
 
@@ -53,6 +54,7 @@ public class NeoBinarySerializerConfig
 	/// Gets or sets the set of explicitly blocked types.
 	/// These types cannot be deserialized even if they would otherwise be allowed.
 	/// </summary>
+	[SuppressMessage("ReSharper", "CollectionNeverUpdated.Global")]
 	public HashSet<Type> BlockedTypes { get; set; }
 
 	/// <summary>

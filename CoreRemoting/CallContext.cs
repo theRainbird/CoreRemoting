@@ -69,7 +69,7 @@ public static class CallContext
 
         foreach (var entry in entries)
         {
-            CallContext.SetData(entry.Name, entry.Value);
+            SetData(entry.Name, entry.Value);
         }
     }
 }

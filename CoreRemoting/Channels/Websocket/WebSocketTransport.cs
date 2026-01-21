@@ -15,7 +15,7 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     /// <summary>
     /// True when listening to incoming messages.
     /// </summary>
-    protected bool _listening = false;
+    protected bool _listening;
     
     /// <summary>
     /// Handshake cookies: message encryption flag.

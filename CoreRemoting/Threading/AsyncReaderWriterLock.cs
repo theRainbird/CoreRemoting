@@ -17,7 +17,7 @@ using ConfiguredAwaitable = ConfiguredTaskAwaitable<IAsyncDisposable>;
 /// </remarks>
 public class AsyncReaderWriterLock : IDisposable
 {
-    private volatile int blockingReaders = 0;
+    private volatile int blockingReaders;
 
     private AsyncLock ReadersLock { get; } = new();
 

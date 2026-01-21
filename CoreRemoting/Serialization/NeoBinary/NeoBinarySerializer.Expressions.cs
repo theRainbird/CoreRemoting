@@ -449,9 +449,10 @@ partial class NeoBinarySerializer
 
 		protected override Expression VisitParameter(ParameterExpression node)
 		{
-			if (_parameterMap.TryGetValue(node.Name, out var replacement)) return replacement;
-
-			return base.VisitParameter(node);
+			return 
+				_parameterMap.TryGetValue(node.Name, out var replacement) 
+					? replacement 
+					: base.VisitParameter(node);
 		}
 	}
 }

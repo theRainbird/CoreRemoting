@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -82,6 +83,7 @@ public partial class SerializerCache
 		/// <summary>
 		/// Average time spent in serialization operations for this serializer.
 		/// </summary>
+		[SuppressMessage("ReSharper", "UnusedMember.Global")]
 		public TimeSpan AverageSerializationTime =>
 			SerializationCount > 0 ? new TimeSpan(TotalSerializationTimeTicks / SerializationCount) : TimeSpan.Zero;
 	}
@@ -123,7 +125,7 @@ public partial class SerializerCache
 	{
 		if (_serializerCache.TryGetValue(type, out var cached))
 		{
-			cached.RecordAccess();
+			cached?.RecordAccess();
 			Interlocked.Increment(ref _cacheHits);
 			return cached;
 		}
@@ -167,7 +169,7 @@ public partial class SerializerCache
 	{
 		if (_deserializerCache.TryGetValue(type, out var cached))
 		{
-			cached.RecordAccess();
+			cached?.RecordAccess();
 			Interlocked.Increment(ref _cacheHits);
 			return cached;
 		}
@@ -211,7 +213,7 @@ public partial class SerializerCache
 	{
 		if (_serializerCache.TryGetValue(type, out var cached))
 		{
-			cached.RecordAccess();
+			cached?.RecordAccess();
 			Interlocked.Increment(ref _cacheHits);
 			return cached;
 		}
@@ -255,7 +257,7 @@ public partial class SerializerCache
 	{
 		if (_deserializerCache.TryGetValue(type, out var cached))
 		{
-			cached.RecordAccess();
+			cached?.RecordAccess();
 			Interlocked.Increment(ref _cacheHits);
 			return cached;
 		}
@@ -336,25 +338,28 @@ public partial class SerializerCache
 	/// <returns>Cache statistics</returns>
 	public CacheStatistics GetStatistics()
 	{
-		return new CacheStatistics
+		lock (_lockObject)
 		{
-			SerializerCount = _serializerCache.Count,
-			DeserializerCount = _deserializerCache.Count,
-			FieldCacheCount = _fieldCache.Count,
-			StringPoolCount = StringPool.Count,
-			TotalSerializations = _totalSerializations,
-			TotalDeserializations = _totalDeserializations,
-			CacheHits = _cacheHits,
-			CacheMisses = _cacheMisses,
-			TopSerializers = _serializerCache
-				.OrderByDescending(kvp => kvp.Value.AccessCount)
-				.Take(10)
-				.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-			TopDeserializers = _deserializerCache
-				.OrderByDescending(kvp => kvp.Value.AccessCount)
-				.Take(10)
-				.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
-		};
+			return new CacheStatistics
+			{
+				SerializerCount = _serializerCache.Count,
+				DeserializerCount = _deserializerCache.Count,
+				FieldCacheCount = _fieldCache.Count,
+				StringPoolCount = StringPool.Count,
+				TotalSerializations = _totalSerializations,
+				TotalDeserializations = _totalDeserializations,
+				CacheHits = _cacheHits,
+				CacheMisses = _cacheMisses,
+				TopSerializers = _serializerCache
+					.OrderByDescending(kvp => kvp.Value.AccessCount)
+					.Take(10)
+					.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+				TopDeserializers = _deserializerCache
+					.OrderByDescending(kvp => kvp.Value.AccessCount)
+					.Take(10)
+					.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+			};
+		}
 	}
 
 	/// <summary>

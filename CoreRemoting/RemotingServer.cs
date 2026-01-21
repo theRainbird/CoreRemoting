@@ -76,7 +76,7 @@ public sealed class RemotingServer : IRemotingServer
         Channel.Init(this);
 
         if (_config.IsDefault)
-            RemotingServer.DefaultRemotingServer ??= this;
+            DefaultRemotingServer ??= this;
     }
 
     /// <summary>
@@ -276,8 +276,8 @@ public sealed class RemotingServer : IRemotingServer
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
-        if (RemotingServer.DefaultRemotingServer == this)
-            RemotingServer.DefaultRemotingServer = null;
+        if (DefaultRemotingServer == this)
+            DefaultRemotingServer = null;
 
         _serverInstances.TryRemove(_config.UniqueServerInstanceName, out _);
 

@@ -1,5 +1,7 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+#pragma warning disable SYSLIB0050
+#pragma warning disable SYSLIB0011
 
 namespace CoreRemoting.Serialization.Binary
 {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -627,6 +628,7 @@ public partial class IlTypeSerializer
     /// <param name="targetObject">Object containing the field</param>
     /// <param name="field">Field info</param>
     /// <param name="placeholderObjectId">Placeholder object ID</param>
+    [SuppressMessage("ReSharper", "UnusedMember.Local")]
     private static void TrackForwardReference(ObjectDeserializationContext context, object targetObject, FieldInfo field,
         int placeholderObjectId)
     {

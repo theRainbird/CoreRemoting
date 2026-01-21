@@ -108,14 +108,11 @@ namespace CoreRemoting.RpcMessaging
                 
                 if (sendersPublicKeyBlob != null && signedMessageData.Signature != null)
                 {
-                    if (RsaSignature.VerifySignature(
+                    return RsaSignature.VerifySignature(
                         keySize: sendersPublicKeySize,
                         sendersPublicKeyBlob: sendersPublicKeyBlob,
                         rawData: signedMessageData.MessageRawData,
-                        signature: signedMessageData.Signature))
-                        return signedMessageData.MessageRawData;
-                    else
-                        throw new SecurityException("Verification of message signature failed.");
+                        signature: signedMessageData.Signature) ? signedMessageData.MessageRawData : throw new SecurityException("Verification of message signature failed.");
                 }
                 else
                     return decryptedRawData;

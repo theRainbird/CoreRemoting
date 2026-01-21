@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 
 namespace CoreRemoting.Serialization.NeoBinary;
@@ -178,54 +179,6 @@ public class NeoBinarySerializerAdapter : ISerializerAdapter
 	}
 
 	/// <summary>
-	/// Deserializes an object from a stream.
-	/// </summary>
-	/// <param name="type">Object type</param>
-	/// <param name="stream">Stream to read from</param>
-	/// <returns>Deserialized object</returns>
-	public object DeserializeFromStream(Type type, Stream stream)
-	{
-		if (type == null)
-			throw new ArgumentNullException(nameof(type));
-		if (stream == null)
-			throw new ArgumentNullException(nameof(stream));
-
-		try
-		{
-			object result;
-
-			if (Serializer.Config.EnableCompression)
-			{
-				using var compressionStream =
-					new System.IO.Compression.DeflateStream(stream, System.IO.Compression.CompressionMode.Decompress);
-				result = Serializer.Deserialize(compressionStream);
-			}
-			else
-			{
-				result = Serializer.Deserialize(stream);
-			}
-
-			// Validate type compatibility
-			if (result != null && !type.IsAssignableFrom(result.GetType()))
-				throw new InvalidOperationException(
-					$"Deserialized object type '{result.GetType().FullName}' is not compatible with expected type '{type.FullName}'.");
-
-			return result;
-		}
-		catch (NeoBinaryUnsafeDeserializationException)
-		{
-			// Re-throw security exceptions as-is
-			throw;
-		}
-		catch (Exception ex)
-		{
-			throw new InvalidOperationException(
-				$"Failed to deserialize data from stream to type '{type.FullName}'. See inner exception for details.",
-				ex);
-		}
-	}
-
-	/// <summary>
 	/// Creates a clone of an object using serialization.
 	/// </summary>
 	/// <typeparam name="T">Object type</typeparam>
@@ -243,10 +196,12 @@ public class NeoBinarySerializerAdapter : ISerializerAdapter
 	/// <summary>
 	/// Gets the configuration of the underlying serializer.
 	/// </summary>
+	[SuppressMessage("ReSharper", "UnusedMember.Global")]
 	public NeoBinarySerializerConfig Configuration => Serializer.Config;
 
 	/// <summary>
 	/// Gets the type validator of the underlying serializer.
 	/// </summary>
+	[SuppressMessage("ReSharper", "UnusedMember.Global")]
 	public NeoBinaryTypeValidator TypeValidator => Serializer.TypeValidator;
 }

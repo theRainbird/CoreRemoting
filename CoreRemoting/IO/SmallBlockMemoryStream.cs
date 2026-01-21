@@ -185,8 +185,10 @@ namespace CoreRemoting.IO
 
 			var read = 0;
 			var toRead = _length - cursorBase - cursorOffset;
+			
 			if (count < toRead)
 				toRead = count;
+			
 			while (toRead > 0)
 			{
 				var block = _blocks[cursorIndex];

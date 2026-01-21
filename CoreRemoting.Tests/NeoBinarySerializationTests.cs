@@ -292,10 +292,13 @@ namespace CoreRemoting.Tests
 			// Should block delegates
 			Assert.False(validator.IsTypeAllowed(typeof(Func<string>)));
 
+			// Should block unknown types
+			Assert.False(validator.IsTypeAllowed(typeof(object)));
+			
 			// Should block types from blocked namespaces
-			validator.BlockNamespace("System.Management.Automation");
-			Assert.False(validator.IsTypeAllowed(typeof(object))); // object is in System namespace, not blocked
-
+			validator.BlockNamespace("CoreRemoting");
+			Assert.False(validator.IsTypeAllowed(typeof(ClientConfig)));
+			
 			// Should allow explicitly allowed types
 			validator.AllowType<string>();
 			Assert.True(validator.IsTypeAllowed(typeof(string)));

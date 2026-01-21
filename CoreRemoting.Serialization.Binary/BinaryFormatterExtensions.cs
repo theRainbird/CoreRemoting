@@ -1,4 +1,5 @@
 using System.IO;
+#pragma warning disable SYSLIB0011
 
 /*
  * Code is copied from https://github.com/zyanfx/SafeDeserializationHelpers

@@ -1,4 +1,5 @@
 using System.Runtime.Serialization.Formatters;
+#pragma warning disable SYSLIB0050
 
 namespace CoreRemoting.Serialization.Binary
 {

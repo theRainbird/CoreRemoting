@@ -973,12 +973,14 @@ public partial class NeoBinarySerializer
 	/// <returns>True if it looks like a type name</returns>
 	private static bool LooksLikeFullTypeName(string candidate)
 	{
-		if (string.IsNullOrEmpty(candidate)) return false;
+		if (string.IsNullOrEmpty(candidate)) 
+			return false;
 		// must contain a namespace separator and no whitespace; should not be only assembly simple name
-		if (!candidate.Contains('.')) return false;
-		if (candidate.IndexOf(' ') >= 0) return false;
+		if (!candidate.Contains('.')) 
+			return false;
+		
+		return candidate.IndexOf(' ') < 0;
 		// avoid obvious assembly version patterns like x.y.z
-		return true;
 	}
 
 	/// <summary>

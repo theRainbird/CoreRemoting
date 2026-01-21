@@ -43,6 +43,7 @@ public class ServerRpcContext
     /// <summary>
     /// Gets or sets the unwrapped method call parameter types.
     /// </summary>
+    [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
     public Type[] MethodCallParameterTypes { get; set; }
 
     /// <summary>
