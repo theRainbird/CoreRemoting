@@ -190,12 +190,14 @@ partial class NeoBinarySerializer
 					SerializeIntArraySimd((int[])array, writer);
 					return;
 				}
-				else if (elementType == typeof(float))
+
+				if (elementType == typeof(float))
 				{
 					SerializeFloatArraySimd((float[])array, writer);
 					return;
 				}
-				else if (elementType == typeof(double))
+
+				if (elementType == typeof(double))
 				{
 					SerializeDoubleArraySimd((double[])array, writer);
 					return;
@@ -342,12 +344,14 @@ partial class NeoBinarySerializer
 				DeserializeIntArraySimd((int[])array, reader);
 				return array;
 			}
-			else if (elementType == typeof(float))
+
+			if (elementType == typeof(float))
 			{
 				DeserializeFloatArraySimd((float[])array, reader);
 				return array;
 			}
-			else if (elementType == typeof(double))
+
+			if (elementType == typeof(double))
 			{
 				DeserializeDoubleArraySimd((double[])array, reader);
 				return array;

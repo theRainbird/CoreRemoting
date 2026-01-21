@@ -14,7 +14,6 @@ public partial class SerializerCache
 	private readonly ConcurrentDictionary<Type, CachedSerializer> _serializerCache = new();
 	private readonly ConcurrentDictionary<Type, CachedDeserializer> _deserializerCache = new();
 	private readonly ConcurrentDictionary<Type, FieldInfo[]> _fieldCache = new();
-	private readonly ConcurrentDictionary<string, string> _stringPool = new();
 	private readonly Timer _cleanupTimer;
 	private readonly object _lockObject = new();
 	private long _totalSerializations;
@@ -43,8 +42,8 @@ public partial class SerializerCache
 		public DateTime LastAccessed { get; set; }
 
 		internal long _accessCount;
-		internal long _serializationCount;
-		internal long _totalSerializationTimeTicks;
+		private long _serializationCount;
+		private long _totalSerializationTimeTicks;
 
 		/// <summary>
 		/// Number of times this serializer has been accessed.
@@ -202,6 +201,94 @@ public partial class SerializerCache
 	}
 
 	/// <summary>
+	/// Gets or creates a cached compact serializer for the specified type.
+	/// </summary>
+	/// <param name="type">Type to get serializer for</param>
+	/// <param name="factory">Factory function to create serializer if not cached</param>
+	/// <returns>Cached serializer</returns>
+	public CachedSerializer GetOrCreateCompactSerializer(Type type,
+		Func<Type, IlTypeSerializer.ObjectSerializerDelegate> factory)
+	{
+		if (_serializerCache.TryGetValue(type, out var cached))
+		{
+			cached.RecordAccess();
+			Interlocked.Increment(ref _cacheHits);
+			return cached;
+		}
+
+		lock (_lockObject)
+		{
+			// Double-check pattern
+			if (_serializerCache.TryGetValue(type, out cached))
+			{
+				cached.RecordAccess();
+				Interlocked.Increment(ref _cacheHits);
+				return cached;
+			}
+
+			// Check cache size limit
+			if (_serializerCache.Count >= Config.MaxCacheSize) EvictLeastUsedItems();
+
+			var serializer = factory(type);
+			cached = new CachedSerializer
+			{
+				Serializer = serializer,
+				CreatedAt = DateTime.UtcNow,
+				LastAccessed = DateTime.UtcNow
+			};
+			Interlocked.Increment(ref cached._accessCount);
+
+			_serializerCache[type] = cached;
+			Interlocked.Increment(ref _cacheMisses);
+			return cached;
+		}
+	}
+
+	/// <summary>
+	/// Gets or creates a cached compact deserializer for the specified type.
+	/// </summary>
+	/// <param name="type">Type to get deserializer for</param>
+	/// <param name="factory">Factory function to create deserializer if not cached</param>
+	/// <returns>Cached deserializer</returns>
+	public CachedDeserializer GetOrCreateCompactDeserializer(Type type,
+		Func<Type, IlTypeSerializer.ObjectDeserializerDelegate> factory)
+	{
+		if (_deserializerCache.TryGetValue(type, out var cached))
+		{
+			cached.RecordAccess();
+			Interlocked.Increment(ref _cacheHits);
+			return cached;
+		}
+
+		lock (_lockObject)
+		{
+			// Double-check pattern
+			if (_deserializerCache.TryGetValue(type, out cached))
+			{
+				cached.RecordAccess();
+				Interlocked.Increment(ref _cacheHits);
+				return cached;
+			}
+
+			// Check cache size limit
+			if (_deserializerCache.Count >= Config.MaxCacheSize) EvictLeastUsedItems();
+
+			var deserializer = factory(type);
+			cached = new CachedDeserializer
+			{
+				Deserializer = deserializer,
+				CreatedAt = DateTime.UtcNow,
+				LastAccessed = DateTime.UtcNow
+			};
+			Interlocked.Increment(ref cached._accessCount);
+
+			_deserializerCache[type] = cached;
+			Interlocked.Increment(ref _cacheMisses);
+			return cached;
+		}
+	}
+
+	/// <summary>
 	/// Gets or creates cached field information for the specified type.
 	/// </summary>
 	/// <param name="type">Type to get fields for</param>
@@ -219,13 +306,13 @@ public partial class SerializerCache
 	/// <returns>Pooled string instance</returns>
 	public string GetOrCreatePooledString(string value)
 	{
-		return _stringPool.GetOrAdd(value, v => v);
+		return StringPool.GetOrAdd(value, v => v);
 	}
 
 	/// <summary>
 	/// Gets the internal string pool for advanced usage.
 	/// </summary>
-	internal ConcurrentDictionary<string, string> StringPool => _stringPool;
+	internal ConcurrentDictionary<string, string> StringPool { get; } = new();
 
 	/// <summary>
 	/// Records a serialization operation.
@@ -254,7 +341,7 @@ public partial class SerializerCache
 			SerializerCount = _serializerCache.Count,
 			DeserializerCount = _deserializerCache.Count,
 			FieldCacheCount = _fieldCache.Count,
-			StringPoolCount = _stringPool.Count,
+			StringPoolCount = StringPool.Count,
 			TotalSerializations = _totalSerializations,
 			TotalDeserializations = _totalDeserializations,
 			CacheHits = _cacheHits,
@@ -280,7 +367,7 @@ public partial class SerializerCache
 			_serializerCache.Clear();
 			_deserializerCache.Clear();
 			_fieldCache.Clear();
-			_stringPool.Clear();
+			StringPool.Clear();
 
 			// Reset statistics
 			Interlocked.Exchange(ref _totalSerializations, 0);
@@ -327,15 +414,15 @@ public partial class SerializerCache
 				foreach (var key in deserializersToRemove) _deserializerCache.TryRemove(key, out _);
 
 				// Clean up string pool (keep only frequently used strings)
-				if (_stringPool.Count > Config.MaxCacheSize / 2)
+				if (StringPool.Count > Config.MaxCacheSize / 2)
 				{
 					// This is a simple cleanup strategy - in practice, string pool cleanup
 					// might need more sophisticated logic based on usage patterns
-					var stringsToRemove = _stringPool.Keys
-						.Take(Math.Max(0, _stringPool.Count - Config.MaxCacheSize / 2))
+					var stringsToRemove = StringPool.Keys
+						.Take(Math.Max(0, StringPool.Count - Config.MaxCacheSize / 2))
 						.ToList();
 
-					foreach (var key in stringsToRemove) _stringPool.TryRemove(key, out _);
+					foreach (var key in stringsToRemove) StringPool.TryRemove(key, out _);
 				}
 			}
 		}

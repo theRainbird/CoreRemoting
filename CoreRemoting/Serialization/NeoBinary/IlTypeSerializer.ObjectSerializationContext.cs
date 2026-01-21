@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace CoreRemoting.Serialization.NeoBinary;
@@ -6,9 +5,9 @@ namespace CoreRemoting.Serialization.NeoBinary;
 public partial class IlTypeSerializer
 {
 	/// <summary>
-	/// Serialization context containing shared state.
+	/// Object serialization context containing shared state for serialization operations.
 	/// </summary>
-	public class SerializationContext
+	public class ObjectSerializationContext
 	{
 		/// <summary>
 		/// A collection of objects that have already been serialized in the current context.
@@ -28,11 +27,5 @@ public partial class IlTypeSerializer
 		/// It manages a serialization context which includes tracking of already serialized objects to avoid duplication and a string pool for efficient string handling.
 		/// </summary>
 		public NeoBinarySerializer Serializer { get; set; }
-
-		/// <summary>
-		/// A pool of reusable string instances to optimize memory usage and improve performance.
-		/// The string pool helps in reducing the memory footprint by reusing string objects that are likely to be duplicated throughout the application.
-		/// </summary>
-		public ConcurrentDictionary<string, string> StringPool { get; set; }
 	}
 }

@@ -8,8 +8,6 @@ namespace CoreRemoting.Serialization.NeoBinary;
 /// </summary>
 public class NeoBinarySerializerAdapter : ISerializerAdapter
 {
-	private readonly NeoBinarySerializer _serializer;
-
 	/// <summary>
 	/// Creates a new instance of the NeoBinarySerializerAdapter class.
 	/// </summary>
@@ -31,20 +29,20 @@ public class NeoBinarySerializerAdapter : ISerializerAdapter
 
 		foreach (var blockedType in effectiveConfig.BlockedTypes) typeValidator.BlockType(blockedType);
 
-		_serializer = new NeoBinarySerializer
+		Serializer = new NeoBinarySerializer
 		{
 			Config = effectiveConfig,
 			TypeValidator = typeValidator
 		};
 
 		// Validate configuration
-		_serializer.Config.Validate();
+		Serializer.Config.Validate();
 	}
 
 	/// <summary>
 	/// Gets the underlying NeoBinarySerializer instance.
 	/// </summary>
-	public NeoBinarySerializer Serializer => _serializer;
+	public NeoBinarySerializer Serializer { get; }
 
 	/// <summary>
 	/// Gets whether parameter values must be put in an envelope object for proper deserialization, or not.
@@ -79,16 +77,16 @@ public class NeoBinarySerializerAdapter : ISerializerAdapter
 			using var memoryStream = new MemoryStream();
 
 			// Apply compression if enabled
-			if (_serializer.Config.EnableCompression)
+			if (Serializer.Config.EnableCompression)
 			{
 				using var compressionStream =
-					new System.IO.Compression.DeflateStream(memoryStream, _serializer.Config.CompressionLevel, true);
-				_serializer.Serialize(graph, compressionStream);
+					new System.IO.Compression.DeflateStream(memoryStream, Serializer.Config.CompressionLevel, true);
+				Serializer.Serialize(graph, compressionStream);
 				compressionStream.Close();
 			}
 			else
 			{
-				_serializer.Serialize(graph, memoryStream);
+				Serializer.Serialize(graph, memoryStream);
 			}
 
 			return memoryStream.ToArray();
@@ -125,16 +123,16 @@ public class NeoBinarySerializerAdapter : ISerializerAdapter
 			throw new ArgumentNullException(nameof(rawData));
 
 		// Check size limits
-		if (rawData.Length > _serializer.Config.MaxSerializedSize)
+		if (rawData.Length > Serializer.Config.MaxSerializedSize)
 			throw new InvalidOperationException(
-				$"Serialized data size ({rawData.Length} bytes) exceeds maximum allowed size ({_serializer.Config.MaxSerializedSize} bytes).");
+				$"Serialized data size ({rawData.Length} bytes) exceeds maximum allowed size ({Serializer.Config.MaxSerializedSize} bytes).");
 
 		try
 		{
 			using var memoryStream = new MemoryStream(rawData);
 
 			// Apply decompression if needed
-			if (_serializer.Config.EnableCompression)
+			if (Serializer.Config.EnableCompression)
 			{
 				memoryStream.Position = 0;
 				using var decompressionStream = new System.IO.Compression.DeflateStream(memoryStream,
@@ -145,7 +143,7 @@ public class NeoBinarySerializerAdapter : ISerializerAdapter
 				decompressionStream.CopyTo(decompressedStream);
 				decompressedStream.Position = 0;
 
-				var result = _serializer.Deserialize(decompressedStream);
+				var result = Serializer.Deserialize(decompressedStream);
 
 				// Validate type compatibility
 				if (result != null && !type.IsAssignableFrom(result.GetType()))
@@ -157,7 +155,7 @@ public class NeoBinarySerializerAdapter : ISerializerAdapter
 			else
 			{
 				memoryStream.Position = 0;
-				var result = _serializer.Deserialize(memoryStream);
+				var result = Serializer.Deserialize(memoryStream);
 
 				// Validate type compatibility
 				if (result != null && !type.IsAssignableFrom(result.GetType()))
@@ -180,50 +178,6 @@ public class NeoBinarySerializerAdapter : ISerializerAdapter
 	}
 
 	/// <summary>
-	/// Serializes an object to a stream.
-	/// </summary>
-	/// <typeparam name="T">Object type</typeparam>
-	/// <param name="graph">Object to serialize</param>
-	/// <param name="stream">Stream to write to</param>
-	public void SerializeToStream<T>(T graph, Stream stream)
-	{
-		if (stream == null)
-			throw new ArgumentNullException(nameof(stream));
-
-		try
-		{
-			if (_serializer.Config.EnableCompression)
-			{
-				using var compressionStream =
-					new System.IO.Compression.DeflateStream(stream, _serializer.Config.CompressionLevel, true);
-				_serializer.Serialize(graph, compressionStream);
-				compressionStream.Close();
-			}
-			else
-			{
-				_serializer.Serialize(graph, stream);
-			}
-		}
-		catch (Exception ex)
-		{
-			throw new InvalidOperationException(
-				$"Failed to serialize object of type '{typeof(T).FullName}' to stream. See inner exception for details.",
-				ex);
-		}
-	}
-
-	/// <summary>
-	/// Deserializes an object from a stream.
-	/// </summary>
-	/// <typeparam name="T">Object type</typeparam>
-	/// <param name="stream">Stream to read from</param>
-	/// <returns>Deserialized object</returns>
-	public T DeserializeFromStream<T>(Stream stream)
-	{
-		return (T)DeserializeFromStream(typeof(T), stream);
-	}
-
-	/// <summary>
 	/// Deserializes an object from a stream.
 	/// </summary>
 	/// <param name="type">Object type</param>
@@ -240,15 +194,15 @@ public class NeoBinarySerializerAdapter : ISerializerAdapter
 		{
 			object result;
 
-			if (_serializer.Config.EnableCompression)
+			if (Serializer.Config.EnableCompression)
 			{
 				using var compressionStream =
 					new System.IO.Compression.DeflateStream(stream, System.IO.Compression.CompressionMode.Decompress);
-				result = _serializer.Deserialize(compressionStream);
+				result = Serializer.Deserialize(compressionStream);
 			}
 			else
 			{
-				result = _serializer.Deserialize(stream);
+				result = Serializer.Deserialize(stream);
 			}
 
 			// Validate type compatibility
@@ -289,10 +243,10 @@ public class NeoBinarySerializerAdapter : ISerializerAdapter
 	/// <summary>
 	/// Gets the configuration of the underlying serializer.
 	/// </summary>
-	public NeoBinarySerializerConfig Configuration => _serializer.Config;
+	public NeoBinarySerializerConfig Configuration => Serializer.Config;
 
 	/// <summary>
 	/// Gets the type validator of the underlying serializer.
 	/// </summary>
-	public NeoBinaryTypeValidator TypeValidator => _serializer.TypeValidator;
+	public NeoBinaryTypeValidator TypeValidator => Serializer.TypeValidator;
 }

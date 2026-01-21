@@ -246,19 +246,17 @@ partial class NeoBinarySerializer
 		{
 			return DeserializeDataSetBinary(type, reader, deserializedObjects, objectId);
 		}
-		else
-		{
-			// XML deserialization
-			var schemaXml = reader.ReadString();
-			var diffGramXml = reader.ReadString();
-			var dataSet = (DataSet)CreateInstanceWithoutConstructor(type);
-			deserializedObjects[objectId] = dataSet;
-			using var sr = new StringReader(schemaXml);
-			dataSet.ReadXmlSchema(sr);
-			using var sr2 = new StringReader(diffGramXml);
-			dataSet.ReadXml(sr2, XmlReadMode.DiffGram);
-			return dataSet;
-		}
+
+		// XML deserialization
+		var schemaXml = reader.ReadString();
+		var diffGramXml = reader.ReadString();
+		var dataSet = (DataSet)CreateInstanceWithoutConstructor(type);
+		deserializedObjects[objectId] = dataSet;
+		using var sr = new StringReader(schemaXml);
+		dataSet.ReadXmlSchema(sr);
+		using var sr2 = new StringReader(diffGramXml);
+		dataSet.ReadXml(sr2, XmlReadMode.DiffGram);
+		return dataSet;
 	}
 
 	private object DeserializeDataSetBinary(Type type, BinaryReader reader,
@@ -322,8 +320,10 @@ partial class NeoBinarySerializer
 
 			var nested = reader.ReadBoolean();
 
-			var relation = new DataRelation(relationName, parentColumns, childColumns, false);
-			relation.Nested = nested;
+			var relation = new DataRelation(relationName, parentColumns, childColumns, false)
+			{
+				Nested = nested
+			};
 			dataSet.Relations.Add(relation);
 		}
 
@@ -344,35 +344,33 @@ partial class NeoBinarySerializer
 		{
 			return DeserializeDataTableBinary(type, reader, deserializedObjects, objectId);
 		}
+
+		// XML deserialization
+		var schemaXml = reader.ReadString();
+		var diffGramXml = reader.ReadString();
+		var tempDataSet = new DataSet();
+		using var sr = new StringReader(schemaXml);
+		tempDataSet.ReadXmlSchema(sr);
+		using var sr2 = new StringReader(diffGramXml);
+		tempDataSet.ReadXml(sr2, XmlReadMode.DiffGram);
+		var baseTable = tempDataSet.Tables[0];
+
+		DataTable resultTable;
+		if (type == typeof(DataTable))
+		{
+			resultTable = baseTable;
+		}
 		else
 		{
-			// XML deserialization
-			var schemaXml = reader.ReadString();
-			var diffGramXml = reader.ReadString();
-			var tempDataSet = new DataSet();
-			using var sr = new StringReader(schemaXml);
-			tempDataSet.ReadXmlSchema(sr);
-			using var sr2 = new StringReader(diffGramXml);
-			tempDataSet.ReadXml(sr2, XmlReadMode.DiffGram);
-			var baseTable = tempDataSet.Tables[0];
-
-			DataTable resultTable;
-			if (type == typeof(DataTable))
-			{
-				resultTable = baseTable;
-			}
-			else
-			{
-				// Create typed DataTable instance and merge data from baseTable
-				var typedTable = (DataTable)CreateInstanceWithoutConstructor(type);
-				typedTable.TableName = baseTable.TableName;
-				typedTable.Merge(baseTable, false, MissingSchemaAction.Add);
-				resultTable = typedTable;
-			}
-
-			deserializedObjects[objectId] = resultTable;
-			return resultTable;
+			// Create typed DataTable instance and merge data from baseTable
+			var typedTable = (DataTable)CreateInstanceWithoutConstructor(type);
+			typedTable.TableName = baseTable.TableName;
+			typedTable.Merge(baseTable, false, MissingSchemaAction.Add);
+			resultTable = typedTable;
 		}
+
+		deserializedObjects[objectId] = resultTable;
+		return resultTable;
 	}
 
 	private object DeserializeDataTableBinary(Type type, BinaryReader reader,

@@ -30,27 +30,17 @@ partial class NeoBinarySerializer
 		try
 		{
 			return assembly.GetTypes()
-				.Where(t => t != null && t.FullName != null)
+				.Where(t => t is { FullName: not null })
 				.GroupBy(t => t.FullName!)
 				.ToDictionary(g => g.Key, g => g.First());
 		}
 		catch (ReflectionTypeLoadException ex)
 		{
 			return ex.Types
-				.Where(t => t != null && t.FullName != null)
+				.Where(t => t is { FullName: not null })
 				.GroupBy(t => t!.FullName!)
 				.ToDictionary(g => g.Key, g => g.First()!);
 		}
-	}
-
-	/// <summary>
-	/// Gets cache statistics for monitoring performance.
-	/// </summary>
-	/// <returns>Tuple with assembly cache count and name cache count</returns>
-	public (int AssemblyTypeCacheCount, int AssemblyNameCacheCount, int SearchCacheCount) GetCacheStatistics()
-	{
-		var searchCacheCount = _resolvedTypeCache.Keys.Count(key => key.StartsWith("search_"));
-		return (_assemblyTypeCache.Count, _assemblyNameCache.Count, searchCacheCount);
 	}
 
 	/// <summary>
@@ -222,32 +212,35 @@ partial class NeoBinarySerializer
 
 			// If looks like a generic with our [[...]] notation
 			var idx = tn.IndexOf("[[", StringComparison.Ordinal);
-			if (idx > 0)
+			if (idx <= 0) 
+				return FindTypeInLoadedAssemblies(tn);
+			
+			var defName = tn.Substring(0, idx);
+			var argsPart = tn.Substring(idx);
+
+			var defType = FindTypeInLoadedAssemblies(defName) ?? Type.GetType(defName);
+			if (defType == null)
+				return null;
+
+			var argNames = ParseGenericArgumentNames(argsPart);
+			var argTypes = new Type[argNames.Count];
+			for (var i = 0; i < argNames.Count; i++)
 			{
-				var defName = tn.Substring(0, idx);
-				var argsPart = tn.Substring(idx);
-
-				var defType = FindTypeInLoadedAssemblies(defName) ?? Type.GetType(defName);
-				if (defType == null)
+				var at = ResolveAssemblyNeutralType(argNames[i]);
+					
+				if (at == null) 
 					return null;
+					
+				argTypes[i] = at;
+			}
 
-				var argNames = ParseGenericArgumentNames(argsPart);
-				var argTypes = new Type[argNames.Count];
-				for (var i = 0; i < argNames.Count; i++)
-				{
-					var at = ResolveAssemblyNeutralType(argNames[i]);
-					if (at == null) return null;
-					argTypes[i] = at;
-				}
-
-				try
-				{
-					return defType.MakeGenericType(argTypes);
-				}
-				catch
-				{
-					return null;
-				}
+			try
+			{
+				return defType.MakeGenericType(argTypes);
+			}
+			catch
+			{
+				return null;
 			}
 
 			// Non-generic: search loaded assemblies by FullName then by Name

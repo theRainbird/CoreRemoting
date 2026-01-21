@@ -26,23 +26,13 @@ public partial class SerializerCache
 		public DateTime LastAccessed { get; set; }
 
 		internal long _accessCount;
-		internal long _deserializationCount;
-		internal long _totalDeserializationTimeTicks;
+		private long _deserializationCount;
+		private long _totalDeserializationTimeTicks;
 
 		/// <summary>
 		/// Number of times this deserializer has been accessed.
 		/// </summary>
 		public long AccessCount => _accessCount;
-
-		/// <summary>
-		/// Number of deserialization operations performed with this deserializer.
-		/// </summary>
-		public long DeserializationCount => _deserializationCount;
-
-		/// <summary>
-		/// Total time spent in deserialization operations for this deserializer (in ticks).
-		/// </summary>
-		public long TotalDeserializationTimeTicks => _totalDeserializationTimeTicks;
 
 		/// <summary>
 		/// Records an access to this cached deserializer.
@@ -62,13 +52,5 @@ public partial class SerializerCache
 			Interlocked.Increment(ref _deserializationCount);
 			Interlocked.Add(ref _totalDeserializationTimeTicks, elapsedTicks);
 		}
-
-		/// <summary>
-		/// Average time spent in deserialization operations for this deserializer.
-		/// </summary>
-		public TimeSpan AverageDeserializationTime =>
-			DeserializationCount > 0
-				? new TimeSpan(TotalDeserializationTimeTicks / DeserializationCount)
-				: TimeSpan.Zero;
 	}
 }

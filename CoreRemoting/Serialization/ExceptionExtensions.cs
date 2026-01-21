@@ -20,13 +20,17 @@ public static class ExceptionExtensions
         AggregateException agg =>
             agg.InnerExceptions.All(ix => ix.IsSerializable()) &&
                 agg.InnerException.IsSerializable() &&
-                agg.GetType().IsSerializable,
+#pragma warning disable SYSLIB0050
+            agg.GetType().IsSerializable,
+#pragma warning restore SYSLIB0050
 
         // this exception is not deserializable
-        ComponentActivatorException cax => false,
+        ComponentActivatorException => false,
 
+#pragma warning disable SYSLIB0050
         _ => ex.GetType().IsSerializable &&
-            ex.InnerException.IsSerializable()
+#pragma warning restore SYSLIB0050
+             ex.InnerException.IsSerializable()
     };
 
     /// <summary>

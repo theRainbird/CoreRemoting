@@ -9,7 +9,7 @@ public partial class NeoBinarySerializer
 	/// Provides thread-safe isolation for type reference tables during (de)serialization.
 	/// This prevents race conditions when multiple threads use the same serializer instance.
 	/// </summary>
-	internal class SerializationContext
+	internal class TypeReferenceContext
 	{
 		/// <summary>
 		/// Type table for the current serialization operation.

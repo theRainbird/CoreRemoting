@@ -17,8 +17,8 @@ public class NeoBinarySerializerConfig
 		UseTypeReferences = true;
 		MaxObjectGraphDepth = 100;
 		MaxSerializedSize = 100 * 1024 * 1024; // 100MB
-		AllowedTypes = new HashSet<Type>();
-		BlockedTypes = new HashSet<Type>();
+		AllowedTypes = [];
+		BlockedTypes = [];
 		AllowUnknownTypes = true;
 		UseIlCompactLayout = true;
 	}
@@ -65,7 +65,7 @@ public class NeoBinarySerializerConfig
 	/// Gets or sets whether LINQ expressions should be allowed during serialization/deserialization.
 	/// When false, expressions are not supported for security reasons.
 	/// </summary>
-	public bool AllowExpressions { get; set; } = false;
+	public bool AllowExpressions { get; set; }
 
 	/// <summary>
 	/// Gets or sets whether reflection types should be allowed during serialization/deserialization.
@@ -91,7 +91,7 @@ public class NeoBinarySerializerConfig
 	/// <summary>
 	/// Gets or sets whether to compress serialized data.
 	/// </summary>
-	public bool EnableCompression { get; set; } = false;
+	public bool EnableCompression { get; set; }
 
 	/// <summary>
 	/// Gets or sets the compression level when compression is enabled.
@@ -103,32 +103,7 @@ public class NeoBinarySerializerConfig
 	/// Gets or sets whether to use binary serialization for DataSets and DataTables instead of XML.
 	/// Binary serialization is faster but may not be compatible with all DataSet schemas.
 	/// </summary>
-	public bool EnableBinaryDataSetSerialization { get; set; } = false;
-
-	/// <summary>
-	/// Creates a copy of this configuration.
-	/// </summary>
-	/// <returns>A new NeoBinarySerializerConfig instance with same settings</returns>
-	public NeoBinarySerializerConfig Clone()
-	{
-		return new NeoBinarySerializerConfig
-		{
-			IncludeAssemblyVersions = IncludeAssemblyVersions,
-			UseTypeReferences = UseTypeReferences,
-			MaxObjectGraphDepth = MaxObjectGraphDepth,
-			MaxSerializedSize = MaxSerializedSize,
-			AllowedTypes = new HashSet<Type>(AllowedTypes),
-			BlockedTypes = new HashSet<Type>(BlockedTypes),
-			AllowUnknownTypes = AllowUnknownTypes,
-			IncludeFieldNames = IncludeFieldNames,
-			EnableCompression = EnableCompression,
-			CompressionLevel = CompressionLevel,
-			EnableBinaryDataSetSerialization = EnableBinaryDataSetSerialization,
-			AllowExpressions = AllowExpressions,
-			AllowReflectionTypes = AllowReflectionTypes,
-			UseIlCompactLayout = UseIlCompactLayout
-		};
-	}
+	public bool EnableBinaryDataSetSerialization { get; set; }
 
 	/// <summary>
 	/// Validates the configuration settings.
@@ -155,48 +130,5 @@ public class NeoBinarySerializerConfig
 	public void AllowType<T>()
 	{
 		AllowedTypes.Add(typeof(T));
-	}
-
-	/// <summary>
-	/// Adds a type to the blocked types list.
-	/// </summary>
-	/// <typeparam name="T">Type to block</typeparam>
-	public void BlockType<T>()
-	{
-		BlockedTypes.Add(typeof(T));
-	}
-
-	/// <summary>
-	/// Removes a type from the allowed types list.
-	/// </summary>
-	/// <typeparam name="T">Type to remove from allowed list</typeparam>
-	public void RemoveAllowedType<T>()
-	{
-		AllowedTypes.Remove(typeof(T));
-	}
-
-	/// <summary>
-	/// Removes a type from the blocked types list.
-	/// </summary>
-	/// <typeparam name="T">Type to remove from blocked list</typeparam>
-	public void RemoveBlockedType<T>()
-	{
-		BlockedTypes.Remove(typeof(T));
-	}
-
-	/// <summary>
-	/// Checks if a type is allowed according to the current configuration.
-	/// </summary>
-	/// <param name="type">Type to check</param>
-	/// <returns>True if the type is allowed, false otherwise</returns>
-	public bool IsTypeAllowed(Type type)
-	{
-		if (BlockedTypes.Contains(type))
-			return false;
-
-		if (AllowedTypes.Count == 0)
-			return AllowUnknownTypes;
-
-		return AllowedTypes.Contains(type);
 	}
 }

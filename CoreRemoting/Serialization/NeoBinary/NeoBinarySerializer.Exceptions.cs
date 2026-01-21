@@ -176,25 +176,25 @@ partial class NeoBinarySerializer
 				// For custom exceptions or unknown types, try to use constructor or create without constructor
 				if (innerException != null)
 				{
-					var ctor = type.GetConstructor(new[] { typeof(string), typeof(Exception) });
+					var ctor = type.GetConstructor([typeof(string), typeof(Exception)]);
 					if (ctor != null)
 					{
-						exception = (Exception)ctor.Invoke(new object[] { message, innerException });
+						exception = (Exception)ctor.Invoke([message, innerException]);
 					}
 					else
 					{
-						var ctorMessage = type.GetConstructor(new[] { typeof(string) });
+						var ctorMessage = type.GetConstructor([typeof(string)]);
 						if (ctorMessage != null)
-							exception = (Exception)ctorMessage.Invoke(new object[] { message });
+							exception = (Exception)ctorMessage.Invoke([message]);
 						else
 							exception = (Exception)CreateInstanceWithoutConstructor(type);
 					}
 				}
 				else
 				{
-					var ctorMessage = type.GetConstructor(new[] { typeof(string) });
+					var ctorMessage = type.GetConstructor([typeof(string)]);
 					if (ctorMessage != null)
-						exception = (Exception)ctorMessage.Invoke(new object[] { message });
+						exception = (Exception)ctorMessage.Invoke([message]);
 					else
 						exception = (Exception)CreateInstanceWithoutConstructor(type);
 				}

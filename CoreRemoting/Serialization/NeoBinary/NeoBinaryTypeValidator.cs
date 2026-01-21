@@ -22,11 +22,11 @@ public class NeoBinaryTypeValidator
 	/// </summary>
 	public NeoBinaryTypeValidator()
 	{
-		_allowedTypes = new HashSet<Type>();
-		_blockedTypes = new HashSet<Type>();
-		_allowedNamespaces = new HashSet<string>();
-		_blockedNamespaces = new HashSet<string>();
-		_blockedTypeNames = new HashSet<string>();
+		_allowedTypes = [];
+		_blockedTypes = [];
+		_allowedNamespaces = [];
+		_blockedNamespaces = [];
+		_blockedTypeNames = [];
 
 		// Add default blocked types for security
 		AddDefaultBlockedTypes();
@@ -169,7 +169,8 @@ public class NeoBinaryTypeValidator
 		}
 
 		// Recursively validate child nodes
-		foreach (var child in GetChildExpressions(node)) ValidateExpressionNode(child);
+		foreach (var child in GetChildExpressions(node)) 
+			ValidateExpressionNode(child);
 	}
 
 	private void ValidateMethodCall(System.Linq.Expressions.MethodCallExpression callExpr)
@@ -179,11 +180,14 @@ public class NeoBinaryTypeValidator
 
 		// Block dangerous methods
 		var declaringType = callExpr.Method.DeclaringType;
+		
 		if (declaringType != null)
+		{
 			if (IsDangerousNamespace(declaringType.Namespace) ||
 			    IsDangerousType(declaringType))
 				throw new NeoBinaryUnsafeDeserializationException(
 					$"Method call to '{callExpr.Method.Name}' on type '{declaringType.FullName}' is not allowed.");
+		}
 	}
 
 	private void ValidateMemberAccess(System.Linq.Expressions.MemberExpression memberExpr)
@@ -204,6 +208,7 @@ public class NeoBinaryTypeValidator
 			return;
 
 		var declaringType = newExpr.Constructor.DeclaringType;
+		
 		if (declaringType != null && IsDangerousType(declaringType))
 			throw new NeoBinaryUnsafeDeserializationException(
 				$"Constructor call for type '{declaringType.FullName}' is not allowed.");
@@ -364,10 +369,6 @@ public class NeoBinaryTypeValidator
 				var typeBinaryExpr = (System.Linq.Expressions.TypeBinaryExpression)node;
 				if (typeBinaryExpr.Expression != null) yield return typeBinaryExpr.Expression;
 				break;
-
-			default:
-				// For unsupported expression types, skip children to avoid errors
-				break;
 		}
 	}
 
@@ -392,24 +393,6 @@ public class NeoBinaryTypeValidator
 	}
 
 	/// <summary>
-	/// Adds a type to the allowed types list.
-	/// </summary>
-	/// <typeparam name="T">Type to allow</typeparam>
-	public void AllowGenericType<T>()
-	{
-		AllowType(typeof(T));
-	}
-
-	/// <summary>
-	/// Adds a type to the blocked types list.
-	/// </summary>
-	/// <typeparam name="T">Type to block</typeparam>
-	public void BlockType<T>()
-	{
-		_blockedTypes.Add(typeof(T));
-	}
-
-	/// <summary>
 	/// Adds a type to the blocked types list.
 	/// </summary>
 	/// <param name="type">Type to block</param>
@@ -418,17 +401,6 @@ public class NeoBinaryTypeValidator
 		if (type == null)
 			throw new ArgumentNullException(nameof(type));
 		_blockedTypes.Add(type);
-	}
-
-	/// <summary>
-	/// Adds a namespace to the allowed namespaces list.
-	/// </summary>
-	/// <param name="namespace">Namespace to allow</param>
-	public void AllowNamespace(string @namespace)
-	{
-		if (string.IsNullOrEmpty(@namespace))
-			throw new ArgumentException("Namespace cannot be null or empty", nameof(@namespace));
-		_allowedNamespaces.Add(@namespace);
 	}
 
 	/// <summary>
@@ -460,15 +432,6 @@ public class NeoBinaryTypeValidator
 	public void RemoveAllowedType<T>()
 	{
 		_allowedTypes.Remove(typeof(T));
-	}
-
-	/// <summary>
-	/// Removes a type from the blocked types list.
-	/// </summary>
-	/// <typeparam name="T">Type to remove from blocked list</typeparam>
-	public void RemoveBlockedType<T>()
-	{
-		_blockedTypes.Remove(typeof(T));
 	}
 
 	/// <summary>

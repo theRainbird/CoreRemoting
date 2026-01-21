@@ -13,7 +13,7 @@ public partial class NeoBinarySerializer
 		private readonly Func<T> _factory;
 		private readonly Action<T> _reset;
 		private readonly object _lock = new();
-		private readonly List<T> _pool = new();
+		private readonly List<T> _pool = [];
 
 		public ObjectPool(Func<T> factory, Action<T> reset)
 		{

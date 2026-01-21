@@ -47,6 +47,9 @@ public partial class NeoBinarySerializer
 	// Performance optimization: reverse lookup for O(1) object-to-ID mapping in forward reference resolution
 	private readonly Dictionary<object, int> _objectToIdMap = new();
 
+	// Thread synchronization objects for safe concurrent access
+	private readonly object _pendingForwardReferencesLock = new();
+
 	// Performance optimization: pre-populated common types cache
 	// ReSharper disable once InconsistentNaming
 	private static readonly ConcurrentDictionary<string, Type> _commonTypes = new()
@@ -71,12 +74,7 @@ public partial class NeoBinarySerializer
 	// --- Thread-safe serialization context for per-operation isolation ---
 
 	// --- Thread-local context storage for per-operation isolation ---
-	[ThreadStatic] private static SerializationContext? _currentContext;
-
-	/// <summary>
-	/// Gets or creates the current thread's serialization context.
-	/// </summary>
-	private SerializationContext CurrentContext => _currentContext ??= new SerializationContext();
+	[ThreadStatic] private static TypeReferenceContext _currentContext;
 
 	// --- NEW: Assembly type index cache (shared across all instances) ---
 	private static readonly ConcurrentDictionary<Assembly, Dictionary<string, Type>> _assemblyTypeIndex = new();
@@ -106,11 +104,6 @@ public partial class NeoBinarySerializer
 	public NeoBinaryTypeValidator TypeValidator { get; set; } = new();
 
 	/// <summary>
-	/// Gets the high-performance serializer cache.
-	/// </summary>
-	public SerializerCache SerializerCache => _serializerCache;
-
-	/// <summary>
 	/// Serializes an object to the specified stream.
 	/// </summary>
 	/// <param name="graph">Object to serialize</param>
@@ -125,8 +118,10 @@ public partial class NeoBinarySerializer
 		// Initialize type-ref tables for this session if enabled
 		if (Config.UseTypeReferences)
 		{
-			_currentContext = new SerializationContext();
-			_currentContext.TypeRefActive = true;
+			_currentContext = new TypeReferenceContext
+			{
+				TypeRefActive = true
+			};
 		}
 		else
 		{
@@ -188,8 +183,10 @@ public partial class NeoBinarySerializer
 		// Initialize type-ref tables for this session if enabled
 		if (Config.UseTypeReferences)
 		{
-			_currentContext = new SerializationContext();
-			_currentContext.TypeRefActive = true;
+			_currentContext = new TypeReferenceContext
+			{
+				TypeRefActive = true
+			};
 		}
 		else
 		{
@@ -239,7 +236,7 @@ public partial class NeoBinarySerializer
 		writer.Write(flags);
 	}
 
-	private void ReadHeader(BinaryReader reader)
+	private static void ReadHeader(BinaryReader reader)
 	{
 		var startPosition = reader.BaseStream.CanSeek ? reader.BaseStream.Position : -1;
 
@@ -272,19 +269,19 @@ public partial class NeoBinarySerializer
 
 		// Enhanced version negotiation
 		var versionMismatch = !string.IsNullOrEmpty(remoteVersion) && remoteVersion != localVersion;
-		if (versionMismatch)
-		{
-			// Parse versions to compare major/minor versions
-			if (Version.TryParse(localVersion, out var localVer) &&
-			    Version.TryParse(remoteVersion, out var remoteVer))
-			{
-				// Check for major version incompatibility
-				if (localVer.Major != remoteVer.Major)
-					throw new InvalidOperationException(
-						$"Major version mismatch detected. Local: {localVersion}, Remote: {remoteVersion}. " +
-						$"This indicates incompatible CoreRemoting versions.");
-			}
-		}
+		if (!versionMismatch) 
+			return;
+		
+		// Parse versions to compare major/minor versions
+		if (!Version.TryParse(localVersion, out var localVer) ||
+		    !Version.TryParse(remoteVersion, out var remoteVer)) 
+			return;
+			
+		// Check for major version incompatibility
+		if (localVer.Major != remoteVer.Major)
+			throw new InvalidOperationException(
+				$"Major version mismatch detected. Local: {localVersion}, Remote: {remoteVersion}. " +
+				$"This indicates incompatible CoreRemoting versions.");
 	}
 
 	private void SerializeObject(object obj, BinaryWriter writer, HashSet<object> serializedObjects,
@@ -393,7 +390,7 @@ public partial class NeoBinarySerializer
 	/// </summary>
 	/// <param name="reader">The binary reader to validate</param>
 	/// <param name="context">Context for error reporting</param>
-	private void ValidateStreamIntegrity(BinaryReader reader, string context)
+	private static void ValidateStreamIntegrity(BinaryReader reader, string context)
 	{
 		if (!reader.BaseStream.CanSeek)
 			return; // Cannot validate non-seekable streams
@@ -429,17 +426,6 @@ public partial class NeoBinarySerializer
 	}
 
 	/// <summary>
-	/// Rolls back to a previous stream checkpoint.
-	/// </summary>
-	/// <param name="reader">The binary reader</param>
-	/// <param name="checkpoint">Checkpoint position</param>
-	/// <param name="context">Context description for debugging</param>
-	private void RollbackToCheckpoint(BinaryReader reader, long checkpoint, string context)
-	{
-		if (checkpoint >= 0 && reader.BaseStream.CanSeek) reader.BaseStream.Position = checkpoint;
-	}
-
-	/// <summary>
 	/// Analyzes stream state for debugging and error reporting.
 	/// </summary>
 	/// <param name="reader">The binary reader to analyze</param>
@@ -462,7 +448,7 @@ public partial class NeoBinarySerializer
 				var nextByte = reader.ReadByte();
 				if (nextByte >= 0)
 				{
-					var asChar = nextByte >= 32 && nextByte <= 126 ? (char)nextByte : '?';
+					var asChar = nextByte is >= 32 and <= 126 ? (char)nextByte : '?';
 					diagnosis += $", Next: 0x{nextByte:X2} ('{asChar}')";
 
 					// Roll back the byte we read
@@ -478,25 +464,27 @@ public partial class NeoBinarySerializer
 			diagnosis += ", Next: <EOS>";
 
 		// Check for common corruption patterns
-		if (remaining > 4)
-			try
+		if (remaining <= 4) 
+			return diagnosis;
+		
+		try
+		{
+			var bytesAhead = new byte[4];
+			var actuallyRead = reader.BaseStream.Read(bytesAhead, 0, 4);
+			if (actuallyRead > 0)
 			{
-				var bytesAhead = new byte[4];
-				var actuallyRead = reader.BaseStream.Read(bytesAhead, 0, 4);
-				if (actuallyRead > 0)
-				{
-					var hexString = BitConverter.ToString(bytesAhead, 0, actuallyRead).Replace("-", " ");
-					diagnosis += $", Ahead: {hexString}";
-				}
+				var hexString = BitConverter.ToString(bytesAhead, 0, actuallyRead).Replace("-", " ");
+				diagnosis += $", Ahead: {hexString}";
+			}
 
-				// Roll back
-				if (reader.BaseStream.CanSeek)
-					reader.BaseStream.Position = position;
-			}
-			catch
-			{
-				diagnosis += ", Ahead: <unreadable>";
-			}
+			// Roll back
+			if (reader.BaseStream.CanSeek)
+				reader.BaseStream.Position = position;
+		}
+		catch
+		{
+			diagnosis += ", Ahead: <unreadable>";
+		}
 
 		return diagnosis;
 	}
@@ -523,85 +511,88 @@ public partial class NeoBinarySerializer
 				$"Stream diagnosis: {streamDiagnosis}");
 		}
 
-		if (marker == 0) // Null marker
-			return null;
-
-		if (marker == 2) // Reference marker
+		switch (marker)
 		{
-			var objectId = reader.ReadInt32();
+			// Null marker
+			case 0:
+				return null;
+			// Reference marker
+			case 2:
+			{
+				var objectId = reader.ReadInt32();
 
-			// If object is not yet deserialized, create a forward reference
-			if (!deserializedObjects.ContainsKey(objectId))
-				// Create a forward reference placeholder
-				deserializedObjects[objectId] = new ForwardReferencePlaceholder(objectId);
+				// If object is not yet deserialized, create a forward reference
+				if (!deserializedObjects.ContainsKey(objectId))
+					// Create a forward reference placeholder
+					deserializedObjects[objectId] = new ForwardReferencePlaceholder(objectId);
 
-			return deserializedObjects[objectId];
-		}
+				return deserializedObjects[objectId];
+			}
+			// Simple object marker
+			case 3:
+			{
+				ValidateStreamState(reader, "Simple object marker type info");
+				var type = ReadTypeInfo(reader);
 
-		if (marker == 3) // Simple object marker
-		{
-			ValidateStreamState(reader, "Simple object marker type info");
-			var type = ReadTypeInfo(reader);
-
-			// Defensive: apply same type checking order as object marker
-			if (type.IsArray)
-				return DeserializeArray(type, reader, deserializedObjects, -1);
-			else if (typeof(IList).IsAssignableFrom(type))
-				return DeserializeList(type, reader, deserializedObjects, -1);
-			else if (typeof(IDictionary).IsAssignableFrom(type))
-				return DeserializeDictionary(type, reader, deserializedObjects, -1);
-			else if (type == typeof(ExpandoObject))
-				return DeserializeDictionary(type, reader, deserializedObjects, -1);
-			else if (type.IsEnum)
-				return DeserializeEnum(type, reader);
-			else if (IsSimpleType(type))
-				return DeserializePrimitive(type, reader);
-			else
+				// Defensive: apply same type checking order as object marker
+				if (type.IsArray)
+					return DeserializeArray(type, reader, deserializedObjects, -1);
+				if (typeof(IList).IsAssignableFrom(type))
+					return DeserializeList(type, reader, deserializedObjects, -1);
+				if (typeof(IDictionary).IsAssignableFrom(type))
+					return DeserializeDictionary(type, reader, deserializedObjects, -1);
+				if (type == typeof(ExpandoObject))
+					return DeserializeDictionary(type, reader, deserializedObjects, -1);
+				if (type.IsEnum)
+					return DeserializeEnum(type, reader);
+				if (IsSimpleType(type))
+					return DeserializePrimitive(type, reader);
 				return DeserializeComplexObject(type, reader, deserializedObjects, -1);
-		}
+			}
+			// Object marker
+			case 1:
+			{
+				ValidateStreamState(reader, "Object marker ID and type info");
+				var objectId = reader.ReadInt32();
+				var type = ReadTypeInfo(reader);
 
-		if (marker == 1) // Object marker
-		{
-			ValidateStreamState(reader, "Object marker ID and type info");
-			var objectId = reader.ReadInt32();
-			var type = ReadTypeInfo(reader);
+				object obj;
 
-			object obj;
+				// Arrays should be checked first - they have highest priority
+				if (type.IsArray)
+					obj = DeserializeArray(type, reader, deserializedObjects, objectId);
+				else if (IsSimpleType(type))
+					obj = DeserializePrimitive(type, reader);
+				else if (type.IsEnum)
+					obj = DeserializeEnum(type, reader);
+				else if (typeof(IList).IsAssignableFrom(type))
+					obj = DeserializeList(type, reader, deserializedObjects, objectId);
+				else if (type == typeof(ExpandoObject))
+					obj = DeserializeDictionary(type, reader, deserializedObjects, objectId);
+				else if (typeof(IDictionary).IsAssignableFrom(type))
+					obj = DeserializeDictionary(type, reader, deserializedObjects, objectId);
+				else if (typeof(DataSet).IsAssignableFrom(type))
+					obj = DeserializeDataSet(type, reader, deserializedObjects, objectId);
+				else if (typeof(DataTable).IsAssignableFrom(type))
+					obj = DeserializeDataTable(type, reader, deserializedObjects, objectId);
+				else if (typeof(Exception).IsAssignableFrom(type))
+					obj = DeserializeException(type, reader, deserializedObjects, objectId);
+				else if (typeof(Expression).IsAssignableFrom(type))
+					obj = DeserializeExpression(reader, deserializedObjects);
+				else if (typeof(MemberInfo).IsAssignableFrom(type))
+					obj = DeserializeMemberInfo(type, reader, deserializedObjects, objectId);
+				else if (typeof(ParameterInfo).IsAssignableFrom(type))
+					obj = DeserializeParameterInfo(type, reader, deserializedObjects, objectId);
+				else if (typeof(Module).IsAssignableFrom(type))
+					obj = DeserializeModule(type, reader, deserializedObjects, objectId);
+				else if (typeof(Assembly).IsAssignableFrom(type))
+					obj = DeserializeAssembly(type, reader, deserializedObjects, objectId);
+				else
+					obj = DeserializeComplexObject(type, reader, deserializedObjects, objectId);
 
-			// Arrays should be checked first - they have highest priority
-			if (type.IsArray)
-				obj = DeserializeArray(type, reader, deserializedObjects, objectId);
-			else if (IsSimpleType(type))
-				obj = DeserializePrimitive(type, reader);
-			else if (type.IsEnum)
-				obj = DeserializeEnum(type, reader);
-			else if (typeof(IList).IsAssignableFrom(type))
-				obj = DeserializeList(type, reader, deserializedObjects, objectId);
-			else if (type == typeof(ExpandoObject))
-				obj = DeserializeDictionary(type, reader, deserializedObjects, objectId);
-			else if (typeof(IDictionary).IsAssignableFrom(type))
-				obj = DeserializeDictionary(type, reader, deserializedObjects, objectId);
-			else if (typeof(DataSet).IsAssignableFrom(type))
-				obj = DeserializeDataSet(type, reader, deserializedObjects, objectId);
-			else if (typeof(DataTable).IsAssignableFrom(type))
-				obj = DeserializeDataTable(type, reader, deserializedObjects, objectId);
-			else if (typeof(Exception).IsAssignableFrom(type))
-				obj = DeserializeException(type, reader, deserializedObjects, objectId);
-			else if (typeof(Expression).IsAssignableFrom(type))
-				obj = DeserializeExpression(reader, deserializedObjects);
-			else if (typeof(MemberInfo).IsAssignableFrom(type))
-				obj = DeserializeMemberInfo(type, reader, deserializedObjects, objectId);
-			else if (typeof(ParameterInfo).IsAssignableFrom(type))
-				obj = DeserializeParameterInfo(type, reader, deserializedObjects, objectId);
-			else if (typeof(Module).IsAssignableFrom(type))
-				obj = DeserializeModule(type, reader, deserializedObjects, objectId);
-			else if (typeof(Assembly).IsAssignableFrom(type))
-				obj = DeserializeAssembly(type, reader, deserializedObjects, objectId);
-			else
-				obj = DeserializeComplexObject(type, reader, deserializedObjects, objectId);
-
-			RegisterObjectWithReverseMapping(deserializedObjects, objectId, obj);
-			return obj;
+				RegisterObjectWithReverseMapping(deserializedObjects, objectId, obj);
+				return obj;
+			}
 		}
 
 		// For complex reflection object graphs, some markers might not be handled
@@ -611,29 +602,30 @@ public partial class NeoBinarySerializer
 		if (streamPosition >= 0) errorMessage += $"\nDeserializeObject called at stream position: {streamPosition - 1}";
 
 		// Add hex dump for debugging corruption issues
-		if (reader.BaseStream.CanSeek)
+		if (!reader.BaseStream.CanSeek) 
+			throw new InvalidOperationException(errorMessage);
+		
+		var originalPosition = reader.BaseStream.Position;
+		
+		try
 		{
-			var originalPosition = reader.BaseStream.Position;
-			try
-			{
-				// Try to read context around the invalid marker
-				var contextStart = Math.Max(0, originalPosition - 16);
-				var contextEnd = Math.Min(reader.BaseStream.Length, originalPosition + 16);
-				var contextLength = (int)(contextEnd - contextStart);
+			// Try to read context around the invalid marker
+			var contextStart = Math.Max(0, originalPosition - 16);
+			var contextEnd = Math.Min(reader.BaseStream.Length, originalPosition + 16);
+			var contextLength = (int)(contextEnd - contextStart);
 
-				reader.BaseStream.Position = contextStart;
-				var contextBytes = reader.ReadBytes(contextLength);
+			reader.BaseStream.Position = contextStart;
+			var contextBytes = reader.ReadBytes(contextLength);
 
-				errorMessage += $"\nStream context (hex dump):\n{FormatHexDump(contextBytes, contextStart)}";
-				errorMessage += $"\nMarker position: {originalPosition - 1} (marked with >> <<)";
+			errorMessage += $"\nStream context (hex dump):\n{FormatHexDump(contextBytes, contextStart)}";
+			errorMessage += $"\nMarker position: {originalPosition - 1} (marked with >> <<)";
 
-				// Reset position
-				reader.BaseStream.Position = originalPosition;
-			}
-			catch (Exception ex)
-			{
-				errorMessage += $"\nFailed to capture stream context: {ex.Message}";
-			}
+			// Reset position
+			reader.BaseStream.Position = originalPosition;
+		}
+		catch (Exception ex)
+		{
+			errorMessage += $"\nFailed to capture stream context: {ex.Message}";
 		}
 
 		throw new InvalidOperationException(errorMessage);
@@ -798,24 +790,23 @@ public partial class NeoBinarySerializer
 
 					// Some producers (mixed versions) may append an Int32 ID after legacy triple
 					// Try to consume it if it matches the assigned id to keep stream alignment
-					if (reader.BaseStream.CanSeek)
+					if (!reader.BaseStream.CanSeek) 
+						return tLegacy;
+					var posBeforeId = reader.BaseStream.Position;
+					try
 					{
-						var posBeforeId = reader.BaseStream.Position;
-						try
+						if (reader.BaseStream.Length - posBeforeId >= 4)
 						{
-							if (reader.BaseStream.Length - posBeforeId >= 4)
-							{
-								var idCandidate = reader.ReadInt32();
-								if (idCandidate != assignedId)
-									// Not the expected id; rewind so caller can read whatever follows
-									reader.BaseStream.Seek(-4, SeekOrigin.Current);
-							}
+							var idCandidate = reader.ReadInt32();
+							if (idCandidate != assignedId)
+								// Not the expected id; rewind so caller can read whatever follows
+								reader.BaseStream.Seek(-4, SeekOrigin.Current);
 						}
-						catch
-						{
-							// On any issue, rewind to safe position
-							reader.BaseStream.Position = posBeforeId;
-						}
+					}
+					catch
+					{
+						// On any issue, rewind to safe position
+						reader.BaseStream.Position = posBeforeId;
 					}
 
 					return tLegacy;
@@ -889,7 +880,7 @@ public partial class NeoBinarySerializer
 				// Heuristic: assemblyName is actually the type; version contains assembly simple name
 				typeName = assemblyName;
 				assemblyName = string.IsNullOrEmpty(assemblyVersion)
-					? assemblyName.Split('.')?.FirstOrDefault() ?? string.Empty
+					? assemblyName.Split('.').FirstOrDefault() ?? string.Empty
 					: assemblyVersion;
 				assemblyVersion = string.Empty;
 			}
@@ -922,19 +913,18 @@ public partial class NeoBinarySerializer
 				var assembly = GetAssemblyCached(assemblyName);
 				if (assembly != null)
 				{
-					var map = _assemblyTypeIndex.GetOrAdd((Assembly)assembly,
+					var map = _assemblyTypeIndex.GetOrAdd(assembly,
 						(Func<Assembly, Dictionary<string, Type>>)BuildTypeIndexForAssembly);
 					if (!map.TryGetValue(typeName, out type))
 						// Try short name as a weak fallback
 						type = map.Values.FirstOrDefault(t => t.Name == typeName);
 				}
 
-				if (type == null)
-					type = Type.GetType(typeName);
+				type ??= Type.GetType(typeName);
 			}
 		}
 
-		if (type == null) type = ResolveAssemblyNeutralType(typeName);
+		type ??= ResolveAssemblyNeutralType(typeName);
 
 		// Final fallback: handle simple array types (highest priority fallback)
 		if (type == null && !string.IsNullOrEmpty(typeName) && typeName.EndsWith("[]", StringComparison.Ordinal))
@@ -1003,16 +993,18 @@ public partial class NeoBinarySerializer
 		deserializedObjects[objectId] = obj;
 
 		// Only add to reverse mapping if it's not a placeholder or problematic reflection type
-		if (!(obj is ForwardReferencePlaceholder) && obj != null)
-			try
-			{
-				_objectToIdMap[obj] = objectId;
-			}
-			catch (NullReferenceException)
-			{
-				// Skip reverse mapping for partially initialized reflection objects
-				// This can happen with PropertyInfo and other reflection types
-			}
+		if (obj is ForwardReferencePlaceholder or null) 
+			return;
+		
+		try
+		{
+			_objectToIdMap[obj] = objectId;
+		}
+		catch (NullReferenceException)
+		{
+			// Skip reverse mapping for partially initialized reflection objects
+			// This can happen with PropertyInfo and other reflection types
+		}
 	}
 
 	private static List<string> ParseGenericArgumentNames(string argsPart)
@@ -1028,18 +1020,16 @@ public partial class NeoBinarySerializer
 		{
 			var c = argsPart[i];
 
-			if (c == '[')
+			switch (c)
 			{
-				depth++;
-				sb.Append(c);
-				continue;
-			}
-
-			if (c == ']')
-			{
-				depth--;
-				sb.Append(c);
-				continue;
+				case '[':
+					depth++;
+					sb.Append(c);
+					continue;
+				case ']':
+					depth--;
+					sb.Append(c);
+					continue;
 			}
 
 			// Split token is ",[" when at top level (depth == 0) but our format uses "],["
@@ -1199,7 +1189,7 @@ public partial class NeoBinarySerializer
 		HashSet<object> serializedObjects,
 		Dictionary<object, int> objectMap)
 	{
-		var dict = (IDictionary<string, object>)expando;
+		IDictionary<string, object> dict = expando;
 		writer.Write(dict.Count);
 		foreach (var kvp in dict)
 		{
@@ -1217,14 +1207,13 @@ public partial class NeoBinarySerializer
 		if (Config.UseIlCompactLayout)
 		{
 			// Write compact layout tag directly after TypeInfo (caller already wrote TypeInfo)
-			writer.Write(IlTypeSerializer.CompactLayoutTag);
+			writer.Write(IlTypeSerializer.COMPACT_LAYOUT_TAG);
 
-			var context = new IlTypeSerializer.SerializationContext
+			var context = new IlTypeSerializer.ObjectSerializationContext
 			{
 				SerializedObjects = serializedObjects,
 				ObjectMap = objectMap,
-				Serializer = this,
-				StringPool = _serializerCache.StringPool
+				Serializer = this
 			};
 
 			var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -1247,12 +1236,11 @@ public partial class NeoBinarySerializer
 				_serializerCache.GetOrCreateSerializer(type, t => _ilSerializer.CreateSerializer(t));
 			cachedSerializer.RecordAccess();
 
-			var context = new IlTypeSerializer.SerializationContext
+			var context = new IlTypeSerializer.ObjectSerializationContext
 			{
 				SerializedObjects = serializedObjects,
 				ObjectMap = objectMap,
-				Serializer = this,
-				StringPool = _serializerCache.StringPool
+				Serializer = this
 			};
 
 			var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -1273,7 +1261,7 @@ public partial class NeoBinarySerializer
 		Dictionary<int, object> deserializedObjects, int objectId)
 	{
 		// Prepare context and placeholder first
-		var context = new IlTypeSerializer.DeserializationContext
+		var context = new IlTypeSerializer.ObjectDeserializationContext
 		{
 			DeserializedObjects = deserializedObjects,
 			Serializer = this,
@@ -1289,7 +1277,7 @@ public partial class NeoBinarySerializer
 		try
 		{
 			var b = reader.ReadByte();
-			if (b == IlTypeSerializer.CompactLayoutTag)
+			if (b == IlTypeSerializer.COMPACT_LAYOUT_TAG)
 			{
 				isCompact = true;
 			}
@@ -1300,11 +1288,8 @@ public partial class NeoBinarySerializer
 				{
 					reader.BaseStream.Seek(-1, SeekOrigin.Current);
 				}
-				else
-				{
-					// Non-seekable stream without compact tag is not supported for legacy IL path
-					// Fall back to legacy path by throwing so caller can handle, but we stay here and continue
-				}
+				// Non-seekable stream without compact tag is not supported for legacy IL path
+				// Fall back to legacy path by throwing so caller can handle, but we stay here and continue
 			}
 		}
 		catch (EndOfStreamException)
@@ -1358,10 +1343,8 @@ public partial class NeoBinarySerializer
 
 		if (result.EndsWith(suffix1, StringComparison.Ordinal))
 			return result.Substring(0, result.Length - suffix1.Length);
-		if (result.EndsWith(suffix2, StringComparison.Ordinal))
-			return result.Substring(0, result.Length - suffix2.Length);
-
-		return result;
+		
+		return result.EndsWith(suffix2, StringComparison.Ordinal) ? result.Substring(0, result.Length - suffix2.Length) : result;
 	}
 
 	private object CreateInstanceWithoutConstructor(Type type)
@@ -1425,7 +1408,7 @@ public partial class NeoBinarySerializer
 				var getUninitializedObjectMethod = runtimeType.GetMethod("GetUninitializedObject",
 					BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
 				if (getUninitializedObjectMethod != null)
-					return getUninitializedObjectMethod.Invoke(null, new object[] { type })!;
+					return getUninitializedObjectMethod.Invoke(null, [type])!;
 			}
 		}
 		catch
@@ -1436,53 +1419,55 @@ public partial class NeoBinarySerializer
 		// Last resort: try to create using the most accessible constructor with default parameters
 		var constructors =
 			type.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-		if (constructors.Length > 0)
+		
+		if (constructors.Length <= 0)
+			throw new InvalidOperationException(
+				$"Cannot create instance of type '{type.FullName}' without a parameterless constructor. Consider adding a parameterless constructor or marking the type with [Serializable].");
+		
+		// Try the parameterless constructor first (already checked above, but just in case)
+		var parameterlessConstructor = constructors.FirstOrDefault(c => c.GetParameters().Length == 0);
+		if (parameterlessConstructor != null) return parameterlessConstructor.Invoke(null);
+
+		// Try constructors with parameters and use default values
+		foreach (var ctor in constructors.OrderBy(c => c.GetParameters().Length))
 		{
-			// Try the parameterless constructor first (already checked above, but just in case)
-			var parameterlessConstructor = constructors.FirstOrDefault(c => c.GetParameters().Length == 0);
-			if (parameterlessConstructor != null) return parameterlessConstructor.Invoke(null);
+			var parameters = ctor.GetParameters();
+			var args = new object[parameters.Length];
 
-			// Try constructors with parameters and use default values
-			foreach (var ctor in constructors.OrderBy(c => c.GetParameters().Length))
+			var canCreate = true;
+			for (var i = 0; i < parameters.Length; i++)
 			{
-				var parameters = ctor.GetParameters();
-				var args = new object[parameters.Length];
+				var paramType = parameters[i].ParameterType;
 
-				var canCreate = true;
-				for (var i = 0; i < parameters.Length; i++)
+				if (paramType.IsValueType)
 				{
-					var paramType = parameters[i].ParameterType;
-
-					if (paramType.IsValueType)
-					{
-						args[i] = Activator.CreateInstance(paramType)!;
-					}
-					else if (paramType == typeof(string))
-					{
-						args[i] = string.Empty;
-					}
-					else if (parameters[i].HasDefaultValue)
-					{
-						args[i] = parameters[i].DefaultValue;
-					}
-					else
-					{
-						canCreate = false;
-						break;
-					}
+					args[i] = Activator.CreateInstance(paramType)!;
 				}
-
-				if (canCreate)
+				else if (paramType == typeof(string))
 				{
-					try
-					{
-						return ctor.Invoke(args);
-					}
-					catch
-					{
-						// Try next constructor
-					}
+					args[i] = string.Empty;
 				}
+				else if (parameters[i].HasDefaultValue)
+				{
+					args[i] = parameters[i].DefaultValue;
+				}
+				else
+				{
+					canCreate = false;
+					break;
+				}
+			}
+
+			if (!canCreate)
+				continue;
+				
+			try
+			{
+				return ctor.Invoke(args);
+			}
+			catch
+			{
+				// Try next constructor
 			}
 		}
 
@@ -1534,26 +1519,30 @@ public partial class NeoBinarySerializer
 	/// <param name="deserializedObjects">Map of object ids to instances</param>
 	private void ResolvePendingForwardReferences(Dictionary<int, object> deserializedObjects)
 	{
-		// Try multiple passes in case of chains; cap iterations to avoid infinite loops.
-		var maxIterations = _pendingForwardReferences.Count + 1;
-		for (var iteration = 0; iteration < maxIterations; iteration++)
+		// Thread-safe: Use lock to prevent race conditions when multiple threads resolve references
+		lock (_pendingForwardReferencesLock)
 		{
-			if (_pendingForwardReferences.Count == 0) break;
+			// Try multiple passes in case of chains; cap iterations to avoid infinite loops.
+			var maxIterations = _pendingForwardReferences.Count + 1;
+			for (var iteration = 0; iteration < maxIterations; iteration++)
+			{
+				if (_pendingForwardReferences.Count == 0) break;
 
-			var remaining =
-				new List<(object targetObject, FieldInfo field, int placeholderObjectId)>();
+				var remaining =
+					new List<(object targetObject, FieldInfo field, int placeholderObjectId)>();
 
-			foreach (var (targetObject, field, placeholderObjectId) in _pendingForwardReferences)
-				if (deserializedObjects.TryGetValue(placeholderObjectId, out var resolved)
-				    && resolved is not ForwardReferencePlaceholder)
-					field.SetValue(targetObject, resolved);
-				else
-					remaining.Add((targetObject, field, placeholderObjectId));
+				foreach (var (targetObject, field, placeholderObjectId) in _pendingForwardReferences)
+					if (deserializedObjects.TryGetValue(placeholderObjectId, out var resolved)
+					    && resolved is not ForwardReferencePlaceholder)
+						field.SetValue(targetObject, resolved);
+					else
+						remaining.Add((targetObject, field, placeholderObjectId));
 
-			_pendingForwardReferences.Clear();
-			_pendingForwardReferences.AddRange(remaining);
+				_pendingForwardReferences.Clear();
+				_pendingForwardReferences.AddRange(remaining);
 
-			if (_pendingForwardReferences.Count == 0) break;
+				if (_pendingForwardReferences.Count == 0) break;
+			}
 		}
 	}
 
