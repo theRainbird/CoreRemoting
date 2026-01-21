@@ -46,6 +46,15 @@ public class NeoBinarySerializerAdapter : ISerializerAdapter
 	public NeoBinarySerializer Serializer { get; }
 
 	/// <summary>
+	/// Gets comprehensive serializer cache statistics.
+	/// </summary>
+	/// <returns>Cache statistics</returns>
+	public SerializerCache.CacheStatistics GetCacheStatistics()
+	{
+		return Serializer.GetCacheStatistics();
+	}
+
+	/// <summary>
 	/// Gets whether parameter values must be put in an envelope object for proper deserialization, or not.
 	/// NeoBinary serializer does not require envelope objects.
 	/// </summary>

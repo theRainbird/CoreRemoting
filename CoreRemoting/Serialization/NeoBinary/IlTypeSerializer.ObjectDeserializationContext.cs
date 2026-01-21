@@ -17,13 +17,14 @@ public partial class IlTypeSerializer
 		/// </summary>
 		public Dictionary<int, object> DeserializedObjects { get; set; } = new();
 
-		/// <summary>
-		/// A dictionary used for object-to-ID mapping during deserialization.
-		/// Maps objects to their corresponding IDs in the deserialized context. This
-		/// is crucial for handling self-references and resolving forward references
-		/// efficiently.
-		/// </summary>
-		public Dictionary<object, int> ObjectToIdMap { get; set; } = new();
+	/// <summary>
+	/// A dictionary used for object-to-ID mapping during deserialization.
+	/// Maps objects to their corresponding IDs in the deserialized context. This
+	/// is crucial for handling self-references and resolving forward references
+	/// efficiently.
+	/// Each deserialization operation gets its own isolated dictionary for thread safety.
+	/// </summary>
+	public Dictionary<object, int> ObjectToIdMap { get; set; } = new();
 
 		/// <summary>
 		/// Forward references that couldn't be resolved during the main deserialization pass.

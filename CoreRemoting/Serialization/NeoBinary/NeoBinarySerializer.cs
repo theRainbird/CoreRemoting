@@ -44,8 +44,7 @@ public partial class NeoBinarySerializer
 	private readonly ConcurrentDictionary<Assembly, Type[]> _assemblyTypeCache = new();
 	private readonly ConcurrentDictionary<string, Assembly> _assemblyNameCache = new();
 
-	// Performance optimization: reverse lookup for O(1) object-to-ID mapping in forward reference resolution
-	private readonly Dictionary<object, int> _objectToIdMap = new();
+
 
 	// Thread synchronization objects for safe concurrent access
 	private readonly object _pendingForwardReferencesLock = new();
@@ -102,6 +101,15 @@ public partial class NeoBinarySerializer
 	/// Gets or sets the type validator for security.
 	/// </summary>
 	public NeoBinaryTypeValidator TypeValidator { get; set; } = new();
+
+	/// <summary>
+	/// Gets comprehensive serializer cache statistics.
+	/// </summary>
+	/// <returns>Cache statistics</returns>
+	public SerializerCache.CacheStatistics GetCacheStatistics()
+	{
+		return _serializerCache.GetStatistics();
+	}
 
 	/// <summary>
 	/// Serializes an object to the specified stream.
@@ -1000,7 +1008,8 @@ public partial class NeoBinarySerializer
 		
 		try
 		{
-			_objectToIdMap[obj] = objectId;
+			// Note: Reverse mapping is now handled per operation through context.ObjectToIdMap
+			// This method only registers the object in the main deserializedObjects dictionary
 		}
 		catch (NullReferenceException)
 		{
@@ -1262,12 +1271,15 @@ public partial class NeoBinarySerializer
 	private object DeserializeComplexObject(Type type, BinaryReader reader,
 		Dictionary<int, object> deserializedObjects, int objectId)
 	{
+		// Create operation-specific object-to-ID map for thread safety
+		var objectToIdMap = new Dictionary<object, int>();
+		
 		// Prepare context and placeholder first
 		var context = new IlTypeSerializer.ObjectDeserializationContext
 		{
 			DeserializedObjects = deserializedObjects,
 			Serializer = this,
-			ObjectToIdMap = _objectToIdMap
+			ObjectToIdMap = objectToIdMap
 		};
 
 		// Register a placeholder immediately to handle self-references during IL deserialization
