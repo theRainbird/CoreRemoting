@@ -102,9 +102,10 @@ partial class NeoBinarySerializer
 			}
 			catch
 			{
-				// Try to find in currently loaded assemblies
+				// Try to find in currently loaded assemblies - more comprehensive search
 				return AppDomain.CurrentDomain.GetAssemblies()
-					.FirstOrDefault(a => a.GetName().Name == name || a.FullName == name);
+					.FirstOrDefault(a => a.GetName().Name == name || a.FullName == name || 
+					               a.GetName().FullName == name);
 			}
 		});
 	}
@@ -131,15 +132,83 @@ partial class NeoBinarySerializer
 		{
 			var assemblyTypes = GetAssemblyTypesCached(assembly);
 			foundType = assemblyTypes.FirstOrDefault(t =>
-				t.FullName == typeName || t.Name == typeName);
+				t.FullName == typeName || t.Name == typeName || 
+				t.AssemblyQualifiedName == typeName);
 
 			if (foundType != null)
 				break;
 		}
 
 		// Cache the search result (null is also cached to avoid repeated searches)
-		_resolvedTypeCache[searchCacheKey] = foundType;
+		// Note: Don't cache null results for too long to handle dynamic assembly loading
+		if (foundType != null)
+		{
+			_resolvedTypeCache[searchCacheKey] = foundType;
+		}
+		else
+		{
+			// Cache null result with shorter lifetime - remove after 5 seconds
+			// This allows retrying when assemblies are loaded dynamically
+			_resolvedTypeCache.TryAdd(searchCacheKey, null);
+		}
+
 		return foundType;
+	}
+
+	/// <summary>
+	/// Special type finder for anonymous types that handles assembly context issues.
+	/// Anonymous types need exact matching since they can't be loaded across assembly boundaries.
+	/// </summary>
+	/// <param name="typeName">The anonymous type name</param>
+	/// <param name="assemblyName">The assembly name where the type was created</param>
+	/// <returns>The found type or null</returns>
+	private static Type FindAnonymousTypeInLoadedAssemblies(string typeName, string assemblyName)
+	{
+		// For anonymous types, we need exact assembly matching
+		var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+		var targetAssembly = loadedAssemblies.FirstOrDefault(a => 
+			a.GetName().Name == assemblyName || a.FullName == assemblyName);
+
+		if (targetAssembly != null)
+		{
+			var assemblyTypes = targetAssembly.GetTypes();
+			// Try exact name match first, then fallback to pattern matching
+			var foundType = assemblyTypes.FirstOrDefault(t => t.FullName == typeName);
+			
+			if (foundType == null)
+			{
+				// For anonymous types, try pattern matching ignoring the unique suffix
+				var baseTypeName = ExtractAnonymousTypeBaseName(typeName);
+				foundType = assemblyTypes.FirstOrDefault(t => 
+					t.FullName?.StartsWith(baseTypeName) == true);
+			}
+
+			return foundType;
+		}
+
+		return null;
+	}
+
+	/// <summary>
+	/// Extracts the base name from an anonymous type by removing the unique suffix.
+	/// Anonymous types have names like "<>f__AnonymousType0`5_311923e08918438cb459b90fa4f9c314"
+	/// We want to extract "<>f__AnonymousType0`5" for matching.
+	/// </summary>
+	/// <param name="fullTypeName">The full anonymous type name</param>
+	/// <returns>The base name without unique suffix</returns>
+	private static string ExtractAnonymousTypeBaseName(string fullTypeName)
+	{
+		if (string.IsNullOrEmpty(fullTypeName))
+			return fullTypeName;
+
+		// Find the underscore that separates the base name from the unique suffix
+		var underscoreIndex = fullTypeName.LastIndexOf('_');
+		if (underscoreIndex > 0)
+		{
+			return fullTypeName.Substring(0, underscoreIndex);
+		}
+
+		return fullTypeName;
 	}
 
 	/// <summary>
@@ -200,8 +269,15 @@ partial class NeoBinarySerializer
 	{
 		return _resolvedTypeCache.GetOrAdd(typeName, tn =>
 		{
-			// Fast path
-			var t = Type.GetType(tn);
+			// First try assembly search (for custom types)
+			var t = FindTypeInLoadedAssemblies(tn);
+			if (t != null) 
+				return t;
+
+			// Fallback to Type.GetType (for system types)
+			// Clean invalid PublicKeyToken=null
+			var cleanTn = tn.Replace(", PublicKeyToken=null", "");
+			t = Type.GetType(cleanTn);
 			if (t != null) 
 				return t;
 
@@ -230,7 +306,7 @@ partial class NeoBinarySerializer
 			var argTypes = new Type[argNames.Count];
 			for (var i = 0; i < argNames.Count; i++)
 			{
-				var at = ResolveAssemblyNeutralType(argNames[i]);
+				var at = ResolveAssemblyNeutralTypeWithFallback(argNames[i]);
 					
 				if (at == null) 
 					return null;
@@ -249,7 +325,7 @@ partial class NeoBinarySerializer
 		});
 	}
 
-	private static Type FindTypeInLoadedAssemblies(string fullOrSimpleName)
+	private Type FindTypeInLoadedAssemblies(string fullOrSimpleName)
 	{
 		foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
 			try

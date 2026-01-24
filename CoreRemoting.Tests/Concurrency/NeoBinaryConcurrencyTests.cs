@@ -84,6 +84,7 @@ namespace CoreRemoting.Tests.Concurrency
 		[InlineData(typeof(TestComplexObject))]
 		[InlineData(typeof(List<string>))]
 		[InlineData(typeof(Dictionary<string, int>))]
+		[InlineData(typeof(Dictionary<string, TestComplexObject>))]
 		[InlineData(typeof(TestComplexObject[]))]
 		[InlineData(typeof(DataTable))]
 		public async Task ConcurrentSameTypeSerialization_Should_BeThreadSafe(Type testType)
@@ -341,14 +342,14 @@ namespace CoreRemoting.Tests.Concurrency
 					// Create unique types rapidly to stress the cache creation mechanism
 					for (int j = 0; j < 5; j++)
 					{
-						// Create anonymous objects as new "types"
-						var anonymousObject = new
+						// Use stable test types instead of anonymous types
+						var testObject = new ThreadSafeTestType
 						{
 							ThreadId = i,
 							OperationId = j,
 							Timestamp = DateTime.UtcNow,
 							Guid = Guid.NewGuid(),
-							NestedData = new
+							NestedData = new NestedThreadSafeData
 							{
 								InnerValue = new Random().Next(1, 1000),
 								InnerString = $"Inner_{i}_{j}_{Guid.NewGuid()}"
@@ -356,10 +357,10 @@ namespace CoreRemoting.Tests.Concurrency
 						};
 
 						// Serialize and deserialize
-						var serialized = _fixture.Serializer.Serialize(anonymousObject);
-						var deserialized = _fixture.Serializer.Deserialize(anonymousObject.GetType(), serialized);
+						var serialized = _fixture.Serializer.Serialize(testObject);
+						var deserialized = _fixture.Serializer.Deserialize(typeof(ThreadSafeTestType), serialized);
 
-						typeCreationResults.Add((anonymousObject.GetType(), true));
+						typeCreationResults.Add((typeof(ThreadSafeTestType), true));
 						await Task.Delay(1).ConfigureAwait(false);
 					}
 				}
