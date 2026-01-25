@@ -863,7 +863,25 @@ public partial class NeoBinarySerializer
                 string.IsNullOrEmpty(assemblyVersionNew))
                 tResolved = typeof(object);
             else
-                tResolved = ResolveTypeCore(typeNameNew, assemblyNameNew, assemblyVersionNew);
+            {
+                // Check if typeNameNew already contains assembly information (complex generic types)
+                if (!string.IsNullOrEmpty(typeNameNew) && typeNameNew.Contains("[[") && 
+                    typeNameNew.Contains("PublicKeyToken="))
+                {
+                    // This is a complex generic type with embedded assembly info
+                    // Try to resolve it directly first
+                    tResolved = ResolveAssemblyNeutralType(typeNameNew);
+                    if (tResolved == null)
+                    {
+                        // Fallback to normal resolution
+                        tResolved = ResolveTypeCore(typeNameNew, assemblyNameNew, assemblyVersionNew);
+                    }
+                }
+                else
+                {
+                    tResolved = ResolveTypeCore(typeNameNew, assemblyNameNew, assemblyVersionNew);
+                }
+            }
 
             // ensure table size/order correctness
             if (newId != _currentContext.TypeTable.Count)
@@ -892,14 +910,6 @@ public partial class NeoBinarySerializer
 
     private Type ResolveTypeCore(string typeName, string assemblyName, string assemblyVersion)
     {
-        // Helper to strip version info from assembly string
-        static string StripVersion(string asm)
-        {
-            if (string.IsNullOrEmpty(asm)) return asm;
-            var commaIdx = asm.IndexOf(',');
-            return commaIdx > 0 ? asm.Substring(0, commaIdx).Trim() : asm.Trim();
-        }
-
         // Helper to resolve a generic argument descriptor like "System.String, System.Private.CoreLib, Version=..."
         Type ResolveArgument(string argDesc)
         {

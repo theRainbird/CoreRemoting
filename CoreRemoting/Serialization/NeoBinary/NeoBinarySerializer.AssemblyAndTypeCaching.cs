@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -191,8 +192,8 @@ partial class NeoBinarySerializer
 
 	/// <summary>
 	/// Extracts the base name from an anonymous type by removing the unique suffix.
-	/// Anonymous types have names like "<>f__AnonymousType0`5_311923e08918438cb459b90fa4f9c314"
-	/// We want to extract "<>f__AnonymousType0`5" for matching.
+	/// Anonymous types have names like "&lt;&gt;f__AnonymousType0`5_311923e08918438cb459b90fa4f9c314"
+	/// We want to extract "&lt;&gt;f__AnonymousType0`5" for matching.
 	/// </summary>
 	/// <param name="fullTypeName">The full anonymous type name</param>
 	/// <returns>The base name without unique suffix</returns>
@@ -275,11 +276,21 @@ partial class NeoBinarySerializer
 				return t;
 
 			// Fallback to Type.GetType (for system types)
-			// Clean invalid PublicKeyToken=null
-			var cleanTn = tn.Replace(", PublicKeyToken=null", "");
-			t = Type.GetType(cleanTn);
-			if (t != null) 
-				return t;
+			// Clean invalid assembly tokens that can cause parsing errors
+			var cleanTn = CleanAssemblyQualifiedName(tn);
+			try
+			{
+				t = Type.GetType(cleanTn);
+				if (t != null) 
+					return t;
+			}
+			catch (FileLoadException)
+			{
+				// Type.GetType failed due to invalid assembly name, try with just the type name
+				t = Type.GetType(ExtractTypeName(tn));
+				if (t != null) 
+					return t;
+			}
 
 			// Handle simple array types (single dimension)
 			if (tn.EndsWith("[]", StringComparison.Ordinal))
@@ -323,6 +334,46 @@ partial class NeoBinarySerializer
 				return null;
 			}
 		});
+	}
+
+	/// <summary>
+	/// Cleans invalid assembly tokens from assembly-qualified type names to prevent parsing errors.
+	/// </summary>
+	/// <param name="typeName">Type name that may contain invalid assembly tokens</param>
+	/// <returns>Cleaned type name</returns>
+	private static string CleanAssemblyQualifiedName(string typeName)
+	{
+		if (string.IsNullOrEmpty(typeName))
+			return typeName;
+
+		// Simple approach: remove problematic tokens that cause FileLoadException
+		var cleaned = typeName;
+		
+		// Remove PublicKeyToken=null - this is the main culprit
+		cleaned = cleaned.Replace(", PublicKeyToken=null", "");
+		
+		// Clean up any double commas that might result from removals
+		cleaned = cleaned.Replace(",,", ",");
+		
+		// Remove trailing commas
+		cleaned = cleaned.Trim().TrimEnd(',');
+		
+		// For generic types, ensure we don't break the structure
+		return cleaned;
+	}
+
+	/// <summary>
+	/// Extracts just the type name from an assembly-qualified type name.
+	/// </summary>
+	/// <param name="assemblyQualifiedName">Assembly-qualified type name</param>
+	/// <returns>Type name without assembly information</returns>
+	private static string ExtractTypeName(string assemblyQualifiedName)
+	{
+		if (string.IsNullOrEmpty(assemblyQualifiedName))
+			return assemblyQualifiedName;
+
+		var commaIndex = assemblyQualifiedName.IndexOf(',');
+		return commaIndex > 0 ? assemblyQualifiedName.Substring(0, commaIndex) : assemblyQualifiedName;
 	}
 
 	private Type FindTypeInLoadedAssemblies(string fullOrSimpleName)
