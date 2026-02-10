@@ -58,15 +58,19 @@ public class NeoBinaryTypeValidator
 	/// </summary>
 	public bool AllowDynamicAssemblies { get; set; } = false;
 
-	/// <summary>
-	/// Validates a type for secure deserialization.
-	/// </summary>
-	/// <param name="type">Type to validate</param>
-	/// <exception cref="NeoBinaryUnsafeDeserializationException">Thrown when type is not allowed</exception>
-	public void ValidateType(Type type)
-	{
-		if (type == null)
-			throw new ArgumentNullException(nameof(type));
+/// <summary>
+/// Validates a type for secure deserialization.
+/// </summary>
+/// <param name="type">Type to validate</param>
+/// <exception cref="NeoBinaryUnsafeDeserializationException">Thrown when type is not allowed</exception>
+public void ValidateType(Type type)
+{
+    if (type == null)
+        throw new ArgumentNullException(nameof(type));
+
+    // Always allow CustomSerializationData for ICustomSerialization support
+    if (type == typeof(CustomSerializationData))
+        return;
 
 		// Check if type is explicitly blocked
 		if (_blockedTypes.Contains(type))

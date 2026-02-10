@@ -421,6 +421,8 @@ public partial class NeoBinarySerializer
         else if (typeof(Assembly).IsAssignableFrom(type))
             // Serialize Assembly with custom approach
             SerializeAssembly(obj, writer, serializedObjects, objectMap);
+        else if (typeof(ICustomSerialization).IsAssignableFrom(type) && Config.EnableCustomSerialization)
+            SerializeCustomSerializableObject(obj, writer, serializedObjects, objectMap);
         else
             // Serialize any complex object regardless of [Serializable] attribute
             SerializeComplexObject(obj, writer, serializedObjects, objectMap);
@@ -628,6 +630,8 @@ public partial class NeoBinarySerializer
                     obj = DeserializeModule(type, reader, deserializedObjects, objectId);
                 else if (typeof(Assembly).IsAssignableFrom(type))
                     obj = DeserializeAssembly(type, reader, deserializedObjects, objectId);
+                else if (typeof(ICustomSerialization).IsAssignableFrom(type) && Config.EnableCustomSerialization)
+                    obj = DeserializeCustomSerializableObject(type, reader, deserializedObjects, objectId);
                 else
                     obj = DeserializeComplexObject(type, reader, deserializedObjects, objectId);
 
@@ -1773,9 +1777,10 @@ public partial class NeoBinarySerializer
         return marker switch
         {
             0 => true, // Null marker
-            1 => true, // Object marker  
+            1 => true, // Object marker
             2 => true, // Reference marker
             3 => true, // Simple object marker
+            4 => true, // Custom serializable marker
             0xFE => true, // Compact layout tag
             _ => false
         };

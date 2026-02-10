@@ -102,10 +102,17 @@ public class NeoBinarySerializerConfig
 		System.IO.Compression.CompressionLevel.Optimal;
 
 	/// <summary>
-	/// Gets or sets whether to use binary serialization for DataSets and DataTables instead of XML.
-	/// Binary serialization is faster but may not be compatible with all DataSet schemas.
-	/// </summary>
-	public bool EnableBinaryDataSetSerialization { get; set; }
+/// Gets or sets whether to use binary serialization for DataSets and DataTables instead of XML.
+/// Binary serialization is faster but may not be compatible with all DataSet schemas.
+/// </summary>
+public bool EnableBinaryDataSetSerialization { get; set; }
+
+/// <summary>
+/// Gets or sets whether ICustomSerialization support is enabled.
+/// When enabled, objects implementing ICustomSerialization will use custom serialization
+/// instead of reflection-based serialization.
+/// </summary>
+public bool EnableCustomSerialization { get; set; } = true;
 
 	/// <summary>
 	/// Validates the configuration settings.
