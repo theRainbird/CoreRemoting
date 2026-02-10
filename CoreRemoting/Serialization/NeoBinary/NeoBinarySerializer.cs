@@ -421,6 +421,8 @@ public partial class NeoBinarySerializer
         else if (typeof(Assembly).IsAssignableFrom(type))
             // Serialize Assembly with custom approach
             SerializeAssembly(obj, writer, serializedObjects, objectMap);
+        else if (Config.CustomSerializationHandlers.ContainsKey(type) && Config.EnableCustomSerialization)
+            SerializeWithHandler(obj, writer, serializedObjects, objectMap);
         else if (typeof(ICustomSerialization).IsAssignableFrom(type) && Config.EnableCustomSerialization)
             SerializeCustomSerializableObject(obj, writer, serializedObjects, objectMap);
         else
@@ -630,6 +632,8 @@ public partial class NeoBinarySerializer
                     obj = DeserializeModule(type, reader, deserializedObjects, objectId);
                 else if (typeof(Assembly).IsAssignableFrom(type))
                     obj = DeserializeAssembly(type, reader, deserializedObjects, objectId);
+                else if (Config.CustomSerializationHandlers.ContainsKey(type) && Config.EnableCustomSerialization)
+                    obj = DeserializeWithHandler(type, reader, deserializedObjects, objectId);
                 else if (typeof(ICustomSerialization).IsAssignableFrom(type) && Config.EnableCustomSerialization)
                     obj = DeserializeCustomSerializableObject(type, reader, deserializedObjects, objectId);
                 else

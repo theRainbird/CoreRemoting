@@ -10,12 +10,52 @@ partial class NeoBinarySerializer
 {
 	private const byte CUSTOM_SERIALIZABLE_MARKER = 4;
 
+	private void SerializeWithHandler(object obj, BinaryWriter writer, HashSet<object> serializedObjects,
+		Dictionary<object, int> objectMap)
+	{
+		var type = obj.GetType();
+		var handler = Config.CustomSerializationHandlers[type];
+
+		if (handler == null || handler.GetSerializationData == null)
+			throw new SerializationException(
+				$"Type '{type.FullName}' has a handler but GetSerializationData is not provided.");
+
+		var data = handler.GetSerializationData(obj);
+
+		writer.Write(data.Count);
+
+		foreach (var entry in data)
+			SerializeCustomSerializationData(entry, writer, serializedObjects, objectMap);
+	}
+
+	private object DeserializeWithHandler(Type type, BinaryReader reader,
+		Dictionary<int, object> deserializedObjects, int objectId)
+	{
+		var handler = Config.CustomSerializationHandlers[type];
+
+		if (handler == null || handler.CreateFromSerializationData == null)
+			throw new SerializationException(
+				$"Type '{type.FullName}' has a handler but CreateFromSerializationData is not provided.");
+
+		var dataCount = reader.ReadInt32();
+
+		var data = new List<CustomSerializationData>(dataCount);
+		for (var i = 0; i < dataCount; i++)
+			data.Add(DeserializeCustomSerializationData(reader, deserializedObjects));
+
+		var obj = handler.CreateFromSerializationData(type, data);
+
+		deserializedObjects[objectId] = obj;
+
+		return obj;
+	}
+
 	private void SerializeCustomSerializableObject(object obj, BinaryWriter writer, HashSet<object> serializedObjects,
 		Dictionary<object, int> objectMap)
 	{
 		var customObj = (ICustomSerialization)obj;
 
-		List<CustomSerializationData> data = customObj.GetSerializationData();
+		var data = customObj.GetSerializationData();
 
 		writer.Write(data.Count);
 
@@ -34,10 +74,10 @@ partial class NeoBinarySerializer
 	private object DeserializeCustomSerializableObject(Type type, BinaryReader reader,
 		Dictionary<int, object> deserializedObjects, int objectId)
 	{
-		int dataCount = reader.ReadInt32();
+		var dataCount = reader.ReadInt32();
 
 		var data = new List<CustomSerializationData>(dataCount);
-		for (int i = 0; i < dataCount; i++)
+		for (var i = 0; i < dataCount; i++)
 			data.Add(DeserializeCustomSerializationData(reader, deserializedObjects));
 
 		var ctor = type.GetConstructor(
@@ -51,7 +91,7 @@ partial class NeoBinarySerializer
 				$"Type '{type.FullName}' implements ICustomSerialization but has no " +
 				$"constructor with 'List<CustomSerializationData>' parameter.");
 
-		object obj = ctor.Invoke([data]);
+		var obj = ctor.Invoke([data]);
 
 		deserializedObjects[objectId] = obj;
 
@@ -61,9 +101,9 @@ partial class NeoBinarySerializer
 	private CustomSerializationData DeserializeCustomSerializationData(BinaryReader reader,
 		Dictionary<int, object> deserializedObjects)
 	{
-		string name = reader.ReadString();
-		Type type = ReadTypeInfo(reader);
-		object value = DeserializeObject(reader, deserializedObjects);
+		var name = reader.ReadString();
+		var type = ReadTypeInfo(reader);
+		var value = DeserializeObject(reader, deserializedObjects);
 
 		return new CustomSerializationData
 		{

@@ -152,6 +152,78 @@ public class NeoBinaryCustomSerializationTests
 		Assert.Equal(42, deserialized.Metadata["key2"]);
 	}
 
+	[Fact]
+	public void CustomSerializationHandler_should_handle_external_types()
+	{
+		var config = new NeoBinarySerializerConfig();
+		config.CustomSerializationHandlers[typeof(ExternalType)] = CustomSerializationHandler.From(
+			getSerializationData: obj =>
+			{
+				var ext = (ExternalType)obj;
+				return new List<CustomSerializationData>
+				{
+					new() { Name = "Value", Type = typeof(int), Value = ext.Value },
+					new() { Name = "Text", Type = typeof(string), Value = ext.Text }
+				};
+			},
+			createFromSerializationData: (type, data) =>
+			{
+				var ext = new ExternalType();
+				foreach (var entry in data)
+				{
+					if (entry.Name == "Value") ext.Value = (int)entry.Value;
+					else if (entry.Name == "Text") ext.Text = (string)entry.Value;
+				}
+				return ext;
+			});
+
+		var serializer = new NeoBinarySerializerAdapter(config);
+
+		var original = new ExternalType { Value = 42, Text = "Test" };
+
+		var serialized = serializer.Serialize(original);
+		var deserialized = serializer.Deserialize<ExternalType>(serialized);
+
+		Assert.Equal(42, deserialized.Value);
+		Assert.Equal("Test", deserialized.Text);
+	}
+
+	[Fact]
+	public void CustomSerializationHandler_with_null_values()
+	{
+		var config = new NeoBinarySerializerConfig();
+		config.CustomSerializationHandlers[typeof(ExternalTypeWithNullable)] = CustomSerializationHandler.From(
+			getSerializationData: obj =>
+			{
+				var ext = (ExternalTypeWithNullable)obj;
+				return new List<CustomSerializationData>
+				{
+					new() { Name = "Id", Type = typeof(int), Value = ext.Id },
+					new() { Name = "Description", Type = typeof(string), Value = ext.Description }
+				};
+			},
+			createFromSerializationData: (type, data) =>
+			{
+				var ext = new ExternalTypeWithNullable();
+				foreach (var entry in data)
+				{
+					if (entry.Name == "Id") ext.Id = (int)entry.Value;
+					else if (entry.Name == "Description") ext.Description = (string)entry.Value;
+				}
+				return ext;
+			});
+
+		var serializer = new NeoBinarySerializerAdapter(config);
+
+		var original = new ExternalTypeWithNullable { Id = 1, Description = null };
+
+		var serialized = serializer.Serialize(original);
+		var deserialized = serializer.Deserialize<ExternalTypeWithNullable>(serialized);
+
+		Assert.Equal(1, deserialized.Id);
+		Assert.Null(deserialized.Description);
+	}
+
 	[Serializable]
 	public class SimpleCustomObject : ICustomSerialization
 	{
@@ -303,5 +375,17 @@ public class NeoBinaryCustomSerializationTests
 				new() { Name = "Values", Type = typeof(List<int>), Value = Values },
 				new() { Name = "Metadata", Type = typeof(Dictionary<string, object>), Value = Metadata }
 			};
+	}
+
+	public class ExternalType
+	{
+		public int Value { get; set; }
+		public string Text { get; set; }
+	}
+
+	public class ExternalTypeWithNullable
+	{
+		public int Id { get; set; }
+		public string Description { get; set; }
 	}
 }
