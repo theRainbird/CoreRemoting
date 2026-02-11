@@ -16,8 +16,8 @@
         <PackageLicenseUrl></PackageLicenseUrl>
         <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageVersion>1.3.4.0</PackageVersion>
-        <PackageReleaseNotes>- Added custom serialization handlers for NeoBinarySerializer</PackageReleaseNotes>
+        <PackageVersion>1.3.5.0</PackageVersion>
+        <PackageReleaseNotes>- Fixed custom serialization handler priority for NeoBinarySerializers</PackageReleaseNotes>
     </PropertyGroup>
 
     <ItemGroup>

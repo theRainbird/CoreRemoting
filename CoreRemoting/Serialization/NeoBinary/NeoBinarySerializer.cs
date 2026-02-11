@@ -388,7 +388,11 @@ public partial class NeoBinarySerializer
         WriteTypeInfo(writer, type);
 
         // Serialize based on type
-        if (type.IsEnum)
+        if (Config.CustomSerializationHandlers.ContainsKey(type) && Config.EnableCustomSerialization)
+            SerializeWithHandler(obj, writer, serializedObjects, objectMap);
+        else if (typeof(ICustomSerialization).IsAssignableFrom(type) && Config.EnableCustomSerialization)
+            SerializeCustomSerializableObject(obj, writer, serializedObjects, objectMap);
+        else if (type.IsEnum)
             SerializeEnum(obj, writer);
         else if (type.IsArray)
             SerializeArray((Array)obj, writer, serializedObjects, objectMap);
@@ -421,10 +425,6 @@ public partial class NeoBinarySerializer
         else if (typeof(Assembly).IsAssignableFrom(type))
             // Serialize Assembly with custom approach
             SerializeAssembly(obj, writer, serializedObjects, objectMap);
-        else if (Config.CustomSerializationHandlers.ContainsKey(type) && Config.EnableCustomSerialization)
-            SerializeWithHandler(obj, writer, serializedObjects, objectMap);
-        else if (typeof(ICustomSerialization).IsAssignableFrom(type) && Config.EnableCustomSerialization)
-            SerializeCustomSerializableObject(obj, writer, serializedObjects, objectMap);
         else
             // Serialize any complex object regardless of [Serializable] attribute
             SerializeComplexObject(obj, writer, serializedObjects, objectMap);
@@ -603,8 +603,11 @@ public partial class NeoBinarySerializer
 
                 object obj;
 
-                // Arrays should be checked first - they have highest priority
-                if (type.IsArray)
+                if (Config.CustomSerializationHandlers.ContainsKey(type) && Config.EnableCustomSerialization)
+                    obj = DeserializeWithHandler(type, reader, deserializedObjects, objectId);
+                else if (typeof(ICustomSerialization).IsAssignableFrom(type) && Config.EnableCustomSerialization)
+                    obj = DeserializeCustomSerializableObject(type, reader, deserializedObjects, objectId);
+                else if (type.IsArray)
                     obj = DeserializeArray(type, reader, deserializedObjects, objectId);
                 else if (IsSimpleType(type))
                     obj = DeserializePrimitive(type, reader);
@@ -632,10 +635,6 @@ public partial class NeoBinarySerializer
                     obj = DeserializeModule(type, reader, deserializedObjects, objectId);
                 else if (typeof(Assembly).IsAssignableFrom(type))
                     obj = DeserializeAssembly(type, reader, deserializedObjects, objectId);
-                else if (Config.CustomSerializationHandlers.ContainsKey(type) && Config.EnableCustomSerialization)
-                    obj = DeserializeWithHandler(type, reader, deserializedObjects, objectId);
-                else if (typeof(ICustomSerialization).IsAssignableFrom(type) && Config.EnableCustomSerialization)
-                    obj = DeserializeCustomSerializableObject(type, reader, deserializedObjects, objectId);
                 else
                     obj = DeserializeComplexObject(type, reader, deserializedObjects, objectId);
 
