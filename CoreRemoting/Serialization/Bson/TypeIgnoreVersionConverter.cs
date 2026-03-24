@@ -36,23 +36,92 @@ internal class TypeIgnoreVersionConverter : JsonConverter
     {
         var resultType = Type.GetType(fullTypeName);
 
-        if (resultType != null || string.IsNullOrEmpty(fullTypeName)) 
+        if (resultType != null || string.IsNullOrEmpty(fullTypeName))
             return resultType;
-            
+
         var commaIndex = fullTypeName.IndexOf(',');
         if (commaIndex <= 0)
             return null;
-        string simpleTypeName = fullTypeName.Substring(0, commaIndex).Trim();
-        string assemblyName = new AssemblyName(fullTypeName.Substring(commaIndex + 1).Trim()).Name;
-        resultType = FindTypeInLoadedAssemblies(simpleTypeName, assemblyName);
 
-        return resultType;
+        string typeName = fullTypeName.Substring(0, commaIndex).Trim();
+        string assemblyQualifiedName = fullTypeName.Substring(commaIndex + 1).Trim();
+        string assemblySimpleName = new AssemblyName(assemblyQualifiedName).Name;
+
+        var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+        Assembly targetAssembly = null;
+        foreach (var assembly in assemblies)
+        {
+            var name = assembly.GetName().Name;
+            if (name != null && name.Equals(assemblySimpleName, StringComparison.OrdinalIgnoreCase))
+            {
+                targetAssembly = assembly;
+                break;
+            }
+        }
+
+        if (targetAssembly != null)
+        {
+            resultType = FindType(targetAssembly, typeName);
+            if (resultType != null) return resultType;
+        }
+
+        foreach (var assembly in assemblies)
+        {
+            resultType = FindType(assembly, typeName);
+            if (resultType != null) return resultType;
+        }
+        return null;
     }
-        
-    private static Type FindTypeInLoadedAssemblies(string typeName, string assemblyName)
+
+    private Type FindType(Assembly assembly, string fullTypeName)
     {
-        return (from assembly in AppDomain.CurrentDomain.GetAssemblies()
-            where assembly.FullName != null && assembly.FullName.Contains(assemblyName)
-            select assembly.GetType(typeName)).FirstOrDefault(foundType => foundType != null);
+        try
+        {
+            if (fullTypeName.EndsWith("[]"))
+            {
+                var elementTypeName = fullTypeName.Substring(0, fullTypeName.Length - 2);
+                var elementType = assembly.GetType(elementTypeName) ?? FindGenericType(assembly, elementTypeName);
+                if (elementType != null)
+                {
+                    return elementType.MakeArrayType();
+                }
+            }
+
+            var type = assembly.GetType(fullTypeName);
+            if (type != null) return type;
+
+            return FindGenericType(assembly, fullTypeName);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private Type FindGenericType(Assembly assembly, string fullTypeName)
+    {
+        try
+        {
+            if (!fullTypeName.Contains('['))
+                return assembly.GetType(fullTypeName);
+
+            int indexOfBracket = fullTypeName.IndexOf('[');
+            string baseTypeName = fullTypeName.Substring(0, indexOfBracket).Trim();
+            string argumentTypeName = fullTypeName.Substring(indexOfBracket + 1, fullTypeName.Length - indexOfBracket - 2);
+
+            Type baseType = assembly.GetType(baseTypeName);
+            if (baseType == null)
+                return null;
+
+            Type argType = FindGenericType(assembly, argumentTypeName);
+            if (argType == null)
+                return null;
+
+            return baseType.MakeGenericType(argType);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 }
