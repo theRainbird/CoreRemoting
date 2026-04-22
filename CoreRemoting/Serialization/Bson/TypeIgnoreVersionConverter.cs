@@ -34,37 +34,31 @@ internal class TypeIgnoreVersionConverter : JsonConverter
 
     private Type GetTypeWithoutVersion(string fullTypeName)
     {
-        var resultType = Type.GetType(fullTypeName);
-
-        if (resultType != null || string.IsNullOrEmpty(fullTypeName))
-            return resultType;
-
-        var commaIndex = fullTypeName.IndexOf(',');
-        if (commaIndex <= 0)
+        if (string.IsNullOrEmpty(fullTypeName))
             return null;
 
-        string typeName = fullTypeName.Substring(0, commaIndex).Trim();
-        string assemblyQualifiedName = fullTypeName.Substring(commaIndex + 1).Trim();
-        string assemblySimpleName = new AssemblyName(assemblyQualifiedName).Name;
+        var resultType = Type.GetType(fullTypeName);
+        if (resultType != null)
+            return resultType;
+
+        if (!TrySplitTypeAndAssembly(fullTypeName, out var typeName, out var assemblyQualifiedName))
+            return null;
+
+        string assemblySimpleName = GetAssemblySimpleNameSafe(assemblyQualifiedName);
+        if (string.IsNullOrEmpty(assemblySimpleName))
+            return null;
 
         var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-        Assembly targetAssembly = null;
-        foreach (var assembly in assemblies)
-        {
-            var name = assembly.GetName().Name;
-            if (name != null && name.Equals(assemblySimpleName, StringComparison.OrdinalIgnoreCase))
-            {
-                targetAssembly = assembly;
-                break;
-            }
-        }
+
+        Assembly targetAssembly = assemblies.FirstOrDefault(a =>
+            a.GetName().Name?.Equals(assemblySimpleName, StringComparison.OrdinalIgnoreCase) == true);
 
         if (targetAssembly != null)
         {
             resultType = FindType(targetAssembly, typeName);
             if (resultType != null) return resultType;
         }
-
+        
         foreach (var assembly in assemblies)
         {
             resultType = FindType(assembly, typeName);
@@ -80,17 +74,30 @@ internal class TypeIgnoreVersionConverter : JsonConverter
             if (fullTypeName.EndsWith("[]"))
             {
                 var elementTypeName = fullTypeName.Substring(0, fullTypeName.Length - 2);
-                var elementType = assembly.GetType(elementTypeName) ?? FindGenericType(assembly, elementTypeName);
+                var elementType = FindType(assembly, elementTypeName);
                 if (elementType != null)
                 {
                     return elementType.MakeArrayType();
                 }
             }
-
+            
             var type = assembly.GetType(fullTypeName);
             if (type != null) return type;
 
-            return FindGenericType(assembly, fullTypeName);
+            if (GetBaseAndArgumentTypesNames(fullTypeName, out var baseTypeName, out var argumentTypeName))
+            {
+                Type baseType = assembly.GetType(baseTypeName);
+                if (baseType != null)
+                {
+                    Type argType = FindType(assembly, argumentTypeName);
+                    if (argType != null)
+                    {
+                        return baseType.MakeGenericType(argType);
+                    }
+                }
+            }
+
+            return null;
         }
         catch
         {
@@ -98,30 +105,101 @@ internal class TypeIgnoreVersionConverter : JsonConverter
         }
     }
 
-    private Type FindGenericType(Assembly assembly, string fullTypeName)
+    #region Help Methods
+
+    internal bool TrySplitTypeAndAssembly(string fullTypeName, out string typeName, out string assemblyQualifiedName)
     {
+        typeName = null;
+        assemblyQualifiedName = null;
+
+        int bracketDepth = 0;
+        int commaIndex = -1;
+
+        for (int i = 0; i < fullTypeName.Length; i++)
+        {
+            char c = fullTypeName[i];
+
+            if (c == '[')
+            {
+                bracketDepth++;
+            }
+            else if (c == ']')
+            {
+                bracketDepth--;
+            }
+            else if (c == ',' && bracketDepth == 0)
+            {
+                commaIndex = i;
+                break;
+            }
+        }
+
+        if (commaIndex <= 0)
+            return false;
+
+        typeName = fullTypeName.Substring(0, commaIndex).Trim();
+        assemblyQualifiedName = fullTypeName.Substring(commaIndex + 1).Trim();
+        return true;
+    }
+
+    internal string GetAssemblySimpleNameSafe(string assemblyQualifiedName)
+    {
+        if (string.IsNullOrEmpty(assemblyQualifiedName))
+            return null;
+
         try
         {
-            if (!fullTypeName.Contains('['))
-                return assembly.GetType(fullTypeName);
-
-            int indexOfBracket = fullTypeName.IndexOf('[');
-            string baseTypeName = fullTypeName.Substring(0, indexOfBracket).Trim();
-            string argumentTypeName = fullTypeName.Substring(indexOfBracket + 1, fullTypeName.Length - indexOfBracket - 2);
-
-            Type baseType = assembly.GetType(baseTypeName);
-            if (baseType == null)
-                return null;
-
-            Type argType = FindGenericType(assembly, argumentTypeName);
-            if (argType == null)
-                return null;
-
-            return baseType.MakeGenericType(argType);
+            var assemblyName = new AssemblyName(assemblyQualifiedName);
+            return assemblyName.Name;
         }
-        catch (Exception)
+        catch
         {
+            var firstCommaIndex = assemblyQualifiedName.IndexOf(',');
+            if (firstCommaIndex > 0)
+            {
+                var simpleName = assemblyQualifiedName.Substring(0, firstCommaIndex).Trim();
+                return simpleName;
+            }
+
+            var versionIndex = assemblyQualifiedName.IndexOf("Version=", StringComparison.OrdinalIgnoreCase);
+            if (versionIndex > 0)
+            {
+                var name = assemblyQualifiedName.Substring(0, versionIndex - 1).Trim();
+                name = name.TrimEnd(',');
+                return name;
+            }
             return null;
         }
     }
+
+    internal bool GetBaseAndArgumentTypesNames(string fullTypeName, out string baseTypeName,
+        out string argumentTypeName)
+    {
+        baseTypeName = null;
+        argumentTypeName = null;
+
+        if (string.IsNullOrEmpty(fullTypeName))
+            return false;
+
+        int indexOfBracket = fullTypeName.IndexOf('[');
+        if (indexOfBracket < 0)
+            return false;
+
+        baseTypeName = fullTypeName.Substring(0, indexOfBracket).Trim();
+
+        int lastIndexOfBracket = fullTypeName.LastIndexOf(']');
+        if (lastIndexOfBracket <= indexOfBracket)
+            return false;
+
+        argumentTypeName = fullTypeName.Substring(indexOfBracket + 1, lastIndexOfBracket - indexOfBracket - 1);
+
+        while (argumentTypeName.StartsWith("[") && argumentTypeName.EndsWith("]"))
+        {
+            argumentTypeName = argumentTypeName.Substring(1, argumentTypeName.Length - 2);
+        }
+
+        return true;
+    }
+
+    #endregion
 }
