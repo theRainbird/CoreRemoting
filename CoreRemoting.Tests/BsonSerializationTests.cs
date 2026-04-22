@@ -701,4 +701,342 @@ public class BsonSerializationTests
         Assert.Equal(paramsList[0].Value.GetType(), desDto[0].Value.GetType());
         Assert.Equal(paramsList[1].Something.GetType(), desDto[1].Something.GetType());
     }
+    
+    #region TypeIgnoreVersionConverter
+
+    private readonly TypeIgnoreVersionConverter _converter;
+    private readonly MethodInfo _getTypeWithoutVersionMethod;
+
+    public BsonSerializationTests()
+    {
+        _converter = new TypeIgnoreVersionConverter();
+        _getTypeWithoutVersionMethod = typeof(TypeIgnoreVersionConverter)
+            .GetMethod("GetTypeWithoutVersion", BindingFlags.NonPublic | BindingFlags.Instance);
+    }
+
+    #region Base tests
+
+    [Fact]
+    public void TrySplitTypeAndAssembly_ShouldSplitValidTypeName()
+    {
+        var fullTypeName = "System.String, System.Private.CoreLib, Version=8.0.0.0";
+
+        var result = _converter.TrySplitTypeAndAssembly(fullTypeName, out var typeName, out var assemblyName);
+
+        Assert.True(result);
+        Assert.Equal("System.String", typeName);
+        Assert.Equal("System.Private.CoreLib, Version=8.0.0.0", assemblyName);
+    }
+
+    [Fact]
+    public void TrySplitTypeAndAssembly_ShouldHandleListOfLongArrays()
+    {
+        var fullTypeName = "System.Collections.Generic.List`1[[System.Int64[]]], System.Private.CoreLib";
+
+        var result = _converter.TrySplitTypeAndAssembly(fullTypeName, out var typeName, out var assemblyName);
+
+        Assert.True(result);
+        Assert.Equal("System.Collections.Generic.List`1[[System.Int64[]]]", typeName);
+        Assert.Equal("System.Private.CoreLib", assemblyName);
+    }
+
+    [Fact]
+    public void TrySplitTypeAndAssembly_ShouldHandleComplexGenericWithAssembly()
+    {
+        var fullTypeName =
+            "System.Collections.Generic.List`1[[System.Int64, System.Private.CoreLib, Version=8.0.0.0]], System.Private.CoreLib";
+
+        var result = _converter.TrySplitTypeAndAssembly(fullTypeName, out var typeName, out var assemblyName);
+
+        Assert.True(result);
+        Assert.Equal("System.Collections.Generic.List`1[[System.Int64, System.Private.CoreLib, Version=8.0.0.0]]",
+            typeName);
+        Assert.Equal("System.Private.CoreLib", assemblyName);
+    }
+
+    [Fact]
+    public void TrySplitTypeAndAssembly_ShouldReturnFalse_WhenNoComma()
+    {
+        var result = _converter.TrySplitTypeAndAssembly("System.String", out _, out _);
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void GetAssemblySimpleNameSafe_ShouldExtractNameFromFullQualifiedName()
+    {
+        var result = _converter.GetAssemblySimpleNameSafe(
+            "System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e");
+        Assert.Equal("System.Private.CoreLib", result);
+    }
+
+    [Fact]
+    public void GetAssemblySimpleNameSafe_ShouldExtractNameFromCustomAssembly()
+    {
+        var result = _converter.GetAssemblySimpleNameSafe(
+            "MyCompany.MyLibrary, Version=3.5.5436.0, Culture=neutral, PublicKeyToken=null");
+        Assert.Equal("MyCompany.MyLibrary", result);
+    }
+
+    [Fact]
+    public void GetAssemblySimpleNameSafe_ShouldHandleAssemblyWithoutVersion()
+    {
+        var result = _converter.GetAssemblySimpleNameSafe("System.Private.CoreLib");
+        Assert.Equal("System.Private.CoreLib", result);
+    }
+
+    [Fact]
+    public void GetAssemblySimpleNameSafe_ShouldReturnNull_WhenNullInput()
+    {
+        var result = _converter.GetAssemblySimpleNameSafe(null);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetBaseAndArgumentTypesNames_ShouldParseListOfInt()
+    {
+        var result = _converter.GetBaseAndArgumentTypesNames(
+            "System.Collections.Generic.List`1[[System.Int32]]",
+            out var baseType,
+            out var argumentType);
+
+        Assert.True(result);
+        Assert.Equal("System.Collections.Generic.List`1", baseType);
+        Assert.Equal("System.Int32", argumentType);
+    }
+
+    [Fact]
+    public void GetBaseAndArgumentTypesNames_ShouldParseListOfLongArrays()
+    {
+        var result = _converter.GetBaseAndArgumentTypesNames(
+            "System.Collections.Generic.List`1[[System.Int64[]]]",
+            out var baseType,
+            out var argumentType);
+
+        Assert.True(result);
+        Assert.Equal("System.Collections.Generic.List`1", baseType);
+        Assert.Equal("System.Int64[]", argumentType);
+    }
+
+    [Fact]
+    public void GetBaseAndArgumentTypesNames_ShouldParseListOfListOfLong()
+    {
+        var result = _converter.GetBaseAndArgumentTypesNames(
+            "System.Collections.Generic.List`1[[System.Collections.Generic.List`1[[System.Int64]]]]",
+            out var baseType,
+            out var argumentType);
+
+        Assert.True(result);
+        Assert.Equal("System.Collections.Generic.List`1", baseType);
+        Assert.Equal("System.Collections.Generic.List`1[[System.Int64]]", argumentType);
+    }
+
+    [Fact]
+    public void GetBaseAndArgumentTypesNames_ShouldParseDictionaryStringToListOfLongArrays()
+    {
+        var result = _converter.GetBaseAndArgumentTypesNames(
+            "System.Collections.Generic.Dictionary`2[[System.String],[System.Collections.Generic.List`1[[System.Int64[]]]]]",
+            out var baseType,
+            out var argumentType);
+
+        Assert.True(result);
+        Assert.Equal("System.Collections.Generic.Dictionary`2", baseType);
+        Assert.Equal("System.String],[System.Collections.Generic.List`1[[System.Int64[]]]", argumentType);
+    }
+
+    [Fact]
+    public void GetBaseAndArgumentTypesNames_ShouldParseTupleWithTwoLongArrays()
+    {
+        var result = _converter.GetBaseAndArgumentTypesNames(
+            "System.Tuple`2[[System.Int64[]],[System.Int64[]]]",
+            out var baseType,
+            out var argumentType);
+
+        Assert.True(result);
+        Assert.Equal("System.Tuple`2", baseType);
+        Assert.Equal("System.Int64[]],[System.Int64[]", argumentType);
+    }
+
+    [Fact]
+    public void GetBaseAndArgumentTypesNames_ShouldHandleGenericWithAssemblyQualifiedNames()
+    {
+        var result = _converter.GetBaseAndArgumentTypesNames(
+            "System.Collections.Generic.List`1[[TestUserData, CoreRemoting.Tests, Version=2.1.0.0, Culture=neutral, PublicKeyToken=null]]",
+            out var baseType,
+            out var argumentType);
+
+        Assert.True(result);
+        Assert.Equal("System.Collections.Generic.List`1", baseType);
+        Assert.Equal("TestUserData, CoreRemoting.Tests, Version=2.1.0.0, Culture=neutral, PublicKeyToken=null",
+            argumentType);
+    }
+
+    [Fact]
+    public void GetBaseAndArgumentTypesNames_ShouldReturnFalse_WhenNoBrackets()
+    {
+        var result = _converter.GetBaseAndArgumentTypesNames("System.Int32", out _, out _);
+        Assert.False(result);
+    }
+
+    #endregion
+
+    #region SCENARIO: Integration tests with version differences
+
+    [Fact]
+    public void Integration_ClientOlder_ServerNewer_ListOfLong()
+    {
+        var serverTypeName =
+            "System.Collections.Generic.List`1[[System.Int64, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]";
+
+        var resultType = _getTypeWithoutVersionMethod?.Invoke(_converter, new object[] { serverTypeName }) as Type;
+
+        Assert.NotNull(resultType);
+        Assert.Equal(typeof(List<long>), resultType);
+    }
+
+    [Fact]
+    public void Integration_ClientOlder_ServerNewer_ListOfLongArrays()
+    {
+        var serverTypeName =
+            "System.Collections.Generic.List`1[[System.Int64[], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]";
+
+        var resultType = _getTypeWithoutVersionMethod?.Invoke(_converter, new object[] { serverTypeName }) as Type;
+
+        Assert.NotNull(resultType);
+        Assert.Equal(typeof(List<long[]>).Name, resultType.Name);
+        var genericArg = resultType.GetGenericArguments()[0];
+        Assert.True(genericArg.IsArray);
+        Assert.Equal(typeof(long), genericArg.GetElementType());
+    }
+
+    [Fact]
+    public void Integration_ClientOlder_ServerNewer_TupleWithTwoLongArrays()
+    {
+        var serverTypeName =
+            "System.Tuple`2[[System.Int64[], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int64[], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]";
+
+        var resultType = _getTypeWithoutVersionMethod?.Invoke(_converter, new object[] { serverTypeName }) as Type;
+
+        Assert.NotNull(resultType);
+        var genericArgs = resultType.GetGenericArguments();
+        Assert.Equal(2, genericArgs.Length);
+        Assert.Equal(typeof(long[]), genericArgs[0]);
+        Assert.Equal(typeof(long[]), genericArgs[1]);
+    }
+
+    [Fact]
+    public void Integration_ClientNewer_ServerOlder_ListOfLong()
+    {
+        var serverTypeName =
+            "System.Collections.Generic.List`1[[System.Int64, System.Private.CoreLib, Version=6.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]";
+
+        var resultType = _getTypeWithoutVersionMethod?.Invoke(_converter, new object[] { serverTypeName }) as Type;
+
+        Assert.NotNull(resultType);
+        Assert.Equal(typeof(List<long>), resultType);
+    }
+
+    [Fact]
+    public void Integration_ClientNewer_ServerOlder_ListOfLongArrays()
+    {
+        var serverTypeName =
+            "System.Collections.Generic.List`1[[System.Int64[], System.Private.CoreLib, Version=6.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]";
+
+        var resultType = _getTypeWithoutVersionMethod?.Invoke(_converter, new object[] { serverTypeName }) as Type;
+
+        Assert.NotNull(resultType);
+        Assert.Equal(typeof(List<long[]>).Name, resultType.Name);
+    }
+
+    [Fact]
+    public void Integration_ClientNewer_ServerOlder_DifferentPublicKeyToken()
+    {
+        var serverTypeName =
+            "System.Collections.Generic.List`1[[System.Int64, System.Private.CoreLib, Version=6.0.0.0, Culture=neutral, PublicKeyToken=1234567890abcdef]]";
+
+        var resultType = _getTypeWithoutVersionMethod?.Invoke(_converter, new object[] { serverTypeName }) as Type;
+
+        Assert.NotNull(resultType);
+        Assert.Equal(typeof(List<long>), resultType);
+    }
+
+    [Fact]
+    public void Integration_NullInput_ShouldReturnNull()
+    {
+        var result = _getTypeWithoutVersionMethod?.Invoke(_converter, new object[] { null });
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void Integration_EmptyInput_ShouldReturnNull()
+    {
+        var resultType = _getTypeWithoutVersionMethod?.Invoke(_converter, new object[] { string.Empty }) as Type;
+        Assert.Null(resultType);
+    }
+
+    [Fact]
+    public void Integration_Version9_ShouldWork()
+    {
+        var serverTypeName =
+            "System.Collections.Generic.List`1[[System.Int64, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]";
+
+        var resultType = _getTypeWithoutVersionMethod?.Invoke(_converter, new object[] { serverTypeName }) as Type;
+
+        Assert.NotNull(resultType);
+        Assert.Equal(typeof(List<long>), resultType);
+    }
+
+    [Fact]
+    public void Integration_MissingVersion_ShouldWork()
+    {
+        var serverTypeName = "System.Collections.Generic.List`1[[System.Int64, System.Private.CoreLib]]";
+
+        var resultType = _getTypeWithoutVersionMethod?.Invoke(_converter, new object[] { serverTypeName }) as Type;
+
+        Assert.NotNull(resultType);
+    }
+
+    [Fact]
+    public void Integration_DeeplyNestedGenerics_ShouldWork()
+    {
+        var serverTypeName =
+            "System.Collections.Generic.List`1[[System.Collections.Generic.List`1[[System.Collections.Generic.List`1[[System.Int64[], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]";
+
+        var resultType = _getTypeWithoutVersionMethod?.Invoke(_converter, new object[] { serverTypeName }) as Type;
+
+        Assert.NotNull(resultType);
+        Assert.Equal(typeof(List<List<List<long[]>>>).Name, resultType.Name);
+    }
+
+    [Fact]
+    public void TryExtractArrayElementType_ShouldExtractFromSimpleArray()
+    {
+        var result = _converter.TryExtractArrayElementType("System.Int64[]", out var elementType);
+    
+        Assert.True(result);
+        Assert.Equal("System.Int64", elementType);
+    }
+
+    [Fact]
+    public void TryExtractArrayElementType_ShouldExtractFromJaggedArray()
+    {
+        var result = _converter.TryExtractArrayElementType("System.Int64[][]", out var elementType);
+    
+        Assert.True(result);
+        Assert.Equal("System.Int64[]", elementType);
+    }
+
+    [Fact]
+    public void TryExtractArrayElementType_ShouldExtractFromGenericArray()
+    {
+        var result = _converter.TryExtractArrayElementType(
+            "System.Collections.Generic.List`1[[System.Int32]][]", 
+            out var elementType);
+    
+        Assert.True(result);
+        Assert.Equal("System.Collections.Generic.List`1[[System.Int32]]", elementType);
+    }
+    
+    #endregion
+
+    #endregion
 }
