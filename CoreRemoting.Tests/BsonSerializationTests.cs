@@ -5,6 +5,7 @@ using System.Data;
 using System.Globalization;
 using System.Net;
 using System.Numerics;
+using System.Reflection;
 using System.Text;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization.Bson;
