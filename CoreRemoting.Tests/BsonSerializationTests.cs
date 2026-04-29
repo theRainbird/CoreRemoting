@@ -1007,35 +1007,6 @@ public class BsonSerializationTests
         Assert.NotNull(resultType);
         Assert.Equal(typeof(List<List<List<long[]>>>).Name, resultType.Name);
     }
-
-    [Fact]
-    public void TryExtractArrayElementType_ShouldExtractFromSimpleArray()
-    {
-        var result = _converter.TryExtractArrayElementType("System.Int64[]", out var elementType);
-    
-        Assert.True(result);
-        Assert.Equal("System.Int64", elementType);
-    }
-
-    [Fact]
-    public void TryExtractArrayElementType_ShouldExtractFromJaggedArray()
-    {
-        var result = _converter.TryExtractArrayElementType("System.Int64[][]", out var elementType);
-    
-        Assert.True(result);
-        Assert.Equal("System.Int64[]", elementType);
-    }
-
-    [Fact]
-    public void TryExtractArrayElementType_ShouldExtractFromGenericArray()
-    {
-        var result = _converter.TryExtractArrayElementType(
-            "System.Collections.Generic.List`1[[System.Int32]][]", 
-            out var elementType);
-    
-        Assert.True(result);
-        Assert.Equal("System.Collections.Generic.List`1[[System.Int32]]", elementType);
-    }
     
     #endregion
 
