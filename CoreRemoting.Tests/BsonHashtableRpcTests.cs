@@ -66,14 +66,15 @@ namespace CoreRemoting.Tests
         }
     }
 
-    #region Hashtable Deserialization - RPC Roundtrip Test
+    #region Hashtable Deserialization Bug - RPC Roundtrip Test
 
-    public interface ITestService
+    // Переименованные интерфейс и класс, чтобы не конфликтовать с существующими
+    public interface IHashtableEchoService
     {
         Hashtable Echo(Hashtable input);
     }
 
-    public class TestService : ITestService
+    public class HashtableEchoService : IHashtableEchoService
     {
         public Hashtable Echo(Hashtable input)
         {
@@ -107,7 +108,7 @@ namespace CoreRemoting.Tests
                 NetworkPort = 9099,
                 RegisterServicesAction = container =>
                 {
-                    container.RegisterService<ITestService, TestService>(
+                    container.RegisterService<IHashtableEchoService, HashtableEchoService>(
                         lifetime: ServiceLifetime.Singleton);
                 }
             };
@@ -129,7 +130,7 @@ namespace CoreRemoting.Tests
         [Fact]
         public void Hashtable_ShouldSurviveRoundtrip_WithoutBecomingJObject()
         {
-            var proxy = _client.CreateProxy<ITestService>();
+            var proxy = _client.CreateProxy<IHashtableEchoService>();
             var original = new Hashtable
             {
                 { "@param1", "test_value" },
