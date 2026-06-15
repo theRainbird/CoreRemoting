@@ -1,6 +1,9 @@
+using System;
 using System.Collections;
 using CoreRemoting.Serialization.Bson;
 using Xunit;
+using CoreRemoting.DependencyInjection;
+using Newtonsoft.Json.Linq;
 
 namespace CoreRemoting.Tests
 {
@@ -62,4 +65,97 @@ namespace CoreRemoting.Tests
             Assert.True(deserializedHashtable["IntValue"] is int);
         }
     }
+
+    #region Hashtable Deserialization Bug - RPC Roundtrip Test
+    
+    public interface IHashtableEchoService
+    {
+        Hashtable Echo(Hashtable input);
+    }
+
+    public class HashtableEchoService : IHashtableEchoService
+    {
+        public Hashtable Echo(Hashtable input)
+        {
+            if (input != null)
+            {
+                foreach (DictionaryEntry entry in input)
+                {
+                    if (entry.Value is JObject)
+                    {
+                        throw new InvalidOperationException(
+                            $"BUG REPRODUCED: Parameter '{entry.Key}' deserialized as JObject. " +
+                            $"Original type was lost during deserialization.");
+                    }
+                }
+            }
+
+            return input;
+        }
+    }
+
+    public class HashtableDeserializationBugTest : IDisposable
+    {
+        private readonly RemotingServer _server;
+        private readonly RemotingClient _client;
+
+        public HashtableDeserializationBugTest()
+        {
+            var serverConfig = new ServerConfig
+            {
+                HostName = "localhost",
+                NetworkPort = 9099,
+                RegisterServicesAction = container =>
+                {
+                    container.RegisterService<IHashtableEchoService, HashtableEchoService>(
+                        lifetime: ServiceLifetime.Singleton);
+                }
+            };
+
+            _server = new RemotingServer(serverConfig);
+            _server.Start();
+
+            var clientConfig = new ClientConfig
+            {
+                ServerHostName = "localhost",
+                ServerPort = 9099,
+                ConnectionTimeout = 5000
+            };
+
+            _client = new RemotingClient(clientConfig);
+            _client.Connect();
+        }
+
+        [Fact]
+        public void Hashtable_ShouldSurviveRoundtrip_WithoutBecomingJObject()
+        {
+            var proxy = _client.CreateProxy<IHashtableEchoService>();
+            var original = new Hashtable
+            {
+                { "@param1", "test_value" },
+                { "@param2", 123 },
+                { "@param3", true }
+            };
+
+            var exception = Record.Exception(() =>
+            {
+                var result = proxy.Echo(original);
+
+                foreach (DictionaryEntry entry in result)
+                {
+                    Assert.IsNotType<JObject>(entry.Value);
+                }
+            });
+
+            Assert.Null(exception);
+        }
+
+        public void Dispose()
+        {
+            _client?.Dispose();
+            _server?.Dispose();
+        }
+    }
+
+    #endregion
 }
