@@ -81,6 +81,9 @@ public class TcpServerChannel : IServerChannel
     {
         if (_tcpServer != null)
         {
+            if (IsListening)
+                StopListening();
+
             // work around TaskCanceledException, see
             // https://github.com/dotnet/WatsonTcp/issues/303
             await Task.Delay(100).ConfigureAwait(false);

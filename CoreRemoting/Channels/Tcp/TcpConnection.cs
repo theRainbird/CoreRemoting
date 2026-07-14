@@ -109,8 +109,15 @@ public class TcpConnection : IRawMessageTransport
     private async void BeforeDisposeSession()
     {
         _session = null;
-        await _tcpServer.DisconnectClientAsync(_clientMetadata.Guid, MessageStatus.Shutdown)
-            .ConfigureAwait(false);
+        try
+        {
+            await _tcpServer.DisconnectClientAsync(_clientMetadata.Guid, MessageStatus.Shutdown)
+                .ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Ignored: server may already be stopped
+        }
     }
 
     /// <summary>
