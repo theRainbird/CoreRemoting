@@ -510,36 +510,46 @@ public sealed class RemotingClient : IRemotingClient
     /// Called when a message is received from server.
     /// </summary>
     /// <param name="rawMessage">Raw message data</param>
-    private void OnMessage(byte[] rawMessage) => Task.Run(async () =>
+    private void OnMessage(byte[] rawMessage)
     {
         var message = TryDeserialize(rawMessage);
 
-        switch (message.MessageType.ToLower())
+        // Set flag synchronously before dispatching to Task.Run,
+        // to avoid a race between ProcessSessionClosedMessage and
+        // the Disconnected event (which fires synchronously from
+        // WatsonTcp after the Shutdown message is received).
+        if (string.Equals(message.MessageType, "session_closed", StringComparison.OrdinalIgnoreCase))
+            _sessionClosedByServer = true;
+
+        Task.Run(async () =>
         {
-            case "complete_handshake":
-                ProcessCompleteHandshakeMessage(message);
-                break;
-            case "auth_response":
-                ProcessAuthenticationResponseMessage(message);
-                break;
-            case "rpc_result":
-                await ProcessRpcResultMessage(message);
-                break;
-            case "invoke":
-                ProcessRemoteDelegateInvocationMessage(message);
-                break;
-            case "goodbye":
-                ProcessGoodbyeMessage(message);
-                break;
-            case "session_closed":
-                await ProcessSessionClosedMessage(message);
-                break;
-            default:
-                // TODO: how do we handle invalid wire messages received by the client?
-                // A wire message could have been tampered with and couldn't be deserialized
-                break;
-        }
-    }).ConfigureAwait(false);
+            switch (message.MessageType.ToLower())
+            {
+                case "complete_handshake":
+                    ProcessCompleteHandshakeMessage(message);
+                    break;
+                case "auth_response":
+                    ProcessAuthenticationResponseMessage(message);
+                    break;
+                case "rpc_result":
+                    await ProcessRpcResultMessage(message);
+                    break;
+                case "invoke":
+                    ProcessRemoteDelegateInvocationMessage(message);
+                    break;
+                case "goodbye":
+                    ProcessGoodbyeMessage(message);
+                    break;
+                case "session_closed":
+                    await ProcessSessionClosedMessage(message);
+                    break;
+                default:
+                    // TODO: how do we handle invalid wire messages received by the client?
+                    // A wire message could have been tampered with and couldn't be deserialized
+                    break;
+            }
+        }).ConfigureAwait(false);
+    }
 
     private WireMessage TryDeserialize(byte[] rawMessage)
     {
