@@ -4,6 +4,8 @@ using CoreRemoting.Serialization.NeoBinary;
 using System.Runtime.Serialization;
 using Xunit;
 
+namespace CoreRemoting.Tests.Serialization.NeoBinary;
+
 public class NeoBinaryCustomSerializationTests
 {
 	[Fact]

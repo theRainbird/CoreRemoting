@@ -9,6 +9,7 @@ using System.Reflection;
 using System.Text;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization.Bson;
+using CoreRemoting.Serialization.Bson.Converters;
 using CoreRemoting.Tests.Tools;
 using Newtonsoft.Json;
 using Xunit;
@@ -41,6 +42,17 @@ public class BsonSerializationTests
     }
 
     #endregion
+
+    private BsonSerializerConfig UseHashtableConverter
+    {
+        get
+        {
+            var config = new BsonSerializerConfig();
+            config.AddCommonJsonConverters = true;
+            config.JsonConverters.Add(new HashtableConverter());
+            return config;
+        }
+    }
 
     [Fact]
     public void BsonSerializerAdapter_should_deserialize_MethodCallMessage()
@@ -271,13 +283,13 @@ public class BsonSerializationTests
     }
     
     [Fact]
-    public void BsonSerializerAdapter_should_deserialize_Hashtable_original_content_types()
+    public void BsonSerializerAdapter_should_deserialize_Hashtable_original_content_types_UsingHashtableConverter()
     {
         var originalHashtable = new Hashtable();
         int originalValue = 10;
         originalHashtable["StoredValue"] = originalValue;
         
-        var serializer = new BsonSerializerAdapter();
+        var serializer = new BsonSerializerAdapter(UseHashtableConverter);
         var serializedBytes = serializer.Serialize(originalHashtable);
         var deserializedHastable = serializer.Deserialize<Hashtable>(serializedBytes);
         var deserializedValue = deserializedHastable["StoredValue"];
@@ -318,12 +330,12 @@ public class BsonSerializationTests
     }
     
     [Fact]
-    public void BsonSerializerAdapter_should_deserialize_nested_Hashtables()
+    public void BsonSerializerAdapter_should_deserialize_nested_Hashtables_UsingHashtableConverter()
     {
         var innerHt = new Hashtable { ["value"] = 1 };
         var ht = new Hashtable { ["innerHt"] = innerHt };
         
-        var serializer = new BsonSerializerAdapter();
+        var serializer = new BsonSerializerAdapter(UseHashtableConverter);
         var bytes = serializer.Serialize(ht);
         var desDto = serializer.Deserialize<Hashtable>(bytes);
         
@@ -348,9 +360,9 @@ public class BsonSerializationTests
         Assert.Equal(originalObj.Count, deserializedObj.Count);
     }
     
-    private Hashtable BSONSerializeDeserialize(Hashtable testHashtable)
+    private Hashtable BSONSerializeDeserialize(Hashtable testHashtable, BsonSerializerConfig cfg =  null)
     {
-        var serializer = new BsonSerializerAdapter();
+        var serializer = new BsonSerializerAdapter(cfg);
         var input = serializer.Serialize(testHashtable);
         var output = serializer.Deserialize<Hashtable>(input);
         return output;
@@ -441,13 +453,13 @@ public class BsonSerializationTests
     }
 
     [Fact]
-    public void BsonSerializerAdapter_should_deserialize_Hashtable_NestedHashtableInt()
+    public void BsonSerializerAdapter_should_deserialize_Hashtable_NestedHashtableInt_UsingHashtableConverter()
     {
         var innerHashtable = new Hashtable();
         innerHashtable.Add("key", 42); // int значение
         var outerHashtable = new Hashtable();
         outerHashtable.Add("@innerObject", innerHashtable);
-        Hashtable deserializedOuter = BSONSerializeDeserialize(outerHashtable);
+        Hashtable deserializedOuter = BSONSerializeDeserialize(outerHashtable, UseHashtableConverter);
         Assert.IsType<Hashtable>(deserializedOuter["@innerObject"]);
         var deserializedInner = (Hashtable)deserializedOuter["@innerObject"];
         Assert.Equal(42, deserializedInner["key"]);
@@ -651,24 +663,24 @@ public class BsonSerializationTests
     }
 
     [Fact]
-    public void BsonSerializerAdapter_should_deserialize_Hashtable_NestedHashtableDateTime()
+    public void BsonSerializerAdapter_should_deserialize_Hashtable_NestedHashtableDateTime_UsingHashtableConverter()
     {
         var innerHashtable = new Hashtable();
         innerHashtable.Add("key", new DateTime(2023, 10, 1, 12, 30, 45, 500));
         var outerHashtable = new Hashtable();
         outerHashtable.Add("@innerObject", innerHashtable);
-        Hashtable deserializedOuter = BSONSerializeDeserialize(outerHashtable);
+        Hashtable deserializedOuter = BSONSerializeDeserialize(outerHashtable, UseHashtableConverter);
         Assert.IsType<Hashtable>(deserializedOuter["@innerObject"]);
         var deserializedInner = (Hashtable)deserializedOuter["@innerObject"];
         Assert.Equal(new DateTime(2023, 10, 1, 12, 30, 45, 500), deserializedInner["key"]);
     }
 
     [Fact]
-    public void BsonSerializerAdapter_should_deserialize_Hashtable_TimeSpan()
+    public void BsonSerializerAdapter_should_deserialize_Hashtable_TimeSpan_UsingHashtableConverter()
     {
         var timeSpan = new TimeSpan(0, 5, 0);
         Hashtable dto = new Hashtable { ["TimeSpan"] = timeSpan };
-        var desDto = BSONSerializeDeserialize(dto);
+        var desDto = BSONSerializeDeserialize(dto, UseHashtableConverter);
         Assert.Equal((TimeSpan)dto["TimeSpan"], (TimeSpan)desDto["TimeSpan"]);
     }
     
