@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Runtime.Serialization;
+using DataDictionary = System.Collections.Generic.Dictionary<string, string>;
 
 namespace CoreRemoting.Serialization;
 
@@ -73,9 +74,9 @@ public class SerializableException : Exception
 		SourceTypeName = info.GetString("SourceTypeName");
 
 		// Copy data from serialization info to Data dictionary
-		if (info.GetValue("SerializableExceptionData", typeof(IDictionary)) is IDictionary data)
+		if (info.GetValue("SerializableExceptionData", typeof(DataDictionary)) is DataDictionary data)
 		{
-			foreach (DictionaryEntry entry in data)
+			foreach (var entry in data)
 			{
 				Data[entry.Key] = entry.Value;
 			}
@@ -99,10 +100,10 @@ public class SerializableException : Exception
 		info.AddValue("SourceTypeName", SourceTypeName);
 
 		// Serialize the Data dictionary
-		var dataDict = new Hashtable();
+		var dataDict = new DataDictionary();
 		foreach (DictionaryEntry entry in Data)
 		{
-			dataDict[entry.Key] = entry.Value;
+			dataDict[$"{entry.Key}"] = $"{entry.Value}";
 		}
 
 		info.AddValue("SerializableExceptionData", dataDict);
