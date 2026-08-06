@@ -1,5 +1,6 @@
 using System;
 using CoreRemoting.RpcMessaging;
+using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Binary;
 using CoreRemoting.Tests.Tools;
 using Xunit;
@@ -61,5 +62,20 @@ public class BinarySerializationTests
         
         Assert.Equal("complete_handshake", deserializedMessage.MessageType);
         Assert.Equal(sessionId, new Guid(deserializedMessage.Data));
+    }
+
+    [Fact]
+    public void SerializedExceptionWithDataDeserialization()
+    {
+        var ex = new SerializableException("FooException", "Hashtable deserialization throws NRE");
+        ex.Data["Foo"] = "Bar";
+
+        var serializer = new BinarySerializerAdapter();
+        var rawData = serializer.Serialize(ex);
+        var deserialized = serializer.Deserialize<SerializableException>(rawData);
+        Assert.Equal(ex.Message, deserialized.Message);
+        Assert.Equal(ex.SourceTypeName, deserialized.SourceTypeName);
+        Assert.Equal(ex.StackTrace, deserialized.StackTrace);
+        Assert.Equal(ex.Data["Foo"], deserialized.Data["Foo"]);
     }
 }
