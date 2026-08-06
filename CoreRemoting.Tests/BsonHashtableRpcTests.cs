@@ -1,13 +1,25 @@
 using System.Collections;
 using CoreRemoting.Serialization.Bson;
+using CoreRemoting.Serialization.Bson.Converters;
 using Xunit;
 
 namespace CoreRemoting.Tests
 {
     public class BsonHashtableRpcTests
     {
+        private BsonSerializerConfig UseHashtableConverter
+        {
+            get
+            {
+                var config = new BsonSerializerConfig();
+                config.AddCommonJsonConverters = true;
+                config.JsonConverters.Add(new HashtableConverter());
+                return config;
+            }
+        }
+
         [Fact]
-        public void BsonSerializerAdapter_should_handle_Hashtable_with_objects_in_RPC_scenario()
+        public void BsonSerializerAdapter_should_handle_Hashtable_with_objects_in_RPC_scenario_UsingHashtableConverter()
         {
             // Simulate RPC scenario where Hashtable parameters are wrapped in Envelope
             var originalHashtable = new Hashtable();
@@ -15,8 +27,8 @@ namespace CoreRemoting.Tests
             originalHashtable["IntValue"] = 42;
             originalHashtable["NestedHashtable"] = new Hashtable { ["inner"] = "value" };
 
-            var serializer = new BsonSerializerAdapter();
-            
+            var serializer = new BsonSerializerAdapter(UseHashtableConverter);
+
             // Simulate what happens in RPC: parameter is wrapped in Envelope
             var envelope = new Envelope(originalHashtable);
             var serializedBytes = serializer.Serialize(envelope);
@@ -43,14 +55,14 @@ namespace CoreRemoting.Tests
         }
 
         [Fact]
-        public void BsonSerializerAdapter_should_preserve_Hashtable_types_without_Envelope()
+        public void BsonSerializerAdapter_should_preserve_Hashtable_types_without_Envelope_UsingHashtableConverter()
         {
             // Test normal Hashtable serialization (not in RPC scenario)
             var originalHashtable = new Hashtable();
             originalHashtable["StringValue"] = "test value";
             originalHashtable["IntValue"] = 42;
 
-            var serializer = new BsonSerializerAdapter();
+            var serializer = new BsonSerializerAdapter(UseHashtableConverter);
             var serializedBytes = serializer.Serialize(originalHashtable);
             var deserializedHashtable = serializer.Deserialize<Hashtable>(serializedBytes);
 

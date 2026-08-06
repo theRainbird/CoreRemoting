@@ -6,7 +6,7 @@ using CoreRemoting.Tests.Tools;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace CoreRemoting.Tests;
+namespace CoreRemoting.Tests.Serialization.NeoBinary;
 
 /// <summary>
 /// Integrationstests für CoreRemoting mit Websocket-Kanal und NeoBinary-Serialisierung

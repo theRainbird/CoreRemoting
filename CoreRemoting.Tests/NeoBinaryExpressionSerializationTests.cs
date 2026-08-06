@@ -3,7 +3,7 @@ using System.Linq.Expressions;
 using CoreRemoting.Serialization.NeoBinary;
 using Xunit;
 
-namespace CoreRemoting.Tests
+namespace CoreRemoting.Tests.Serialization.NeoBinary
 {
     public class NeoBinaryExpressionSerializationTests
     {
