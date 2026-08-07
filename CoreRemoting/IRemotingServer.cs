@@ -92,10 +92,9 @@ public interface IRemotingServer : IAsyncDisposable, IDisposable
     void Stop();
 
     /// <summary>
-    /// Authenticates the specified credentials and returns whether the authentication was successful or not.
+    /// Authenticates using the specified requesnt message and returns authentication response message.
     /// </summary>
-    /// <param name="credentials">Credentials to be used for authentication</param>
-    /// <param name="authenticatedIdentity">Authenticated identity (null when authentication fails)</param>
-    /// <returns>True when authentication was successful, otherwise false</returns>
-    bool Authenticate(Credential[] credentials, out RemotingIdentity authenticatedIdentity);
+    /// <param name="request">Authentication request message containing credentials to be used for authentication</param>
+    /// <returns>Authentication response containing the authenticated identity when authentication was successful</returns>
+    AuthenticationResponseMessage Authenticate(AuthenticationRequestMessage request);
 }

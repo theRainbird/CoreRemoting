@@ -1,10 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
         <RootNamespace>CoreRemoting.Authentication</RootNamespace>
         <AssemblyName>CoreRemoting.Authentication.GenericOsAuthProvider</AssemblyName>
-        <PackageVersion>1.2.1</PackageVersion>
+        <PackageVersion>1.2.2</PackageVersion>
         <Authors>Hagen Siegel</Authors>
         <Description>Generic OS user authentication provider for CoreRemoting</Description>
         <Copyright>2024 Hagen Siegel</Copyright>
@@ -16,18 +16,21 @@
         <RepositoryType>git</RepositoryType>
         <PackageTags>Remoting RPC Network Authentication Windows Linux</PackageTags>
         <AssemblyVersion>1.2.1</AssemblyVersion>
-        <LangVersion>8</LangVersion>
+        <LangVersion>10</LangVersion>
         <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="Castle.Windsor" Version="6.0.0" />
-      <PackageReference Include="CoreRemoting" Version="1.2.3" />
-      <PackageReference Include="CoreRemoting.Authentication.LinuxPamAuthProvider" Version="1.2.1" />
-      <PackageReference Include="CoreRemoting.Authentication.WindowsAuthProvider" Version="1.2.1" />
       <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.10" />
       <PackageReference Include="System.Diagnostics.Tools" Version="4.3.0" />
       <PackageReference Include="System.DirectoryServices.AccountManagement" Version="9.0.10" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\CoreRemoting.Authentication.LinuxPamAuthProvider\CoreRemoting.Authentication.LinuxPamAuthProvider.csproj" />
+      <ProjectReference Include="..\CoreRemoting.Authentication.WindowsAuthProvider\CoreRemoting.Authentication.WindowsAuthProvider.csproj" />
+      <ProjectReference Include="..\CoreRemoting\CoreRemoting.csproj" />
     </ItemGroup>
 
 </Project>

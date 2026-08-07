@@ -369,17 +369,10 @@ public sealed class RemotingSession : IAsyncDisposable
                         sendersPublicKeyBlob: _clientPublicKeyBlob,
                         sendersPublicKeySize: _keyPair?.KeySize ?? 0));
 
-        _isAuthenticated = _server.Authenticate(authRequestMessage.Credentials, out var authenticatedIdentity);
+        var authResponseMessage = _server.Authenticate(authRequestMessage);
 
-        if (_isAuthenticated)
-            Identity = authenticatedIdentity;
-
-        var authResponseMessage =
-            new AuthenticationResponseMessage
-            {
-                IsAuthenticated = _isAuthenticated,
-                AuthenticatedIdentity = authenticatedIdentity
-            };
+        if (_isAuthenticated = authResponseMessage.IsAuthenticated)
+            Identity = authResponseMessage.AuthenticatedIdentity;
 
         var serializedAuthResponse = _server.Serializer.Serialize(authResponseMessage);
 
@@ -395,6 +388,7 @@ public sealed class RemotingSession : IAsyncDisposable
             _server.Serializer.Serialize(wireMessage))
                 .ConfigureAwait(false);
 
+        // TODO: should we fire the event on failure? on last steps only?
         ((RemotingServer)_server).OnLogon();
     }
 

@@ -1,10 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <RootNamespace>CoreRemoting.Authentication</RootNamespace>
     <AssemblyName>CoreRemoting.Authentication.WindowsAuthProvider</AssemblyName>
-    <PackageVersion>1.2.1</PackageVersion>
+    <PackageVersion>1.2.2</PackageVersion>
     <Authors>Hagen Siegel</Authors>
     <Description>Windows user authentication provider for CoreRemoting</Description>
     <Copyright>2024 Hagen Siegel</Copyright>
@@ -16,15 +16,18 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>Remoting RPC Network Authentication Windows</PackageTags>
     <AssemblyVersion>1.2.1</AssemblyVersion>
-    <LangVersion>8</LangVersion>
+    <LangVersion>10</LangVersion>
     <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Castle.Windsor" Version="6.0.0" />
-    <PackageReference Include="CoreRemoting" Version="1.2.3" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.10" />
     <PackageReference Include="System.DirectoryServices.AccountManagement" Version="9.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CoreRemoting\CoreRemoting.csproj" />
   </ItemGroup>
 
 </Project>

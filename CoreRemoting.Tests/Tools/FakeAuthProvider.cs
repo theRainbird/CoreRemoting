@@ -7,20 +7,21 @@ public class FakeAuthProvider : IAuthenticationProvider
 {
     public Func<Credential[], bool> AuthenticateFake { get; set; }
     
-    public bool Authenticate(Credential[] credentials, out RemotingIdentity authenticatedIdentity)
+    public AuthenticationResponseMessage Authenticate(AuthenticationRequestMessage request)
     {
-        var success = AuthenticateFake?.Invoke(credentials) ?? true;
+        var success = AuthenticateFake?.Invoke(request.Credentials) ?? true;
 
-        authenticatedIdentity =
-            new RemotingIdentity()
+        return new AuthenticationResponseMessage
+        {
+            IsAuthenticated = success,
+            AuthenticatedIdentity = new RemotingIdentity()
             {
                 AuthenticationType = "Fake",
                 Domain = "domain",
                 IsAuthenticated = success,
-                Name = credentials[0].Value,
+                Name = request.Credentials[0].Value,
                 Roles = ["Test"],
-            };
-
-        return success;
+            }
+        };
     }
 }

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
@@ -15,16 +15,19 @@
         <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageTags>Remoting RPC Network Authentication Linux</PackageTags>
-        <AssemblyVersion>1.2.1</AssemblyVersion>
-        <LangVersion>8</LangVersion>
+        <AssemblyVersion>1.2.2</AssemblyVersion>
+        <LangVersion>10</LangVersion>
         <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="Castle.Windsor" Version="6.0.0" />
-      <PackageReference Include="CoreRemoting" Version="1.2.3" />
       <PackageReference Include="Npam" Version="1.0.2" />
       <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.10" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\CoreRemoting\CoreRemoting.csproj" />
     </ItemGroup>
 
 </Project>
