@@ -638,7 +638,8 @@ public sealed class RemotingClient : IRemotingClient
 
         Identity = _isAuthenticated ? authResponseMessage.AuthenticatedIdentity : null;
 
-        _authenticationCompletedTaskSource.TrySetResult(true);
+        if (authResponseMessage.IsCompleted)
+            _authenticationCompletedTaskSource.TrySetResult(true);
     }
 
     /// <summary>

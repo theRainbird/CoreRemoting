@@ -1,3 +1,5 @@
+using System.Threading.Tasks;
+
 namespace CoreRemoting.Authentication;
 
 /// <summary>
@@ -10,5 +12,5 @@ public interface IAuthenticationProvider
     /// </summary>
     /// <param name="request">Authentication request message.</param>
     /// <returns>Authentication response message including the authenticated identity.</returns>
-    AuthenticationResponseMessage Authenticate(AuthenticationRequestMessage request);
+    Task<AuthenticationResponseMessage> Authenticate(AuthenticationRequestMessage request);
 }

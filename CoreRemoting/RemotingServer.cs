@@ -248,7 +248,7 @@ public sealed class RemotingServer : IRemotingServer
     /// </summary>
     /// <param name="request">Authentication request message containing credentials to be used for authentication</param>
     /// <returns>Authentication response containing the authenticated identity when authentication was successful</returns>
-    public AuthenticationResponseMessage Authenticate(AuthenticationRequestMessage request)
+    public async Task<AuthenticationResponseMessage> Authenticate(AuthenticationRequestMessage request)
     {
         var failed = new AuthenticationResponseMessage
         {
@@ -261,7 +261,7 @@ public sealed class RemotingServer : IRemotingServer
 
         try
         {
-            return _config.AuthenticationProvider.Authenticate(request);
+            return await _config.AuthenticationProvider.Authenticate(request);
         }
         catch (Exception ex)
         {

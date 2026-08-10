@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Threading.Tasks;
 using Npam;
 
 namespace CoreRemoting.Authentication;
@@ -19,7 +20,7 @@ public class LinuxPamAuthProvider : IAuthenticationProvider
     /// <param name="credentials">Array of credentials ("username", "password")</param>
     /// <param name="authenticatedIdentity">Authenticated Identity</param>
     /// <returns>Indicates whether the authentication was successful.</returns>
-    public AuthenticationResponseMessage Authenticate(AuthenticationRequestMessage request)
+    public Task<AuthenticationResponseMessage> Authenticate(AuthenticationRequestMessage request)
     {
         var failed = new AuthenticationResponseMessage
         {
@@ -28,7 +29,7 @@ public class LinuxPamAuthProvider : IAuthenticationProvider
         };
 
         if (request?.Credentials == null)
-            return failed;
+            return Task.FromResult(failed);
 
         var userName =
             request.Credentials
@@ -48,7 +49,7 @@ public class LinuxPamAuthProvider : IAuthenticationProvider
         {
             var accountInfo = NpamUser.GetAccountInfo(userName);
 
-            return new AuthenticationResponseMessage
+            return Task.FromResult(new AuthenticationResponseMessage
             {
                 IsAuthenticated = true,
                 AuthenticatedIdentity = new RemotingIdentity()
@@ -57,9 +58,9 @@ public class LinuxPamAuthProvider : IAuthenticationProvider
                     IsAuthenticated = true,
                     Roles = new[] { accountInfo.GroupID.ToString() }
                 }
-            };
+            });
         }
 
-        return failed;
+        return Task.FromResult(failed);
     }
 }

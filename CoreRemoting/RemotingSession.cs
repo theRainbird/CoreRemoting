@@ -369,7 +369,7 @@ public sealed class RemotingSession : IAsyncDisposable
                         sendersPublicKeyBlob: _clientPublicKeyBlob,
                         sendersPublicKeySize: _keyPair?.KeySize ?? 0));
 
-        var authResponseMessage = _server.Authenticate(authRequestMessage);
+        var authResponseMessage = await _server.Authenticate(authRequestMessage);
 
         if (_isAuthenticated = authResponseMessage.IsAuthenticated)
             Identity = authResponseMessage.AuthenticatedIdentity;

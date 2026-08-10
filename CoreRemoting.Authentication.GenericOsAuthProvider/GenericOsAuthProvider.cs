@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 
 namespace CoreRemoting.Authentication;
 
@@ -20,7 +21,7 @@ public class GenericOsAuthProvider : IAuthenticationProvider
     /// <param name="credentials">Array of credentials ("username", "password" and optional "domain" [Windows AD only])</param>
     /// <param name="authenticatedIdentity">Authenticated Identity</param>
     /// <returns>Indicates whether the authentication was successful.</returns>
-    public AuthenticationResponseMessage Authenticate(AuthenticationRequestMessage request)
+    public Task<AuthenticationResponseMessage> Authenticate(AuthenticationRequestMessage request)
     {
         IAuthenticationProvider authProvider = null;
         

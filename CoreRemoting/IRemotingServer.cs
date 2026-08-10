@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using CoreRemoting.Authentication;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.RpcMessaging;
@@ -96,5 +97,5 @@ public interface IRemotingServer : IAsyncDisposable, IDisposable
     /// </summary>
     /// <param name="request">Authentication request message containing credentials to be used for authentication</param>
     /// <returns>Authentication response containing the authenticated identity when authentication was successful</returns>
-    AuthenticationResponseMessage Authenticate(AuthenticationRequestMessage request);
+    Task<AuthenticationResponseMessage> Authenticate(AuthenticationRequestMessage request);
 }

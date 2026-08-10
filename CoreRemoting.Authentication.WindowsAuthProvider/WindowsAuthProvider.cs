@@ -2,6 +2,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.DirectoryServices.AccountManagement;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace CoreRemoting.Authentication;
 
@@ -21,7 +22,7 @@ public class WindowsAuthProvider : IAuthenticationProvider
     /// <param name="credentials">Array of credentials ("username", "password" and optional "domain")</param>
     /// <param name="authenticatedIdentity">Authenticated Identity</param>
     /// <returns>Indicates whether the authentication was successful.</returns>
-    public AuthenticationResponseMessage Authenticate(AuthenticationRequestMessage request)
+    public Task<AuthenticationResponseMessage> Authenticate(AuthenticationRequestMessage request)
     {
         var failed = new AuthenticationResponseMessage
         {
@@ -30,7 +31,7 @@ public class WindowsAuthProvider : IAuthenticationProvider
         };
 
         if (request?.Credentials == null)
-            return failed;
+            return Task.FromResult(failed);
 
         var domain =
             request.Credentials
@@ -74,7 +75,7 @@ public class WindowsAuthProvider : IAuthenticationProvider
                     ? Array.Empty<string>()
                     : principal.GetAuthorizationGroups().Select(group => group.Name);
 
-            return new AuthenticationResponseMessage
+            return Task.FromResult(new AuthenticationResponseMessage
             {
                 IsAuthenticated = true,
                 AuthenticatedIdentity = new RemotingIdentity()
@@ -83,9 +84,9 @@ public class WindowsAuthProvider : IAuthenticationProvider
                     IsAuthenticated = true,
                     Roles = userIsMemberOf.ToArray()
                 }
-            };
+            });
         }
 
-        return failed;
+        return Task.FromResult(failed);
     }
 }
