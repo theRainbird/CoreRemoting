@@ -36,7 +36,7 @@ public class LinuxPamAuthProvider : IAuthenticationProvider
                 .Where(c => c.Name.ToLower() == CREDENTIAL_TYPE_USERNAME)
                 .Select(c => c.Value)
                 .FirstOrDefault();
-        
+
         var password =
             request.Credentials
                 .Where(c => c.Name.ToLower() == CREDENTIAL_TYPE_PASSWORD)

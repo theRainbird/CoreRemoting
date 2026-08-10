@@ -27,7 +27,7 @@ namespace CoreRemoting;
 /// <summary>
 /// Provides remoting functionality on client side.
 /// </summary>
-public sealed class RemotingClient : IRemotingClient
+public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 {
     #region Fields
 
@@ -44,6 +44,7 @@ public sealed class RemotingClient : IRemotingClient
     private readonly object _sessionLock;
     private readonly AsyncCountdownEvent _currentlyPendingMessagesCounter;
     private TaskCompletionSource<bool> _handshakeCompletedTaskSource;
+    private TaskCompletionSource<AuthenticationResponseMessage> _authenticationResponseTaskSource;
     private TaskCompletionSource<bool> _authenticationCompletedTaskSource;
     private readonly AsyncManualResetEvent _goodbyeCompletedEvent;
     private bool _isAuthenticated;
@@ -80,6 +81,7 @@ public sealed class RemotingClient : IRemotingClient
         _cancellationTokenSource = new();
         _delegateRegistry = new();
         _handshakeCompletedTaskSource = new();
+        _authenticationResponseTaskSource = new();
         _authenticationCompletedTaskSource = new();
         _goodbyeCompletedEvent = new();
     }
@@ -455,25 +457,9 @@ public sealed class RemotingClient : IRemotingClient
 
     #region Authentication
 
-    /// <summary>
-    /// Authenticates this CoreRemoting client instance with the specified credentials.
-    /// </summary>
-    /// <exception cref="SecurityException">Thrown, if authentication failed or timed out</exception>
-    private async Task AuthenticateAsync()
+    async Task<AuthenticationResponseMessage> IAuthenticationProvider.Authenticate(AuthenticationRequestMessage authRequestMessage)
     {
-        if (_config.Credentials == null || _config.Credentials is { Length: 0 })
-            return;
-
-        if (_authenticationCompletedTaskSource.Task.IsCompleted)
-            return;
-
         var sharedSecret = SharedSecret();
-
-        var authRequestMessage =
-            new AuthenticationRequestMessage
-            {
-                Credentials = _config.Credentials
-            };
 
         var wireMessage =
             MessageEncryptionManager.CreateWireMessage(
@@ -487,13 +473,34 @@ public sealed class RemotingClient : IRemotingClient
 
         _rawMessageTransport.LastException = null;
 
+        _authenticationResponseTaskSource = new();
+
         await _rawMessageTransport.SendMessageAsync(rawData)
             .ConfigureAwait(false);
 
         if (_rawMessageTransport.LastException != null)
             throw _rawMessageTransport.LastException;
 
-        await _authenticationCompletedTaskSource.Task.Timeout(
+        return await _authenticationResponseTaskSource.Task;
+    }
+
+    /// <summary>
+    /// Authenticates this CoreRemoting client instance with the specified credentials.
+    /// </summary>
+    /// <exception cref="SecurityException">Thrown, if authentication failed or timed out</exception>
+    private async Task AuthenticateAsync()
+    {
+        if (_config.Credentials == null || _config.Credentials is { Length: 0 })
+            return;
+
+        if (_authenticationCompletedTaskSource.Task.IsCompleted)
+            return;
+
+        var authenticator = _config.Authenticator ?? new DefaultAuthenticator();
+
+        var authResponse = authenticator.Authenticate(_config.Credentials, this);
+
+        await Task.WhenAll(authResponse, _authenticationCompletedTaskSource.Task).Timeout(
             _config.AuthenticationTimeout, () =>
                 throw new SecurityException("Authentication timeout."))
                     .ConfigureAwait(false);
@@ -634,12 +641,14 @@ public sealed class RemotingClient : IRemotingClient
                         sendersPublicKeyBlob: _serverPublicKeyBlob,
                         sendersPublicKeySize: _keyPair?.KeySize ?? 0));
 
-        _isAuthenticated = authResponseMessage.IsAuthenticated;
-
-        Identity = _isAuthenticated ? authResponseMessage.AuthenticatedIdentity : null;
+        _authenticationResponseTaskSource.TrySetResult(authResponseMessage);
 
         if (authResponseMessage.IsCompleted)
+        {
+            _isAuthenticated = authResponseMessage.IsAuthenticated;
+            Identity = _isAuthenticated ? authResponseMessage.AuthenticatedIdentity : null;
             _authenticationCompletedTaskSource.TrySetResult(true);
+        }
     }
 
     /// <summary>

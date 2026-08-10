@@ -62,9 +62,9 @@ public class WindowsAuthProvider : IAuthenticationProvider
         else
         {
             principalContext = new PrincipalContext(ContextType.Domain, domain);
-            identityName = domain + "\\" + userName;                
+            identityName = domain + "\\" + userName;
         }
-        
+
         var isAuthenticated = principalContext.ValidateCredentials(userName ?? string.Empty, password ?? string.Empty);
 
         if (isAuthenticated)

@@ -24,7 +24,7 @@ public class GenericOsAuthProvider : IAuthenticationProvider
     public Task<AuthenticationResponseMessage> Authenticate(AuthenticationRequestMessage request)
     {
         IAuthenticationProvider authProvider = null;
-        
+
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             authProvider = new WindowsAuthProvider();
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
