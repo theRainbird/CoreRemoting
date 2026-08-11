@@ -21,6 +21,6 @@ public class AuthenticationRequestMessage
     /// Gets the value of the given credential, or null.
     /// </summary>
     /// <param name="name">Credential name, case-insensitive.</param>
-    public Credential this[string name] => Credentials.FirstOrDefault(c =>
-        string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+    public string this[string name] => Credentials?.FirstOrDefault(c =>
+        string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase))?.Value;
 }

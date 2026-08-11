@@ -20,19 +20,19 @@ internal class TwoFactorAuthProvider : IAuthenticationProvider
         var password = request["password"];
         var code = request["code"];
 
-        if (string.IsNullOrWhiteSpace(login?.Value) ||
-            string.IsNullOrWhiteSpace(password?.Value))
+        if (string.IsNullOrWhiteSpace(login) ||
+            string.IsNullOrWhiteSpace(password))
         {
             return new(); // failed: no login or password provided
         }
 
         // step1: verify userName & password, generate random code
-        if (string.IsNullOrWhiteSpace(code?.Value))
+        if (string.IsNullOrWhiteSpace(code))
         {
             var genCode = RandomNumberGenerator.GetHexString(4);
-            GeneratedCodes[login.Value] = genCode;
+            GeneratedCodes[login] = genCode;
 
-            await SendSmsToUser(login.Value, genCode);
+            await SendSmsToUser(login, genCode);
             return new()
             {
                 IsCompleted = false
@@ -40,9 +40,9 @@ internal class TwoFactorAuthProvider : IAuthenticationProvider
         }
 
         // step2: verify generated code
-        if (GeneratedCodes.TryGetValue(login.Value, out var newCode))
+        if (GeneratedCodes.TryGetValue(login, out var newCode))
         {
-            if (newCode.Equals(code.Value, StringComparison.OrdinalIgnoreCase))
+            if (newCode.Equals(code, StringComparison.OrdinalIgnoreCase))
             {
                 return new()
                 {
@@ -50,7 +50,7 @@ internal class TwoFactorAuthProvider : IAuthenticationProvider
                     IsCompleted = true,
                     AuthenticatedIdentity = new RemotingIdentity
                     {
-                        Name = login.Value,
+                        Name = login,
                     }
                 };
             }

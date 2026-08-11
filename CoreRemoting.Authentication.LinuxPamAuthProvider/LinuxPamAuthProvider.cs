@@ -31,17 +31,8 @@ public class LinuxPamAuthProvider : IAuthenticationProvider
         if (request?.Credentials == null)
             return Task.FromResult(failed);
 
-        var userName =
-            request.Credentials
-                .Where(c => c.Name.ToLower() == CREDENTIAL_TYPE_USERNAME)
-                .Select(c => c.Value)
-                .FirstOrDefault();
-
-        var password =
-            request.Credentials
-                .Where(c => c.Name.ToLower() == CREDENTIAL_TYPE_PASSWORD)
-                .Select(c => c.Value)
-                .FirstOrDefault();
+        var userName = request[CREDENTIAL_TYPE_USERNAME];
+        var password = request[CREDENTIAL_TYPE_PASSWORD];
 
         var isAuthenticated = NpamUser.Authenticate("passwd", userName, password);
 

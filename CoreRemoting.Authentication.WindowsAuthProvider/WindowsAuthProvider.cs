@@ -33,23 +33,9 @@ public class WindowsAuthProvider : IAuthenticationProvider
         if (request?.Credentials == null)
             return Task.FromResult(failed);
 
-        var domain =
-            request.Credentials
-                .Where(c => c.Name.ToLower() == CREDENTIAL_TYPE_DOMAIN)
-                .Select(c => c.Value)
-                .FirstOrDefault();
-
-        var userName =
-            request.Credentials
-                .Where(c => c.Name.ToLower() == CREDENTIAL_TYPE_USERNAME)
-                .Select(c => c.Value)
-                .FirstOrDefault();
-
-        var password =
-            request.Credentials
-                .Where(c => c.Name.ToLower() == CREDENTIAL_TYPE_PASSWORD)
-                .Select(c => c.Value)
-                .FirstOrDefault();
+        var domain = request[CREDENTIAL_TYPE_DOMAIN];
+        var userName = request[CREDENTIAL_TYPE_USERNAME];
+        var password = request[CREDENTIAL_TYPE_PASSWORD];
 
         PrincipalContext principalContext;
         string identityName;
