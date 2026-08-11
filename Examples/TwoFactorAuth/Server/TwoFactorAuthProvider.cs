@@ -40,7 +40,7 @@ internal class TwoFactorAuthProvider : IAuthenticationProvider
         }
 
         // step2: verify generated code
-        if (GeneratedCodes.TryGetValue(login, out var newCode))
+        if (GeneratedCodes.TryRemove(login, out var newCode))
         {
             if (newCode.Equals(code, StringComparison.OrdinalIgnoreCase))
             {
