@@ -16,7 +16,7 @@ class Server
         });
 
         server.Start();
-        WriteLine("Server: started. Starting client...");
+        WriteLine("Started. Starting client...");
         return server;
     }
 }

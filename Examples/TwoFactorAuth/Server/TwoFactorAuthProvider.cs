@@ -42,7 +42,7 @@ internal class TwoFactorAuthProvider : IAuthenticationProvider
         // step2: verify generated code
         if (GeneratedCodes.TryGetValue(login.Value, out var newCode))
         {
-            if (newCode == code.Value)
+            if (newCode.Equals(code.Value, StringComparison.OrdinalIgnoreCase))
             {
                 return new()
                 {
@@ -61,7 +61,7 @@ internal class TwoFactorAuthProvider : IAuthenticationProvider
 
     private async Task SendSmsToUser(string userName, string genCode)
     {
-        WriteLine($"Server: pretending to send {userName} a code via SMS: {genCode}");
+        WriteLine($"Pretending to send {userName} a code via SMS: {genCode}");
 
         // deliver the code to the userName's device
         await Task.Delay(100);

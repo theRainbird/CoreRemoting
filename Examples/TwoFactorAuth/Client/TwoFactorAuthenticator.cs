@@ -20,7 +20,7 @@ public class TwoFactorAuthenticator : IAuthenticator
         // step2: ask for 2fa code and send it => server accepts or rejects the code
         if (!resp.IsCompleted)
         {
-            Write("Client: enter 2FA code sent by server: ");
+            Write("Enter 2FA code sent by server: ");
             var code = ReadLine();
 
             // append auth code to the credentials

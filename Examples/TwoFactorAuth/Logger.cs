@@ -4,20 +4,22 @@ class Logger<T>
 {
     private static void SetColor()
     {
-        var isServer = typeof(T).Name.Contains("Server");
+        var isServer = Name.Contains("Server");
         Console.ForegroundColor = isServer ? ConsoleColor.Green : ConsoleColor.Gray;
     }
+
+    private static string Name => typeof(T).Name;
 
     public static void WriteLine(string format, params object[] args)
     {
         SetColor();
-        Console.WriteLine(format, args);
+        Console.WriteLine($"{Name}: " + format, args);
     }
 
     public static void Write(string format, params object[] args)
     {
         SetColor();
-        Console.Write(format, args);
+        Console.Write($"{Name}: " + format, args);
     }
 
     public static string ReadLine() => Console.ReadLine();

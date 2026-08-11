@@ -5,14 +5,14 @@ class Client
 {
     public static IRemotingClient Start()
     {
-        WriteLine("Client: connecting. Use any non-empty user name and password.");
+        WriteLine("Connecting. Use any non-empty user name and password.");
 
         // login
-        Write("Client: what's your user name? ");
+        Write("What's your user name? ");
         var login = ReadLine();
 
         // password
-        Write("Client: what's your password? ");
+        Write("What's your password? ");
         var password = ReadLine();
 
         var client = new RemotingClient(new()
@@ -28,7 +28,7 @@ class Client
         });
 
         client.Connect();
-        WriteLine("Client: connected. Calling the remote method.");
+        WriteLine("Connected. Calling the remote method.");
 
         var proxy = client.CreateProxy<ISampleService>();
         proxy.SayHello();
