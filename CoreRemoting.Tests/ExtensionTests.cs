@@ -15,10 +15,15 @@ public class ExtensionTests
         Assert.Single(strings);
         Assert.Equal("Hello", strings.Single());
 
-        strings = strings.Append(null);
+        strings = strings.Append(values: null);
         Assert.NotNull(strings);
         Assert.Single(strings);
         Assert.Equal("Hello", strings.Single());
+
+        strings = strings.Append("World");
+        Assert.NotNull(strings);
+        Assert.Equal(2, strings.Length);
+        Assert.Equal("World", strings.Last());
     }
 
     [Fact]

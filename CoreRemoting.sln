@@ -41,6 +41,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.Serialization.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TwoFactorAuth", "Examples\TwoFactorAuth\TwoFactorAuth.csproj", "{303D5D5E-6211-86FD-99F1-24D270A480A7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LoginUsingGithubDemo", "Examples\LoginUsingGithubDemo\LoginUsingGithubDemo.csproj", "{EE2AA4B4-2E47-465D-FCB5-0A2B294F6E4C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -107,6 +109,10 @@ Global
 		{303D5D5E-6211-86FD-99F1-24D270A480A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{303D5D5E-6211-86FD-99F1-24D270A480A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{303D5D5E-6211-86FD-99F1-24D270A480A7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EE2AA4B4-2E47-465D-FCB5-0A2B294F6E4C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EE2AA4B4-2E47-465D-FCB5-0A2B294F6E4C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EE2AA4B4-2E47-465D-FCB5-0A2B294F6E4C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EE2AA4B4-2E47-465D-FCB5-0A2B294F6E4C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -117,6 +123,7 @@ Global
 		{7E1B5031-0265-4BEF-B4FE-382E5CAEBA8B} = {530CD64A-0D82-445A-8360-30E27FD7403C}
 		{530CD64A-0D82-445A-8360-30E27FD7403C} = {A60590C3-9800-4945-AC2B-F9770370F8FE}
 		{303D5D5E-6211-86FD-99F1-24D270A480A7} = {A60590C3-9800-4945-AC2B-F9770370F8FE}
+		{EE2AA4B4-2E47-465D-FCB5-0A2B294F6E4C} = {A60590C3-9800-4945-AC2B-F9770370F8FE}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {56E821C2-FAE1-4C5F-8043-1A141A74F1FE}
