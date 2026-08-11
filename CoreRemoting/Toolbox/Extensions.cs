@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using CoreRemoting.Authentication;
 
 namespace CoreRemoting.Toolbox;
 
@@ -108,4 +109,17 @@ public static class Extensions
     /// <param name="values">Values to append.</param>
     public static T[] Append<T>(this T[] array, params T[] values) =>
         (array ?? []).Concat(values ?? []).ToArray();
+
+    /// <summary>
+    /// Appends the given credentials to the array.
+    /// </summary>
+    /// <param name="array">Array to append values to.</param>
+    /// <param name="anonymous">Append all properties of the anonymous object.</param>
+    public static Credential[] Append(this Credential[] array, object anonymous) =>
+        array.Append(anonymous is null ? [] : anonymous.GetType()
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(p => new { p, value = p.GetValue(anonymous) })
+            .Where(x => x.value != null)
+            .Select(x => new Credential { Name = x.p.Name, Value = x.value.ToString() })
+            .ToArray());
 }

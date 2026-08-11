@@ -27,11 +27,10 @@ public class TwoFactorAuthenticator : IAuthenticator
             // append auth code to the credentials
             resp = await authProxy.Authenticate(new()
             {
-                Credentials = credentials.Append([new()
+                Credentials = credentials.Append(new
                 {
-                    Name = "code",
-                    Value = code,
-                }])
+                    code,
+                })
             });
         }
     }

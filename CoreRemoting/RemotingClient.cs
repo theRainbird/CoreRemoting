@@ -490,9 +490,8 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <exception cref="SecurityException">Thrown, if authentication failed or timed out</exception>
     private async Task AuthenticateAsync()
     {
-        if ((_config.Credentials == null ||
-            _config.Credentials is { Length: 0 }) &&
-            _config.Authenticator is DefaultAuthenticator)
+        if (_config.Credentials is null or { Length: 0 } &&
+            _config.Authenticator is null or DefaultAuthenticator)
             return;
 
         if (_authenticationCompletedTaskSource.Task.IsCompleted)
