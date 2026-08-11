@@ -23,5 +23,3 @@ class Logger<T>
     public static string ReadLine() => Console.ReadLine();
 }
 
-record Server;
-record Client;
