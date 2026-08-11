@@ -99,4 +99,13 @@ public static class Extensions
     public static string HexDump(this byte[] bytes) => bytes == null ? "" :
         string.Join("\n", Enumerable.Range(0, (bytes.Length + 15) / 16)
             .Select(i => string.Join(" ", bytes.Skip(i * 16).Take(16).Select(b => b.ToString("X2")))));
+
+    /// <summary>
+    /// Appends the given values to the array.
+    /// </summary>
+    /// <typeparam name="T">The type of the element.</typeparam>
+    /// <param name="array">Array to append values to.</param>
+    /// <param name="values">Values to append.</param>
+    public static T[] Append<T>(this T[] array, params T[] values) =>
+        (array ?? []).Concat(values ?? []).ToArray();
 }

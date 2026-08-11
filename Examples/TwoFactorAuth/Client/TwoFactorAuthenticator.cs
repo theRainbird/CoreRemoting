@@ -1,6 +1,7 @@
 ﻿using System.Linq;
 using System.Threading.Tasks;
 using CoreRemoting.Authentication;
+using CoreRemoting.Toolbox;
 using static Logger<Client>;
 
 /// <summary>
@@ -26,12 +27,11 @@ public class TwoFactorAuthenticator : IAuthenticator
             // append auth code to the credentials
             resp = await authProxy.Authenticate(new()
             {
-                Credentials = credentials.Concat([new Credential
+                Credentials = credentials.Append(new Credential
                 {
                     Name = "code",
                     Value = code,
-                }])
-                .ToArray()
+                })
             });
         }
     }
