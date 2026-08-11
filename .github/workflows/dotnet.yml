@@ -9,6 +9,8 @@ on:
     branches:
     - master
     - release/*
+    - issue*
+    - auth-refactor
 
 jobs:
   build:
