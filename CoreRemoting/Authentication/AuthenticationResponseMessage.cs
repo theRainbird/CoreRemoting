@@ -1,6 +1,6 @@
 using System;
 using System.Runtime.Serialization;
-using Castle.Windsor.Diagnostics;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Authentication;
 
@@ -34,4 +34,27 @@ public class AuthenticationResponseMessage
     /// </summary>
     [DataMember]
     public AuthenticationResponseParameter[] Parameters { get; set; }
+
+    /// <summary>
+    /// Gets or sets optional error message.
+    /// </summary>
+    [DataMember]
+    public string ErrorMessage { get; set; }
+
+    /// <summary>
+    /// Gets the value of the given parameter, or null.
+    /// </summary>
+    /// <param name="name">Parameter name, case-insensitive.</param>
+    public string this[string name] => Parameters?.FindByName(name);
+
+    /// <summary>
+    /// Helper method to create error response message.
+    /// </summary>
+    public static AuthenticationResponseMessage Error(string errorMessage = "Authentication failed") => new()
+    {
+        IsAuthenticated = false,
+        IsCompleted = true,
+        AuthenticatedIdentity = null,
+        ErrorMessage = errorMessage,
+    };
 }

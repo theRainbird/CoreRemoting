@@ -1,6 +1,6 @@
 using System;
-using System.Linq;
 using System.Runtime.Serialization;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Authentication;
 
@@ -21,6 +21,5 @@ public class AuthenticationRequestMessage
     /// Gets the value of the given credential, or null.
     /// </summary>
     /// <param name="name">Credential name, case-insensitive.</param>
-    public string this[string name] => Credentials?.FirstOrDefault(c =>
-        string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase))?.Value;
+    public string this[string name] => Credentials?.FindByName(name);
 }

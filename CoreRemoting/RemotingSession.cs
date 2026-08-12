@@ -388,8 +388,8 @@ public sealed class RemotingSession : IAsyncDisposable
             _server.Serializer.Serialize(wireMessage))
                 .ConfigureAwait(false);
 
-        // TODO: should we fire the event on failure? on last steps only?
-        ((RemotingServer)_server).OnLogon();
+        if (_isAuthenticated)
+            ((RemotingServer)_server).OnLogon();
     }
 
     /// <summary>

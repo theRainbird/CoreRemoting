@@ -3,7 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CoreRemoting.Authentication;
 using Octokit;
-using static Logger<Server>;
+using static CoreRemoting.Authentication.AuthenticationResponseMessage;
 
 /// <summary>
 /// Github authentication provider demo.
@@ -16,7 +16,7 @@ public class GitHubAuthProvider : IAuthenticationProvider
         var token = request["token"];
         if (string.IsNullOrWhiteSpace(token))
         {
-            return new AuthenticationResponseMessage { IsAuthenticated = false };
+            return Error("GitHub token is missing");
         }
 
         try
@@ -46,13 +46,11 @@ public class GitHubAuthProvider : IAuthenticationProvider
         }
         catch (AuthorizationException)
         {
-            WriteLine("GitHub token validation failed (invalid or expired)");
-            return new AuthenticationResponseMessage { IsAuthenticated = false };
+            return Error("GitHub token validation failed (invalid or expired)");
         }
         catch (Exception ex)
         {
-            WriteLine($"GitHub validation error: {ex.Message}");
-            return new AuthenticationResponseMessage { IsAuthenticated = false };
+            return Error($"GitHub validation error: {ex.Message}");
         }
     }
 }

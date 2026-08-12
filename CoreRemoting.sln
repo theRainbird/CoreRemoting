@@ -43,6 +43,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TwoFactorAuth", "Examples\T
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LoginUsingGithubDemo", "Examples\LoginUsingGithubDemo\LoginUsingGithubDemo.csproj", "{EE2AA4B4-2E47-465D-FCB5-0A2B294F6E4C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.Authentication.SecureRemotePassword", "CoreRemoting.Authentication.SecureRemotePassword\CoreRemoting.Authentication.SecureRemotePassword.csproj", "{963449AE-2169-8B24-93B4-5BE7CB7DFF0C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -113,6 +115,10 @@ Global
 		{EE2AA4B4-2E47-465D-FCB5-0A2B294F6E4C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EE2AA4B4-2E47-465D-FCB5-0A2B294F6E4C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EE2AA4B4-2E47-465D-FCB5-0A2B294F6E4C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{963449AE-2169-8B24-93B4-5BE7CB7DFF0C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{963449AE-2169-8B24-93B4-5BE7CB7DFF0C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{963449AE-2169-8B24-93B4-5BE7CB7DFF0C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{963449AE-2169-8B24-93B4-5BE7CB7DFF0C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

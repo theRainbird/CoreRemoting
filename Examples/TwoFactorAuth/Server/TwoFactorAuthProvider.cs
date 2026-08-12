@@ -3,7 +3,9 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using CoreRemoting.Authentication;
+using static CoreRemoting.Authentication.AuthenticationResponseMessage;
 using static Logger<Server>;
+
 
 /// <summary>
 /// Two-factor authentication provider demo.
@@ -23,7 +25,7 @@ internal class TwoFactorAuthProvider : IAuthenticationProvider
         if (string.IsNullOrWhiteSpace(login) ||
             string.IsNullOrWhiteSpace(password))
         {
-            return new(); // failed: no login or password provided
+            return Error("No login or password specified");
         }
 
         // step1: verify userName & password, generate random code
@@ -56,7 +58,7 @@ internal class TwoFactorAuthProvider : IAuthenticationProvider
             }
         }
 
-        return new(); // failed
+        return Error();
     }
 
     private async Task SendSmsToUser(string userName, string genCode)

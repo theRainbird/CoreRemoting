@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Net;
 using System.Reflection;
 using CoreRemoting.Authentication;
 
@@ -100,6 +101,24 @@ public static class Extensions
     public static string HexDump(this byte[] bytes) => bytes == null ? "" :
         string.Join("\n", Enumerable.Range(0, (bytes.Length + 15) / 16)
             .Select(i => string.Join(" ", bytes.Skip(i * 16).Take(16).Select(b => b.ToString("X2")))));
+
+    /// <summary>
+    /// Finds the credential value by name, case-insensitive.
+    /// </summary>
+    /// <param name="credentials">Credentials array.</param>
+    /// <param name="name">Credential name.</param>
+    public static string FindByName(this Credential[] credentials, string name) =>
+        credentials?.FirstOrDefault(c =>
+            string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase))?.Value;
+
+    /// <summary>
+    /// Finds the parameter value by name, case-insensitive.
+    /// </summary>
+    /// <param name="parameters">Parameters array.</param>
+    /// <param name="name">Credential name.</param>
+    public static string FindByName(this AuthenticationResponseParameter[] parameters, string name) =>
+        parameters?.FirstOrDefault(c =>
+            string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase))?.Value;
 
     /// <summary>
     /// Appends the given values to the array.
