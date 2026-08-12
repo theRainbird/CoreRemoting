@@ -1,20 +1,20 @@
 ﻿using System.Threading.Tasks;
 using CoreRemoting.Toolbox;
 using SecureRemotePassword;
-using static CoreRemoting.Authentication.SecureRemotePassword.SrpConstants;
+using static CoreRemoting.Authentication.SecureRemotePassword.SrpProtocolConstants;
 
 namespace CoreRemoting.Authentication.SecureRemotePassword;
 
 /// <summary>
 /// Client-side: credentials for the SRP-6a authentication protocol.
 /// </summary>
-public class SrpCredentials : IAuthenticator
+public class SrpAuthenticator : IAuthenticator
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="SrpCredentials"/> class.
+    /// Initializes a new instance of the <see cref="SrpAuthenticator"/> class.
     /// </summary>
     /// <param name="parameters">Optional SRP-6a protocol parameters (should match server parameters).</param>
-    public SrpCredentials(SrpParameters parameters = null)
+    public SrpAuthenticator(SrpParameters parameters = null)
     {
         SrpClient = new SrpClient(parameters);
     }

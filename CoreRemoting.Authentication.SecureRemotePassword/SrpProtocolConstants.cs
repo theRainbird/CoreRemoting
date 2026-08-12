@@ -3,7 +3,7 @@
 /// <summary>
 /// SRP-6a protocol constants used by SrpAuthenticator and SrpAuthenticationProvider.
 /// </summary>
-public class SrpConstants
+public class SrpProtocolConstants
 {
     /// <summary>
     /// User name (case sensitive).
@@ -39,4 +39,9 @@ public class SrpConstants
     /// Server session proof.
     /// </summary>
     public const string SERVER_SESSION_PROOF = "M2";
+
+    /// <summary>
+    /// Optional session identity.
+    /// </summary>
+    public const string OPTIONAL_SESSION_ID = "X";
 }

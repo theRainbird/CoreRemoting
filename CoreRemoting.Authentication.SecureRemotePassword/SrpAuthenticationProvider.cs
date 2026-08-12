@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Security;
 using System.Threading.Tasks;
 using SecureRemotePassword;
-using static CoreRemoting.Authentication.SecureRemotePassword.SrpConstants;
+using static CoreRemoting.Authentication.SecureRemotePassword.SrpProtocolConstants;
 using static CoreRemoting.Authentication.AuthenticationResponseMessage;
 
 namespace CoreRemoting.Authentication.SecureRemotePassword;
@@ -35,8 +35,8 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
 
     private string UnknownUserSalt { get; set; }
 
-    internal ConcurrentDictionary<Guid, Step1Data> PendingAuthentications { get; } =
-        new ConcurrentDictionary<Guid, Step1Data>();
+    internal ConcurrentDictionary<string, Step1Data> PendingAuthentications { get; } =
+        new ConcurrentDictionary<string, Step1Data>();
 
     // variables produced on the first authentication step
     internal class Step1Data
@@ -72,7 +72,7 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
         // first step never fails: User -> Host: I, A = g^a (identifies self, a = random number)
         var userName = authRequest[USERNAME];
         var clientEphemeral = authRequest[CLIENT_EPHEMERAL_PUBLIC];
-        var sessionId = RemotingSession.Current.SessionId;
+        var sessionId = authRequest[OPTIONAL_SESSION_ID] ?? RemotingSession.Current.SessionId.ToString();
 
         var account = await AuthRepository.FindByName(userName);
         if (account != null)
@@ -112,7 +112,7 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
         try
         {
             // get the values calculated on the first step
-            var sessionId = RemotingSession.Current.SessionId;
+            var sessionId = authRequest[OPTIONAL_SESSION_ID] ?? RemotingSession.Current.SessionId.ToString();
             if (!PendingAuthentications.TryRemove(sessionId, out var vars) || vars.Account is FakeSrpAccount)
                 throw new SecurityException();
 
