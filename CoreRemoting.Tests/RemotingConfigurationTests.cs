@@ -121,4 +121,11 @@ public class RemotingConfigurationTests : IClassFixture<ServerFixture>
 
         RemotingConfiguration.ShutdownAll();
     }
+
+    [Fact]
+    public void AuthenticationRequired_flag_requires_that_AuthenticationProvider_is_set()
+    {
+        var serverConfig = new ServerConfig { AuthenticationRequired = true };
+        Assert.Throws<InvalidOperationException>(serverConfig.Validate);
+    }
 }

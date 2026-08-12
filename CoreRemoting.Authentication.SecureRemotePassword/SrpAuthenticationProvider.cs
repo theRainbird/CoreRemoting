@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Security;
 using System.Threading.Tasks;
 using SecureRemotePassword;
@@ -74,7 +73,7 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
         var clientEphemeral = authRequest[CLIENT_EPHEMERAL_PUBLIC];
         var sessionId = authRequest[OPTIONAL_SESSION_ID] ?? RemotingSession.Current.SessionId.ToString();
 
-        var account = await AuthRepository.FindByName(userName);
+        var account = await AuthRepository.FindByName(userName).ConfigureAwait(false);
         if (account != null)
         {
             // save the data for the second authentication step
@@ -122,7 +121,8 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
                 vars.Account.Salt, vars.Account.UserName, vars.Account.Verifier, clientSessionProof);
 
             // Host -> User: H(A, M, K)
-            return await ResponseStep2(serverSession.Proof, vars.Account);
+            return await ResponseStep2(serverSession.Proof, vars.Account)
+                .ConfigureAwait(false);
         }
         catch (SecurityException)
         {
@@ -145,7 +145,7 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
     {
         IsCompleted = true,
         IsAuthenticated = true,
-        AuthenticatedIdentity = await AuthRepository.GetIdentity(account),
+        AuthenticatedIdentity = await AuthRepository.GetIdentity(account).ConfigureAwait(false),
         Parameters =
         [
             new() { Name = SERVER_SESSION_PROOF, Value = serverSessionProof },

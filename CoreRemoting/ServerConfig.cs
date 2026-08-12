@@ -113,4 +113,16 @@ public class ServerConfig
     /// Set -1 to wait forever (default).
     /// </summary>
     public int WaitTimeForCurrentlyProcessedMessagesOnDispose { get; set; } = -1;
+
+    /// <summary>
+    /// Validates the config and throws error on invalid settings.
+    /// </summary>
+    public ServerConfig Validate()
+    {
+        if (AuthenticationRequired && AuthenticationProvider == null)
+            throw new InvalidOperationException("ServerConfig.AuthenticationRequired " +
+                "is set, but AuthenticationProvider is not set.");
+
+        return this;
+    }
 }

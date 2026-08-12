@@ -37,7 +37,7 @@ public sealed class RemotingServer : IRemotingServer
     /// <param name="config">Configuration settings to be used (Default configuration is used, if left null)</param>
     public RemotingServer(ServerConfig config = null)
     {
-        _config = config ?? new ServerConfig();
+        _config = config?.Validate() ?? new ServerConfig();
 
         _uniqueServerInstanceName =
             string.IsNullOrWhiteSpace(_config.UniqueServerInstanceName)

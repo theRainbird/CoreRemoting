@@ -39,7 +39,7 @@ public class SrpAuthenticator : IAuthenticator
         };
 
         // step1 response: Host -> User: s, B = kv + g^b (sends salt, b = random number)
-        var response1 = await authProxy.Authenticate(request1);
+        var response1 = await authProxy.Authenticate(request1).ConfigureAwait(false);
         var salt = response1[SALT];
         var serverEphemeralPublic = response1[SERVER_EPHEMERAL_PUBLIC];
 
@@ -55,7 +55,7 @@ public class SrpAuthenticator : IAuthenticator
         };
 
         // step2 response: Host -> User: H(A, M, K)
-        var response2 = await authProxy.Authenticate(request2);
+        var response2 = await authProxy.Authenticate(request2).ConfigureAwait(false);
         var serverSessionProof = response2[SERVER_SESSION_PROOF];
         SrpClient.VerifySession(clientEphemeral.Public, clientSession, serverSessionProof);
     }
