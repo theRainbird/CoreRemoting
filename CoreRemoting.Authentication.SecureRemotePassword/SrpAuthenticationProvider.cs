@@ -23,7 +23,7 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
         AuthRepository = repository;
         SrpParameters = parameters ?? new();
         SrpServer = new SrpServer(SrpParameters);
-        UnknownUserSalt = new SrpClient(parameters).GenerateSalt();
+        UnknownUserSalt = new SrpClient(SrpParameters).GenerateSalt();
     }
 
     private ISrpAccountRepository AuthRepository { get; set; }
@@ -34,8 +34,7 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
 
     private string UnknownUserSalt { get; set; }
 
-    internal ConcurrentDictionary<string, Step1Data> PendingAuthentications { get; } =
-        new ConcurrentDictionary<string, Step1Data>();
+    internal ConcurrentDictionary<string, Step1Data> PendingAuthentications { get; } = new();
 
     // variables produced on the first authentication step
     internal class Step1Data
@@ -43,14 +42,6 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
         public ISrpAccount Account { get; set; }
         public string ClientEphemeralPublic { get; set; }
         public SrpEphemeral ServerEphemeral { get; set; }
-    }
-
-    // Fake account is used so the attacker cannot tell whether the given user exists or not
-    internal class FakeSrpAccount : ISrpAccount
-    {
-        public string UserName { get; set; }
-        public string Salt => "1234";
-        public string Verifier => "4321";
     }
 
     /// <inheritdoc/>
@@ -96,13 +87,6 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
         var fakeSalt = SrpParameters.Hash(userName + UnknownUserSalt).ToHex();
         var fakeEphemeral = SrpServer.GenerateEphemeral(fakeSalt);
 
-        PendingAuthentications[sessionId] = new Step1Data
-        {
-            Account = new FakeSrpAccount { UserName = userName },
-            ClientEphemeralPublic = clientEphemeral,
-            ServerEphemeral = fakeEphemeral
-        };
-
         return ResponseStep1(fakeSalt, fakeEphemeral.Public);
     }
 
@@ -112,7 +96,7 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
         {
             // get the values calculated on the first step
             var sessionId = authRequest[OPTIONAL_SESSION_ID] ?? RemotingSession.Current.SessionId.ToString();
-            if (!PendingAuthentications.TryRemove(sessionId, out var vars) || vars.Account is FakeSrpAccount)
+            if (!PendingAuthentications.TryRemove(sessionId, out var vars))
                 throw new SecurityException();
 
             // second step may fail: User -> Host: M = H(H(N) xor H(g), H(I), s, A, B, K)
