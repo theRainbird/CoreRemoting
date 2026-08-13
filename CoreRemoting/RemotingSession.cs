@@ -369,17 +369,10 @@ public sealed class RemotingSession : IAsyncDisposable
                         sendersPublicKeyBlob: _clientPublicKeyBlob,
                         sendersPublicKeySize: _keyPair?.KeySize ?? 0));
 
-        _isAuthenticated = _server.Authenticate(authRequestMessage.Credentials, out var authenticatedIdentity);
+        var authResponseMessage = await _server.Authenticate(authRequestMessage);
 
-        if (_isAuthenticated)
-            Identity = authenticatedIdentity;
-
-        var authResponseMessage =
-            new AuthenticationResponseMessage
-            {
-                IsAuthenticated = _isAuthenticated,
-                AuthenticatedIdentity = authenticatedIdentity
-            };
+        if (_isAuthenticated = authResponseMessage.IsAuthenticated)
+            Identity = authResponseMessage.AuthenticatedIdentity;
 
         var serializedAuthResponse = _server.Serializer.Serialize(authResponseMessage);
 
@@ -395,7 +388,8 @@ public sealed class RemotingSession : IAsyncDisposable
             _server.Serializer.Serialize(wireMessage))
                 .ConfigureAwait(false);
 
-        ((RemotingServer)_server).OnLogon();
+        if (_isAuthenticated)
+            ((RemotingServer)_server).OnLogon();
     }
 
     /// <summary>

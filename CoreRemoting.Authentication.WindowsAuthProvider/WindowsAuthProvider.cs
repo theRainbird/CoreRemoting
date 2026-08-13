@@ -1,87 +1,78 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.DirectoryServices.AccountManagement;
+using System.Linq;
+using System.Threading.Tasks;
 
-namespace CoreRemoting.Authentication
+namespace CoreRemoting.Authentication;
+
+/// <summary>
+/// Authentication provider to check credentials against Windows user accounts.
+/// </summary>
+[SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
+public class WindowsAuthProvider : IAuthenticationProvider
 {
+    public const string CREDENTIAL_TYPE_DOMAIN = "domain";
+    public const string CREDENTIAL_TYPE_USERNAME = "username";
+    public const string CREDENTIAL_TYPE_PASSWORD = "password";
+
     /// <summary>
-    /// Authentication provider to check credentials against Windows user accounts.
+    /// Authenticates the provided credentials and returns the authenticated identity, if successful.
     /// </summary>
-    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
-    public class WindowsAuthProvider : IAuthenticationProvider
+    /// <param name="credentials">Array of credentials ("username", "password" and optional "domain")</param>
+    /// <param name="authenticatedIdentity">Authenticated Identity</param>
+    /// <returns>Indicates whether the authentication was successful.</returns>
+    public Task<AuthenticationResponseMessage> Authenticate(AuthenticationRequestMessage request)
     {
-        public const string CREDENTIAL_TYPE_DOMAIN = "domain";
-        public const string CREDENTIAL_TYPE_USERNAME = "username";
-        public const string CREDENTIAL_TYPE_PASSWORD = "password";
-        
-        /// <summary>
-        /// Authenticates the provided credentials and returns the authenticated identity, if successful.
-        /// </summary>
-        /// <param name="credentials">Array of credentials ("username", "password" and optional "domain")</param>
-        /// <param name="authenticatedIdentity">Authenticated Identity</param>
-        /// <returns>Indicates whether the authentication was successful.</returns>
-        public bool Authenticate(Credential[] credentials, out RemotingIdentity authenticatedIdentity)
+        var failed = new AuthenticationResponseMessage
         {
-            authenticatedIdentity = null;
+            IsAuthenticated = false,
+            AuthenticatedIdentity = null,
+        };
 
-            if (credentials == null)
-                return false;
+        if (request?.Credentials == null)
+            return Task.FromResult(failed);
 
-            var domain =
-                credentials
-                    .Where(c => c.Name.ToLower() == CREDENTIAL_TYPE_DOMAIN)
-                    .Select(c => c.Value)
-                    .FirstOrDefault();
+        var domain = request[CREDENTIAL_TYPE_DOMAIN];
+        var userName = request[CREDENTIAL_TYPE_USERNAME];
+        var password = request[CREDENTIAL_TYPE_PASSWORD];
 
-            var userName =
-                credentials
-                    .Where(c => c.Name.ToLower() == CREDENTIAL_TYPE_USERNAME)
-                    .Select(c => c.Value)
-                    .FirstOrDefault();
+        PrincipalContext principalContext;
+        string identityName;
 
-            var password =
-                credentials
-                    .Where(c => c.Name.ToLower() == CREDENTIAL_TYPE_PASSWORD)
-                    .Select(c => c.Value)
-                    .FirstOrDefault();
-
-            PrincipalContext principalContext;
-            string identityName;
-
-            if (string.IsNullOrEmpty(domain))
-            {
-                principalContext = new PrincipalContext(ContextType.Machine);
-                identityName = userName;
-            }
-            else
-            {
-                principalContext = new PrincipalContext(ContextType.Domain, domain);
-                identityName = domain + "\\" + userName;                
-            }
-            
-            var isAuthenticated = principalContext.ValidateCredentials(userName ?? string.Empty, password ?? string.Empty);
-
-            if (isAuthenticated)
-            {
-                var principal = UserPrincipal.FindByIdentity(principalContext, identityName ?? string.Empty);
-                var userIsMemberOf = 
-                    principal == null
-                        ? Array.Empty<string>()
-                        : principal.GetAuthorizationGroups().Select(group => group.Name);
-
-                authenticatedIdentity =
-                    new RemotingIdentity()
-                    {
-                        Name = identityName,
-                        IsAuthenticated = true,
-                        Roles = userIsMemberOf.ToArray()
-                    };
-
-                return true;
-            }
-
-            return false;
+        if (string.IsNullOrEmpty(domain))
+        {
+            principalContext = new PrincipalContext(ContextType.Machine);
+            identityName = userName;
         }
+        else
+        {
+            principalContext = new PrincipalContext(ContextType.Domain, domain);
+            identityName = domain + "\\" + userName;
+        }
+
+        var isAuthenticated = principalContext.ValidateCredentials(userName ?? string.Empty, password ?? string.Empty);
+
+        if (isAuthenticated)
+        {
+            var principal = UserPrincipal.FindByIdentity(principalContext, identityName ?? string.Empty);
+            var userIsMemberOf = 
+                principal == null
+                    ? Array.Empty<string>()
+                    : principal.GetAuthorizationGroups().Select(group => group.Name);
+
+            return Task.FromResult(new AuthenticationResponseMessage
+            {
+                IsAuthenticated = true,
+                AuthenticatedIdentity = new RemotingIdentity()
+                {
+                    Name = identityName,
+                    IsAuthenticated = true,
+                    Roles = userIsMemberOf.ToArray()
+                }
+            });
+        }
+
+        return Task.FromResult(failed);
     }
 }

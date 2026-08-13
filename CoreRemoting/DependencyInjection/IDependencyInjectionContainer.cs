@@ -33,7 +33,7 @@ public interface IDependencyInjectionContainer : IDisposable
     /// <typeparam name="TServiceInterface">Service interface type</typeparam>
     /// <typeparam name="TServiceImpl">Service implementation type</typeparam>
     void RegisterService<TServiceInterface, TServiceImpl>(
-        ServiceLifetime lifetime,
+        ServiceLifetime lifetime = ServiceLifetime.Scoped,
         string serviceName = "",
         bool asHiddenSystemService = false)
         where TServiceInterface : class
@@ -49,7 +49,7 @@ public interface IDependencyInjectionContainer : IDisposable
     /// <typeparam name="TServiceInterface">Service interface type</typeparam>
     void RegisterService<TServiceInterface>(
         Func<TServiceInterface> factoryDelegate,
-        ServiceLifetime lifetime,
+        ServiceLifetime lifetime = ServiceLifetime.Scoped,
         string serviceName = "",
         bool asHiddenSystemService = false)
         where TServiceInterface : class;

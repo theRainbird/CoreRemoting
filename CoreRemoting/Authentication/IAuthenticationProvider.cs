@@ -1,16 +1,16 @@
-namespace CoreRemoting.Authentication
+using System.Threading.Tasks;
+
+namespace CoreRemoting.Authentication;
+
+/// <summary>
+/// Interface for authentication providers.
+/// </summary>
+public interface IAuthenticationProvider
 {
     /// <summary>
-    /// Interface for authentication providers.
+    /// Authenticates the provided credentials and returns the response message containing the authenticated identity, if successful.
     /// </summary>
-    public interface IAuthenticationProvider
-    {
-        /// <summary>
-        /// Authenticates the provided credentials and returns the authenticated identity, if successful.
-        /// </summary>
-        /// <param name="credentials">Array of credentials</param>
-        /// <param name="authenticatedIdentity">Authenticated Identity</param>
-        /// <returns>Indicates whether the authentication was successful.</returns>
-        bool Authenticate(Credential[] credentials, out RemotingIdentity authenticatedIdentity);
-    }
+    /// <param name="request">Authentication request message.</param>
+    /// <returns>Authentication response message including the authenticated identity.</returns>
+    Task<AuthenticationResponseMessage> Authenticate(AuthenticationRequestMessage request);
 }

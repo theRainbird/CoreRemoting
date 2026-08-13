@@ -37,7 +37,7 @@ public sealed class RemotingServer : IRemotingServer
     /// <param name="config">Configuration settings to be used (Default configuration is used, if left null)</param>
     public RemotingServer(ServerConfig config = null)
     {
-        _config = config ?? new ServerConfig();
+        _config = config?.Validate() ?? new ServerConfig();
 
         _uniqueServerInstanceName =
             string.IsNullOrWhiteSpace(_config.UniqueServerInstanceName)
@@ -246,25 +246,28 @@ public sealed class RemotingServer : IRemotingServer
     /// <summary>
     /// Authenticates the specified credentials and returns whether the authentication was successful or not.
     /// </summary>
-    /// <param name="credentials">Credentials to be used for authentication</param>
-    /// <param name="authenticatedIdentity">Authenticated identity (null when authentication fails)</param>
-    /// <returns>True when authentication was successful, otherwise false</returns>
-    public bool Authenticate(Credential[] credentials, out RemotingIdentity authenticatedIdentity)
+    /// <param name="request">Authentication request message containing credentials to be used for authentication</param>
+    /// <returns>Authentication response containing the authenticated identity when authentication was successful</returns>
+    public async Task<AuthenticationResponseMessage> Authenticate(AuthenticationRequestMessage request)
     {
-        authenticatedIdentity = null;
+        var failed = new AuthenticationResponseMessage
+        {
+            AuthenticatedIdentity = null,
+            IsAuthenticated = false,
+        };
 
         if (_config.AuthenticationProvider == null)
-            return false;
+            return failed;
 
         try
         {
-            return _config.AuthenticationProvider.Authenticate(credentials, out authenticatedIdentity);
+            return await _config.AuthenticationProvider.Authenticate(request);
         }
         catch (Exception ex)
         {
             OnError(ex);
 
-            return false;
+            return failed;
         }
     }
 

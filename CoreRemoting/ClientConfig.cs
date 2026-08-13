@@ -87,6 +87,11 @@ public class ClientConfig
     public Credential[] Credentials { get; set; }
 
     /// <summary>
+    /// Gets or sets the authenticator implementing the client-side authentication protocol.
+    /// </summary>
+    public IAuthenticator Authenticator { get; set; }
+
+    /// <summary>
     /// Gets or sets an interval in seconds to keep session alive, even on idle (session is not kept alive if set to 0).
     /// </summary>
     public int KeepSessionAliveInterval { get; set; } = 20;
