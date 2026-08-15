@@ -4,17 +4,18 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
+using CoreRemoting.DependencyInjection;
 using CoreRemoting.Encryption;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization;
 using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
-using CoreRemoting.DependencyInjection;
 using Serialize.Linq.Extensions;
 using Serialize.Linq.Nodes;
 
@@ -31,6 +32,7 @@ public sealed class RemotingSession : IAsyncDisposable
     private readonly IRemotingServer _server;
     private IRawMessageTransport _rawMessageTransport;
     private readonly RsaKeyPair _keyPair;
+    private readonly int _keySize;
     private readonly Guid _sessionId;
     private readonly byte[] _clientPublicKeyBlob;
     private readonly string _clientAddress;
@@ -68,7 +70,8 @@ public sealed class RemotingSession : IAsyncDisposable
         _sessionId = Guid.NewGuid();
         _lastActivityTimestamp = DateTime.Now;
         _isAuthenticated = false;
-        _keyPair = new RsaKeyPair(keySize);
+        _keySize = keySize;
+        _keyPair = new RsaKeyPair(_keySize);
         CreatedOn = DateTime.Now;
         _remoteDelegateInvocationEventAggregator = new RemoteDelegateInvocationEventAggregator();
         _server = server ?? throw new ArgumentNullException(nameof(server));
@@ -82,49 +85,6 @@ public sealed class RemotingSession : IAsyncDisposable
         _rawMessageTransport.ErrorOccured += OnErrorOccured;
 
         MessageEncryption = clientPublicKey != null;
-
-        WireMessage completeHandshakeMessage;
-
-        if (MessageEncryption)
-        {
-            var encryptedSessionId =
-                RsaKeyExchange.EncryptSecret(
-                    keySize: keySize,
-                    receiversPublicKeyBlob: clientPublicKey,
-                    secretToEncrypt: _sessionId.ToByteArray(),
-                    sendersPublicKeyBlob: _keyPair.PublicKey);
-
-            var rawContent = _server.Serializer.Serialize(encryptedSessionId);
-
-            var signedMessageData =
-                new SignedMessageData
-                {
-                    MessageRawData = rawContent,
-                    Signature =
-                        RsaSignature.CreateSignature(
-                            keySize: keySize,
-                            sendersPrivateKeyBlob: _keyPair.PrivateKey,
-                            rawData: rawContent)
-                };
-
-            var rawData = _server.Serializer.Serialize(typeof(SignedMessageData), signedMessageData);
-
-            completeHandshakeMessage =
-                new WireMessage
-                {
-                    MessageType = "complete_handshake",
-                    Data = rawData
-                };
-        }
-        else
-        {
-            completeHandshakeMessage =
-                new WireMessage
-                {
-                    MessageType = "complete_handshake",
-                    Data = _sessionId.ToByteArray()
-                };
-        }
 
         _remoteDelegateInvocationEventAggregator.RemoteDelegateInvocationNeeded +=
             async (_, uniqueCallKey, handlerKey, arguments) =>
@@ -170,6 +130,54 @@ public sealed class RemotingSession : IAsyncDisposable
                         $"Handler key: {handlerKey}", ex);
                 }
             };
+
+        SendCompleteHandshakeMessage();
+    }
+
+    private void SendCompleteHandshakeMessage()
+    {
+        WireMessage completeHandshakeMessage;
+
+        if (MessageEncryption)
+        {
+            var encryptedSessionId =
+                RsaKeyExchange.EncryptSecret(
+                    keySize: _keySize,
+                    receiversPublicKeyBlob: _clientPublicKeyBlob,
+                    secretToEncrypt: _sessionId.ToByteArray(),
+                    sendersPublicKeyBlob: _keyPair.PublicKey);
+
+            var rawContent = _server.Serializer.Serialize(encryptedSessionId);
+
+            var signedMessageData =
+                new SignedMessageData
+                {
+                    MessageRawData = rawContent,
+                    Signature =
+                        RsaSignature.CreateSignature(
+                            keySize: _keySize,
+                            sendersPrivateKeyBlob: _keyPair.PrivateKey,
+                            rawData: rawContent)
+                };
+
+            var rawData = _server.Serializer.Serialize(typeof(SignedMessageData), signedMessageData);
+
+            completeHandshakeMessage =
+                new WireMessage
+                {
+                    MessageType = "complete_handshake",
+                    Data = rawData
+                };
+        }
+        else
+        {
+            completeHandshakeMessage =
+                new WireMessage
+                {
+                    MessageType = "complete_handshake",
+                    Data = _sessionId.ToByteArray()
+                };
+        }
 
         _rawMessageTransport?.SendMessageAsync(
             _server.Serializer.Serialize(completeHandshakeMessage))
