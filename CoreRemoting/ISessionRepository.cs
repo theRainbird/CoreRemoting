@@ -11,11 +11,6 @@ namespace CoreRemoting;
 public interface ISessionRepository : IAsyncDisposable
 {
     /// <summary>
-    /// Gets the key size for asymmetric encryption. Should be 3072 or better in 2021 ;)
-    /// </summary>
-    int KeySize { get; }
-
-    /// <summary>
     /// Creates a new session.
     /// </summary>
     /// <param name="clientPublicKey">Client's public key</param>

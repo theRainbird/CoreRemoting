@@ -89,7 +89,7 @@ public sealed class RemotingSession : IAsyncDisposable
         {
             var encryptedSessionId =
                 RsaKeyExchange.EncryptSecret(
-                    keySize: _server.SessionRepository.KeySize,
+                    keySize: keySize,
                     receiversPublicKeyBlob: clientPublicKey,
                     secretToEncrypt: _sessionId.ToByteArray(),
                     sendersPublicKeyBlob: _keyPair.PublicKey);

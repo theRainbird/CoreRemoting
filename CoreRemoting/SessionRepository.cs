@@ -75,7 +75,7 @@ public class SessionRepository : ISessionRepository
     /// <summary>
     /// Gets the key size for asymmetric encryption. Should be 3072 or better in 2021 ;)
     /// </summary>
-    public int KeySize { get; }
+    private int KeySize { get; }
 
     /// <summary>
     /// Creates a new session.
