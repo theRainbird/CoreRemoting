@@ -34,17 +34,17 @@ public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
     /// <summary>
     /// Starts listening to the incoming messages.
     /// </summary>
-    public override Guid StartListening()
+    public override async Task<Guid> StartListening()
     {
-        var sessionId = CreateRemotingSession();
-        base.StartListening();
+        var sessionId = await CreateRemotingSession().ConfigureAwait(false);
+        await base.StartListening().ConfigureAwait(false);
         return sessionId;
     }
 
     /// <summary>
     /// Creates <see cref="RemotingSession"/> for the incoming websocket connection.
     /// </summary>
-    private Guid CreateRemotingSession()
+    private async Task<Guid> CreateRemotingSession()
     {
         byte[] clientPublicKey = null;
 
@@ -58,8 +58,9 @@ public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
                     shakeHandsCookie.Value);
         }
 
-        Session = RemotingServer.SessionRepository.CreateSession(
-            clientPublicKey, ClientAddress, RemotingServer, this);
+        Session = await RemotingServer.SessionRepository.CreateSession(
+            clientPublicKey, ClientAddress, RemotingServer, this)
+                .ConfigureAwait(false);
 
         return Session.SessionId;
     }

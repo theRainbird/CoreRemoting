@@ -54,9 +54,10 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
         if (clientPublicKey != null && clientPublicKey.Length == 0)
             clientPublicKey = null;
 
-        Session = RemotingServer.SessionRepository.CreateSession(
+        Session = await RemotingServer.SessionRepository.CreateSession(
             clientPublicKey, Connection.RemoteEndPoint.ToString(),
-                RemotingServer, this);
+                RemotingServer, this)
+                    .ConfigureAwait(false);
 
         return Session.SessionId;
     }

@@ -80,7 +80,7 @@ public class NullServerChannel : IServerChannel
                 .ConfigureAwait(false))
         {
             var connection = new NullServerConnection(msg, Server);
-            var sessionId = connection.StartListening();
+            var sessionId = await connection.StartListening().ConfigureAwait(false);
             Connections[sessionId] = connection;
         }
     }

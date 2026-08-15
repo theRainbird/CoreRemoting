@@ -4,7 +4,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Authentication;
@@ -130,11 +129,9 @@ public sealed class RemotingSession : IAsyncDisposable
                         $"Handler key: {handlerKey}", ex);
                 }
             };
-
-        SendCompleteHandshakeMessage();
     }
 
-    private void SendCompleteHandshakeMessage()
+    internal async Task SendCompleteHandshakeMessageAsync()
     {
         WireMessage completeHandshakeMessage;
 
@@ -179,9 +176,9 @@ public sealed class RemotingSession : IAsyncDisposable
                 };
         }
 
-        _rawMessageTransport?.SendMessageAsync(
-            _server.Serializer.Serialize(completeHandshakeMessage))
-                .JustWait();
+        await (_rawMessageTransport?.SendMessageAsync(
+            _server.Serializer.Serialize(completeHandshakeMessage)))
+                .ConfigureAwait(false);
     }
 
     /// <summary>

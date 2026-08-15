@@ -70,10 +70,10 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     /// <summary>
     /// Starts listening for the incoming messages.
     /// </summary>
-    public virtual Guid StartListening()
+    public virtual Task<Guid> StartListening()
     {
         _ = ReadIncomingMessages();
-        return Guid.Empty;
+        return Task.FromResult(Guid.Empty);
     }
 
     private AsyncLock ReceiveLock { get; } = new();

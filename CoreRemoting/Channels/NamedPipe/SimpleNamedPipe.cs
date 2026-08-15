@@ -156,7 +156,8 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 		{
 			// Create session immediately for NamedPipe connections
 			// This ensures proper session context for scoped services
-			if (!CreateSessionAsNeeded(null))
+			var sessionCreated = await CreateSessionAsNeeded(null).ConfigureAwait(false);
+			if (!sessionCreated)
 			{
 				// Session creation failed, stop processing
 				return;
@@ -254,16 +255,17 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 		}
 	}
 
-	private bool CreateSessionAsNeeded(Dictionary<string, object> metadata)
+	private async Task<bool> CreateSessionAsNeeded(Dictionary<string, object> metadata)
 	{
 		if (_session != null)
 			return false;
 
-		_session = _server.SessionRepository.CreateSession(
+		_session = await _server.SessionRepository.CreateSession(
 			null,
 			$"NamedPipe:{_connectionId}",
 			_server,
-			this);
+			this)
+			.ConfigureAwait(false);
 
 		_session.BeforeDispose += BeforeDisposeSession;
 

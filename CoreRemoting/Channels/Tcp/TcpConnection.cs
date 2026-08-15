@@ -97,7 +97,8 @@ public class TcpConnection : IRawMessageTransport
                 clientPublicKey,
                 _clientMetadata.IpPort,
                 _server,
-                this);
+                this)
+            .GetAwaiter().GetResult();
 
         _session.BeforeDispose += BeforeDisposeSession;
         return true;

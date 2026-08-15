@@ -18,7 +18,7 @@ public interface ISessionRepository : IAsyncDisposable
     /// <param name="server">Server instance</param>
     /// <param name="rawMessageTransport">Component that does the raw message transport</param>
     /// <returns>The newly created session</returns>
-    RemotingSession CreateSession(
+    Task<RemotingSession> CreateSession(
         byte[] clientPublicKey,
         string clientAddress,
         IRemotingServer server,
@@ -29,7 +29,7 @@ public interface ISessionRepository : IAsyncDisposable
     /// </summary>
     /// <param name="sessionId">Session ID</param>
     /// <returns>The session correlating to the specified session ID</returns>
-    RemotingSession GetSession(Guid sessionId);
+    Task<RemotingSession> GetSession(Guid sessionId);
 
     /// <summary>
     /// Gets a list of all sessions.

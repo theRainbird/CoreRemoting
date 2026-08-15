@@ -68,7 +68,8 @@ public class RpcWebsocketSharpBehavior : WebSocketBehavior, IRawMessageTransport
                     clientPublicKey,
                     Context.UserEndPoint.ToString(),
                     _server,
-                    this);
+                    this)
+                .GetAwaiter().GetResult();
 
             _session.BeforeDispose += BeforeDisposeSession;
         }
