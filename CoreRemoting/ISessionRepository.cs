@@ -25,13 +25,6 @@ public interface ISessionRepository : IAsyncDisposable
         IRawMessageTransport rawMessageTransport);
 
     /// <summary>
-    /// Gets a specified session by its ID.
-    /// </summary>
-    /// <param name="sessionId">Session ID</param>
-    /// <returns>The session correlating to the specified session ID</returns>
-    Task<RemotingSession> GetSession(Guid sessionId);
-
-    /// <summary>
     /// Gets a list of all sessions.
     /// </summary>
     IEnumerable<RemotingSession> Sessions { get; }
