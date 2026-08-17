@@ -44,7 +44,7 @@ public class NullClientChannel : NullTransport, IClientChannel
         ThisEndpoint = NullMessageQueue.Connect(Url, metadata);
         RemoteEndpoint = Url;
 
-        StartListening();
+        _ = StartListening();
         OnConnected();
 
         return Task.CompletedTask;
