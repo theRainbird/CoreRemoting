@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using CoreRemoting.Channels;
 
@@ -23,11 +22,6 @@ public interface ISessionRepository : IAsyncDisposable
         string clientAddress,
         IRemotingServer server,
         IRawMessageTransport rawMessageTransport);
-
-    /// <summary>
-    /// Gets a list of all sessions.
-    /// </summary>
-    IEnumerable<RemotingSession> Sessions { get; }
 
     /// <summary>
     /// Removes a specified session by its ID.
