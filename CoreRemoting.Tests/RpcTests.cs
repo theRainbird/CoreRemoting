@@ -3,6 +3,7 @@ using System.Data;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
@@ -1502,8 +1503,23 @@ public class RpcTests : IClassFixture<ServerFixture>
         }
     }
 
-    [Fact(Skip = "This scenario is not supported anymore because client.Connect would throw if authentication is required")]
-    public void BeginCall_event_handler_can_bypass_authentication_for_chosen_method()
+    private class FreezingAuthenticator : IAuthenticator
+    {
+        private TaskCompletionSource Freezing { get; } = new();
+
+        public TaskCompletionSource Connected { get; } = new();
+
+        public Task Authenticate(Credential[] credentials, IAuthenticationProvider authProxy)
+        {
+            // now we know we're connected, but not yet authenticated
+            Connected.TrySetResult();
+            return Freezing.Task;
+        }
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "Required by ValidationSyncContext")]
+    public async Task BeginCall_event_handler_can_bypass_authentication_for_chosen_method_but_then_authentication_times_out_anyway()
     {
         void BypassAuthorizationForEcho(object sender, ServerRpcContext e) =>
             e.AuthenticationRequired =
@@ -1515,19 +1531,24 @@ public class RpcTests : IClassFixture<ServerFixture>
 
         try
         {
+            var dirtyHack = new FreezingAuthenticator();
             using var client = new RemotingClient(new ClientConfig()
             {
+                AuthenticationTimeout = 2,
                 ConnectionTimeout = 0,
                 InvocationTimeout = 0,
                 SendTimeout = 0,
                 Channel = ClientChannel,
                 MessageEncryption = false,
                 ServerPort = _serverFixture.Server.Config.NetworkPort,
+                Authenticator = dirtyHack,
             });
 
-            // not sure can we establish unauthenticated connection
-            // even if the server says it's required?
-            client.Connect();
+            // note: this scenario is actually not supported
+            // we cannot establish unauthenticated connection
+            // if the server says it's required (unless we use this hack)
+            var connectTask = client.ConnectAsync();
+            await dirtyHack.Connected.Task.ConfigureAwait(false);
 
             // try allowed method "Echo"
             var proxy = client.CreateProxy<ITestService>();
@@ -1535,7 +1556,12 @@ public class RpcTests : IClassFixture<ServerFixture>
 
             // try disallowed method "Reverse"
             var ex = Assert.Throws<RemoteInvocationException>(() => proxy.Reverse("This method is not allowed"));
-            Assert.Contains("auth", ex.Message);
+            Assert.Contains("auth", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+            // connection timeout
+            var sx = await Assert.ThrowsAsync<SecurityException>(() => connectTask);
+            Assert.Contains("auth", sx.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("timeout", sx.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -1579,6 +1605,7 @@ public class RpcTests : IClassFixture<ServerFixture>
             client.Disconnect();
 
             // enable optional authentication
+            Assert.False(_serverFixture.Server.Config.AuthenticationRequired);
             _serverFixture.Server.Config.AuthenticationProvider = new FakeAuthProvider
             {
                 AuthenticateFake = c => c.First().Name.StartsWith("foo")
