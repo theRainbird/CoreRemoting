@@ -42,6 +42,14 @@ public class AuthenticationResponseMessage
     public string ErrorMessage { get; set; }
 
     /// <summary>
+    /// Gets or sets an optional shared key negotiated during authentication (e.g., the session key derived by SRP).
+    /// If set, both endpoints switch to this key for symmetric message encryption as soon as the
+    /// authentication is completed, replacing the default session key from the handshake.
+    /// </summary>
+    [DataMember(IsRequired = false)]
+    public byte[] NegotiatedSharedKey { get; set; }
+
+    /// <summary>
     /// Gets the value of the given parameter, or null.
     /// </summary>
     /// <param name="name">Parameter name, case-insensitive.</param>

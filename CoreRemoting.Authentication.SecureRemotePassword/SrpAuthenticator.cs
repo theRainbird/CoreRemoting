@@ -1,4 +1,6 @@
-﻿using System.Threading.Tasks;
+﻿using System.Linq;
+using System.Security;
+using System.Threading.Tasks;
 using CoreRemoting.Toolbox;
 using SecureRemotePassword;
 using static CoreRemoting.Authentication.SecureRemotePassword.SrpProtocolConstants;
@@ -58,5 +60,14 @@ public class SrpAuthenticator : IAuthenticator
         var response2 = await authProxy.Authenticate(request2).ConfigureAwait(false);
         var serverSessionProof = response2[SERVER_SESSION_PROOF];
         SrpClient.VerifySession(clientEphemeral.Public, clientSession, serverSessionProof);
+
+        // verify that the SRP session key negotiated by the server matches the locally derived key
+        if (response2.NegotiatedSharedKey != null)
+        {
+            var expectedSessionKey = SrpValueConverter.FromHex(clientSession.Key);
+
+            if (!response2.NegotiatedSharedKey.SequenceEqual(expectedSessionKey))
+                throw new SecurityException("Negotiated shared key does not match the locally derived SRP session key.");
+        }
     }
 }

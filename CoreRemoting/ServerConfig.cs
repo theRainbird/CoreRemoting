@@ -45,6 +45,14 @@ public class ServerConfig
     public bool MessageEncryption { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets whether message encryption should use the legacy session key derivation,
+    /// where the symmetric shared secret is derived from the session ID (for compatibility with old clients).
+    /// This setting is valid for this server instance as a whole. When set to false (default), a cryptographically
+    /// random session key is generated per session and exchanged during the handshake in addition to the session ID.
+    /// </summary>
+    public bool UseLegacySessionKeyDerivation { get; set; } = false;
+
+    /// <summary>
     /// Gets or sets the serializer to be used (Bson serializer is used, if set to null).
     /// </summary>
     public ISerializerAdapter Serializer { get; set; }

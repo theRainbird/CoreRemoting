@@ -42,10 +42,14 @@ The current auth flow sends `auth` → waits for `auth_response`. Multi-phase is
 
 No new wire types are sent. Old clients see `IsCompleted = true` from legacy providers and behave unchanged. New clients with an `IAuthenticator` that checks `IsCompleted` can loop until done.
 
-### Rule 4 — Session Key Derivation: Never Re-key Mid-session
-Phase 3 proposes replacing `_sessionKey` with `NegotiatedSharedKey` after authentication succeeds. If messages were already exchanged (e.g., during an SRP challenge-response loop) using the random key, **those messages become undecryptable** once we swap to the negotiated key — and vice versa.
+### Rule 4 — Session Key Derivation: Atomic Rekey at the Auth-Completion Boundary
+Phase 3 switches the session's shared secret from the Phase 1 random key to a key negotiated by the authentication protocol. The danger with naive mid-session re-keying is that messages already exchanged would be undecryptable under the new key (and vice versa).
 
-Mitigation: When a provider returns a non-null `NegotiatedSharedKey`, do NOT generate `_sessionKey` at all in Phase 1. Instead, skip AES encryption entirely during the challenge-response phase (messages are signed but not encrypted with per-message IV), then swap to the negotiated key only after auth completes. The handshake message format must include a flag indicating "negotiated-key mode" so both sides know whether to expect AES-encrypted messages or unencrypted-wrapped-by-RSA-only messages during auth.
+**Implemented mitigation (deviates from the earlier draft):** no handshake flag, and AES is *never* skipped. Both sides switch the shared secret atomically at exactly one deterministic boundary — the **final completed `auth_response` carrying a non-null `NegotiatedSharedKey`**:
+- Every message exchanged during authentication (including challenge-response rounds) remains fully encrypted with RSA signatures + per-message IV/AES under the random handshake key. That key is only ever consumed by setup traffic and no longer needed after the switch — so nothing becomes undecryptable: both peers rekey after sending/receiving the same final message, and all subsequent traffic uses the negotiated key symmetrically on both sides.
+- Server: `RemotingSession.ProcessAuthenticationRequestMessage` applies the rekey only after a completed, successful authentication (and, in legacy mode, after stripping the field from the wire).
+- Client: `RemotingClient.ProcessAuthenticationResponseMessage` applies the same switch inside the `IsCompleted` handling.
+- No new handshake metadata is needed — the key itself travels inside the existing `auth_response` message type.
 
 ### Rule 5 — New Fields on Existing Types: Opt-in via Optional Members
 Adding fields like `RemotingIdentity.Claims` (Phase 7) or a negotiated key hint in `AuthenticationResponseMessage` must use optional members with default values, so old deserializers silently ignore them and new ones consume what they understand. The `[DataMember]` attribute on DataContract types already defaults to opt-in deserialization — but we should explicitly set `IsRequired = false` for clarity.
@@ -62,7 +66,7 @@ Phase 4 adds a method (`GetOrCreateResumeCandidate`) and an optional parameter (
 | Wire format changes in handshake (Phase 1) | Low — compat flag mentioned but not specified how it works end-to-end | **Low** — version-negotiation via metadata; old clients fall back to sessionId-derived key automatically when they cannot parse the new field. No server config change needed for mixed deployments. |
 | `IAuthenticationProvider` interface replacement (Phase 2) | Medium — "adapter bridges legacy" but no deprecation timeline | **Medium** — kept as-is, but now with explicit N+1 version strategy and `[Obsolete]` attributes on deprecated members rather than outright removal. Existing providers continue compiling without changes through adapter extension methods in core library. |
 | Auth loop change from request/response to challenge-response (Phase 2 + SRP/OIDC) | **High** — old clients would timeout waiting for `auth_response`, new servers send challenges first | **Low** — mitigated by reusing `auth`/`auth_response` with `IsCompleted` flag. Legacy providers return `IsCompleted = true`, new providers can return `IsCompleted = false` with `Parameters`. No new wire types, old clients remain in single-step mode. |
-| Session key re-keying mid-session (Phase 3) | Low-Medium — "re-key all existing encrypted state" is technically difficult and error-prone | **Low** — mitigated by skipping AES entirely during challenge-response when negotiated key available; no mid-session swap needed. Handshake flag communicates mode to client upfront. |
+| Session key re-keying (Phase 3) | Low-Medium — "re-key all existing encrypted state" is technically difficult and error-prone | **Low** — AES is never disabled; challenge traffic stays encrypted under the Phase 1 random key. Rekeying happens atomically after the final completed `auth_response` on both sides, so no window exists where peers disagree about the active key (Rule 4). |
 | Session resume handshake metadata (Phase 4) | Medium | **Medium** — additive only, old servers ignore unknown fields in handshake metadata. Resume requires new clients on both sides anyway for the feature to work end-to-end. |
 
 ---
@@ -102,28 +106,38 @@ Multi-phase authentication is implemented without new wire types. The existing `
 
 ---
 
-## Phase 3: Negotiated Shared Key via Auth Provider
+## Phase 3: Negotiated Shared Key via Auth Provider (implemented)
 
-Add optional property on auth provider that, when set after successful protocol negotiation, replaces the random AES key with a shared secret derived by the authentication protocol itself (e.g., SRP).
+The authentication protocol itself can produce a shared secret (e.g., SRP's `K`). When negotiation is enabled, that key replaces the Phase 1 random AES key for all traffic after authentication.
+
+**Design decision — key travels with the auth result, not on the interface:**
+The negotiated key is *not* exposed on `IAuthenticationProvider`. C# interfaces cannot have optional getters, providers need per-session state anyway, and released clients already ignore unknown wire fields silently. Instead, the key rides in the final authentication result via an optional member (Rule 5) on the existing wire type:
 
 ```csharp
-public interface IAuthenticationProvider
-{
-    // ... existing members from Phase 2 + legacy single-step API preserved in parallel ...
-
-    /// <summary>Shared cryptographic material produced during auth. When non-null, used as AES session key instead of random.</summary>
-    byte[]? NegotiatedSharedKey { get; }
-}
+// AuthenticationResponseMessage (existing [DataContract] type):
+[DataMember(IsRequired = false)]
+public byte[] NegotiatedSharedKey { get; set; }
 ```
 
-**Backward compatibility — Rule 4 applied:**
-- **Do NOT generate `_sessionKey` at all when negotiated-key mode is active.** SRP and similar protocols produce the key themselves during auth, so generating a random one first then swapping it mid-session (as originally proposed) would corrupt any messages already exchanged with AES. Instead: handshake metadata includes `NegotiatedKeyType = true/false`. When `true`, server skips `_sessionKey` generation entirely; challenge-response messages use RSA signature only (no per-message IV/AES). After auth completes, both sides switch to AES using the negotiated key for all subsequent traffic.
-- The legacy single-step flow (Phase 1 compat mode) continues to work unchanged: no provider returns a negotiated key in that path, so `_sessionKey` is generated as before and used throughout the session lifecycle.
+- Legacy providers leave it `null` → behavior unchanged.
+- Negotiating providers set it on the **final** response (`IsCompleted = true`, `IsAuthenticated = true`).
+
+**Generic core mechanism (provider-agnostic):**
+- Server — `RemotingSession.ProcessAuthenticationRequestMessage`: after a completed, successful authentication with a non-null key, rekeys via `_sessionKey = NegotiatedSharedKey`. If the server runs in legacy mode (`ServerConfig.UseLegacySessionKeyDerivation = true`) or without message encryption, the field is nulled before serialization — otherwise the client would rekey while the server kept the random key (inconsistent state, guaranteed decrypt failure).
+- Client — `RemotingClient.ProcessAuthenticationResponseMessage`: stores the non-null key as session key under the session lock when handling a completed, successful response.
+- The rekey boundary is atomic on both sides (server: after sending the final response; client: upon receiving it) and all challenge-phase messages remain encrypted under the Phase 1 handshake key (Rule 4).
+
+**Backward compatibility:**
+- Released clients don't know the field and ignore it (`IsRequired = false`). Consequence: when a negotiating provider is enabled, old clients cannot establish sessions — every client must be upgraded before negotiation is switched on (same upgrade ordering story as Phase 1's random key). Documented opt-in requirement.
+- Traditional providers (no negotiation) are unaffected in any configuration — the field stays `null` end to end.
+- **Implemented deviation from the earlier plan draft:** no `NegotiatedKeyType` handshake flag, and the old idea of skipping AES during the auth phase was *not* implemented. Encryption remains active for the entire session lifecycle (safer), and no new handshake metadata is required because the key piggybacks on `auth_response`.
+- Providers opt in individually so existing deployments stay untouched (e.g., `SrpAuthenticationProvider` constructor parameter `useNegotiatedSessionKey = false` by default). The client optionally verifies the received key against its own locally derived value (defense-in-depth / server authentication — implemented for SRP).
 
 **Files:**
-- `IAuthenticationProvider.cs` — add the property above (extended from Phase 2). Legacy single-step API preserved via adapter for N+1 deprecation.
-- Handshake wire format — extend with `NegotiatedKeyType: bool` flag in metadata so client knows whether to expect AES or RSA-only during auth phase. Both sides must agree; old servers default to false (random key mode), which is the current behavior.
-- `RemotingSession` handshake completion path — when negotiated-key mode active, swap from no-AES to AES with NegotiatedSharedKey after auth completes. No mid-session re-keying needed because nothing was encrypted before this point.
+- `AuthenticationResponseMessage.cs` — new optional `NegotiatedSharedKey` member.
+- `RemotingSession.cs` — conditional rekey + legacy/no-encryption strip in `ProcessAuthenticationRequestMessage`.
+- `RemotingClient.cs` — rekey on final `auth_response` in `ProcessAuthenticationResponseMessage`.
+- `SrpAuthenticationProvider.cs` / `SrpAuthenticator.cs` — SRP-specific binding (opt-in parameter, key comparison).
 
 ---
 
@@ -207,9 +221,10 @@ SRP-6a lets client and server establish a shared secret without ever transmittin
 ### Backward compatibility — Rule 3 + Rule 4 applied
 SRP uses existing `auth` / `auth_response` wire types only. Challenge data is sent in `AuthenticationResponseMessage.Parameters` with `IsCompleted = false`, client response is sent back in `AuthenticationRequestMessage.Credentials`. No new wire types are introduced.
 
-When negotiated-key mode is active:
-- Server skips `_sessionKey` generation entirely in Phase 1 — no AES key exists yet because the real key comes from SRP math itself.
-- Challenge-response messages use RSA signature only, no per-message IV/AES, so there is **nothing to corrupt** if we later switch to AES with the negotiated key after auth completes. No mid-session re-keying needed.
+When negotiation is enabled (opt-in via `SrpAuthenticationProvider` constructor parameter `useNegotiatedSessionKey`, default off):
+- The Phase 1 random handshake key is still generated and protects all handshake + challenge traffic — encryption is never skipped.
+- After a successful SRP authentication, the final `auth_response` carries SRP's `K` as `NegotiatedSharedKey`, and the core rekeys both sides to `K` at the Rule 4 boundary.
+- The client additionally verifies that the received key matches its locally derived `K` before accepting it (defense-in-depth / server authentication).
 
 ### New project structure
 
@@ -304,9 +319,9 @@ The provider keeps per-session state keyed by `sessionId` to correlate steps.
 
 | Phase | Integration point |
 |-------|------------------|
-| **Phase 1 (random AES key)** — skipped when using SRP, because Phase 3's negotiated key replaces it entirely. The handshake still sends `B` encrypted via RSA during the initial phase; only after successful auth does the server switch to AES with `NegotiatedSharedKey`. |
+| **Phase 1 (random AES key)** — still generated and used for all handshake + challenge traffic (encryption is never skipped). After successful SRP auth, the core switches the session secret to `NegotiatedSharedKey` atomically (Rule 4 boundary). |
 | **Phase 2 (multi-phase interface)** — SRP provider uses `IsCompleted` + `Parameters` via `auth` / `auth_response`. First round returns `IsCompleted = false` with `SALT`/`SERVER_EPHEMERAL_PUBLIC` in `Parameters`. Second round processes client `Credentials` and returns `IsCompleted = true` on success. |
-| **Phase 3 (negotiated key)** — SRP's shared secret K is exactly what Phase 3 expects as `NegotiatedSharedKey`. The session switches to AES with K after auth completes; challenge messages remain RSA-signed only. |
+| **Phase 3 (negotiated key)** — SRP's shared secret K travels in the final `auth_response` as `NegotiatedSharedKey` when opt-in is enabled; the session rekeys to AES under K after auth completes, while challenge messages stay fully encrypted with the handshake key. |
 | **Phase 4 (session resume)** — SRP sessions are fully authenticated by the time Phase 3 succeeds, so resumed-session logic works identically. The server stores v per username; on reconnect, same user+password → same K derivation path. |
 | **Phase 5 (session variables)** — after successful auth, provider can populate session variables with roles fetched from `ISrpPasswordStore.Roles`. |
 
@@ -360,7 +375,7 @@ This helper is **internal** to the SRP project — not part of public API. It's 
 | Issue from original report | Phase(s) that address it |
 |----------------------------|--------------------------|
 | SessionId == shared secret, <128 bits entropy (UUID not recommended as secure token) | **Phase 1** — random AES-256 key per session. **Phase 3/8** — SRP produces cryptographically strong negotiated key. |
-| No way to provide custom shared key for a session (supported by some auth protocols) | **Phase 3** — `NegotiatedSharedKey` on provider interface. **Phase 7+8** — OIDC and SRP both exercise this pathway. |
+| No way to provide custom shared key for a session (supported by some auth protocols) | **Phase 3** — optional `NegotiatedSharedKey` member on `AuthenticationResponseMessage`. **Phase 7+8** — OIDC and SRP both exercise this pathway. |
 | Auth provider doesn't support multi-step protocols like SRP or 2FA | **Phase 2** — refactored multi-phase interface. **Phase 7 (Pattern B)** — adaptive step-up auth for OIDC/Keycloak. **Phase 8** — full SRP implementation as a concrete provider. |
 | SessionId changes on reconnect after server restart; should support session resume (#162) | **Phase 4** — `GetOrCreateResumeCandidate` + resumable sessionId in handshake metadata, with public-key binding to prevent hijacking. |
 | No session variables for storing elevated permissions etc. | **Phase 5** — per-session `ConcurrentDictionary<string, object?>`. SRP provider populates roles from password store into these on login (Phase 8). |
@@ -370,7 +385,7 @@ This helper is **internal** to the SRP project — not part of public API. It's 
 |-----------|----------|----------------------|----------------------|
 | Phase 1 — random AES key | `EncryptedSessionKey` wire helper | `RemotingSession.cs`, `AesEncryption.cs`, `RsaKeyExchange.cs`, `RemotingClient.cs` | — |
 | Phase 2 — multi-phase interface | Adapter for legacy providers | `IAuthenticationProvider.cs`, `RemotingSession.cs`, `RemotingClient.cs`, `AuthenticationResponseMessage.IsCompleted` + `Parameters` usage | All three existing auth projects (via adapter — minimal change) |
-| Phase 3 — negotiated key | — | `IAuthenticationProvider.cs` extended, `RemotingSession.cs` handshake completion path | — |
+| Phase 3 — negotiated key | — | `AuthenticationResponseMessage.cs` (optional `NegotiatedSharedKey` member), `RemotingSession.cs` (rekey + legacy strip in `ProcessAuthenticationRequestMessage`), `RemotingClient.cs` (rekey on final `auth_response`) | `SrpAuthenticationProvider.cs` / `SrpAuthenticator.cs` (opt-in + key verification) |
 | Phase 4 — session resume | — | `ISessionRepository.cs`, `SessionRepository.cs`, all server connection handlers for TCP/WS/QUIC/NamedPipe | — |
 | Phase 5 — session variables | — | `RemotingSession.cs` (add ConcurrentDictionary + accessors) | — |
 | Phase 6 — tests & migration | New test files covering each phase's behavior, including crypto correctness | Existing auth provider projects via adapter pattern updates | All three existing auth providers migrated to multi-phase interface using legacy-adapter bridge |

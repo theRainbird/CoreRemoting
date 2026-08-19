@@ -41,6 +41,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     private Dictionary<Guid, ClientRpcContext> _activeCalls;
     private readonly AsyncLock _activeCallsLock;
     private Guid _sessionId;
+    private byte[] _sessionKey;
     private readonly object _sessionLock;
     private readonly AsyncCountdownEvent _currentlyPendingMessagesCounter;
     private TaskCompletionSource<bool> _handshakeCompletedTaskSource;
@@ -318,12 +319,15 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             return;
 
         Guid sessionId;
+        byte[] sessionKey;
         lock (_sessionLock)
         {
             if (_sessionId == Guid.Empty)
                 return;
             sessionId = _sessionId;
+            sessionKey = _sessionKey;
             _sessionId = Guid.Empty;
+            _sessionKey = null;
         }
 
         if (_keepSessionAliveTimer != null)
@@ -335,7 +339,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         var sharedSecret =
             MessageEncryption
-                 ? sessionId.ToByteArray()
+                 ? sessionKey ?? sessionId.ToByteArray()
                  : null;
 
         if (!quiet)
@@ -444,7 +448,8 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         {
             lock (_sessionLock)
             {
-                return _sessionId.ToByteArray();
+                // Session key was provided by server during handshake, unless it uses legacy session key derivation
+                return _sessionKey ?? _sessionId.ToByteArray();
             }
         }
         else
@@ -604,21 +609,35 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                 signature: signedMessageData.Signature))
                 throw new SecurityException("Verification of message signature failed.");
 
+            var handshakeSecret = RsaKeyExchange.DecryptSecret(
+                keySize: _config.KeySize,
+                // ReSharper disable once PossibleNullReferenceException
+                receiversPrivateKeyBlob: _keyPair.PrivateKey,
+                encryptedSecret: encryptedSecret);
+
             lock (_sessionLock)
             {
-                _sessionId =
-                    new Guid(
-                        RsaKeyExchange.DecryptSecret(
-                            keySize: _config.KeySize,
-                            // ReSharper disable once PossibleNullReferenceException
-                            receiversPrivateKeyBlob: _keyPair.PrivateKey,
-                            encryptedSecret: encryptedSecret));
+                // The handshake secret contains the session ID and, unless the server uses
+                // legacy session key derivation, an additional symmetric session key
+                var sessionIdBytes = new byte[16];
+                Array.Copy(handshakeSecret, 0, sessionIdBytes, 0, 16);
+                _sessionId = new Guid(sessionIdBytes);
+
+                _sessionKey = null;
+                if (handshakeSecret.Length > 16)
+                {
+                    _sessionKey = new byte[handshakeSecret.Length - 16];
+                    Array.Copy(handshakeSecret, 16, _sessionKey, 0, _sessionKey.Length);
+                }
             }
         }
         else
         {
             lock (_sessionLock)
+            {
                 _sessionId = new Guid(message.Data);
+                _sessionKey = null;
+            }
         }
 
         _handshakeCompletedTaskSource.TrySetResult(true);
@@ -646,6 +665,16 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         if (authResponseMessage.IsCompleted)
         {
+            // if the authentication protocol negotiated a new shared key, re-key the session.
+            // Both endpoints switch to the negotiated key right after this final response,
+            // so the next message is already encrypted with it on both sides.
+            if (authResponseMessage.IsAuthenticated && MessageEncryption &&
+                authResponseMessage.NegotiatedSharedKey != null)
+            {
+                lock (_sessionLock)
+                    _sessionKey = authResponseMessage.NegotiatedSharedKey;
+            }
+
             _isAuthenticated = authResponseMessage.IsAuthenticated;
             Identity = _isAuthenticated ? authResponseMessage.AuthenticatedIdentity : null;
             _authenticationCompletedTaskSource.TrySetResult(true);
