@@ -171,6 +171,8 @@ public class TestService : ITestService
 
     private static TestService LastInstance { get; set; }
 
+    public string Version => "1.0";
+
     public void SaveLastInstance() => LastInstance = this;
 
     public bool CheckLastSavedInstance() => LastInstance == this;

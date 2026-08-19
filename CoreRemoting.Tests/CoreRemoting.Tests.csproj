@@ -62,6 +62,10 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\CoreRemoting.SourceGenerators\CoreRemoting.SourceGenerators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    <ItemGroup>
       <Compile Remove="DicTests_DryIoc.cs" />
       <Compile Include="DicTests_DryIoc.cs">
         <DependentUpon>DicTests.cs</DependentUpon>

@@ -45,6 +45,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LoginUsingGithubDemo", "Exa
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.Authentication.SecureRemotePassword", "CoreRemoting.Authentication.SecureRemotePassword\CoreRemoting.Authentication.SecureRemotePassword.csproj", "{963449AE-2169-8B24-93B4-5BE7CB7DFF0C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRemoting.SourceGenerators", "CoreRemoting.SourceGenerators\CoreRemoting.SourceGenerators.csproj", "{ED33D1F0-B563-851A-5E43-77347CB5D4C6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -119,6 +121,10 @@ Global
 		{963449AE-2169-8B24-93B4-5BE7CB7DFF0C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{963449AE-2169-8B24-93B4-5BE7CB7DFF0C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{963449AE-2169-8B24-93B4-5BE7CB7DFF0C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ED33D1F0-B563-851A-5E43-77347CB5D4C6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ED33D1F0-B563-851A-5E43-77347CB5D4C6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ED33D1F0-B563-851A-5E43-77347CB5D4C6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ED33D1F0-B563-851A-5E43-77347CB5D4C6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
