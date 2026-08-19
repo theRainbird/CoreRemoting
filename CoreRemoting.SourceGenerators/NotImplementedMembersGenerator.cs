@@ -102,7 +102,7 @@ public class NotImplementedMembersGenerator : IIncrementalGenerator
         {
             string source = GenerateSource(info);
             string rawName = info.ClassSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ".NotImplemented.g.cs";
-            string fileName = SanitizeFileName(rawName);
+            string fileName = GeneratorHelpers.SanitizeFileName(rawName);
             context.AddSource(fileName, source);
         }
     }
@@ -245,25 +245,6 @@ public class NotImplementedMembersGenerator : IIncrementalGenerator
         sb.AppendLine($"        add {{ throw new NotImplementedException(); }}");
         sb.AppendLine($"        remove {{ throw new NotImplementedException(); }}");
         sb.AppendLine("    }");
-    }
-
-    private static string SanitizeFileName(string name)
-    {
-        if (name.StartsWith("global::"))
-        {
-            name = name.Substring(8);
-        }
-
-        var sb = new StringBuilder(name.Length);
-        foreach (char c in name)
-        {
-            if (char.IsLetterOrDigit(c) || c == '.' || c == '_')
-                sb.Append(c);
-            else
-                sb.Append('_');
-        }
-
-        return sb.ToString();
     }
 
     private record ClassInfo(

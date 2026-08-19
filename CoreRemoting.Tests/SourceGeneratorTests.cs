@@ -1,9 +1,10 @@
 using System;
-using System.Diagnostics.CodeAnalysis;
+using System.CodeDom.Compiler;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Castle.Core.Internal;
+using CoreRemoting.Authentication;
 using CoreRemoting.Tests.Tools;
 using CoreRemoting.Toolbox;
 using Xunit;
@@ -12,6 +13,58 @@ namespace CoreRemoting.Tests;
 
 public partial class SourceGeneratorTests
 {
+    partial class LegacyAuthenticationProvider : IAuthenticationProvider
+    {
+        public bool Authenticate(Credential[] credentials, out RemotingIdentity id)
+        {
+            id = credentials.FindByName("login") != "root" ? null : new()
+            {
+                Name = "Administrator"
+            };
+
+            return id != null;
+        }
+    }
+
+    [Fact]
+    public async Task Legacy_AuthenticationProvider_is_automatically_upgraded()
+    {
+        var type = typeof(LegacyAuthenticationProvider);
+
+        // ñheck that the new method exists with the correct signature
+        var newMethod = type.GetMethod(
+            nameof(IAuthenticationProvider.Authenticate),
+            [typeof(AuthenticationRequestMessage)]);
+        Assert.NotNull(newMethod);
+        Assert.Equal(typeof(Task<AuthenticationResponseMessage>), newMethod.ReturnType);
+
+        // ñheck that it has the GeneratedCode attribute
+        var generatedCodeAttr = newMethod.GetCustomAttribute<GeneratedCodeAttribute>();
+        Assert.NotNull(generatedCodeAttr);
+
+        // test the adapter logic
+        var provider = new LegacyAuthenticationProvider();
+
+        // request with valid credentials
+        var validRequest = new AuthenticationRequestMessage
+        {
+            Credentials =
+            [
+                new() { Name = "login", Value = "root" }
+            ]
+        };
+
+        var response = await provider.Authenticate(validRequest);
+        Assert.True(response.IsAuthenticated);
+        Assert.NotNull(response.AuthenticatedIdentity);
+        Assert.Equal("Administrator", response.AuthenticatedIdentity.Name);
+
+        // request with invalid credentials
+        response = await provider.Authenticate(new());
+        Assert.False(response.IsAuthenticated);
+        Assert.Null(response.AuthenticatedIdentity);
+    }
+
     [NotImplemented]
     partial class PartiallyImplementedService : ITestService
     {
