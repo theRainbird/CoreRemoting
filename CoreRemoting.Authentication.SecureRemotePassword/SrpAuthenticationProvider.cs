@@ -146,7 +146,8 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
 
         // optionally negotiate the derived SRP session key as the new shared secret for message encryption
         if (UseNegotiatedSessionKey)
-            response.NegotiatedSharedKey = SrpValueConverter.FromHex(serverSessionKey);
+            response.NegotiatedSharedKey =
+                SrpInteger.FromHex(serverSessionKey).ToByteArray();
 
         return response;
     }

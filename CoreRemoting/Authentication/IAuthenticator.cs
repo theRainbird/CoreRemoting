@@ -13,5 +13,5 @@ public interface IAuthenticator
     /// <param name="credentials">Credentials.</param>
     /// <param name="authProxy">A proxy for the remote authentication provider.</param>
     /// <returns>The last authentication response sent by the remote provider.</returns>
-    Task Authenticate(Credential[] credentials, IAuthenticationProvider authProxy);
+    Task<AuthenticationResponseMessage> Authenticate(Credential[] credentials, IAuthenticationProvider authProxy);
 }

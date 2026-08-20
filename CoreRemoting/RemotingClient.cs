@@ -542,6 +542,16 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         if (!_isAuthenticated)
             throw new SecurityException("Authentication failed. Please check credentials.");
+
+        // if the authentication protocol negotiated a new shared key, re-key the session.
+        // Both endpoints switch to the negotiated key right after this final response,
+        // so the next message is already encrypted with it on both sides.
+        var authResponseMessage = await authResponse.ConfigureAwait(false);
+        if (authResponseMessage?.NegotiatedSharedKey is not null and { Length: > 0 })
+        {
+            lock (_sessionLock)
+                _sharedSecret = authResponseMessage.NegotiatedSharedKey;
+        }
     }
 
     #endregion
@@ -704,16 +714,6 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         if (authResponseMessage.IsCompleted)
         {
-            // if the authentication protocol negotiated a new shared key, re-key the session.
-            // Both endpoints switch to the negotiated key right after this final response,
-            // so the next message is already encrypted with it on both sides.
-            if (authResponseMessage.IsAuthenticated && MessageEncryption &&
-                authResponseMessage.NegotiatedSharedKey != null)
-            {
-                lock (_sessionLock)
-                    _sharedSecret = authResponseMessage.NegotiatedSharedKey;
-            }
-
             _isAuthenticated = authResponseMessage.IsAuthenticated;
             Identity = _isAuthenticated ? authResponseMessage.AuthenticatedIdentity : null;
             _authenticationCompletedTaskSource.TrySetResult(true);

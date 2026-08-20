@@ -464,9 +464,13 @@ public sealed class RemotingSession : IAsyncDisposable
 
         // a server in legacy key derivation mode (or without message encryption) cannot re-key the session,
         // so strip the negotiated shared key from the response to keep both endpoints consistent
-        if (authResponseMessage.NegotiatedSharedKey != null &&
-            (!MessageEncryption || _server.Config.UseLegacySessionKeyDerivation))
-            authResponseMessage.NegotiatedSharedKey = null;
+        var negotiatedSharedKey = MessageEncryption &&
+            !_server.Config.UseLegacySessionKeyDerivation ?
+                authResponseMessage.NegotiatedSharedKey : null;
+
+        // make sure that negotiated shared key never goes over the wire
+        authResponseMessage.NegotiatedSharedKey =
+            negotiatedSharedKey is not null ? [] : null;
 
         var serializedAuthResponse = _server.Serializer.Serialize(authResponseMessage);
 
@@ -485,8 +489,8 @@ public sealed class RemotingSession : IAsyncDisposable
         // if the authentication protocol negotiated a new shared key, re-key the session.
         // Both endpoints switch to the negotiated key right after this final response,
         // so the next message is already encrypted with it on both sides.
-        if (_isAuthenticated && authResponseMessage.NegotiatedSharedKey != null)
-            _sharedSecret = authResponseMessage.NegotiatedSharedKey;
+        if (_isAuthenticated && negotiatedSharedKey is not null and { Length: > 0 })
+            _sharedSecret = negotiatedSharedKey;
 
         if (_isAuthenticated)
             ((RemotingServer)_server).OnLogon();
