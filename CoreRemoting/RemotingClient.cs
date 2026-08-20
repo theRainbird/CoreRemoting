@@ -106,7 +106,9 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         _config = config;
 
         if (MessageEncryption)
-            _keyPair = new RsaKeyPair(config.KeySize);
+            _keyPair = config.RsaPrivateKeyBlob != null
+                ? new RsaKeyPair(config.KeySize, config.RsaPrivateKeyBlob)
+                : new RsaKeyPair(config.KeySize);
 
         _channel = config.Channel ?? new TcpClientChannel();
 
@@ -220,6 +222,36 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     public byte[] PublicKey => _keyPair?.PublicKey;
 
     /// <summary>
+    /// Gets the private key of this CoreRemoting client instance (for persisting the key between process restarts to enable session resume).
+    /// </summary>
+    public byte[] PrivateKey => _keyPair?.PrivateKey;
+
+    /// <summary>
+    /// Gets the ID of the current session (null, if no session has been established).
+    /// </summary>
+    public Guid? SessionId
+    {
+        get
+        {
+            lock (_sessionLock)
+                return _sessionId == Guid.Empty ? null : _sessionId;
+        }
+    }
+
+    /// <summary>
+    /// Gets the ID of a session that should be resumed on connection
+    /// (the ID of the current session, or ClientConfig.ResumableSessionId, if no session is active).
+    /// </summary>
+    public Guid? ResumableSessionId
+    {
+        get
+        {
+            lock (_sessionLock)
+                return _sessionId == Guid.Empty ? _config.ResumableSessionId : _sessionId;
+        }
+    }
+
+    /// <summary>
     /// Gets whether the connection to the server is established or not.
     /// </summary>
     public bool IsConnected => _channel?.IsConnected ?? false;
@@ -272,6 +304,13 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         using (await _activeCallsLock)
             _activeCalls = new();
+
+        // prepare a fresh handshake/authentication cycle. This is also required for session resume,
+        // where the previous cycle's task sources are already completed and authentication must run again
+        _handshakeCompletedTaskSource = new();
+        _authenticationCompletedTaskSource = new();
+        _isAuthenticated = false;
+        Identity = null;
 
         await _channel.ConnectAsync()
             .ConfigureAwait(false);
@@ -622,6 +661,24 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             _sessionId = handshakeMessage.SessionId;
             _sharedSecret = MessageEncryption ? handshakeMessage.SharedSecret ?? _sessionId.ToByteArray() : null;
             _authenticationRequired = handshakeMessage.AuthenticationRequired;
+        }
+
+        // the client explicitly requested to resume a specific session (ClientConfig.ResumableSessionId),
+        // but the server created a new session instead -> fail the connection
+        var requestedSessionId = _config.ResumableSessionId;
+        if (requestedSessionId != null)
+        {
+            lock (_sessionLock)
+            {
+                if (_sessionId != requestedSessionId.Value)
+                {
+                    var exception = new RemotingException(
+                        $"Server refused to resume the requested session {requestedSessionId.Value}.");
+
+                    _handshakeCompletedTaskSource.TrySetException(exception);
+                    throw exception;
+                }
+            }
         }
 
         _handshakeCompletedTaskSource.TrySetResult(true);

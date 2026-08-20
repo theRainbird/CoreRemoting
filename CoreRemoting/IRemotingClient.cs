@@ -23,6 +23,22 @@ public interface IRemotingClient : IAsyncDisposable, IDisposable
     byte[] PublicKey { get; }
 
     /// <summary>
+    /// Gets the private key of this CoreRemoting client instance (for persisting the key between process restarts to enable session resume).
+    /// </summary>
+    byte[] PrivateKey { get; }
+
+    /// <summary>
+    /// Gets the ID of the current session (null, if no session has been established).
+    /// </summary>
+    Guid? SessionId { get; }
+
+    /// <summary>
+    /// Gets the ID of a session that should be resumed on connection
+    /// (the ID of the current session, or ClientConfig.ResumableSessionId, if no session is active).
+    /// </summary>
+    Guid? ResumableSessionId { get; }
+
+    /// <summary>
     /// Gets or sets the invocation timeout in milliseconds.
     /// </summary>
     int? InvocationTimeout { get; set; }

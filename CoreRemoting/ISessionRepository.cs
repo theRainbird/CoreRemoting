@@ -25,6 +25,19 @@ public interface ISessionRepository : IAsyncDisposable
         IRawMessageTransport rawMessageTransport);
 
     /// <summary>
+    /// Tries to resume a specified session on the given raw message transport.
+    /// The presented public key has to match the public key of the original connection (hijack protection).
+    /// </summary>
+    /// <param name="sessionId">Session ID of the session to be resumed</param>
+    /// <param name="clientPublicKey">Client's public key, as presented by the reconnecting client</param>
+    /// <param name="rawMessageTransport">Component that does the raw message transport of the reconnected client</param>
+    /// <returns>The resumed session, or null if the session doesn't exist or can't be resumed (callers then have to fall back to creating a new session)</returns>
+    Task<RemotingSession> TryResumeSession(
+        Guid sessionId,
+        byte[] clientPublicKey,
+        IRawMessageTransport rawMessageTransport);
+
+    /// <summary>
     /// Gets a list of all sessions.
     /// </summary>
     IEnumerable<RemotingSession> Sessions { get; }

@@ -19,6 +19,11 @@ namespace CoreRemoting.Channels
         event Action<string, Exception> ErrorOccured;
 
         /// <summary>
+        /// Event: Signals that the underlying connection has been disconnected.
+        /// </summary>
+        event Action Disconnected;
+
+        /// <summary>
         /// Gets or sets the last exception.
         /// </summary>
         NetworkException LastException { get; set; }

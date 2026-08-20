@@ -11,6 +11,7 @@ namespace CoreRemoting.Channels.Tcp;
 /// </summary>
 public class TcpClientChannel : IClientChannel, IRawMessageTransport
 {
+    private IRemotingClient _client;
     private WatsonTcpClient _tcpClient;
     private Dictionary<string, object> _handshakeMetadata;
 
@@ -35,6 +36,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <param name="client">CoreRemoting client</param>
     public void Init(IRemotingClient client)
     {
+        _client = client;
         _tcpClient = new WatsonTcpClient(client.Config.ServerHostName, client.Config.ServerPort);
         _tcpClient.Settings.NoDelay = true;
 
@@ -44,7 +46,22 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
         };
 
         if (client.MessageEncryption)
+        {
             _handshakeMetadata.Add("ShakeHands", Convert.ToBase64String(client.PublicKey));
+
+            ApplyResumeSessionId(client);
+        }
+    }
+
+    /// <summary>
+    /// Updates the handshake metadata with the ID of a session that should be resumed.
+    /// </summary>
+    /// <param name="client">CoreRemoting client</param>
+    private void ApplyResumeSessionId(IRemotingClient client)
+    {
+        if (client.MessageEncryption && client.ResumableSessionId != null)
+            _handshakeMetadata["ResumeSessionId"] =
+                Convert.ToBase64String(client.ResumableSessionId.Value.ToByteArray());
     }
 
     /// <summary>
@@ -57,6 +74,8 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
 
         if (_tcpClient.Connected)
             return;
+
+        ApplyResumeSessionId(_client);
 
         _tcpClient.Events.ExceptionEncountered += OnError;
         _tcpClient.Events.MessageReceived += OnMessage;

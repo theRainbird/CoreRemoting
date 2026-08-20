@@ -43,6 +43,12 @@ public sealed class RemotingSession : IAsyncDisposable
     private bool _isDisposing;
     private DateTime _lastActivityTimestamp;
     private readonly AsyncCountdownEvent _currentlyProcessedMessagesCounter;
+
+    // session lifecycle state: 0 = active, 1 = parked (transport lost abruptly, can be resumed)
+    private const int _stateActive = 0;
+    private const int _stateParked = 1;
+    private int _lifecycleState;
+
     private static readonly AsyncLocal<RemotingSession> CurrentSession = new();
 
     /// <summary>
@@ -83,6 +89,7 @@ public sealed class RemotingSession : IAsyncDisposable
 
         _rawMessageTransport.ReceiveMessage += OnReceiveMessage;
         _rawMessageTransport.ErrorOccured += OnErrorOccured;
+        _rawMessageTransport.Disconnected += OnRawMessageTransportDisconnected;
 
         MessageEncryption = clientPublicKey != null;
 
@@ -200,6 +207,60 @@ public sealed class RemotingSession : IAsyncDisposable
         ((RemotingServer)_server).OnError(exception);
     }
 
+    /// <summary>
+    /// Event procedure: Called when the Disconnected event is fired on the raw message transport component.
+    /// Parks the session so a client that reconnects with the same identity can resume it.
+    /// </summary>
+    private void OnRawMessageTransportDisconnected() => ParkSession();
+
+    /// <summary>
+    /// Parks this session after an abrupt disconnect of the underlying transport (no goodbye message).
+    /// All session state (session ID, key material, delegate proxies) is preserved.
+    /// The old transport's events are unsubscribed; in-flight messages finish on their own.
+    /// </summary>
+    /// <returns>True if the session has been parked (already parked or disposed, otherwise false).</returns>
+    internal bool ParkSession()
+    {
+        if (_isDisposing ||
+            Interlocked.CompareExchange(ref _lifecycleState, _stateParked, _stateActive) != _stateActive)
+            return false;
+
+        var oldTransport = _rawMessageTransport;
+
+        oldTransport.ReceiveMessage -= OnReceiveMessage;
+        oldTransport.ErrorOccured -= OnErrorOccured;
+        oldTransport.Disconnected -= OnRawMessageTransportDisconnected;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Attaches a new transport to this parked session (session resume).
+    /// The authenticated state is reset, so the client has to authenticate again.
+    /// </summary>
+    /// <param name="newTransport">Raw message transport component of the reconnected client</param>
+    /// <exception cref="RemotingException">Thrown if the session can't be resumed (not parked or disposed)</exception>
+    internal void AttachTransport(IRawMessageTransport newTransport)
+    {
+        if (newTransport == null)
+            throw new ArgumentNullException(nameof(newTransport));
+
+        if (_isDisposing ||
+            Interlocked.CompareExchange(ref _lifecycleState, _stateActive, _stateParked) != _stateParked)
+            throw new RemotingException("The session can't be resumed because it is not in a parked state.");
+
+        _rawMessageTransport = newTransport;
+        newTransport.ReceiveMessage += OnReceiveMessage;
+        newTransport.ErrorOccured += OnErrorOccured;
+        newTransport.Disconnected += OnRawMessageTransportDisconnected;
+
+        // re-authentication is required, because state may have changed in the meantime
+        _isAuthenticated = false;
+        Identity = null;
+
+        _lastActivityTimestamp = DateTime.Now;
+    }
+
     #endregion
 
     #region Properties
@@ -241,6 +302,26 @@ public sealed class RemotingSession : IAsyncDisposable
     /// Gets whether authentication was successful.
     /// </summary>
     public bool IsAuthenticated => _isAuthenticated;
+
+    /// <summary>
+    /// Gets whether the session is currently parked (transport lost abruptly, can be resumed).
+    /// </summary>
+    [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
+    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
+    internal bool IsParked => Volatile.Read(ref _lifecycleState) == _stateParked;
+
+    /// <summary>
+    /// Gets whether this session can be resumed by a client presenting the given public key.
+    /// The key has to match exactly the public key of the original connection (hijack protection).
+    /// </summary>
+    /// <param name="clientPublicKeyBlob">Public key blob presented by the reconnecting client</param>
+    internal bool CanBeResumedWith(byte[] clientPublicKeyBlob) =>
+        IsParked &&
+        !_isDisposing &&
+        MessageEncryption &&
+        _clientPublicKeyBlob != null &&
+        clientPublicKeyBlob != null &&
+        _clientPublicKeyBlob.SequenceEqual(clientPublicKeyBlob);
 
     /// <summary>
     /// Gets the server side RSA key pair of this session.

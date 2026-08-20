@@ -74,7 +74,20 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
         var handshakeMessage = Array.Empty<byte>();
         if (Client.MessageEncryption)
         {
-            handshakeMessage = Client.PublicKey;
+            if (Client.ResumableSessionId != null)
+            {
+                // resume format: [0x01][session ID (16 bytes)][client public key]
+                handshakeMessage =
+                [
+                    0x01,
+                    .. Client.ResumableSessionId.Value.ToByteArray(),
+                    .. Client.PublicKey
+                ];
+            }
+            else
+            {
+                handshakeMessage = Client.PublicKey;
+            }
         }
 
         // start listening for incoming messages

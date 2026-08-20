@@ -24,6 +24,11 @@ public class RpcWebsocketSharpBehavior : WebSocketBehavior, IRawMessageTransport
     public event Action<string, Exception> ErrorOccured;
 
     /// <summary>
+    /// Event: Fires when the websocket connection has been closed.
+    /// </summary>
+    public event Action Disconnected;
+
+    /// <summary>
     /// Initializes the RPC service instance.
     /// </summary>
     /// <param name="server">Remoting server instance, which is hosting the service to call</param>
@@ -50,32 +55,58 @@ public class RpcWebsocketSharpBehavior : WebSocketBehavior, IRawMessageTransport
     {
         if (_session == null)
         {
-            byte[] clientPublicKey = null;
-
-            var messageEncryptionCookie = Context.CookieCollection["MessageEncryption"];
-
-            if (messageEncryptionCookie?.Value == "1")
-            {
-                var shakeHandsCookie = Context.CookieCollection["ShakeHands"];
-
-                clientPublicKey =
-                    Convert.FromBase64String(
-                        shakeHandsCookie.Value);
-            }
-
-            _session =
-                _server.SessionRepository.CreateSession(
-                    clientPublicKey,
-                    Context.UserEndPoint.ToString(),
-                    _server,
-                    this)
-                .GetAwaiter().GetResult();
+            _session = CreateOrResumeRemotingSession();
 
             _session.BeforeDispose += BeforeDisposeSession;
         }
         else
             ReceiveMessage?.Invoke(e.RawData);
     }
+
+    /// <summary>
+    /// Creates a new remoting session for this connection or resumes an existing parked session,
+    /// if the client presented a resumable session ID whose public key matches.
+    /// </summary>
+    /// <returns>The newly created or resumed session</returns>
+    private RemotingSession CreateOrResumeRemotingSession()
+    {
+        byte[] clientPublicKey = null;
+        Guid? resumableSessionId = null;
+
+        var messageEncryptionCookie = Context.CookieCollection["MessageEncryption"];
+
+        if (messageEncryptionCookie?.Value == "1")
+        {
+            var shakeHandsCookie = Context.CookieCollection["ShakeHands"];
+
+            clientPublicKey =
+                Convert.FromBase64String(
+                    shakeHandsCookie.Value);
+
+            var resumeSessionIdCookie = Context.CookieCollection["ResumeSessionId"];
+            if (resumeSessionIdCookie != null)
+                resumableSessionId = new Guid(Convert.FromBase64String(resumeSessionIdCookie.Value));
+        }
+
+        return _server.SessionRepository.TryResumeSession(
+            resumableSessionId ?? Guid.Empty,
+            clientPublicKey,
+            this)
+            .GetAwaiter().GetResult()
+            ?? _server.SessionRepository.CreateSession(
+                clientPublicKey,
+                Context.UserEndPoint.ToString(),
+                _server,
+                this)
+            .GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Event procedure: Called when the websocket connection has been closed.
+    /// </summary>
+    /// <param name="e">CloseEventArgs</param>
+    protected override void OnClose(CloseEventArgs e) =>
+        Disconnected?.Invoke();
 
     /// <summary>
     /// Closes the internal websocket session.

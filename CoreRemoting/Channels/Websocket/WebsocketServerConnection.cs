@@ -47,6 +47,7 @@ public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
     private async Task<Guid> CreateRemotingSession()
     {
         byte[] clientPublicKey = null;
+        Guid? resumableSessionId = null;
 
         var cookies = WebSocketContext.CookieCollection;
         var messageEncryptionCookie = cookies[MessageEncryptionCookie];
@@ -56,11 +57,21 @@ public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
             clientPublicKey =
                 Convert.FromBase64String(
                     shakeHandsCookie.Value);
+
+            var resumeSessionIdCookie = cookies[ResumeSessionIdCookie];
+            if (resumeSessionIdCookie != null)
+                resumableSessionId = new Guid(Convert.FromBase64String(resumeSessionIdCookie.Value));
         }
 
-        Session = await RemotingServer.SessionRepository.CreateSession(
-            clientPublicKey, ClientAddress, RemotingServer, this)
-                .ConfigureAwait(false);
+        Session =
+            (await RemotingServer.SessionRepository.TryResumeSession(
+                resumableSessionId ?? Guid.Empty,
+                clientPublicKey,
+                this)
+                    .ConfigureAwait(false))
+            ?? await RemotingServer.SessionRepository.CreateSession(
+                clientPublicKey, ClientAddress, RemotingServer, this)
+                    .ConfigureAwait(false);
 
         return Session.SessionId;
     }

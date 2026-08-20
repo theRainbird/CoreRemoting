@@ -117,4 +117,18 @@ public class ClientConfig
     /// Set -1 to wait forever (default is 10000 milliseconds).
     /// </summary>
     public int WaitTimeForGoodbyeOnDisconnect { get; set; } = 10000;
+
+    /// <summary>
+    /// Gets or sets the private key blob of the client RSA key pair (CSP-Blob, only relevant if message encryption is enabled).
+    /// If specified, this key pair will be used instead of a new one. This allows resuming a session after a
+    /// process restart in combination with ResumableSessionId (the key size must match KeySize).
+    /// </summary>
+    public byte[] RsaPrivateKeyBlob { get; set; }
+
+    /// <summary>
+    /// Gets or sets the ID of an existing server side session that should be resumed when connecting.
+    /// Both the client and the server must support session resume and the client must present the same RSA key
+    /// as the original session used. If the configured session cannot be resumed, the connection will fail.
+    /// </summary>
+    public Guid? ResumableSessionId { get; set; }
 }

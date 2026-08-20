@@ -55,7 +55,7 @@ Phase 3 switches the session's shared secret from the Phase 1 random key to a ke
 Adding fields like `RemotingIdentity.Claims` (Phase 7) or a negotiated key hint in `AuthenticationResponseMessage` must use optional members with default values, so old deserializers silently ignore them and new ones consume what they understand. The `[DataMember]` attribute on DataContract types already defaults to opt-in deserialization — but we should explicitly set `IsRequired = false` for clarity.
 
 ### Rule 6 — ISessionRepository: Additive Only
-Phase 4 adds a method (`GetOrCreateResumeCandidate`) and an optional parameter (custom sessionId in `CreateSession`). The default implementation on the base class provides sensible behavior that creates a fresh session when no resume candidate is found, so old code paths work unchanged.
+Phase 4 adds a single additive method `TryResumeSession(Guid, byte[] clientPublicKey, IRawMessageTransport)` which returns null when no resume candidate exists — callers then fall back to the unchanged `CreateSession` path. `CreateSession` itself is not modified (no optional sessionId parameter), so all existing call sites compile and behave unchanged. Session identity (SessionId + key material) is preserved across transport loss via a new parking lifecycle on `RemotingSession`.
 
 ---
 
@@ -141,21 +141,46 @@ public byte[] NegotiatedSharedKey { get; set; }
 
 ---
 
-## Phase 4: Session Resume / Reconnection
+## Phase 4: Session Resume / Reconnection (implemented)
 
-Allow clients to reconnect and resume their previous session by presenting its sessionId during handshake.
+Allow clients to reconnect and resume their previous session by presenting its sessionId during handshake, bound to the original RSA identity.
 
-**Backward compatibility — Rule 6 applied:**
-- Additive only on both interfaces and wire protocol. Old servers ignore unknown fields in handshake metadata; old clients do not send the `ResumeSessionId` field, so they simply get a fresh session (current behavior). Resume requires new code on **both sides**, which is acceptable since it's an opt-in feature gated by `ClientConfig.ResumableSessionId`.
-- The default implementation of `GetOrCreateResumeCandidate` returns null when no candidate matches, causing the existing create-session path to run unchanged.
+**Mechanism:**
+- **Abrupt-disconnect detection:** `IRawMessageTransport` gained a `Disconnected` event (all client transports already exposed one; server-side channels now fire it when the transport dies: `TcpServerChannel.OnClientDisconnected`, the WebSocket connection dispose paths, `RpcWebsocketSharpBehavior.OnClose` + new event, and QUIC's read-loop finally).
+- **Parking:** `RemotingSession` has an Active/Parked lifecycle state. On transport death the session is **parked** (via `ParkSession`) instead of disposed: it unsubscribes from the dead transport while keeping its key material intact — RSA key pair, Phase 1 `_sessionKey`, and `SessionId` all survive. No `session_closed` message is sent. Parked sessions remain in the repository and are reaped by the existing inactive sweep (`LastActivityTimestamp` vs `MaximumSessionInactivityTime`) — no new TTL settings needed.
+- **Resume:** additive `ISessionRepository.TryResumeSession(Guid, byte[] clientPublicKey, IRawMessageTransport)` returns the parked session only when it matches **the same client public key** (hijack protection; only applies to encrypted sessions). Otherwise it returns null and the caller falls back to the unchanged `CreateSession` path. On a match, `AttachTransport` reattaches the new transport, resets `_isAuthenticated = false` and `Identity = null` (**re-authentication is mandatory** because state may have changed), updates the activity timestamp, and the server re-sends the signed `complete_handshake` for the *same* SessionId/key pair — so all subsequent AES traffic continues with the unchanged session key.
+- **Resume hint carrier per channel** (additive, opt-in):
+  - TCP: handshake metadata entry `"ResumeSessionId"` = Base64(16-byte guid), only when message encryption is active.
+  - WebSocket (HttpListener) + WebSocketSharp: `ResumeSessionId` cookie with the same Base64 encoding.
+  - QUIC: first handshake message = `[0x01][16-byte guid][raw CSP public key blob]`. Raw client public-key blobs always start with a 0x06/0x07 CSP header byte, so prefix 0x01 never collides with the legacy format.
+  - NamedPipe and in-process Null channels intentionally do **not** support resume (no RSA key identity available).
+
+**Client side:**
+- New `IRemotingClient` members: `SessionId`, `PrivateKey` (exposes the persisted CSP blob), and `ResumableSessionId` (current session id if connected, else the configured one).
+- `ClientConfig`: optional `Guid? ResumableSessionId` (which session to resume) + optional `byte[] RsaPrivateKeyBlob` (reuses the existing `RsaKeyPair(int, byte[])` import constructor — required only for **cross-process** resume where a new process must present the same RSA identity).
+- In-process resume needs no configuration: after an abrupt disconnect the client instance still owns its session id and key pair, so calling `Connect()` again resumes the parked session (the connect flow resets handshake/auth task sources first).
+- Cross-process resume: persist `client.SessionId` + `client.PrivateKey`, then construct a new client with both values in its config.
+- **Strict failure:** when `ClientConfig.ResumableSessionId` is set but the server hands back a different session id (unknown key, session disposed/swept), the client throws `RemotingException("Server refused to resume...")` instead of silently proceeding — so applications can't be surprised by losing session state.
 
 **Files:**
-- `ISessionRepository.cs` + `SessionRepository.cs` — add method `RemotingSession? GetOrCreateResumeCandidate(Guid requestedSessionId, byte[] clientPublicKey)` that returns the existing active session if it matches the given public key (prevents hijacking). Also extend `CreateSession` with optional custom sessionId parameter for cases where a resumed identity must be preserved.
-- `ClientConfig.cs` — add property `Guid? ResumableSessionId`. When set, client includes it in handshake metadata as "I want to resume session X".
-- All server connection handlers (`TcpConnection.cs:72–104`, `WebsocketServerConnection.cs:47–65`, `QuicServerConnection.cs:47–62`) — before calling `CreateSession`, check for resumable sessionId in metadata. If present and matches an active session, call resume path instead of fresh creation.
-- Wire protocol: add optional field `ResumeSessionId` to handshake metadata (sent as cookie on WS, bytes on TCP/QUIC).
+- `ISessionRepository.cs` — additive `TryResumeSession` method.
+- `SessionRepository.cs` — `TryResumeSession` implementation (lookup → public-key check → attach transport → re-send handshake).
+- `RemotingSession.cs` — Active/Parked lifecycle, `ParkSession`, `AttachTransport`, `IsParked`, `CanBeResumedWith`.
+- `IRawMessageTransport.cs` — `Disconnected` event; server channels fire it on transport death.
+- Connection handlers with resume-before-create branches: `TcpConnection.cs` (metadata), `WebsocketServerConnection.cs` + `RpcWebsocketSharpBehavior.cs` (cookies), `QuicServerConnection.cs` (prefix parsing).
+- Client: `ClientConfig.cs` (`ResumableSessionId`, `RsaPrivateKeyBlob`), `IRemotingClient.cs` / `RemotingClient.cs` (`SessionId`, `PrivateKey`, `ResumableSessionId`, key-blob import, connect-flow reset, strict mismatch check), carriers in `TcpClientChannel.cs`, `WebsocketClientChannel.cs`, `WebsocketSharpClientChannel.cs`, `QuicClientChannel.cs`.
+- Tests: `CoreRemoting.Tests/SessionResumeTests.cs` — four scenarios: in-process resume after abrupt disconnect (with SRP re-authentication), cross-process resume via persisted key material, rejected resume on wrong public key (strict client failure), and no resume after a graceful goodbye.
 
-**Security:** Resume requires same client public key AND valid re-authentication — the old session's transport is preserved but identity must be verified again because state may have changed.
+**Backward compatibility — Rule 6 applied:**
+- Additive only everywhere: `CreateSession` is untouched, `TryResumeSession` returns null on any mismatch → fresh create path unchanged. Old clients never send the resume hint; new clients only send it when configured (opt-in). Resume therefore requires new code on both sides, which is acceptable for an opt-in feature.
+- Previously, a session whose transport died was *not* disposed or removed by anyone — it leaked in the repository until the inactive sweep ran. Parking makes that state explicit and resumerable; graceful goodbye still removes the session immediately.
+
+**Intentional deviations from the draft:**
+- No `GetOrCreateResumeCandidate` and no optional sessionId parameter on `CreateSession`; instead an additive `TryResumeSession` plus the parking lifecycle, which keeps the existing create path byte-for-byte unchanged.
+- No new Park-TTL configuration: parked sessions participate in the existing inactive sweep via their last-activity timestamp.
+- NamedPipe/Null channels excluded (no key identity to bind), versus the draft's "all servers connection handlers".
+
+**Security:** Resume requires the same client public key AND mandatory re-authentication (`_isAuthenticated` and `Identity` are cleared on resume). Key material is preserved across the park, so the AES session key stays stable while the transport is replaced.
 
 ---
 
@@ -322,7 +347,7 @@ The provider keeps per-session state keyed by `sessionId` to correlate steps.
 | **Phase 1 (random AES key)** — still generated and used for all handshake + challenge traffic (encryption is never skipped). After successful SRP auth, the core switches the session secret to `NegotiatedSharedKey` atomically (Rule 4 boundary). |
 | **Phase 2 (multi-phase interface)** — SRP provider uses `IsCompleted` + `Parameters` via `auth` / `auth_response`. First round returns `IsCompleted = false` with `SALT`/`SERVER_EPHEMERAL_PUBLIC` in `Parameters`. Second round processes client `Credentials` and returns `IsCompleted = true` on success. |
 | **Phase 3 (negotiated key)** — SRP's shared secret K travels in the final `auth_response` as `NegotiatedSharedKey` when opt-in is enabled; the session rekeys to AES under K after auth completes, while challenge messages stay fully encrypted with the handshake key. |
-| **Phase 4 (session resume)** — SRP sessions are fully authenticated by the time Phase 3 succeeds, so resumed-session logic works identically. The server stores v per username; on reconnect, same user+password → same K derivation path. |
+| **Phase 4 (session resume)** — a resumed session re-runs the full SRP authentication (fresh ephemerals, fresh K). The handshakes/challenges stay encrypted under the preserved Phase 1 key, and after the final `auth_response` the core applies the Phase 3 rekey again to the newly derived K — so no special handling is needed for resumed sessions. |
 | **Phase 5 (session variables)** — after successful auth, provider can populate session variables with roles fetched from `ISrpPasswordStore.Roles`. |
 
 #### 5. Server-side storage of verifier v
@@ -377,7 +402,7 @@ This helper is **internal** to the SRP project — not part of public API. It's 
 | SessionId == shared secret, <128 bits entropy (UUID not recommended as secure token) | **Phase 1** — random AES-256 key per session. **Phase 3/8** — SRP produces cryptographically strong negotiated key. |
 | No way to provide custom shared key for a session (supported by some auth protocols) | **Phase 3** — optional `NegotiatedSharedKey` member on `AuthenticationResponseMessage`. **Phase 7+8** — OIDC and SRP both exercise this pathway. |
 | Auth provider doesn't support multi-step protocols like SRP or 2FA | **Phase 2** — refactored multi-phase interface. **Phase 7 (Pattern B)** — adaptive step-up auth for OIDC/Keycloak. **Phase 8** — full SRP implementation as a concrete provider. |
-| SessionId changes on reconnect after server restart; should support session resume (#162) | **Phase 4** — `GetOrCreateResumeCandidate` + resumable sessionId in handshake metadata, with public-key binding to prevent hijacking. |
+| SessionId changes on reconnect after server restart; should support session resume (#162) | **Phase 4 (implemented)** — parked sessions are resumed via additive `ISessionRepository.TryResumeSession` (sessionId hint + same client public key), then re-authenticated. Note: this resumes across *client* reconnection; sessions still don't survive a *server* process restart (in-memory repository), which remains follow-up work. |
 | No session variables for storing elevated permissions etc. | **Phase 5** — per-session `ConcurrentDictionary<string, object?>`. SRP provider populates roles from password store into these on login (Phase 8). |
 
 
@@ -386,7 +411,7 @@ This helper is **internal** to the SRP project — not part of public API. It's 
 | Phase 1 — random AES key | `EncryptedSessionKey` wire helper | `RemotingSession.cs`, `AesEncryption.cs`, `RsaKeyExchange.cs`, `RemotingClient.cs` | — |
 | Phase 2 — multi-phase interface | Adapter for legacy providers | `IAuthenticationProvider.cs`, `RemotingSession.cs`, `RemotingClient.cs`, `AuthenticationResponseMessage.IsCompleted` + `Parameters` usage | All three existing auth projects (via adapter — minimal change) |
 | Phase 3 — negotiated key | — | `AuthenticationResponseMessage.cs` (optional `NegotiatedSharedKey` member), `RemotingSession.cs` (rekey + legacy strip in `ProcessAuthenticationRequestMessage`), `RemotingClient.cs` (rekey on final `auth_response`) | `SrpAuthenticationProvider.cs` / `SrpAuthenticator.cs` (opt-in + key verification) |
-| Phase 4 — session resume | — | `ISessionRepository.cs`, `SessionRepository.cs`, all server connection handlers for TCP/WS/QUIC/NamedPipe | — |
+| Phase 4 — session resume (implemented) | `CoreRemoting.Tests/SessionResumeTests.cs` | `ISessionRepository.cs` (additive `TryResumeSession`), `SessionRepository.cs`, `RemotingSession.cs` (Active/Parked lifecycle), `IRawMessageTransport.cs` (`Disconnected`) + server connection handlers TCP/WebSocket/WebSocketSharp/QUIC (resume hint carrier + resume-before-create), `ClientConfig.cs` (`ResumableSessionId`, `RsaPrivateKeyBlob`), `IRemotingClient.cs` / `RemotingClient.cs` (`SessionId`, `PrivateKey`, key-blob import, strict mismatch check) | — |
 | Phase 5 — session variables | — | `RemotingSession.cs` (add ConcurrentDictionary + accessors) | — |
 | Phase 6 — tests & migration | New test files covering each phase's behavior, including crypto correctness | Existing auth provider projects via adapter pattern updates | All three existing auth providers migrated to multi-phase interface using legacy-adapter bridge |
 | **Phase 7 — OIDC** | `CoreRemoting.Authentication.Oidc/IOidcAuthenticationProvider.cs`, `OidcAuthenticationProvider.cs` (JWKS validation, introspection) | `ServerConfig.cs`, `ClientConfig.cs`, `AuthenticationResponseMessage.IsCompleted` + `Parameters` usage, `RemotingIdentity.Claims` | — |

@@ -44,8 +44,11 @@ public class TcpServerChannel : IServerChannel
     private void OnClientConnected(object sender, ConnectionEventArgs e) =>
         GetOrCreateConnection(e.Client);
 
-    private void OnClientDisconnected(object sender, DisconnectionEventArgs e) =>
-        _connections.TryRemove(e.Client.Guid, out _);
+    private void OnClientDisconnected(object sender, DisconnectionEventArgs e)
+    {
+        if (_connections.TryRemove(e.Client.Guid, out var connection))
+            connection.FireDisconnected();
+    }
 
     private void OnTcpMessageReceived(object sender, MessageReceivedEventArgs e) =>
         GetOrCreateConnection(e.Client)

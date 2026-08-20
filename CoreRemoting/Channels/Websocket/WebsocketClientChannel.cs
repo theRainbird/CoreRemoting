@@ -61,6 +61,15 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
                 value: Convert.ToBase64String(client.PublicKey),
                 path: Uri.LocalPath,
                 domain: Uri.Host));
+
+            if (client.ResumableSessionId != null)
+            {
+                ClientWebSocket.Options.Cookies.Add(new Cookie(
+                    name: ResumeSessionIdCookie,
+                    value: Convert.ToBase64String(client.ResumableSessionId.Value.ToByteArray()),
+                    path: Uri.LocalPath,
+                    domain: Uri.Host));
+            }
         }
     }
 

@@ -47,17 +47,38 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
     private async Task<Guid> CreateRemotingSession()
     {
         // read handshake message
-        var clientPublicKey = await ReadIncomingMessage()
+        var handshakeMessage = await ReadIncomingMessage()
             .ConfigureAwait(false);
+
+        Guid? resumableSessionId = null;
+        byte[] clientPublicKey = handshakeMessage;
+
+        // resume format: [0x01][session ID (16 bytes)][client public key]
+        // (a CSP key blob starts with 0x06 and an empty handshake is length 0,
+        // so the version prefix cannot collide)
+        if (handshakeMessage != null && handshakeMessage.Length > 17 && handshakeMessage[0] == 0x01)
+        {
+            resumableSessionId = new Guid(new ReadOnlySpan<byte>(handshakeMessage, 1, 16).ToArray());
+
+            var keyLength = handshakeMessage.Length - 17;
+            clientPublicKey = new byte[keyLength];
+            Array.Copy(handshakeMessage, 17, clientPublicKey, 0, keyLength);
+        }
 
         // disable message encryption if handshake is empty
         if (clientPublicKey != null && clientPublicKey.Length == 0)
             clientPublicKey = null;
 
-        Session = await RemotingServer.SessionRepository.CreateSession(
-            clientPublicKey, Connection.RemoteEndPoint.ToString(),
-                RemotingServer, this)
-                    .ConfigureAwait(false);
+        Session =
+            (await RemotingServer.SessionRepository.TryResumeSession(
+                resumableSessionId ?? Guid.Empty,
+                clientPublicKey,
+                this)
+                    .ConfigureAwait(false))
+            ?? await RemotingServer.SessionRepository.CreateSession(
+                clientPublicKey, Connection.RemoteEndPoint.ToString(),
+                    RemotingServer, this)
+                        .ConfigureAwait(false);
 
         return Session.SessionId;
     }

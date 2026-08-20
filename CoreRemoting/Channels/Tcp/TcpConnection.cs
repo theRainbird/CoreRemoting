@@ -39,6 +39,11 @@ public class TcpConnection : IRawMessageTransport
     public event Action<string, Exception> ErrorOccured;
 
     /// <summary>
+    /// Event: Signals that the underlying TCP connection has been disconnected.
+    /// </summary>
+    public event Action Disconnected;
+
+    /// <summary>
     /// Fires the ReceiveMessage event.
     /// </summary>
     /// <param name="message">Fehlermeldung</param>
@@ -46,6 +51,14 @@ public class TcpConnection : IRawMessageTransport
     internal void FireErrorOccured(string message, Exception ex)
     {
         ErrorOccured?.Invoke(message, ex);
+    }
+
+    /// <summary>
+    /// Fires the Disconnected event.
+    /// </summary>
+    internal void FireDisconnected()
+    {
+        Disconnected?.Invoke();
     }
 
     /// <summary>
@@ -75,6 +88,7 @@ public class TcpConnection : IRawMessageTransport
             return false;
 
         byte[] clientPublicKey = null;
+        Guid? resumableSessionId = null;
 
         if (metadata != null)
         {
@@ -85,14 +99,21 @@ public class TcpConnection : IRawMessageTransport
                 var shakeHands = ((System.Text.Json.JsonElement)metadata["ShakeHands"]).GetString();
 
                 if (shakeHands != null)
+                    clientPublicKey = Convert.FromBase64String(shakeHands);
+
+                if (metadata.TryGetValue("ResumeSessionId", out var resumeValue))
                 {
-                    clientPublicKey =
-                        Convert.FromBase64String(shakeHands);
+                    var resumeId = ((System.Text.Json.JsonElement)resumeValue).GetString();
+                    if (!string.IsNullOrEmpty(resumeId))
+                        resumableSessionId = new Guid(Convert.FromBase64String(resumeId));
                 }
             }
         }
 
         _session =
+            TryResumeExistingSession(resumableSessionId, clientPublicKey);
+
+        _session ??=
             _server.SessionRepository.CreateSession(
                 clientPublicKey,
                 _clientMetadata.IpPort,
@@ -102,6 +123,25 @@ public class TcpConnection : IRawMessageTransport
 
         _session.BeforeDispose += BeforeDisposeSession;
         return true;
+    }
+
+    /// <summary>
+    /// Tries to resume a previously parked session for the current connection.
+    /// </summary>
+    /// <param name="resumableSessionId">Session ID the client requests to resume (may be null)</param>
+    /// <param name="clientPublicKey">Public key of the re-connecting client</param>
+    /// <returns>Resumed session or null if resumption isn't possible</returns>
+    private RemotingSession TryResumeExistingSession(Guid? resumableSessionId, byte[] clientPublicKey)
+    {
+        if (resumableSessionId == null)
+            return null;
+
+        var resumedSession =
+            _server.SessionRepository.TryResumeSession(
+                resumableSessionId.Value, clientPublicKey, this)
+            .GetAwaiter().GetResult();
+
+        return resumedSession;
     }
 
     /// <summary>
