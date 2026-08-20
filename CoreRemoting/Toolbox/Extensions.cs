@@ -145,10 +145,15 @@ public static class Extensions
 
     /// <summary>
     /// Generates strong shared key for symmetric encryption according to the server settings.
+    /// Note: if legacy mode is enabled, sessionId is used as a shared key (not recommended).
     /// </summary>
     /// <param name="config">Configuration data for the remoting server.</param>
-    public static byte[] GenerateSharedKey(this ServerConfig config)
+    /// <param name="sessionId">Session identity, used in legacy mode.</param>
+    public static byte[] GenerateSharedKey(this ServerConfig config, Guid sessionId)
     {
+        if (config.UseLegacySessionKeyDerivation)
+            return sessionId.ToByteArray();
+
         using var rng = RandomNumberGenerator.Create();
         var sharedKey = new byte[config.SharedKeySize / 8];
         rng.GetBytes(sharedKey);

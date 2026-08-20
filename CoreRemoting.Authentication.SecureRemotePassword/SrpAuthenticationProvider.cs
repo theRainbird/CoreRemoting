@@ -18,10 +18,14 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
     /// </summary>
     /// <param name="repository">User account repository.</param>
     /// <param name="parameters">Optional SRP-6a protocol parameters.</param>
-    public SrpAuthenticationProvider(ISrpAccountRepository repository, SrpParameters parameters = null)
+    /// <param name="useNegotiatedSessionKey">If true, the derived SRP session key is sent to the client as the
+    /// negotiated shared key and both endpoints use it for symmetric message encryption after successful
+    /// authentication (replaces the default session key from the handshake). Default is false.</param>
+    public SrpAuthenticationProvider(ISrpAccountRepository repository, SrpParameters parameters = null, bool useNegotiatedSessionKey = false)
     {
         AuthRepository = repository;
         SrpParameters = parameters ?? new();
+        UseNegotiatedSessionKey = useNegotiatedSessionKey;
         SrpServer = new SrpServer(SrpParameters);
         UnknownUserSalt = new SrpClient(SrpParameters).GenerateSalt();
     }
@@ -33,6 +37,8 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
     private SrpServer SrpServer { get; set; }
 
     private string UnknownUserSalt { get; set; }
+
+    private bool UseNegotiatedSessionKey { get; set; }
 
     internal ConcurrentDictionary<string, Step1Data> PendingAuthentications { get; } = new();
 
@@ -105,7 +111,7 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
                 vars.Account.Salt, vars.Account.UserName, vars.Account.Verifier, clientSessionProof);
 
             // Host -> User: H(A, M, K)
-            return await ResponseStep2(serverSession.Proof, vars.Account)
+            return await ResponseStep2(serverSession.Proof, serverSession.Key, vars.Account)
                 .ConfigureAwait(false);
         }
         catch (SecurityException)
@@ -125,14 +131,23 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
         ],
     };
 
-    private async Task<AuthenticationResponseMessage> ResponseStep2(string serverSessionProof, ISrpAccount account) => new()
+    private async Task<AuthenticationResponseMessage> ResponseStep2(string serverSessionProof, string serverSessionKey, ISrpAccount account)
     {
-        IsCompleted = true,
-        IsAuthenticated = true,
-        AuthenticatedIdentity = await AuthRepository.GetIdentity(account).ConfigureAwait(false),
-        Parameters =
-        [
-            new() { Name = SERVER_SESSION_PROOF, Value = serverSessionProof },
-        ],
-    };
+        var response = new AuthenticationResponseMessage
+        {
+            IsCompleted = true,
+            IsAuthenticated = true,
+            AuthenticatedIdentity = await AuthRepository.GetIdentity(account).ConfigureAwait(false),
+            Parameters =
+            [
+                new() { Name = SERVER_SESSION_PROOF, Value = serverSessionProof },
+            ],
+        };
+
+        // optionally negotiate the derived SRP session key as the new shared secret for message encryption
+        if (UseNegotiatedSessionKey)
+            response.NegotiatedSharedKey = SrpValueConverter.FromHex(serverSessionKey);
+
+        return response;
+    }
 }
