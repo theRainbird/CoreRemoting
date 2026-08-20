@@ -4,6 +4,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Net;
 using System.Reflection;
+using System.Security.Cryptography;
 using CoreRemoting.Authentication;
 
 namespace CoreRemoting.Toolbox;
@@ -141,4 +142,21 @@ public static class Extensions
             .Where(x => x.value != null)
             .Select(x => new Credential { Name = x.p.Name, Value = x.value.ToString() })
             .ToArray());
+
+    /// <summary>
+    /// Generates strong shared key for symmetric encryption according to the server settings.
+    /// Note: if legacy mode is enabled, sessionId is used as a shared key (not recommended).
+    /// </summary>
+    /// <param name="config">Configuration data for the remoting server.</param>
+    /// <param name="sessionId">Session identity, used in legacy mode.</param>
+    public static byte[] GenerateSharedKey(this ServerConfig config, Guid sessionId)
+    {
+        if (config.UseLegacySessionKeyDerivation)
+            return sessionId.ToByteArray();
+
+        using var rng = RandomNumberGenerator.Create();
+        var sharedKey = new byte[config.SharedKeySize / 8];
+        rng.GetBytes(sharedKey);
+        return sharedKey;
+    }
 }

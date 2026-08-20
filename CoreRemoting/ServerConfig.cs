@@ -39,6 +39,15 @@ public class ServerConfig
     public int KeySize { get; set; } = 4096;
 
     /// <summary>
+    /// Gets or sets the shared key size for the symmetric encryption (only relevant, if message encryption is enabled).
+    /// </summary>
+    /// <remarks>
+    /// Supported values: 128, 192 and 256 bits.
+    /// </remarks>
+    [SuppressMessage("ReSharper", "AutoPropertyCanBeMadeGetOnly.Global")]
+    public int SharedKeySize { get; set; } = 256;
+
+    /// <summary>
     /// Gets or sets whether messages should be encrypted or not.
     /// </summary>
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]

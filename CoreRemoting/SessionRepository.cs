@@ -134,7 +134,7 @@ public class SessionRepository : ISessionRepository
     }
 
     /// <summary>
-    /// Gets a list of all sessions.
+    /// Gets a list of all sessions (should be used only by unit tests).
     /// </summary>
     public IEnumerable<RemotingSession> Sessions => _sessions.Values.ToArray();
 

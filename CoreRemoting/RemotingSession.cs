@@ -4,7 +4,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Authentication;
@@ -34,7 +33,7 @@ public sealed class RemotingSession : IAsyncDisposable
     private readonly RsaKeyPair _keyPair;
     private readonly int _keySize;
     private readonly Guid _sessionId;
-    private byte[] _sessionKey;
+    private byte[] _sharedSecret;
     private readonly byte[] _clientPublicKeyBlob;
     private readonly string _clientAddress;
     private readonly RemoteDelegateInvocationEventAggregator _remoteDelegateInvocationEventAggregator;
@@ -69,10 +68,6 @@ public sealed class RemotingSession : IAsyncDisposable
         _isDisposing = false;
         _currentlyProcessedMessagesCounter = new(initialCount: 1);
         _sessionId = Guid.NewGuid();
-        var sessionKey = new byte[32];
-        using (var randomNumberGenerator = new RNGCryptoServiceProvider())
-            randomNumberGenerator.GetBytes(sessionKey);
-        _sessionKey = sessionKey;
         _lastActivityTimestamp = DateTime.Now;
         _isAuthenticated = false;
         _keySize = keySize;
@@ -91,14 +86,16 @@ public sealed class RemotingSession : IAsyncDisposable
 
         MessageEncryption = clientPublicKey != null;
 
+        _sharedSecret = MessageEncryption ?
+            _server.Config.GenerateSharedKey(_sessionId) :
+            null;
+
         _remoteDelegateInvocationEventAggregator.RemoteDelegateInvocationNeeded +=
             async (_, uniqueCallKey, handlerKey, arguments) =>
             {
                 // handle graceful client disconnection
                 if (_isDisposing)
                     return;
-
-                var sharedSecret = SharedSecret;
 
                 var remoteDelegateInvocationMessage =
                     new RemoteDelegateInvocationMessage
@@ -113,7 +110,7 @@ public sealed class RemotingSession : IAsyncDisposable
                         .CreateWireMessage(
                             serializedMessage: _server.Serializer.Serialize(remoteDelegateInvocationMessage),
                             serializer: _server.Serializer,
-                            sharedSecret: sharedSecret,
+                            sharedSecret: _sharedSecret,
                             keyPair: _keyPair,
                             messageType: "invoke");
 
@@ -136,18 +133,22 @@ public sealed class RemotingSession : IAsyncDisposable
 
     internal async Task SendCompleteHandshakeMessageAsync()
     {
-        WireMessage completeHandshakeMessage;
+        var wireMessage = new WireMessage
+        {
+            MessageType = "complete_handshake",
+            Data = BuildCompleteHandshakeMessage(),
+        };
 
         if (MessageEncryption)
         {
-            var encryptedSessionId =
+            var encryptedHandshakeMessage =
                 RsaKeyExchange.EncryptSecret(
                     keySize: _keySize,
                     receiversPublicKeyBlob: _clientPublicKeyBlob,
-                    secretToEncrypt: BuildHandshakeSecret(),
+                    secretToEncrypt: wireMessage.Data,
                     sendersPublicKeyBlob: _keyPair.PublicKey);
 
-            var rawContent = _server.Serializer.Serialize(encryptedSessionId);
+            var rawContent = _server.Serializer.Serialize(encryptedHandshakeMessage);
 
             var signedMessageData =
                 new SignedMessageData
@@ -160,27 +161,11 @@ public sealed class RemotingSession : IAsyncDisposable
                             rawData: rawContent)
                 };
 
-            var rawData = _server.Serializer.Serialize(typeof(SignedMessageData), signedMessageData);
-
-            completeHandshakeMessage =
-                new WireMessage
-                {
-                    MessageType = "complete_handshake",
-                    Data = rawData
-                };
-        }
-        else
-        {
-            completeHandshakeMessage =
-                new WireMessage
-                {
-                    MessageType = "complete_handshake",
-                    Data = _sessionId.ToByteArray()
-                };
+            wireMessage.Data = _server.Serializer.Serialize(signedMessageData);
         }
 
         await (_rawMessageTransport?.SendMessageAsync(
-            _server.Serializer.Serialize(completeHandshakeMessage)))
+            _server.Serializer.Serialize(wireMessage)))
                 .ConfigureAwait(false);
     }
 
@@ -190,18 +175,17 @@ public sealed class RemotingSession : IAsyncDisposable
     /// (b) a cryptographically random session key used as symmetric shared secret for message encryption.
     /// </summary>
     /// <returns>Secret to be exchanged during the handshake</returns>
-    private byte[] BuildHandshakeSecret()
+    private byte[] BuildCompleteHandshakeMessage()
     {
         if (_server.Config.UseLegacySessionKeyDerivation)
             return _sessionId.ToByteArray();
 
-        var sessionIdBytes = _sessionId.ToByteArray();
-        var handshakeSecret = new byte[sessionIdBytes.Length + _sessionKey.Length];
-
-        Buffer.BlockCopy(sessionIdBytes, 0, handshakeSecret, 0, sessionIdBytes.Length);
-        Buffer.BlockCopy(_sessionKey, 0, handshakeSecret, sessionIdBytes.Length, _sessionKey.Length);
-
-        return handshakeSecret;
+        return _server.Serializer.Serialize(new CompleteHandshakeMessage
+        {
+            SessionId = _sessionId,
+            AuthenticationRequired = _server.Config.AuthenticationRequired,
+            SharedSecret = _sharedSecret,
+        });
     }
 
     /// <summary>
@@ -244,12 +228,7 @@ public sealed class RemotingSession : IAsyncDisposable
     /// <summary>
     /// Gets the shared secret used for symmetric message encryption of this session (null, if message encryption is not enabled).
     /// </summary>
-    internal byte[] SharedSecret =>
-        MessageEncryption
-            ? _server.Config.UseLegacySessionKeyDerivation
-                ? _sessionId.ToByteArray()
-                : _sessionKey
-            : null;
+    internal byte[] SharedSecret => _sharedSecret;
 
     /// <summary>
     /// Gets the timestamp when this session was created.
@@ -344,15 +323,13 @@ public sealed class RemotingSession : IAsyncDisposable
     /// <param name="request">Wire message from client</param>
     private async Task ProcessGoodbyeMessage(WireMessage request)
     {
-        var sharedSecret = SharedSecret;
-
         var goodbyeMessage =
             _server.Serializer
                 .Deserialize<GoodbyeMessage>(
                     _server.MessageEncryptionManager.GetDecryptedMessageData(
                         message: request,
                         serializer: _server.Serializer,
-                        sharedSecret: sharedSecret,
+                        sharedSecret: _sharedSecret,
                         sendersPublicKeyBlob: _clientPublicKeyBlob,
                         sendersPublicKeySize: _keyPair?.KeySize ?? 0));
 
@@ -365,7 +342,7 @@ public sealed class RemotingSession : IAsyncDisposable
                 serializedMessage: [],
                 serializer: _server.Serializer,
                 keyPair: _keyPair,
-                sharedSecret: sharedSecret,
+                sharedSecret: _sharedSecret,
                 uniqueCallKey: request.UniqueCallKey);
 
         await _rawMessageTransport.SendMessageAsync(
@@ -389,15 +366,13 @@ public sealed class RemotingSession : IAsyncDisposable
 
         Identity = null;
 
-        var sharedSecret = SharedSecret;
-
         var authRequestMessage =
             _server.Serializer
                 .Deserialize<AuthenticationRequestMessage>(
                     _server.MessageEncryptionManager.GetDecryptedMessageData(
                         message: request,
                         serializer: _server.Serializer,
-                        sharedSecret: sharedSecret,
+                        sharedSecret: _sharedSecret,
                         sendersPublicKeyBlob: _clientPublicKeyBlob,
                         sendersPublicKeySize: _keyPair?.KeySize ?? 0));
 
@@ -418,7 +393,7 @@ public sealed class RemotingSession : IAsyncDisposable
             _server.MessageEncryptionManager.CreateWireMessage(
                 serializedMessage: serializedAuthResponse,
                 serializer: _server.Serializer,
-                sharedSecret: sharedSecret,
+                sharedSecret: _sharedSecret,
                 keyPair: _keyPair,
                 messageType: "auth_response");
 
@@ -430,7 +405,7 @@ public sealed class RemotingSession : IAsyncDisposable
         // Both endpoints switch to the negotiated key right after this final response,
         // so the next message is already encrypted with it on both sides.
         if (_isAuthenticated && authResponseMessage.NegotiatedSharedKey != null)
-            _sessionKey = authResponseMessage.NegotiatedSharedKey;
+            _sharedSecret = authResponseMessage.NegotiatedSharedKey;
 
         if (_isAuthenticated)
             ((RemotingServer)_server).OnLogon();
@@ -458,13 +433,11 @@ public sealed class RemotingSession : IAsyncDisposable
                 Session = this
             };
 
-        var sharedSecret = SharedSecret;
-
         var decryptedRawMessage =
             _server.MessageEncryptionManager.GetDecryptedMessageData(
                 message: request,
                 serializer: _server.Serializer,
-                sharedSecret: sharedSecret,
+                sharedSecret: _sharedSecret,
                 sendersPublicKeyBlob: _clientPublicKeyBlob,
                 sendersPublicKeySize: _keyPair?.KeySize ?? 0);
 
@@ -522,7 +495,7 @@ public sealed class RemotingSession : IAsyncDisposable
                     innerEx: ex.ToSerializable());
 
             ((RemotingServer)_server).OnRejectCall(serverRpcContext);
-            
+
             // Debug: Log exception after RejectCall
             var exceptionAfterReject = serverRpcContext.Exception;
             System.Diagnostics.Debug.WriteLine($"RejectCall: Exception type = {exceptionAfterReject?.GetType().Name}, Message = {exceptionAfterReject?.Message}");
@@ -656,7 +629,7 @@ public sealed class RemotingSession : IAsyncDisposable
                 serializedMessage: serializedResult,
                 serializer: _server.Serializer,
                 error: serverRpcContext.Exception != null,
-                sharedSecret: sharedSecret,
+                sharedSecret: _sharedSecret,
                 keyPair: _keyPair,
                 messageType: "rpc_result",
                 uniqueCallKey: serverRpcContext.UniqueCallKey.ToByteArray());
@@ -923,7 +896,7 @@ public sealed class RemotingSession : IAsyncDisposable
             _server.MessageEncryptionManager.CreateWireMessage(
                 serializedMessage: [],
                 serializer: _server.Serializer,
-                sharedSecret: SharedSecret,
+                sharedSecret: _sharedSecret,
                 keyPair: _keyPair,
                 messageType: "session_closed");
 

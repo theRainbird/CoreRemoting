@@ -45,7 +45,6 @@ public class SessionKeyTests
 
             Assert.True(client.HasSession);
             Assert.Single(server.SessionRepository.Sessions);
-
             var session = server.SessionRepository.Sessions.Single();
 
             // Server must use a random session key which differs from the session ID

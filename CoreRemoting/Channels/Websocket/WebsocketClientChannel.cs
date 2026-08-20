@@ -72,7 +72,7 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
                 .ConfigureAwait(false);
 
         IsConnected = true;
-        StartListening();
+        _ = StartListening();
 
         await SendMessageAsync([])
             .ConfigureAwait(false);

@@ -35,7 +35,7 @@ public class SrpAuthenticationTests : IAsyncLifetime
         E0FD108E 4B82D120 A93AD2CA FFFFFFFF FFFFFFFF", "05");
 
     private readonly SampleAccountRepository _repository = new();
-    private RemotingServer? _server;
+    private RemotingServer _server;
 
     public async Task InitializeAsync()
     {
@@ -206,12 +206,8 @@ public class SrpAuthenticationTests : IAsyncLifetime
             // No Authenticator
         });
 
-        // TODO: fail on connection?
-        //await Assert.ThrowsAsync<SecurityException>(client.ConnectAsync);
-        await client.ConnectAsync();
-
-        var proxy = client.CreateProxy<ISampleService>();
-        Assert.Throws<RemoteInvocationException>(() => proxy.Echo("Hello"));
+        // fail on connection
+        await Assert.ThrowsAsync<SecurityException>(client.ConnectAsync);
     }
 
     [Fact]

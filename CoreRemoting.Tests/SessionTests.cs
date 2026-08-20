@@ -58,7 +58,9 @@ public class SessionTests : IClassFixture<ServerFixture>
         }
 
         // There should be no sessions, before both clients connected
-        Assert.Empty(_serverFixture.Server.SessionRepository.Sessions);
+        var sessionRepository = _serverFixture.Server.SessionRepository as SessionRepository;
+        Assert.NotNull(sessionRepository);
+        Assert.Empty(sessionRepository.Sessions);
 
         // Start two clients to create two sessions
         var client1 = ClientTask(clientStarted1);
@@ -67,14 +69,14 @@ public class SessionTests : IClassFixture<ServerFixture>
         // Wait for connection of both clients
         await Task.WhenAll(clientStarted1.Task, clientStarted2.Task).Timeout(5).ConfigureAwait(false);
 
-        Assert.Equal(2, _serverFixture.Server.SessionRepository.Sessions.Count());
+        Assert.Equal(2, sessionRepository.Sessions.Count());
 
         clientStopSignal.TrySetResult();
 
         await Task.WhenAll(client1, client2, Task.Delay(100)).Timeout(5).ConfigureAwait(false);
 
         // There should be no sessions left, after both clients disconnected
-        Assert.Empty(_serverFixture.Server.SessionRepository.Sessions);
+        Assert.Empty(sessionRepository.Sessions);
     }
 
     [Fact]
