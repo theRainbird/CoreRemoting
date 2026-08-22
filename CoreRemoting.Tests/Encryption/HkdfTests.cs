@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Security.Cryptography;
+using System.Text;
 using Xunit;
 
 namespace CoreRemoting.Tests.Encryption;
@@ -80,57 +82,31 @@ public class HkdfTests
     // Reference Implementation Comparison
 
     /// <summary>
-    /// Bit-for-bit comparison with System.Security.Cryptography.HKDF (.NET 5+ reference implementation) for SHA-256.
+    /// Bit-for-bit comparison with System.Security.Cryptography.HKDF (.NET reference implementation).
     /// </summary>
-    [Fact]
-    public void DeriveKey_Sha256_MatchesBuiltInNetImplementation()
+    [Theory]
+    [MemberData(nameof(GetHkdfProviders))]
+    public void DeriveKey_MatchesBuiltInNetImplementation(IHkdfProvider provider, HashAlgorithmName algorithm, int hashLength)
     {
         var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
         var salt = HexToBytes("000102030405060708090a0b0c");
         var info = HexToBytes("f0f1f2f3f4f5f6f7f8f9");
-        var length = 42;
+        var length = hashLength;
 
-        var expected = System.Security.Cryptography.HKDF.DeriveKey(
-            HashAlgorithmName.SHA256, inkm, length, salt, info);
+        var expected = System.Security.Cryptography.HKDF.DeriveKey(algorithm, inkm, length, salt, info);
+        var result = provider.DeriveKey(inkm, length, salt, info);
 
-        var result = Hkdf.Sha256.DeriveKey(inkm, length, salt, info);
         Assert.Equal(expected, result);
     }
 
-    /// <summary>
-    /// Bit-for-bit comparison with System.Security.Cryptography.HKDF (.NET 5+ reference implementation) for SHA-384.
-    /// </summary>
-    [Fact]
-    public void DeriveKey_Sha384_MatchesBuiltInNetImplementation()
+    public static IEnumerable<object[]> GetHkdfProviders()
     {
-        var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
-        var salt = HexToBytes("000102030405060708090a0b0c");
-        var info = HexToBytes("f0f1f2f3f4f5f6f7f8f9");
-        var length = 48;
-
-        var expected = System.Security.Cryptography.HKDF.DeriveKey(
-            HashAlgorithmName.SHA384, inkm, length, salt, info);
-
-        var result = Hkdf.Sha384.DeriveKey(inkm, length, salt, info);
-        Assert.Equal(expected, result);
-    }
-
-    /// <summary>
-    /// Bit-for-bit comparison with System.Security.Cryptography.HKDF (.NET 5+ reference implementation) for SHA-512.
-    /// </summary>
-    [Fact]
-    public void DeriveKey_Sha512_MatchesBuiltInNetImplementation()
-    {
-        var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
-        var salt = HexToBytes("000102030405060708090a0b0c");
-        var info = HexToBytes("f0f1f2f3f4f5f6f7f8f9");
-        var length = 64;
-
-        var expected = System.Security.Cryptography.HKDF.DeriveKey(
-            HashAlgorithmName.SHA512, inkm, length, salt, info);
-
-        var result = Hkdf.Sha512.DeriveKey(inkm, length, salt, info);
-        Assert.Equal(expected, result);
+        yield return [Hkdf.Sha256, HashAlgorithmName.SHA256, 32];
+        yield return [Hkdf.Sha384, HashAlgorithmName.SHA384, 48];
+        yield return [Hkdf.Sha512, HashAlgorithmName.SHA512, 64];
+        yield return [Hkdf.Sha3_256, HashAlgorithmName.SHA3_256, 32];
+        yield return [Hkdf.Sha3_384, HashAlgorithmName.SHA3_384, 48];
+        yield return [Hkdf.Sha3_512, HashAlgorithmName.SHA3_512, 64];
     }
 
     // RFC 5869 Default Behavior (null/empty semantics)
@@ -290,33 +266,189 @@ public class HkdfTests
         Assert.Equal(expected, actual);
     }
 
+    // Extension Methods: Guid salt + string info
+
+    /// <summary>
+    /// Guid salt is converted via <see cref="Guid.ToByteArray"/> and info is UTF-8 encoded.
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_WithGuidSalt_AndStringInfo_Works()
+    {
+        var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var salt = Guid.Parse("12345678-1234-1234-1234-123456789abc");
+        var info = "test-context";
+
+        var result = Hkdf.Sha256.DeriveKey(inkm, 32, salt, info);
+
+        Assert.NotNull(result);
+        Assert.Equal(32, result.Length);
+    }
+
+    /// <summary>
+    /// <see cref="Guid.Empty"/> is treated as an absent salt (equivalent to null byte[]).
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_EmptyGuid_EqualsNullSalt()
+    {
+        var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var info = "test-context";
+
+        var withEmptyGuid = Hkdf.Sha256.DeriveKey(inkm, 32, Guid.Empty, info);
+        var withNoSalt = Hkdf.Sha256.DeriveKey(inkm, 32, salt: null, info: Encoding.UTF8.GetBytes(info));
+
+        Assert.Equal(withNoSalt, withEmptyGuid);
+    }
+
+    /// <summary>
+    /// Extension with explicit Guid matches an explicit call with Guid.ToByteArray() and UTF-8 info.
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_MatchesExplicitCall()
+    {
+        var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var salt = Guid.Parse("12345678-1234-1234-1234-123456789abc");
+        var info = "my-context";
+
+        var extension = Hkdf.Sha256.DeriveKey(inkm, 32, salt, info);
+        var explicitCall = Hkdf.Sha256.DeriveKey(inkm, 32, salt.ToByteArray(), Encoding.UTF8.GetBytes(info));
+
+        Assert.Equal(explicitCall, extension);
+    }
+
+    // Extension Methods: string info only (no salt)
+
+    /// <summary>
+    /// Overload with only a string info produces a valid derived key.
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_WithStringInfoOnly_Works()
+    {
+        var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var info = "session-context-v1";
+
+        var result = Hkdf.Sha256.DeriveKey(inkm, 32, info);
+
+        Assert.NotNull(result);
+        Assert.Equal(32, result.Length);
+    }
+
+    /// <summary>
+    /// String-info-only extension matches an explicit call with null salt and UTF-8 encoded info.
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_StringInfoOnly_MatchesExplicitCall()
+    {
+        var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var info = "my-context";
+
+        var extension = Hkdf.Sha256.DeriveKey(inkm, 32, info);
+        var explicitCall = Hkdf.Sha256.DeriveKey(inkm, 32, null, Encoding.UTF8.GetBytes(info));
+
+        Assert.Equal(explicitCall, extension);
+    }
+
+    /// <summary>
+    /// Empty string info is treated the same as null (both map to empty byte array).
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_EmptyStringInfo_EqualsNullInfo()
+    {
+        var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+
+        var withNull = Hkdf.Sha256.DeriveKey(inkm, 32, (string)null);
+        var withEmpty = Hkdf.Sha256.DeriveKey(inkm, 32, "");
+
+        Assert.Equal(withNull, withEmpty);
+    }
+
+    // Extension Methods: null provider fallback
+
+    /// <summary>
+    /// Extension methods on a null provider fall back to <see cref="Hkdf.Default"/> (SHA-256).
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_NullProvider_UsesDefault()
+    {
+        var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        IHkdfProvider nullProvider = null;
+
+        var viaNull = nullProvider.DeriveKey(inkm, 32, "ctx");
+        var viaDefault = Hkdf.Default.DeriveKey(inkm, 32, "ctx");
+
+        Assert.Equal(viaDefault, viaNull);
+    }
+
+    /// <summary>
+    /// Extension with Guid on a null provider also falls back to <see cref="Hkdf.Default"/>.
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_WithGuid_NullProvider_UsesDefault()
+    {
+        var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var salt = Guid.NewGuid();
+        IHkdfProvider nullProvider = null;
+
+        var viaNull = nullProvider.DeriveKey(inkm, 32, salt, "ctx");
+        var viaDefault = Hkdf.Default.DeriveKey(inkm, 32, salt, "ctx");
+
+        Assert.Equal(viaDefault, viaNull);
+    }
+
     // HashLength Property
 
     /// <summary>
-    /// Source: FIPS 180-4 — SHA-256 output size is 256 bits = 32 bytes.
+    /// Source: FIPS 180-4 (SHA-2) and FIPS 202 (SHA-3) — verifies correct hash output sizes.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(GetHashLengthProviders))]
+    public void HashLength_ReturnsCorrectValue(IHkdfProvider provider, int expectedLength)
+    {
+        Assert.Equal(expectedLength, provider.HashLength);
+    }
+
+    public static IEnumerable<object[]> GetHashLengthProviders()
+    {
+        yield return [Hkdf.Sha256, 32];
+        yield return [Hkdf.Sha384, 48];
+        yield return [Hkdf.Sha512, 64];
+        yield return [Hkdf.Sha3_256, 32];
+        yield return [Hkdf.Sha3_384, 48];
+        yield return [Hkdf.Sha3_512, 64];
+    }
+
+    // SHA-3 Specific Tests
+
+    /// <summary>
+    /// Extension method with Guid salt and string info works on SHA3-256 provider.
     /// </summary>
     [Fact]
-    public void HashLength_Sha256_Returns32()
+    public void DeriveKey_Extension_Sha3_256_WithGuidSalt_Works()
     {
-        Assert.Equal(32, Hkdf.Sha256.HashLength);
+        var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var salt = Guid.Parse("12345678-1234-1234-1234-123456789abc");
+        var info = "test-context";
+
+        var result = Hkdf.Sha3_256.DeriveKey(inkm, 32, salt, info);
+
+        Assert.NotNull(result);
+        Assert.Equal(32, result.Length);
     }
 
     /// <summary>
-    /// Source: FIPS 180-4 — SHA-384 output size is 384 bits = 48 bytes.
+    /// Extension method on SHA3-512 produces a different result than on SHA-256
+    /// for the same inputs, confirming that distinct algorithms are used.
     /// </summary>
     [Fact]
-    public void HashLength_Sha384_Returns48()
+    public void DeriveKey_Extension_Sha3_DiffersFromSha2()
     {
-        Assert.Equal(48, Hkdf.Sha384.HashLength);
-    }
+        var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var salt = Guid.NewGuid();
+        var info = "test-context";
 
-    /// <summary>
-    /// Source: FIPS 180-4 — SHA-512 output size is 512 bits = 64 bytes.
-    /// </summary>
-    [Fact]
-    public void HashLength_Sha512_Returns64()
-    {
-        Assert.Equal(64, Hkdf.Sha512.HashLength);
+        var sha2 = Hkdf.Sha256.DeriveKey(inkm, 32, salt, info);
+        var sha3 = Hkdf.Sha3_256.DeriveKey(inkm, 32, salt, info);
+
+        Assert.NotEqual(sha2, sha3);
     }
 
     // Helpers

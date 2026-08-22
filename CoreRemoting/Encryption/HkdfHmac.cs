@@ -41,7 +41,7 @@ public static class Hkdf<THmac> where THmac : HMAC, new()
             throw new ArgumentOutOfRangeException(nameof(outputLength), $"Maximum length is {255 * HashLength} bytes.");
 
         salt ??= new byte[HashLength];
-        info ??= Array.Empty<byte>();
+        info ??= [];
 
         // Extract: PRK = HMAC-Hash(salt, IKM)
         byte[] prk;
