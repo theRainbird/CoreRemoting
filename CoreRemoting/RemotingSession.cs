@@ -493,9 +493,8 @@ public sealed class RemotingSession : IAsyncDisposable
         {
             var inputKeyMaterial = negotiatedSharedKey;
             var config = _server.Config;
-            var secretSize = config.SharedKeySize / 8;
-            var derivedSharedKey = config.HkdfProvider.DeriveKey(inputKeyMaterial, secretSize, _sessionId, nameof(CoreRemoting));
-            Console.WriteLine($"RemotingSession: {Convert.ToBase64String(derivedSharedKey)}");
+            var secretLength = config.SharedKeySize / 8;
+            var derivedSharedKey = config.HkdfProvider.DeriveKey(inputKeyMaterial, secretLength, _sessionId, nameof(CoreRemoting));
             _sharedSecret = derivedSharedKey;
         }
 
