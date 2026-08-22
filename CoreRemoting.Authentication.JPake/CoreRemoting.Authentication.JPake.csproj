@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <RootNamespace>CoreRemoting.Authentication</RootNamespace>
+        <AssemblyName>CoreRemoting.Authentication.JPake</AssemblyName>
+        <PackageVersion>1.2.2</PackageVersion>
+        <Authors>Alexey Yakovlev</Authors>
+        <Description>J-PAKE authentication provider for CoreRemoting</Description>
+        <Copyright>2026 Alexey Yakovlev</Copyright>
+        <PackageProjectUrl>https://github.com/theRainbird/CoreRemoting</PackageProjectUrl>
+        <PackageLicenseUrl></PackageLicenseUrl>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Title>CoreRemoting.Authentication.LinuxPamAuthProvider</Title>
+        <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageTags>Remoting RPC Network Authentication J-PAKE</PackageTags>
+        <AssemblyVersion>1.2.2</AssemblyVersion>
+        <LangVersion>12</LangVersion>
+        <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\CoreRemoting\CoreRemoting.csproj" />
+    </ItemGroup>
+
+</Project>

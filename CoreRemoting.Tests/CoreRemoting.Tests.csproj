@@ -53,6 +53,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\CoreRemoting.Authentication.JPake\CoreRemoting.Authentication.JPake.csproj" />
       <ProjectReference Include="..\CoreRemoting.Authentication.SecureRemotePassword\CoreRemoting.Authentication.SecureRemotePassword.csproj" />
       <ProjectReference Include="..\CoreRemoting.Channels.WebsocketSharp\CoreRemoting.Channels.WebsocketSharp.csproj" />
       <ProjectReference Include="..\CoreRemoting.Serialization.Binary\CoreRemoting.Serialization.Binary.csproj" />
