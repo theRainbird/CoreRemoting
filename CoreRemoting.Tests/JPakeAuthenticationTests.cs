@@ -14,13 +14,15 @@ public class JPakeAuthenticationTests : IAsyncLifetime
     private const string UserName = "bozo";
     private const string Password = "h4ck3r";
     private const int ServerPort = 9192;
+    private const int ServerPortEncrypted = 9194;
 
     private readonly SampleAccountRepository _repository = new();
-    private RemotingServer _server;
+    private RemotingServer _serverPlain;
+    private RemotingServer _serverEncrypted;
 
-    public async Task InitializeAsync()
+    public Task InitializeAsync()
     {
-        _server = new RemotingServer(new()
+        _serverPlain = new RemotingServer(new()
         {
             HostName = "localhost",
             NetworkPort = ServerPort,
@@ -31,18 +33,38 @@ public class JPakeAuthenticationTests : IAsyncLifetime
                 container.RegisterService<ISampleService, SampleService>()
         });
 
-        _server.Start();
+        _serverPlain.Start();
 
-        await Task.Delay(100);
+        _serverEncrypted = new RemotingServer(new()
+        {
+            HostName = "localhost",
+            NetworkPort = ServerPortEncrypted,
+            MessageEncryption = true,
+            AuthenticationProvider = new JPakeAuthenticationProvider(_repository),
+            AuthenticationRequired = true,
+            RegisterServicesAction = container =>
+                container.RegisterService<ISampleService, SampleService>()
+        });
+
+        _serverEncrypted.Start();
+
+        return Task.CompletedTask;
     }
 
     public Task DisposeAsync()
     {
-        if (_server != null)
+        if (_serverPlain != null)
         {
-            _server.Stop();
-            _server.Dispose();
-            _server = null;
+            _serverPlain.Stop();
+            _serverPlain.Dispose();
+            _serverPlain = null;
+        }
+
+        if (_serverEncrypted != null)
+        {
+            _serverEncrypted.Stop();
+            _serverEncrypted.Dispose();
+            _serverEncrypted = null;
         }
 
         return Task.CompletedTask;
@@ -107,13 +129,11 @@ public class JPakeAuthenticationTests : IAsyncLifetime
         Assert.NotNull(response.AuthenticatedIdentity);
         Assert.Equal(UserName, response.AuthenticatedIdentity.Name);
         Assert.NotNull(response.NegotiatedSharedKey);
-
-        // Verify that the key has correct length (32 bytes for AES-256)
-        Assert.Equal(32, response.NegotiatedSharedKey.Length);
+        Assert.NotEmpty(response.NegotiatedSharedKey);
     }
 
     [Fact]
-    public async Task ValidLoginUsingTcpChannel()
+    public async Task ValidLoginUsingTcpChannel_EncryptionDisabled()
     {
         using var client = CreateClient(UserName, Password);
         await client.ConnectAsync();
@@ -130,6 +150,27 @@ public class JPakeAuthenticationTests : IAsyncLifetime
         var proxy2 = client2.CreateProxy<ISampleService>();
         result = proxy2.Echo("World");
         Assert.Equal("World", result);
+    }
+
+    [Fact]
+    public async Task ValidLoginUsingTcpChannel_EncryptionEnabled()
+    {
+        using var client = CreateClient(UserName, Password, encryption: true);
+        await client.ConnectAsync();
+
+        var proxy = client.CreateProxy<ISampleService>();
+        var result = proxy.Echo("Hello");
+        Assert.Equal("Hello", result);
+
+        await client.DisposeAsync();
+
+        using var client2 = CreateClient(UserName, Password, encryption: true);
+        await client2.ConnectAsync();
+
+        var proxy2 = client2.CreateProxy<ISampleService>();
+        result = proxy2.Echo("World");
+        Assert.Equal("World", result);
+        
     }
 
     [Fact]
@@ -174,13 +215,13 @@ public class JPakeAuthenticationTests : IAsyncLifetime
         await Assert.ThrowsAsync<SecurityException>(client.ConnectAsync);
     }
 
-    private RemotingClient CreateClient(string username, string password)
+    private RemotingClient CreateClient(string username, string password, bool encryption = false)
     {
         return new RemotingClient(new()
         {
             ServerHostName = "localhost",
-            ServerPort = ServerPort,
-            MessageEncryption = false,
+            ServerPort = encryption ? ServerPortEncrypted : ServerPort,
+            MessageEncryption = encryption,
             Authenticator = new JPakeAuthenticator(),
             Credentials =
             [

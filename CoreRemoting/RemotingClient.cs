@@ -43,6 +43,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     private Guid _sessionId;
     private bool _authenticationRequired;
     private byte[] _sharedSecret;
+    private int _sharedSecretSize;
     private readonly object _sessionLock;
     private readonly AsyncCountdownEvent _currentlyPendingMessagesCounter;
     private TaskCompletionSource<bool> _handshakeCompletedTaskSource;
@@ -549,8 +550,11 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         var authResponseMessage = await authResponse.ConfigureAwait(false);
         if (MessageEncryption && authResponseMessage?.NegotiatedSharedKey is not null and { Length: > 0 })
         {
+            var inputKeyMaterial = authResponseMessage.NegotiatedSharedKey;
+            var derivedSharedKey = _config.HkdfProvider.DeriveKey(inputKeyMaterial, _sharedSecretSize, _sessionId, nameof(CoreRemoting));
+            Console.WriteLine($"RemotingClient: {Convert.ToBase64String(derivedSharedKey)}");
             lock (_sessionLock)
-                _sharedSecret = authResponseMessage.NegotiatedSharedKey;
+                _sharedSecret = derivedSharedKey;
         }
     }
 
@@ -670,6 +674,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         {
             _sessionId = handshakeMessage.SessionId;
             _sharedSecret = MessageEncryption ? handshakeMessage.SharedSecret ?? _sessionId.ToByteArray() : null;
+            _sharedSecretSize = _sharedSecret?.Length ?? 0;
             _authenticationRequired = handshakeMessage.AuthenticationRequired;
         }
 

@@ -490,7 +490,14 @@ public sealed class RemotingSession : IAsyncDisposable
         // Both endpoints switch to the negotiated key right after this final response,
         // so the next message is already encrypted with it on both sides.
         if (_isAuthenticated && negotiatedSharedKey is not null and { Length: > 0 })
-            _sharedSecret = negotiatedSharedKey;
+        {
+            var inputKeyMaterial = negotiatedSharedKey;
+            var config = _server.Config;
+            var secretSize = config.SharedKeySize / 8;
+            var derivedSharedKey = config.HkdfProvider.DeriveKey(inputKeyMaterial, secretSize, _sessionId, nameof(CoreRemoting));
+            Console.WriteLine($"RemotingSession: {Convert.ToBase64String(derivedSharedKey)}");
+            _sharedSecret = derivedSharedKey;
+        }
 
         if (_isAuthenticated)
             ((RemotingServer)_server).OnLogon();
