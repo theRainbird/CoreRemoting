@@ -227,6 +227,51 @@ public class HkdfTests
         Assert.Equal(maxLength, result.Length);
     }
 
+    // Bypass Provider
+
+    [Fact]
+    public void Bypass_ReturnsIkmUnchanged()
+    {
+        var ikm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var result = Hkdf.Bypass.DeriveKey(ikm, 16);
+
+        Assert.Same(ikm, result);
+    }
+
+    [Fact]
+    public void Bypass_IgnoresOutputLength()
+    {
+        var ikm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var result = Hkdf.Bypass.DeriveKey(ikm, 1000);
+
+        Assert.Same(ikm, result);
+    }
+
+    [Fact]
+    public void Bypass_IgnoresSaltAndInfo()
+    {
+        var ikm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var salt = HexToBytes("0001020304050607");
+        var info = HexToBytes("f0f1f2f3");
+
+        var result = Hkdf.Bypass.DeriveKey(ikm, 16, salt, info);
+
+        Assert.Same(ikm, result);
+    }
+
+    [Fact]
+    public void Bypass_HashLength_IsZero()
+    {
+        Assert.Equal(0, Hkdf.Bypass.HashLength);
+    }
+
+    [Fact]
+    public void Bypass_ThrowsOnEmptyIkm()
+    {
+        Assert.Throws<ArgumentException>(() => Hkdf.Bypass.DeriveKey([], 16));
+        Assert.Throws<ArgumentException>(() => Hkdf.Bypass.DeriveKey(null, 16));
+    }
+
     // API Consistency
 
     /// <summary>
@@ -242,7 +287,7 @@ public class HkdfTests
         var length = 42;
 
         var expected = Hkdf.Sha256.DeriveKey(inkm, length, salt, info);
-        IHkdfProvider provider = new Hkdf<HMACSHA256>.Provider();
+        var provider = new Hkdf<HMACSHA256>.Provider();
         var actual = provider.DeriveKey(inkm, length, salt, info);
 
         Assert.Equal(expected, actual);
@@ -370,9 +415,8 @@ public class HkdfTests
     public void DeriveKey_Extension_NullProvider_UsesDefault()
     {
         var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
-        IHkdfProvider nullProvider = null;
 
-        var viaNull = nullProvider.DeriveKey(inkm, 32, "ctx");
+        var viaNull = default(IHkdfProvider).DeriveKey(inkm, 32, "ctx");
         var viaDefault = Hkdf.Default.DeriveKey(inkm, 32, "ctx");
 
         Assert.Equal(viaDefault, viaNull);
@@ -386,9 +430,8 @@ public class HkdfTests
     {
         var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
         var salt = Guid.NewGuid();
-        IHkdfProvider nullProvider = null;
 
-        var viaNull = nullProvider.DeriveKey(inkm, 32, salt, "ctx");
+        var viaNull = default(IHkdfProvider).DeriveKey(inkm, 32, salt, "ctx");
         var viaDefault = Hkdf.Default.DeriveKey(inkm, 32, salt, "ctx");
 
         Assert.Equal(viaDefault, viaNull);

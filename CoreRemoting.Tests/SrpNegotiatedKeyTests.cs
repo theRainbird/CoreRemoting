@@ -61,6 +61,11 @@ public class SrpNegotiatedKeyTests
         {
             using var client = CreateClient(ServerPort_Negotiated);
 
+            // use negotiated key as is
+            server.Config.HkdfProvider = 
+                client.Config.HkdfProvider = 
+                    Hkdf.Bypass;
+
             await client.ConnectAsync();
 
             Assert.True(client.HasSession);
@@ -70,7 +75,7 @@ public class SrpNegotiatedKeyTests
 
             // Server must have re-keyed the session with the SRP session key (SHA-384 => 48 bytes)
             Assert.NotNull(session.SharedSecret);
-            Assert.Equal(server.Config.SharedKeySize, session.SharedSecret.Length * 8);
+            Assert.Equal(CustomSrpParameters.HashSizeBytes, session.SharedSecret.Length);
             Assert.False(
                 session.SessionId.ToByteArray().SequenceEqual(session.SharedSecret),
                 "Re-keyed session must not use the session ID anymore");
