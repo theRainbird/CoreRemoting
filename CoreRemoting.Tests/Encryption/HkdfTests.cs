@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Security.Cryptography;
+using System.Text;
 using Xunit;
 
 namespace CoreRemoting.Tests.Encryption;
@@ -288,6 +289,134 @@ public class HkdfTests
         var actual = Hkdf.Sha256.DeriveKey(inkm, length, salt, info);
 
         Assert.Equal(expected, actual);
+    }
+
+    // Extension Methods: Guid salt + string info
+
+    /// <summary>
+    /// Guid salt is converted via <see cref="Guid.ToByteArray"/> and info is UTF-8 encoded.
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_WithGuidSalt_AndStringInfo_Works()
+    {
+        var ikm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var salt = Guid.Parse("12345678-1234-1234-1234-123456789abc");
+        var info = "test-context";
+
+        var result = Hkdf.Sha256.DeriveKey(ikm, 32, salt, info);
+
+        Assert.NotNull(result);
+        Assert.Equal(32, result.Length);
+    }
+
+    /// <summary>
+    /// <see cref="Guid.Empty"/> is treated as an absent salt (equivalent to null byte[]).
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_EmptyGuid_EqualsNullSalt()
+    {
+        var ikm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var info = "test-context";
+
+        var withEmptyGuid = Hkdf.Sha256.DeriveKey(ikm, 32, Guid.Empty, info);
+        var withNoSalt = Hkdf.Sha256.DeriveKey(ikm, 32, salt: null, info: Encoding.UTF8.GetBytes(info));
+
+        Assert.Equal(withNoSalt, withEmptyGuid);
+    }
+
+    /// <summary>
+    /// Extension with explicit Guid matches an explicit call with Guid.ToByteArray() and UTF-8 info.
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_MatchesExplicitCall()
+    {
+        var ikm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var salt = Guid.Parse("12345678-1234-1234-1234-123456789abc");
+        var info = "my-context";
+
+        var extension = Hkdf.Sha256.DeriveKey(ikm, 32, salt, info);
+        var explicitCall = Hkdf.Sha256.DeriveKey(ikm, 32, salt.ToByteArray(), Encoding.UTF8.GetBytes(info));
+
+        Assert.Equal(explicitCall, extension);
+    }
+
+    // Extension Methods: string info only (no salt)
+
+    /// <summary>
+    /// Overload with only a string info produces a valid derived key.
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_WithStringInfoOnly_Works()
+    {
+        var ikm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var info = "session-context-v1";
+
+        var result = Hkdf.Sha256.DeriveKey(ikm, 32, info);
+
+        Assert.NotNull(result);
+        Assert.Equal(32, result.Length);
+    }
+
+    /// <summary>
+    /// String-info-only extension matches an explicit call with null salt and UTF-8 encoded info.
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_StringInfoOnly_MatchesExplicitCall()
+    {
+        var ikm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var info = "my-context";
+
+        var extension = Hkdf.Sha256.DeriveKey(ikm, 32, info);
+        var explicitCall = Hkdf.Sha256.DeriveKey(ikm, 32, null, Encoding.UTF8.GetBytes(info));
+
+        Assert.Equal(explicitCall, extension);
+    }
+
+    /// <summary>
+    /// Empty string info is treated the same as null (both map to empty byte array).
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_EmptyStringInfo_EqualsNullInfo()
+    {
+        var ikm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+
+        var withNull = Hkdf.Sha256.DeriveKey(ikm, 32, (string)null);
+        var withEmpty = Hkdf.Sha256.DeriveKey(ikm, 32, "");
+
+        Assert.Equal(withNull, withEmpty);
+    }
+
+    // Extension Methods: null provider fallback
+
+    /// <summary>
+    /// Extension methods on a null provider fall back to <see cref="Hkdf.Default"/> (SHA-256).
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_NullProvider_UsesDefault()
+    {
+        var ikm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        IHkdfProvider nullProvider = null;
+
+        var viaNull = nullProvider.DeriveKey(ikm, 32, "ctx");
+        var viaDefault = Hkdf.Default.DeriveKey(ikm, 32, "ctx");
+
+        Assert.Equal(viaDefault, viaNull);
+    }
+
+    /// <summary>
+    /// Extension with Guid on a null provider also falls back to <see cref="Hkdf.Default"/>.
+    /// </summary>
+    [Fact]
+    public void DeriveKey_Extension_WithGuid_NullProvider_UsesDefault()
+    {
+        var ikm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var salt = Guid.NewGuid();
+        IHkdfProvider nullProvider = null;
+
+        var viaNull = nullProvider.DeriveKey(ikm, 32, salt, "ctx");
+        var viaDefault = Hkdf.Default.DeriveKey(ikm, 32, salt, "ctx");
+
+        Assert.Equal(viaDefault, viaNull);
     }
 
     // HashLength Property
