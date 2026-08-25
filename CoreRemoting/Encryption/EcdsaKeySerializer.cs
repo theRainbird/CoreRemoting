@@ -4,28 +4,37 @@ using System.Security.Cryptography;
 namespace CoreRemoting.Encryption;
 
 /// <summary>
-/// Serialization utilities for ECDSA keys in compact uncompressed point format.
+/// Serialization utilities for ECDSA P-256 keys in compact uncompressed point format.
+/// This is a lightweight, non-standard format optimized for internal session key exchange:
+/// public key = 65 bytes, private key = 97 bytes (vs 91 and 121 bytes for SPKI/SEC1).
 /// </summary>
 public static class EcdsaKeySerializer
 {
+    private const int CoordinateLength = 32;
+    private const byte UncompressedPointMarker = 0x04;
+
+    /// <summary>
+    /// Length of the public key.
+    /// </summary>
+    public const int PublicKeyLength = 1 + CoordinateLength + CoordinateLength; // 65
+
+    /// <summary>
+    /// Length of the private key.
+    /// </summary>
+    public const int PrivateKeyLength = PublicKeyLength + CoordinateLength;     // 97
+
     /// <summary>
     /// Encodes ECDSA public key to uncompressed point format: [0x04][X:32][Y:32] = 65 bytes.
     /// </summary>
     public static byte[] EncodePublicKey(ECParameters parameters)
     {
-        var x = parameters.Q.X;
-        var y = parameters.Q.Y;
+        var x = Normalize(parameters.Q.X, CoordinateLength);
+        var y = Normalize(parameters.Q.Y, CoordinateLength);
 
-        if (x == null || y == null)
-            throw new ArgumentException("Public key point Q is incomplete.", nameof(parameters));
-
-        x = NormalizeLength(x, 32);
-        y = NormalizeLength(y, 32);
-
-        var result = new byte[1 + 32 + 32];
-        result[0] = 0x04;
-        Buffer.BlockCopy(x, 0, result, 1, 32);
-        Buffer.BlockCopy(y, 0, result, 33, 32);
+        var result = new byte[PublicKeyLength];
+        result[0] = UncompressedPointMarker;
+        Buffer.BlockCopy(x, 0, result, 1, CoordinateLength);
+        Buffer.BlockCopy(y, 0, result, 1 + CoordinateLength, CoordinateLength);
 
         return result;
     }
@@ -35,15 +44,15 @@ public static class EcdsaKeySerializer
     /// </summary>
     public static ECParameters DecodePublicKey(byte[] data)
     {
-        if (data == null || data.Length != 65 || data[0] != 0x04)
+        if (data == null || data.Length != PublicKeyLength || data[0] != UncompressedPointMarker)
             throw new ArgumentException(
-                "Invalid ECDSA public key format. Expected 65 bytes starting with 0x04.",
+                $"Invalid ECDSA public key format. Expected {PublicKeyLength} bytes starting with 0x{UncompressedPointMarker:X2}.",
                 nameof(data));
 
-        var x = new byte[32];
-        var y = new byte[32];
-        Buffer.BlockCopy(data, 1, x, 0, 32);
-        Buffer.BlockCopy(data, 33, y, 0, 32);
+        var x = new byte[CoordinateLength];
+        var y = new byte[CoordinateLength];
+        Buffer.BlockCopy(data, 1, x, 0, CoordinateLength);
+        Buffer.BlockCopy(data, 1 + CoordinateLength, y, 0, CoordinateLength);
 
         return new ECParameters
         {
@@ -57,22 +66,15 @@ public static class EcdsaKeySerializer
     /// </summary>
     public static byte[] EncodePrivateKey(ECParameters parameters)
     {
-        var x = parameters.Q.X;
-        var y = parameters.Q.Y;
-        var d = parameters.D;
+        var x = Normalize(parameters.Q.X, CoordinateLength);
+        var y = Normalize(parameters.Q.Y, CoordinateLength);
+        var d = Normalize(parameters.D, CoordinateLength);
 
-        if (x == null || y == null || d == null)
-            throw new ArgumentException("Private key is incomplete.", nameof(parameters));
-
-        x = NormalizeLength(x, 32);
-        y = NormalizeLength(y, 32);
-        d = NormalizeLength(d, 32);
-
-        var result = new byte[1 + 32 + 32 + 32];
-        result[0] = 0x04;
-        Buffer.BlockCopy(x, 0, result, 1, 32);
-        Buffer.BlockCopy(y, 0, result, 33, 32);
-        Buffer.BlockCopy(d, 0, result, 65, 32);
+        var result = new byte[PrivateKeyLength];
+        result[0] = UncompressedPointMarker;
+        Buffer.BlockCopy(x, 0, result, 1, CoordinateLength);
+        Buffer.BlockCopy(y, 0, result, 1 + CoordinateLength, CoordinateLength);
+        Buffer.BlockCopy(d, 0, result, 1 + 2 * CoordinateLength, CoordinateLength);
 
         return result;
     }
@@ -82,18 +84,18 @@ public static class EcdsaKeySerializer
     /// </summary>
     public static ECParameters DecodePrivateKey(byte[] data)
     {
-        if (data == null || data.Length != 97 || data[0] != 0x04)
+        if (data == null || data.Length != PrivateKeyLength || data[0] != UncompressedPointMarker)
             throw new ArgumentException(
-                "Invalid ECDSA private key format. Expected 97 bytes starting with 0x04.",
+                $"Invalid ECDSA private key format. Expected {PrivateKeyLength} bytes starting with 0x{UncompressedPointMarker:X2}.",
                 nameof(data));
 
-        var x = new byte[32];
-        var y = new byte[32];
-        var d = new byte[32];
+        var x = new byte[CoordinateLength];
+        var y = new byte[CoordinateLength];
+        var d = new byte[CoordinateLength];
 
-        Buffer.BlockCopy(data, 1, x, 0, 32);
-        Buffer.BlockCopy(data, 33, y, 0, 32);
-        Buffer.BlockCopy(data, 65, d, 0, 32);
+        Buffer.BlockCopy(data, 1, x, 0, CoordinateLength);
+        Buffer.BlockCopy(data, 1 + CoordinateLength, y, 0, CoordinateLength);
+        Buffer.BlockCopy(data, 1 + 2 * CoordinateLength, d, 0, CoordinateLength);
 
         return new ECParameters
         {
@@ -103,46 +105,49 @@ public static class EcdsaKeySerializer
         };
     }
 
-    private static byte[] NormalizeLength(byte[] data, int targetLength)
-    {
-        if (data.Length == targetLength)
-            return data;
-
-        if (data.Length > targetLength)
-        {
-            var result = new byte[targetLength];
-            Buffer.BlockCopy(data, data.Length - targetLength, result, 0, targetLength);
-            return result;
-        }
-
-        {
-            var result = new byte[targetLength];
-            Buffer.BlockCopy(data, 0, result, targetLength - data.Length, data.Length);
-            return result;
-        }
-    }
-
     /// <summary>
-    /// Encodes ECDSA public key to uncompressed point format: [0x04][X:32][Y:32] = 65 bytes.
+    /// Extension: exports the public key of an ECDsa instance in compact format.
     /// </summary>
     public static byte[] ExportPublicKey(this ECDsa ecdsa) =>
         EncodePublicKey(ecdsa.ExportParameters(false));
 
     /// <summary>
-    /// Encodes ECDSA private key to compact format: [0x04][X:32][Y:32][D:32] = 97 bytes.
+    /// Extension: exports the private key of an ECDsa instance in compact format.
     /// </summary>
     public static byte[] ExportPrivateKey(this ECDsa ecdsa) =>
         EncodePrivateKey(ecdsa.ExportParameters(true));
 
     /// <summary>
-    /// Decodes uncompressed point format back to ECParameters and imports it into ECDsa.
+    /// Extension: imports a compact public key into an ECDsa instance.
     /// </summary>
     public static void ImportPublicKey(this ECDsa ecdsa, byte[] data) =>
         ecdsa.ImportParameters(DecodePublicKey(data));
 
     /// <summary>
-    /// Decodes compact private key format back to ECParameters and imports it into ECDsa.
+    /// Extension: imports a compact private key into an ECDsa instance.
     /// </summary>
     public static void ImportPrivateKey(this ECDsa ecdsa, byte[] data) =>
         ecdsa.ImportParameters(DecodePrivateKey(data));
+
+    /// <summary>
+    /// Normalizes a coordinate byte array to exactly <paramref name="targetLength"/> bytes.
+    /// Pads with leading zeros if too short, trims leading zeros if too long.
+    /// </summary>
+    private static byte[] Normalize(byte[] data, int targetLength)
+    {
+        if (data == null)
+            throw new ArgumentNullException(nameof(data));
+
+        if (data.Length == targetLength)
+            return data;
+
+        var result = new byte[targetLength];
+
+        if (data.Length > targetLength)
+            Buffer.BlockCopy(data, data.Length - targetLength, result, 0, targetLength);
+        else
+            Buffer.BlockCopy(data, 0, result, targetLength - data.Length, data.Length);
+
+        return result;
+    }
 }
