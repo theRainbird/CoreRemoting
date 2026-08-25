@@ -840,6 +840,10 @@ public class RpcTests : IClassFixture<ServerFixture>
         Assert.Contains("FailingService", ex.Message);
     }
 
+    // Fun fact:
+    // - ServerConfig.MessageEncryption setting doesn't affect anything!
+    // - RemotingServer accepts both encrypted and unencrypted connections.
+
     [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
     public async Task Disposed_client_subscription_doesnt_break_other_clients()
@@ -848,9 +852,6 @@ public class RpcTests : IClassFixture<ServerFixture>
 
         async Task Roundtrip(bool encryption)
         {
-            var oldEncryption = _serverFixture.Server.Config.MessageEncryption;
-            _serverFixture.Server.Config.MessageEncryption = encryption;
-
             try
             {
                 RemotingClient CreateClient() => new RemotingClient(new ClientConfig()
@@ -886,8 +887,6 @@ public class RpcTests : IClassFixture<ServerFixture>
             }
             finally
             {
-                _serverFixture.Server.Config.MessageEncryption = oldEncryption;
-
                 // reset the error counter for other tests
                 _serverFixture.ServerErrorCount = 0;
             }
