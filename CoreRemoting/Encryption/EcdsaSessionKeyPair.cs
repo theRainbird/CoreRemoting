@@ -51,24 +51,15 @@ public sealed class EcdsaSessionKeyPair : ISessionKeyPair
     public byte[] PublicKey => _ecdsa.ExportPublicKey();
 
     /// <inheritdoc/>
-    public byte[] Sign(byte[] data)
-    {
-        if (!_hasPrivateKey)
-            throw new InvalidOperationException("This instance does not contain a private key.");
-        return _ecdsa.SignData(data, HashAlgorithmName.SHA256);
-    }
+    public byte[] PrivateKey => _ecdsa.ExportPrivateKey();
+
+    /// <inheritdoc/>
+    public byte[] Sign(byte[] data) =>
+        _ecdsa.SignData(data, HashAlgorithmName.SHA256);
 
     /// <inheritdoc/>
     public bool Verify(byte[] data, byte[] signature) =>
         _ecdsa.VerifyData(data, signature, HashAlgorithmName.SHA256);
-
-    /// <inheritdoc/>
-    public byte[] ExportPrivateKey()
-    {
-        if (!_hasPrivateKey)
-            throw new InvalidOperationException("This instance does not contain a private key.");
-        return _ecdsa.ExportPrivateKey();
-    }
 
     /// <inheritdoc/>
     public void Dispose() => _ecdsa?.Dispose();

@@ -17,7 +17,7 @@ public class EcdsaKeySerializerTests
         var publicKey = ecdsa.ExportPublicKey();
 
         Assert.Equal(EcdsaKeySerializer.PublicKeyLength, encoded.Length);
-        Assert.Equal(0x04, encoded[0]);
+        Assert.Equal(EcdsaKeySerializer.UncompressedPointMarker, encoded[0]);
         Assert.Equal(encoded, publicKey);
     }
 

@@ -1,18 +1,15 @@
 ﻿using System;
+using System.Security.Cryptography;
 
 namespace CoreRemoting.Encryption;
 
 /// <summary>
-/// Asymmetric key pair used for session resumption challenge-response authentication.
-/// The private key must never leave the client.
+/// Asymmetric key pair for session resumption and message signing.
+/// The private key never leaves the owning party.
+/// Uses lightweight ECDSA when encryption is disabled, or RSA when encryption is enabled.
 /// </summary>
 public interface ISessionKeyPair : IDisposable
 {
-    /// <summary>
-    /// Public key in a transportable format.
-    /// </summary>
-    byte[] PublicKey { get; }
-
     /// <summary>
     /// Signs the given data with the private key.
     /// </summary>
@@ -30,7 +27,13 @@ public interface ISessionKeyPair : IDisposable
     bool Verify(byte[] data, byte[] signature);
 
     /// <summary>
-    /// Exports the private key for persistence (for client-side reconnection).
+    /// Gets the public key.
     /// </summary>
-    byte[] ExportPrivateKey();
+    byte[] PublicKey { get; }
+
+    /// <summary>
+    /// Gets the private key for persistence (for client-side reconnection).
+    /// </summary>
+    /// <exception cref="CryptographicException">If the key pair was created without a private key.</exception>
+    byte[] PrivateKey { get; }
 }

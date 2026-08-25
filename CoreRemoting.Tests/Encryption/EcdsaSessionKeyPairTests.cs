@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Security.Cryptography;
 using CoreRemoting.Encryption;
 using Xunit;
 
@@ -7,17 +8,17 @@ namespace CoreRemoting.Tests.Encryption;
 public class EcdsaSessionKeyPairTests
 {
     [Fact]
-    public void PublicKey_Is65Bytes()
+    public void PublicKey_HasProperSize()
     {
         using var keyPair = new EcdsaSessionKeyPair();
         Assert.Equal(EcdsaKeySerializer.PublicKeyLength, keyPair.PublicKey.Length);
     }
 
     [Fact]
-    public void ExportPrivateKey_Is97Bytes()
+    public void ExportPrivateKey_HasProperSize()
     {
         using var keyPair = new EcdsaSessionKeyPair();
-        Assert.Equal(EcdsaKeySerializer.PrivateKeyLength, keyPair.ExportPrivateKey().Length);
+        Assert.Equal(EcdsaKeySerializer.PrivateKeyLength, keyPair.PrivateKey.Length);
     }
 
     [Fact]
@@ -68,14 +69,14 @@ public class EcdsaSessionKeyPairTests
         using var signer = new EcdsaSessionKeyPair();
         using var verifier = EcdsaSessionKeyPair.FromPublicKey(signer.PublicKey);
 
-        Assert.Throws<InvalidOperationException>(() => verifier.Sign([1]));
+        Assert.Throws<CryptographicException>(() => verifier.Sign([1]));
     }
 
     [Fact]
     public void ReconstructedFromPrivateKey_CanSign()
     {
         using var original = new EcdsaSessionKeyPair();
-        var privateKey = original.ExportPrivateKey();
+        var privateKey = original.PrivateKey;
 
         using var recreated = new EcdsaSessionKeyPair(privateKey);
 
@@ -90,7 +91,7 @@ public class EcdsaSessionKeyPairTests
         using var signer = new EcdsaSessionKeyPair();
         using var verifier = EcdsaSessionKeyPair.FromPublicKey(signer.PublicKey);
 
-        Assert.Throws<InvalidOperationException>(verifier.ExportPrivateKey);
+        Assert.Throws<CryptographicException>(() => verifier.PrivateKey);
     }
 
     [Fact]

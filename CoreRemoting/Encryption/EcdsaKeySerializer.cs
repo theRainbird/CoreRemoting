@@ -11,7 +11,11 @@ namespace CoreRemoting.Encryption;
 public static class EcdsaKeySerializer
 {
     private const int CoordinateLength = 32;
-    private const byte UncompressedPointMarker = 0x04;
+
+    /// <summary>
+    /// Uncompressed point marker (0x04) used as the first byte of serialized ECDSA keys.
+    /// </summary>
+    public const byte UncompressedPointMarker = 0x04;
 
     /// <summary>
     /// Length of the public key.
