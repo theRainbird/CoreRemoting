@@ -1,0 +1,2 @@
+# Local runtime configuration — must not be checked in (may contain secrets / local hostnames).
+.env

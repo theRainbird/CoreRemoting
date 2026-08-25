@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\CoreRemoting\CoreRemoting.csproj" />
+    <ProjectReference Include="..\..\CoreRemoting.Authentication.Oidc\CoreRemoting.Authentication.Oidc.csproj" />
+  </ItemGroup>
+
+</Project>

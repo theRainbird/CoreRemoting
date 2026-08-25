@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
@@ -48,6 +49,8 @@ public sealed class RemotingSession : IAsyncDisposable
     private const int _stateActive = 0;
     private const int _stateParked = 1;
     private int _lifecycleState;
+
+    private readonly ConcurrentDictionary<string, object> _sessionVariables = new();
 
     private static readonly AsyncLocal<RemotingSession> CurrentSession = new();
 
@@ -346,6 +349,104 @@ public sealed class RemotingSession : IAsyncDisposable
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
     public RemotingIdentity Identity { get; private set; }
+
+    #endregion
+
+    #region Session variables
+
+    /// <summary>
+    /// Sets a session variable with the given name.
+    /// </summary>
+    /// <remarks>Session variables store application level data (elevated permissions, role flags, etc.)
+    /// for the duration of this session. Setting a value of null removes the variable.</remarks>
+    /// <param name="name">Variable name</param>
+    /// <param name="value">Variable value</param>
+    public void SetVariable(string name, object value)
+    {
+        if (name == null)
+            throw new ArgumentNullException(nameof(name));
+
+        if (value == null)
+        {
+            _sessionVariables.TryRemove(name, out var _);
+            return;
+        }
+
+        _sessionVariables[name] = value;
+    }
+
+    /// <summary>
+    /// Gets the session variable with the given name.
+    /// </summary>
+    /// <param name="name">Variable name</param>
+    /// <returns>The variable value or <typeparamref name="T"/>.Default, if the variable doesn't exist</returns>
+    /// <exception cref="InvalidCastException">Thrown, if an existing variable has a type incompatible to <typeparamref name="T"/></exception>
+    public T GetVariable<T>(string name)
+    {
+        if (name == null)
+            throw new ArgumentNullException(nameof(name));
+
+        return _sessionVariables.TryGetValue(name, out var value) && value != null
+            ? value is T typed
+                ? typed
+                : throw new InvalidCastException($"The session variable '{name}' can't be cast to {typeof(T).FullName}.")
+            : default;
+    }
+
+    /// <summary>
+    /// Gets the session variable with the given name.
+    /// </summary>
+    /// <param name="name">Variable name</param>
+    /// <param name="value">The variable value, or <typeparamref name="T"/>.Default, if the variable doesn't exist or has an incompatible type</param>
+    /// <returns>Boolean, that indicates whether the variable could be retrieved</returns>
+    public bool TryGetVariable<T>(string name, out T value)
+    {
+        if (name == null)
+            throw new ArgumentNullException(nameof(name));
+
+        if (_sessionVariables.TryGetValue(name, out var storedValue) && storedValue is T typed)
+        {
+            value = typed;
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Gets whether a session variable with the given name exists.
+    /// </summary>
+    /// <param name="name">Variable name</param>
+    public bool HasVariable(string name) =>
+        name != null && _sessionVariables.ContainsKey(name);
+
+    /// <summary>
+    /// Removes a session variable by its name.
+    /// </summary>
+    /// <param name="name">Variable name</param>
+    /// <returns>Boolean, that indicates whether the variable was found and removed</returns>
+    public bool RemoveVariable(string name)
+    {
+        if (name == null)
+            throw new ArgumentNullException(nameof(name));
+
+        return _sessionVariables.TryRemove(name, out var _);
+    }
+
+    /// <summary>
+    /// Removes all session variables of this session.
+    /// </summary>
+    public void ClearVariables() =>
+        _sessionVariables.Clear();
+
+    /// <summary>
+    /// Gets a point in time snapshot of all session variables of this session.
+    /// </summary>
+    [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
+    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
+    public IReadOnlyDictionary<string, object> Variables =>
+        new Dictionary<string, object>(_sessionVariables);
 
     #endregion
 

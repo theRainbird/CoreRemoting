@@ -184,13 +184,27 @@ Allow clients to reconnect and resume their previous session by presenting its s
 
 ---
 
-## Phase 5: Session Variables
+## Phase 5: Session Variables (implemented)
 
-Add per-session key-value storage for application-level data (elevated permissions, role flags, etc.).
+Per-session key-value storage for application-level data (elevated permissions, role flags, etc.), implemented as a `ConcurrentDictionary<string, object>` field on `RemotingSession` with public accessors. Access happens through the ambient session — `RemotingSession.Current` (AsyncLocal, populated while handling incoming messages) — so both RPC service code and authentication provider code can read/write variables of the currently processed session without parameter threading.
+
+**API (all on `RemotingSession`):**
+- `SetVariable(string name, object value)` — sets a variable; a `null` value removes it
+- `T GetVariable<T>(string name)` — missing variable → `default(T)`; type-incompatible stored value → `InvalidCastException`
+- `bool TryGetVariable<T>(string name, out T value)` — non-throwing variant
+- `bool HasVariable(string name)`, `bool RemoveVariable(string name)`, `void ClearVariables()`
+- `IReadOnlyDictionary<string, object> Variables` — point-in-time snapshot for inspection/persistence
+
+**Lifecycle:** variables survive the Phase 4 park/resume cycle — only the identity is cleared on resume, so post-authentication state (elevated flags set by the provider) persists across transport drops. Parked sessions are reaped by the existing inactive sweep, which also disposes their variables.
+
+**Intentional deviations from the draft:**
+- **Server-only (no wire transfer):** session variables are not sent to the client or serialized into any message. The draft's optional "extend auth response / dedicated message" step was deliberately dropped — providers that need state transfer already have `AuthenticationResponseMessage.Parameters`, and rules 1/5 stay untouched with zero backward-compat surface.
+- **No repository-level API:** no `GetSessionVariables`/`SetSessionVariable` members on `ISessionRepository` — variables are accessed through the ambient session (Rule 6's additive repository idea is not needed).
+- **No cross-restart persistence yet:** the `Variables` snapshot property makes serializing on logout / restoring on login a caller concern; repository-level persistence remains the open follow-up of issue #162.
 
 **Files:**
-- `RemotingSession.cs` — add field `_sessionVariables = new ConcurrentDictionary<string, object?>()` and thread-safe accessors (`SetVariable`, `GetVariable<T>`, `HasVariable`). Also expose a serializable snapshot for persistence across server restarts.
-- Wire protocol (optional): extend auth response or introduce a dedicated message to transfer session variables from provider during authentication so they're populated immediately after login. **Rule 5 applied:** any new fields on existing types (`AuthenticationResponseMessage`, `RemotingIdentity`) use `[DataMember(IsRequired = false)]` defaults, so old deserializers silently ignore them and new ones consume what they understand.
+- `RemotingSession.cs` — `_sessionVariables` field + accessors
+- `CoreRemoting.Tests/SessionVariableTests.cs` — new tests: ambient access from RPC service code, population from an authentication provider, survival across park/resume, concurrent write/read safety
 
 ---
 
@@ -215,21 +229,33 @@ Update existing providers using the adapter pattern, write new tests covering al
 
 ---
 
-## Phase 7: OIDC Support (Patterns A + B)
+## Phase 7: OIDC Support (Patterns A + B) (implemented)
+
+New NuGet package **`CoreRemoting.Authentication.Oidc`** (netstandard2.0, mirrors the SRP package layout).
 
 ### Backward compatibility
-No new wire types. OIDC flows use existing `auth` / `auth_response` with `IsCompleted` and `Parameters`.
+No new wire types (Rule 1). The JWT travels in `AuthenticationRequestMessage.Credentials`, the step-up flow uses existing `auth` / `auth_response` with `IsCompleted` + `Parameters` (Rule 3 pattern, identical to the SRP provider). The only additive core change is `RemotingIdentity.Claims` (`IDictionary<string, string[]>`, `[DataMember(IsRequired = false)]`) — old deserializers ignore it (Rule 2/5).
 
 ### Pattern A — Token Exchange Flow
-- `IOidcAuthenticationProvider : IAuthenticationProvider` validates JWTs from client. First request may return `IsCompleted = false` with hint in `Parameters`, e.g. `oidc_challenge`. Client sends JWT back in next `auth` request via `Credentials` named `oidc_token`. Provider validates signature against JWKS, checks expiry/issuer/audience, populates `RemotingIdentity.Claims`.
-- No dedicated wire type; JWT travels in `AuthenticationRequestMessage.Credentials`.
+- `OidcAuthenticationProvider` validates the client-provided JWT from the `oidc_token` credential via its own RS256/JWKS validator (`OpenIdTokenValidator`), fetching keys from the identity provider's JWKS through OIDC discovery + `JwksCache` (discovery cached 24 h, key set cached 60 s, one forced refresh on unknown `kid`).
+- Validation: signature (RS256/PKCS#1 v1.5), `iss`, `aud` (against `AllowedAudiences`), `exp`/`nbf` with configurable clock skew, required `sub`. The resulting identity is populated into `RemotingIdentity` — `Name = sub`, `AuthenticationType = "OIDC"`, `Roles` from the configured role claim (default `roles`), and **all claims** into the new `Claims` dictionary.
+- The client submits the token with `OidcAuthenticator` (client-side `IAuthenticator` implementation built on the existing auth loop — the token is acquired via delegate, mirroring the SRP authenticator concept).
 
 ### Pattern B — Adaptive / Step-Up Flow
-- After initial token validation, provider may return `IsCompleted = false` with `Parameters` containing `step_up_type`. Client `IAuthenticator` prompts app for additional factor and sends next `auth` request with `Credentials` e.g. `totp_code`. Provider repeats until `IsCompleted = true` or max attempts.
+- When `OidcOptions.StepUpValidator` is configured, a successful token validation returns `IsCompleted = false` with `Parameters` containing `step_up_type = oidc_step_up`; the validated identity is parked in the provider's pending-state dictionary (keyed by session id) and the final response is only produced after the client submits a `step_up_code` that passes the validator delegate. Unknown/reused state is rejected — no step-up without prior token validation.
+- The client `OidcAuthenticator` optionally takes a step-up prompt delegate and loops until the server reports completion; it throws `SecurityException` with the server-provided error reason on failure.
 
-### Configuration
-- `ServerConfig.OidcConfiguration : IOidcAuthenticationProvider?` — when set, server accepts both OIDC tokens and traditional credentials (auth chain tries OIDC first). Additive only on ServerConfig (Rule 6 equivalent for config types).
-- `ClientConfig.Oidc : OidcClientOptions?` with IssuerUrl/ClientId/RedirectUri for auto token acquisition via delegate pattern.
+### Configuration (intentional deviations from the draft)
+- **No `ServerConfig.OidcConfiguration`, no `ClientConfig.Oidc`.** Instead the provider integrates through the existing extension points — the server registers it via `ServerConfig.AuthenticationProvider` and the client sets an `OidcAuthenticator` on `ClientConfig.Authenticator` (same pattern as the SRP provider). This keeps ServerConfig/ClientConfig untouched (Rule 6 for config types) and avoids new option objects.
+- **Optional fallback provider** is realized via the second constructor parameter (`OIDC first` chain): when no OIDC token arrives, the request is delegated to the fallback `IAuthenticationProvider` (e.g., a traditional credential validator). Without a token and without a fallback, authentication fails gracefully.
+- **RS256 only (v1)** — other signature algorithms are rejected explicitly (`ES256`/`HS*` support can follow later behind the same validator seam).
+- **JWKS discovery + cache instead of introspection** — no network round-trip per request, keys rotate via TTL refresh; tokens stay stateless.
+- `OidcOptions.NegotiateNewSessionKey` (default off) plugs into Phase 3: the final auth response then carries a fresh random 32-byte `NegotiatedSharedKey` and both sides rekey at the completion boundary.
+
+### Files
+- New package: `CoreRemoting.Authentication.Oidc/` — `OidcOptions.cs`, `OidcProtocolConstants.cs`, `IOidcAuthenticationProvider.cs`, `OidcAuthenticationProvider.cs`, `OpenIdTokenValidator.cs` (internal), `JwksCache.cs`, `Base64Url.cs` (internal), `OidcAuthenticator.cs`.
+- Core: `RemotingIdentity.Claims` (additive optional member).
+- Tests: `CoreRemoting.Tests/OidcAuthenticationTests.cs` (13 facts: validation success/failure matrix with a mock IdP on HTTP, step-up E2E incl. rejected code fallback, OIDC-first fallback chain, session-key renegotiation via `NegotiatedSharedKey`).
 
 ---
 
@@ -348,7 +374,7 @@ The provider keeps per-session state keyed by `sessionId` to correlate steps.
 | **Phase 2 (multi-phase interface)** — SRP provider uses `IsCompleted` + `Parameters` via `auth` / `auth_response`. First round returns `IsCompleted = false` with `SALT`/`SERVER_EPHEMERAL_PUBLIC` in `Parameters`. Second round processes client `Credentials` and returns `IsCompleted = true` on success. |
 | **Phase 3 (negotiated key)** — SRP's shared secret K travels in the final `auth_response` as `NegotiatedSharedKey` when opt-in is enabled; the session rekeys to AES under K after auth completes, while challenge messages stay fully encrypted with the handshake key. |
 | **Phase 4 (session resume)** — a resumed session re-runs the full SRP authentication (fresh ephemerals, fresh K). The handshakes/challenges stay encrypted under the preserved Phase 1 key, and after the final `auth_response` the core applies the Phase 3 rekey again to the newly derived K — so no special handling is needed for resumed sessions. |
-| **Phase 5 (session variables)** — after successful auth, provider can populate session variables with roles fetched from `ISrpPasswordStore.Roles`. |
+| **Phase 5 (session variables)** — SRP ships the granted roles via `RemotingIdentity.Roles` in the auth response; providers may additionally persist custom per-login state via `RemotingSession.Current.SetVariable(...)` (server-only, no wire transfer). |
 
 #### 5. Server-side storage of verifier v
 
@@ -400,10 +426,10 @@ This helper is **internal** to the SRP project — not part of public API. It's 
 | Issue from original report | Phase(s) that address it |
 |----------------------------|--------------------------|
 | SessionId == shared secret, <128 bits entropy (UUID not recommended as secure token) | **Phase 1** — random AES-256 key per session. **Phase 3/8** — SRP produces cryptographically strong negotiated key. |
-| No way to provide custom shared key for a session (supported by some auth protocols) | **Phase 3** — optional `NegotiatedSharedKey` member on `AuthenticationResponseMessage`. **Phase 7+8** — OIDC and SRP both exercise this pathway. |
-| Auth provider doesn't support multi-step protocols like SRP or 2FA | **Phase 2** — refactored multi-phase interface. **Phase 7 (Pattern B)** — adaptive step-up auth for OIDC/Keycloak. **Phase 8** — full SRP implementation as a concrete provider. |
+| No way to provide custom shared key for a session (supported by some auth protocols) | **Phase 3** — optional `NegotiatedSharedKey` member on `AuthenticationResponseMessage`. **Phase 7+8** — OIDC (`OidcOptions.NegotiateNewSessionKey`) and SRP (`useNegotiatedSessionKey`) both exercise this pathway (implemented). |
+| Auth provider doesn't support multi-step protocols like SRP or 2FA | **Phase 2** — refactored multi-phase interface (implemented, via `IsCompleted` + `Parameters`). **Phase 7 (Pattern B)** — adaptive step-up auth for OIDC (`step_up_validator` delegate + loop in `OidcAuthenticator`, implemented). **Phase 8** — full SRP implementation as a concrete provider (implemented). |
 | SessionId changes on reconnect after server restart; should support session resume (#162) | **Phase 4 (implemented)** — parked sessions are resumed via additive `ISessionRepository.TryResumeSession` (sessionId hint + same client public key), then re-authenticated. Note: this resumes across *client* reconnection; sessions still don't survive a *server* process restart (in-memory repository), which remains follow-up work. |
-| No session variables for storing elevated permissions etc. | **Phase 5** — per-session `ConcurrentDictionary<string, object?>`. SRP provider populates roles from password store into these on login (Phase 8). |
+| No session variables for storing elevated permissions etc. | **Phase 5** — implemented: per-session `ConcurrentDictionary<string, object>` on `RemotingSession` with public accessors (`SetVariable`/`GetVariable<T>`/`TryGetVariable<T>`/`HasVariable`/`RemoveVariable`/`ClearVariables`/`Variables` snapshot), accessed via ambient `RemotingSession.Current`. Server-only by design (no wire transfer); variables survive park/resume. |
 
 
 | Component | New files | Modified files (core) | Modified auth projects |
@@ -412,9 +438,9 @@ This helper is **internal** to the SRP project — not part of public API. It's 
 | Phase 2 — multi-phase interface | Adapter for legacy providers | `IAuthenticationProvider.cs`, `RemotingSession.cs`, `RemotingClient.cs`, `AuthenticationResponseMessage.IsCompleted` + `Parameters` usage | All three existing auth projects (via adapter — minimal change) |
 | Phase 3 — negotiated key | — | `AuthenticationResponseMessage.cs` (optional `NegotiatedSharedKey` member), `RemotingSession.cs` (rekey + legacy strip in `ProcessAuthenticationRequestMessage`), `RemotingClient.cs` (rekey on final `auth_response`) | `SrpAuthenticationProvider.cs` / `SrpAuthenticator.cs` (opt-in + key verification) |
 | Phase 4 — session resume (implemented) | `CoreRemoting.Tests/SessionResumeTests.cs` | `ISessionRepository.cs` (additive `TryResumeSession`), `SessionRepository.cs`, `RemotingSession.cs` (Active/Parked lifecycle), `IRawMessageTransport.cs` (`Disconnected`) + server connection handlers TCP/WebSocket/WebSocketSharp/QUIC (resume hint carrier + resume-before-create), `ClientConfig.cs` (`ResumableSessionId`, `RsaPrivateKeyBlob`), `IRemotingClient.cs` / `RemotingClient.cs` (`SessionId`, `PrivateKey`, key-blob import, strict mismatch check) | — |
-| Phase 5 — session variables | — | `RemotingSession.cs` (add ConcurrentDictionary + accessors) | — |
+| Phase 5 — session variables | — | `RemotingSession.cs` (`_sessionVariables` + accessors, via ambient `Current`) | `CoreRemoting.Tests/SessionVariableTests.cs` (new) |
 | Phase 6 — tests & migration | New test files covering each phase's behavior, including crypto correctness | Existing auth provider projects via adapter pattern updates | All three existing auth providers migrated to multi-phase interface using legacy-adapter bridge |
-| **Phase 7 — OIDC** | `CoreRemoting.Authentication.Oidc/IOidcAuthenticationProvider.cs`, `OidcAuthenticationProvider.cs` (JWKS validation, introspection) | `ServerConfig.cs`, `ClientConfig.cs`, `AuthenticationResponseMessage.IsCompleted` + `Parameters` usage, `RemotingIdentity.Claims` | — |
+| **Phase 7 — OIDC** | `CoreRemoting.Authentication.Oidc/` (new package: `OidcOptions.cs`, `IOidcAuthenticationProvider.cs`, `OidcAuthenticationProvider.cs`, `OidcAuthenticator.cs`, `OpenIdTokenValidator.cs`, `JwksCache.cs`, ...) | `RemotingIdentity.cs` (additive `Claims` member), `AuthenticationResponseMessage.IsCompleted` + `Parameters` reuse, Phase 3 `NegotiatedSharedKey` reuse | `CoreRemoting.Tests/OidcAuthenticationTests.cs` (13 facts, mock IdP via HTTP) |
 | **Phase 8 — SRP** | New project `CoreRemoting.Authentication.Srp/`: `SrpAuthenticationProvider.cs`, `ISrpPasswordStore.cs`, `InMemorySrpPasswordStore.cs`, internal helper classes | `AuthenticationResponseMessage.IsCompleted` + `Parameters` usage in `RemotingSession`/`RemotingClient`. No new wire types. | — |
 
 ---
@@ -441,7 +467,7 @@ Phase 6 (tests covering all phases above) — runs continuously alongside each p
 |---------|-----------|
 | Crypto correctness for SRP | Pure-function `SrpMath` helper, heavily tested in isolation against known-answer test vectors from RFC 5054 before integrating into the provider. Code review by someone with crypto experience strongly recommended before shipping to production. |
 | Wire format backward compatibility during Phase 1 rollout | Configurable compat flag on server and client: `UseLegacySessionKeyDerivation = true` keeps old behavior; new default uses random key. Both sides must agree for interop, but mixed deployments work until all clients are upgraded. |
-| OIDC provider timing attacks / JWKS cache poisoning | Cache keys with strict TTL (5 min), validate issuer on every call, reject tokens with unknown `kid`. Use `System.IdentityModel.Tokens.Jwt` library's built-in validation rather than hand-rolling token parsing. |
+| OIDC provider timing attacks / JWKS cache poisoning | (implemented) Strict TTLs (`JwksCache`: discovery 24 h, key set 60 s), issuer/audience/expiry validated on every request, unknown `kid` triggers at most one forced refresh, RS256-only signature check. Tokens are validated by the built-in `OpenIdTokenValidator` (signature + standard claims); JWKS is fetched over the issuer URL with plain HTTP responses and no credentials, so poisoning stays in-band (same trust level as the IdP itself). |
 | Session hijacking during resume in Phase 4 | Require matching client public key AND re-authentication; never allow transport-level session transfer without identity verification on the new connection. |
 
 ---

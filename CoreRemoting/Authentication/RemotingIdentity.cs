@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Security.Principal;
 
@@ -40,4 +41,11 @@ public class RemotingIdentity : IIdentity
     /// </summary>
     [DataMember]
     public bool IsAuthenticated { get; set; }
+
+    /// <summary>
+    /// Gets or sets the raw claims (e.g., OIDC JWT claims) associated with this identity.
+    /// Optional: null when the authentication protocol does not provide claim data.
+    /// </summary>
+    [DataMember(IsRequired = false)]
+    public IDictionary<string, string[]> Claims { get; set; }
 }
