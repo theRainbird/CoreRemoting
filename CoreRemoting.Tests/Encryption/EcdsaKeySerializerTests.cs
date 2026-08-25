@@ -1,5 +1,4 @@
-﻿using System;
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using CoreRemoting.Encryption;
 using Xunit;
 
@@ -14,9 +13,11 @@ public class EcdsaKeySerializerTests
         var parameters = ecdsa.ExportParameters(includePrivateParameters: false);
 
         var encoded = EcdsaKeySerializer.EncodePublicKey(parameters);
+        var publicKey = ecdsa.ExportPublicKey();
 
         Assert.Equal(65, encoded.Length);
         Assert.Equal(0x04, encoded[0]);
+        Assert.Equal(encoded, publicKey);
     }
 
     [Fact]
@@ -26,6 +27,9 @@ public class EcdsaKeySerializerTests
         var originalParams = ecdsa.ExportParameters(includePrivateParameters: true);
 
         var encoded = EcdsaKeySerializer.EncodePrivateKey(originalParams);
+        var privateKey = ecdsa.ExportPrivateKey();
+        Assert.Equal(encoded, privateKey);
+
         var decoded = EcdsaKeySerializer.DecodePrivateKey(encoded);
 
         using var ecdsa2 = ECDsa.Create();
@@ -35,5 +39,10 @@ public class EcdsaKeySerializerTests
         var signature = ecdsa.SignData(data, HashAlgorithmName.SHA256);
 
         Assert.True(ecdsa2.VerifyData(data, signature, HashAlgorithmName.SHA256));
+
+        using var ecdsa3 = ECDsa.Create();
+        ecdsa3.ImportPrivateKey(privateKey);
+
+        Assert.True(ecdsa3.VerifyData(data, signature, HashAlgorithmName.SHA256));
     }
 }

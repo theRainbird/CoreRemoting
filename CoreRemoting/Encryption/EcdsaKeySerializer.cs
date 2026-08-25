@@ -121,4 +121,28 @@ public static class EcdsaKeySerializer
             return result;
         }
     }
+
+    /// <summary>
+    /// Encodes ECDSA public key to uncompressed point format: [0x04][X:32][Y:32] = 65 bytes.
+    /// </summary>
+    public static byte[] ExportPublicKey(this ECDsa ecdsa) =>
+        EncodePublicKey(ecdsa.ExportParameters(false));
+
+    /// <summary>
+    /// Encodes ECDSA private key to compact format: [0x04][X:32][Y:32][D:32] = 97 bytes.
+    /// </summary>
+    public static byte[] ExportPrivateKey(this ECDsa ecdsa) =>
+        EncodePrivateKey(ecdsa.ExportParameters(true));
+
+    /// <summary>
+    /// Decodes uncompressed point format back to ECParameters and imports it into ECDsa.
+    /// </summary>
+    public static void ImportPublicKey(this ECDsa ecdsa, byte[] data) =>
+        ecdsa.ImportParameters(DecodePublicKey(data));
+
+    /// <summary>
+    /// Decodes compact private key format back to ECParameters and imports it into ECDsa.
+    /// </summary>
+    public static void ImportPrivateKey(this ECDsa ecdsa, byte[] data) =>
+        ecdsa.ImportParameters(DecodePrivateKey(data));
 }
