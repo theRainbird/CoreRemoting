@@ -56,7 +56,7 @@ public class HkdfTests
         var length = 42;
 
         var expected = HexToBytes("8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d9d201395faa4b61a96c8");
-        var result = hkdf.DeriveKey(inkm, length, Array.Empty<byte>(), Array.Empty<byte>());
+        var result = hkdf.DeriveKey(inkm, length, [], []);
         Assert.Equal(expected, result);
     }
 
@@ -93,21 +93,21 @@ public class HkdfTests
         var info = HexToBytes("f0f1f2f3f4f5f6f7f8f9");
         var length = hashLength;
 
-        var expected = System.Security.Cryptography.HKDF.DeriveKey(algorithm, inkm, length, salt, info);
+        var expected = HKDF.DeriveKey(algorithm, inkm, length, salt, info);
         var result = provider.DeriveKey(inkm, length, salt, info);
 
         Assert.Equal(expected, result);
     }
 
-    public static IEnumerable<object[]> GetHkdfProviders()
-    {
-        yield return [Hkdf.Sha256, HashAlgorithmName.SHA256, 32];
-        yield return [Hkdf.Sha384, HashAlgorithmName.SHA384, 48];
-        yield return [Hkdf.Sha512, HashAlgorithmName.SHA512, 64];
-        yield return [Hkdf.Sha3_256, HashAlgorithmName.SHA3_256, 32];
-        yield return [Hkdf.Sha3_384, HashAlgorithmName.SHA3_384, 48];
-        yield return [Hkdf.Sha3_512, HashAlgorithmName.SHA3_512, 64];
-    }
+    public static IEnumerable<object[]> GetHkdfProviders() =>
+    [
+        [Hkdf.Sha256, HashAlgorithmName.SHA256, 32],
+        [Hkdf.Sha384, HashAlgorithmName.SHA384, 48],
+        [Hkdf.Sha512, HashAlgorithmName.SHA512, 64],
+        [Hkdf.Sha3_256, HashAlgorithmName.SHA3_256, 32],
+        [Hkdf.Sha3_384, HashAlgorithmName.SHA3_384, 48],
+        [Hkdf.Sha3_512, HashAlgorithmName.SHA3_512, 64],
+    ];
 
     // RFC 5869 Default Behavior (null/empty semantics)
 
@@ -122,8 +122,8 @@ public class HkdfTests
         var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
         var length = 42;
 
-        var nullResult = hkdf.DeriveKey(inkm, length, null, Array.Empty<byte>());
-        var explicitZeros = hkdf.DeriveKey(inkm, length, new byte[hkdf.HashLength], Array.Empty<byte>());
+        var nullResult = hkdf.DeriveKey(inkm, length, null, []);
+        var explicitZeros = hkdf.DeriveKey(inkm, length, new byte[hkdf.HashLength], []);
 
         Assert.Equal(explicitZeros, nullResult);
     }
@@ -140,7 +140,7 @@ public class HkdfTests
         var length = 42;
 
         var nullResult = hkdf.DeriveKey(inkm, length, salt, null);
-        var explicitEmpty = hkdf.DeriveKey(inkm, length, salt, Array.Empty<byte>());
+        var explicitEmpty = hkdf.DeriveKey(inkm, length, salt, []);
 
         Assert.Equal(explicitEmpty, nullResult);
     }
@@ -184,7 +184,7 @@ public class HkdfTests
     {
         var hkdf = Hkdf.Sha256;
 
-        Assert.Throws<ArgumentException>(() => hkdf.DeriveKey(Array.Empty<byte>(), 16));
+        Assert.Throws<ArgumentException>(() => hkdf.DeriveKey([], 16));
         Assert.Throws<ArgumentException>(() => hkdf.DeriveKey(null, 16));
     }
 
@@ -207,11 +207,11 @@ public class HkdfTests
     [Fact]
     public void DeriveKey_ExcessiveLength_ThrowsArgumentOutOfRangeException()
     {
-        var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var ikm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
         var maxLength = 255 * Hkdf.Sha256.HashLength;
 
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            Hkdf.Sha256.DeriveKey(inkm, maxLength + 1));
+            Hkdf.Sha256.DeriveKey(ikm, maxLength + 1));
     }
 
     /// <summary>
@@ -220,10 +220,10 @@ public class HkdfTests
     [Fact]
     public void DeriveKey_MaximumAllowedLength_Works()
     {
-        var inkm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+        var ikm = HexToBytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
         var maxLength = 255 * Hkdf.Sha256.HashLength;
 
-        var result = Hkdf.Sha256.DeriveKey(inkm, maxLength);
+        var result = Hkdf.Sha256.DeriveKey(ikm, maxLength);
         Assert.Equal(maxLength, result.Length);
     }
 
@@ -449,15 +449,15 @@ public class HkdfTests
         Assert.Equal(expectedLength, provider.HashLength);
     }
 
-    public static IEnumerable<object[]> GetHashLengthProviders()
-    {
-        yield return [Hkdf.Sha256, 32];
-        yield return [Hkdf.Sha384, 48];
-        yield return [Hkdf.Sha512, 64];
-        yield return [Hkdf.Sha3_256, 32];
-        yield return [Hkdf.Sha3_384, 48];
-        yield return [Hkdf.Sha3_512, 64];
-    }
+    public static IEnumerable<object[]> GetHashLengthProviders() =>
+    [
+        [Hkdf.Sha256, 32],
+        [Hkdf.Sha384, 48],
+        [Hkdf.Sha512, 64],
+        [Hkdf.Sha3_256, 32],
+        [Hkdf.Sha3_384, 48],
+        [Hkdf.Sha3_512, 64],
+    ];
 
     // SHA-3 Specific Tests
 
