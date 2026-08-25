@@ -119,7 +119,7 @@ public static class EcdsaKeySerializer
     /// Extension: exports the private key of an ECDsa instance in compact format.
     /// </summary>
     public static byte[] ExportPrivateKey(this ECDsa ecdsa) =>
-        EncodePrivateKey(ecdsa.ExportParameters(true));
+        WrapException(() => EncodePrivateKey(ecdsa.ExportParameters(true)));
 
     /// <summary>
     /// Extension: imports a compact public key into an ECDsa instance.
@@ -132,6 +132,18 @@ public static class EcdsaKeySerializer
     /// </summary>
     public static void ImportPrivateKey(this ECDsa ecdsa, byte[] data) =>
         ecdsa.ImportParameters(DecodePrivateKey(data));
+
+    internal static T WrapException<T>(Func<T> function)
+    {
+        try
+        {
+            return function();
+        }
+        catch (Exception ex) when (ex.GetType() != typeof(CryptographicException))
+        {
+            throw new CryptographicException(ex.Message, ex);
+        }
+    }
 
     /// <summary>
     /// Normalizes a coordinate byte array to exactly <paramref name="targetLength"/> bytes.

@@ -9,6 +9,12 @@ namespace CoreRemoting.Encryption;
 public static class SessionKeyPairFactory
 {
     /// <summary>
+    /// Generates a new session key pair (RSA for encryption, ECDSA for signing).
+    /// </summary>
+    public static ISessionKeyPair Generate(bool encryption, int keySize = 2048) =>
+        encryption ? GenerateRsa(keySize) : GenerateEcdsa();
+
+    /// <summary>
     /// Generates a new RSA session key pair with a freshly generated key.
     /// </summary>
     /// <param name="keySize">Key size in bits (1024, 2048, 4096, ...). Defaults to 2048.</param>

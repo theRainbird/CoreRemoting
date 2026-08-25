@@ -3,6 +3,8 @@ using System.Security.Cryptography;
 
 namespace CoreRemoting.Encryption;
 
+using static EcdsaKeySerializer;
+
 /// <summary>
 /// ECDSA-based session key pair using NIST P-256 curve.
 /// Keys are serialized in compact uncompressed point format (65 bytes public, 97 bytes private).
@@ -10,7 +12,6 @@ namespace CoreRemoting.Encryption;
 public sealed class EcdsaSessionKeyPair : ISessionKeyPair
 {
     private readonly ECDsa _ecdsa;
-    private readonly bool _hasPrivateKey;
 
     /// <summary>
     /// Generates a new ECDSA P-256 key pair.
@@ -18,7 +19,6 @@ public sealed class EcdsaSessionKeyPair : ISessionKeyPair
     public EcdsaSessionKeyPair()
     {
         _ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        _hasPrivateKey = true;
     }
 
     /// <summary>
@@ -28,13 +28,11 @@ public sealed class EcdsaSessionKeyPair : ISessionKeyPair
     {
         _ecdsa = ECDsa.Create();
         _ecdsa.ImportPrivateKey(privateKey);
-        _hasPrivateKey = true;
     }
 
-    private EcdsaSessionKeyPair(ECDsa ecdsa, bool hasPrivateKey)
+    private EcdsaSessionKeyPair(ECDsa ecdsa)
     {
         _ecdsa = ecdsa;
-        _hasPrivateKey = hasPrivateKey;
     }
 
     /// <summary>
@@ -44,7 +42,7 @@ public sealed class EcdsaSessionKeyPair : ISessionKeyPair
     {
         var ecdsa = ECDsa.Create();
         ecdsa.ImportPublicKey(publicKey);
-        return new EcdsaSessionKeyPair(ecdsa, hasPrivateKey: false);
+        return new EcdsaSessionKeyPair(ecdsa);
     }
 
     /// <inheritdoc/>
@@ -55,7 +53,7 @@ public sealed class EcdsaSessionKeyPair : ISessionKeyPair
 
     /// <inheritdoc/>
     public byte[] Sign(byte[] data) =>
-        _ecdsa.SignData(data, HashAlgorithmName.SHA256);
+        WrapException(() => _ecdsa.SignData(data, HashAlgorithmName.SHA256));
 
     /// <inheritdoc/>
     public bool Verify(byte[] data, byte[] signature) =>
