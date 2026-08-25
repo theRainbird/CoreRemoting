@@ -59,6 +59,7 @@ public class NullServerConnection : NullTransport, IAsyncDisposable
 
         if (RemotingServer != null)
         {
+            // note: null channel sessions are not resumable
             Session = await RemotingServer.SessionRepository.CreateSession(
                 clientPublicKey, ClientAddress, RemotingServer, this)
                     .ConfigureAwait(false);

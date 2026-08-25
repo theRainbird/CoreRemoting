@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 using WebSocketSharp;
 using WebSocketSharp.Server;
 
@@ -88,17 +89,9 @@ public class RpcWebsocketSharpBehavior : WebSocketBehavior, IRawMessageTransport
                 resumableSessionId = new Guid(Convert.FromBase64String(resumeSessionIdCookie.Value));
         }
 
-        return _server.SessionRepository.TryResumeSession(
-            resumableSessionId ?? Guid.Empty,
-            clientPublicKey,
-            this)
-            .GetAwaiter().GetResult()
-            ?? _server.SessionRepository.CreateSession(
-                clientPublicKey,
-                Context.UserEndPoint.ToString(),
-                _server,
-                this)
-            .GetAwaiter().GetResult();
+        return _server.SessionRepository.ResumeOrCreateSession(
+            resumableSessionId, clientPublicKey, Context.UserEndPoint.ToString(), _server, this)
+                .GetAwaiter().GetResult();
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 using WatsonTcp;
 
 namespace CoreRemoting.Channels.Tcp;
@@ -111,37 +112,12 @@ public class TcpConnection : IRawMessageTransport
         }
 
         _session =
-            TryResumeExistingSession(resumableSessionId, clientPublicKey);
-
-        _session ??=
-            _server.SessionRepository.CreateSession(
-                clientPublicKey,
-                _clientMetadata.IpPort,
-                _server,
-                this)
-            .GetAwaiter().GetResult();
+            _server.SessionRepository.ResumeOrCreateSession(
+                resumableSessionId, clientPublicKey, _clientMetadata.IpPort, _server, this)
+                    .GetAwaiter().GetResult();
 
         _session.BeforeDispose += BeforeDisposeSession;
         return true;
-    }
-
-    /// <summary>
-    /// Tries to resume a previously parked session for the current connection.
-    /// </summary>
-    /// <param name="resumableSessionId">Session ID the client requests to resume (may be null)</param>
-    /// <param name="clientPublicKey">Public key of the re-connecting client</param>
-    /// <returns>Resumed session or null if resumption isn't possible</returns>
-    private RemotingSession TryResumeExistingSession(Guid? resumableSessionId, byte[] clientPublicKey)
-    {
-        if (resumableSessionId == null)
-            return null;
-
-        var resumedSession =
-            _server.SessionRepository.TryResumeSession(
-                resumableSessionId.Value, clientPublicKey, this)
-            .GetAwaiter().GetResult();
-
-        return resumedSession;
     }
 
     /// <summary>
