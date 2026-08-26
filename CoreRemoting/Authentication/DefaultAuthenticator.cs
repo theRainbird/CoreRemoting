@@ -13,12 +13,12 @@ public class DefaultAuthenticator : IAuthenticator
     /// <param name="credentials">Credentials to authenticate.</param>
     /// <param name="remoteAuth">Server-side authentication provider.</param>
     /// <returns>The response returned by remote authentication provider.</returns>
-    public async Task Authenticate(Credential[] credentials, IAuthenticationProvider remoteAuth)
+    public async Task<AuthenticationResponseMessage> Authenticate(Credential[] credentials, IAuthenticationProvider remoteAuth)
     {
         if (credentials == null || credentials.Length == 0)
-            return;
+            return AuthenticationResponseMessage.Error();
 
-        await remoteAuth.Authenticate(new AuthenticationRequestMessage
+        return await remoteAuth.Authenticate(new AuthenticationRequestMessage
         {
             Credentials = credentials,
         });

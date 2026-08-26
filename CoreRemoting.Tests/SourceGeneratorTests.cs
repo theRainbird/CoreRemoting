@@ -31,14 +31,14 @@ public partial class SourceGeneratorTests
     {
         var type = typeof(LegacyAuthenticationProvider);
 
-        // ñheck that the new method exists with the correct signature
+        // check that the new method exists with the correct signature
         var newMethod = type.GetMethod(
             nameof(IAuthenticationProvider.Authenticate),
             [typeof(AuthenticationRequestMessage)]);
         Assert.NotNull(newMethod);
         Assert.Equal(typeof(Task<AuthenticationResponseMessage>), newMethod.ReturnType);
 
-        // ñheck that it has the GeneratedCode attribute
+        // check that it has the GeneratedCode attribute
         var generatedCodeAttr = newMethod.GetCustomAttribute<GeneratedCodeAttribute>();
         Assert.NotNull(generatedCodeAttr);
 

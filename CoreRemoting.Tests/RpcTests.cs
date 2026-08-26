@@ -1505,11 +1505,11 @@ public class RpcTests : IClassFixture<ServerFixture>
 
     private class FreezingAuthenticator : IAuthenticator
     {
-        private TaskCompletionSource Freezing { get; } = new();
-
         public TaskCompletionSource Connected { get; } = new();
 
-        public Task Authenticate(Credential[] credentials, IAuthenticationProvider authProxy)
+        private TaskCompletionSource<AuthenticationResponseMessage> Freezing { get; } = new();
+
+        public Task<AuthenticationResponseMessage> Authenticate(Credential[] credentials, IAuthenticationProvider authProxy)
         {
             // now we know we're connected, but not yet authenticated
             Connected.TrySetResult();

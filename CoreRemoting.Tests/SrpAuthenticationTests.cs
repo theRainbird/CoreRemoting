@@ -314,7 +314,7 @@ public class SrpAuthenticationTests : IAsyncLifetime
     // Broken authenticator for test purposes
     private class BrokenSrpAuthenticator : IAuthenticator
     {
-        public async Task Authenticate(Credential[] credentials, IAuthenticationProvider authProxy)
+        public async Task<AuthenticationResponseMessage> Authenticate(Credential[] credentials, IAuthenticationProvider authProxy)
         {
             // Skip step 1, directly send step 2 with fake proof
             await authProxy.Authenticate(new AuthenticationRequestMessage
@@ -324,6 +324,8 @@ public class SrpAuthenticationTests : IAsyncLifetime
                     new() { Name = CLIENT_SESSION_PROOF, Value = "woof" }
                 ]
             });
+
+            return new();
         }
     }
 }

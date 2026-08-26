@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net.WebSockets;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
 
@@ -63,15 +64,9 @@ public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
                 resumableSessionId = new Guid(Convert.FromBase64String(resumeSessionIdCookie.Value));
         }
 
-        Session =
-            (await RemotingServer.SessionRepository.TryResumeSession(
-                resumableSessionId ?? Guid.Empty,
-                clientPublicKey,
-                this)
-                    .ConfigureAwait(false))
-            ?? await RemotingServer.SessionRepository.CreateSession(
-                clientPublicKey, ClientAddress, RemotingServer, this)
-                    .ConfigureAwait(false);
+        Session = await RemotingServer.SessionRepository.ResumeOrCreateSession(
+            resumableSessionId, clientPublicKey, ClientAddress, RemotingServer, this)
+                .ConfigureAwait(false);
 
         return Session.SessionId;
     }

@@ -2,6 +2,7 @@
 using System.Net.Quic;
 using System.Text;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Quic;
 
@@ -70,15 +71,10 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
             clientPublicKey = null;
 
         Session =
-            (await RemotingServer.SessionRepository.TryResumeSession(
-                resumableSessionId ?? Guid.Empty,
-                clientPublicKey,
-                this)
-                    .ConfigureAwait(false))
-            ?? await RemotingServer.SessionRepository.CreateSession(
-                clientPublicKey, Connection.RemoteEndPoint.ToString(),
-                    RemotingServer, this)
-                        .ConfigureAwait(false);
+            await RemotingServer.SessionRepository.ResumeOrCreateSession(
+                resumableSessionId, clientPublicKey, Connection.RemoteEndPoint.ToString(),
+                RemotingServer, this)
+                    .ConfigureAwait(false);
 
         return Session.SessionId;
     }

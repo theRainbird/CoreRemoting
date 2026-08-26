@@ -43,6 +43,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     private Guid _sessionId;
     private bool _authenticationRequired;
     private byte[] _sharedSecret;
+    private int _sharedSecretLength;
     private readonly object _sessionLock;
     private readonly AsyncCountdownEvent _currentlyPendingMessagesCounter;
     private TaskCompletionSource<bool> _handshakeCompletedTaskSource;
@@ -542,6 +543,18 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         if (!_isAuthenticated)
             throw new SecurityException("Authentication failed. Please check credentials.");
+
+        // if the authentication protocol negotiated a new shared key, re-key the session.
+        // Both endpoints switch to the negotiated key right after this final response,
+        // so the next message is already encrypted with it on both sides.
+        var authResponseMessage = await authResponse.ConfigureAwait(false);
+        if (MessageEncryption && authResponseMessage?.NegotiatedSharedKey is not null and { Length: > 0 })
+        {
+            var inputKeyMaterial = authResponseMessage.NegotiatedSharedKey;
+            var derivedSharedKey = _config.HkdfProvider.DeriveKey(inputKeyMaterial, _sharedSecretLength, _sessionId, nameof(CoreRemoting));
+            lock (_sessionLock)
+                _sharedSecret = derivedSharedKey;
+        }
     }
 
     #endregion
@@ -660,6 +673,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         {
             _sessionId = handshakeMessage.SessionId;
             _sharedSecret = MessageEncryption ? handshakeMessage.SharedSecret ?? _sessionId.ToByteArray() : null;
+            _sharedSecretLength = _sharedSecret?.Length ?? 0;
             _authenticationRequired = handshakeMessage.AuthenticationRequired;
         }
 
@@ -704,16 +718,6 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         if (authResponseMessage.IsCompleted)
         {
-            // if the authentication protocol negotiated a new shared key, re-key the session.
-            // Both endpoints switch to the negotiated key right after this final response,
-            // so the next message is already encrypted with it on both sides.
-            if (authResponseMessage.IsAuthenticated && MessageEncryption &&
-                authResponseMessage.NegotiatedSharedKey != null)
-            {
-                lock (_sessionLock)
-                    _sharedSecret = authResponseMessage.NegotiatedSharedKey;
-            }
-
             _isAuthenticated = authResponseMessage.IsAuthenticated;
             Identity = _isAuthenticated ? authResponseMessage.AuthenticatedIdentity : null;
             _authenticationCompletedTaskSource.TrySetResult(true);

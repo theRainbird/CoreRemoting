@@ -10,7 +10,7 @@ using static Logger<Client>;
 /// </summary>
 public class TwoFactorAuthenticator : IAuthenticator
 {
-    public async Task Authenticate(Credential[] credentials, IAuthenticationProvider authProxy)
+    public async Task<AuthenticationResponseMessage> Authenticate(Credential[] credentials, IAuthenticationProvider authProxy)
     {
         // step1: send login + password => server responds with an incomplete auth message
         var resp = await authProxy.Authenticate(new()
@@ -33,5 +33,7 @@ public class TwoFactorAuthenticator : IAuthenticator
                 })
             });
         }
+
+        return resp;
     }
 }

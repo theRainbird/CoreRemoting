@@ -24,7 +24,7 @@ public class SrpAuthenticator : IAuthenticator
     private SrpClient SrpClient { get; set; }
 
     /// <inheritdoc/>
-    public async Task Authenticate(Credential[] credentials, IAuthenticationProvider authProxy)
+    public async Task<AuthenticationResponseMessage> Authenticate(Credential[] credentials, IAuthenticationProvider authProxy)
     {
         var userName = credentials.FindByName(USERNAME);
         var password = credentials.FindByName(PASSWORD);
@@ -61,13 +61,11 @@ public class SrpAuthenticator : IAuthenticator
         var serverSessionProof = response2[SERVER_SESSION_PROOF];
         SrpClient.VerifySession(clientEphemeral.Public, clientSession, serverSessionProof);
 
-        // verify that the SRP session key negotiated by the server matches the locally derived key
-        if (response2.NegotiatedSharedKey != null)
-        {
-            var expectedSessionKey = SrpValueConverter.FromHex(clientSession.Key);
+        // restore the negotiated SRP session key using the locally derived key
+        if (response2.NegotiatedSharedKey is not null)
+            response2.NegotiatedSharedKey =
+                SrpInteger.FromHex(clientSession.Key).ToByteArray();
 
-            if (!response2.NegotiatedSharedKey.SequenceEqual(expectedSessionKey))
-                throw new SecurityException("Negotiated shared key does not match the locally derived SRP session key.");
-        }
+        return response2;
     }
 }

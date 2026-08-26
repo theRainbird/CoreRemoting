@@ -131,4 +131,9 @@ public class ClientConfig
     /// as the original session used. If the configured session cannot be resumed, the connection will fail.
     /// </summary>
     public Guid? ResumableSessionId { get; set; }
+
+    /// <summary>
+    /// Gets or sets HKDF algorithm provider for negotiated shared key.
+    /// </summary>
+    public IHkdfProvider HkdfProvider { get; set; }
 }

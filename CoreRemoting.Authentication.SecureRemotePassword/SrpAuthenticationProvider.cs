@@ -20,8 +20,8 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
     /// <param name="parameters">Optional SRP-6a protocol parameters.</param>
     /// <param name="useNegotiatedSessionKey">If true, the derived SRP session key is sent to the client as the
     /// negotiated shared key and both endpoints use it for symmetric message encryption after successful
-    /// authentication (replaces the default session key from the handshake). Default is false.</param>
-    public SrpAuthenticationProvider(ISrpAccountRepository repository, SrpParameters parameters = null, bool useNegotiatedSessionKey = false)
+    /// authentication (replaces the default session key from the handshake). Default is true.</param>
+    public SrpAuthenticationProvider(ISrpAccountRepository repository, SrpParameters parameters = null, bool useNegotiatedSessionKey = true)
     {
         AuthRepository = repository;
         SrpParameters = parameters ?? new();
@@ -146,7 +146,8 @@ public class SrpAuthenticationProvider : IAuthenticationProvider
 
         // optionally negotiate the derived SRP session key as the new shared secret for message encryption
         if (UseNegotiatedSessionKey)
-            response.NegotiatedSharedKey = SrpValueConverter.FromHex(serverSessionKey);
+            response.NegotiatedSharedKey =
+                SrpInteger.FromHex(serverSessionKey).ToByteArray();
 
         return response;
     }

@@ -18,7 +18,7 @@ public class GitHubAuthenticator : IAuthenticator
 
     private string ClientId { get; }
 
-    public async Task Authenticate(Credential[] credentials, IAuthenticationProvider authProxy)
+    public async Task<AuthenticationResponseMessage> Authenticate(Credential[] credentials, IAuthenticationProvider authProxy)
     {
         var client = new GitHubClient(new ProductHeaderValue("CoreRemotingDemo"));
 
@@ -33,7 +33,7 @@ public class GitHubAuthenticator : IAuthenticator
 
         var token = await client.Oauth.CreateAccessTokenForDeviceFlow(ClientId, deviceFlow);
 
-        await authProxy.Authenticate(new AuthenticationRequestMessage
+        return await authProxy.Authenticate(new AuthenticationRequestMessage
         {
             Credentials =
             [

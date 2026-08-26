@@ -142,4 +142,9 @@ public class ServerConfig
 
         return this;
     }
+
+    /// <summary>
+    /// Gets or sets HKDF algorithm provider for negotiated shared key.
+    /// </summary>
+    public IHkdfProvider HkdfProvider { get; set; }
 }
