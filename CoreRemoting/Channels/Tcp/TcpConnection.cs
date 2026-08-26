@@ -88,12 +88,13 @@ public class TcpConnection : IRawMessageTransport
         if (_session != null)
             return false;
 
+        bool messageEncryption = false;
         byte[] clientPublicKey = null;
         Guid? resumableSessionId = null;
 
         if (metadata != null)
         {
-            var messageEncryption = ((System.Text.Json.JsonElement)metadata["MessageEncryption"]).GetBoolean();
+            messageEncryption = ((System.Text.Json.JsonElement)metadata["MessageEncryption"]).GetBoolean();
 
             if (messageEncryption)
             {
@@ -113,7 +114,7 @@ public class TcpConnection : IRawMessageTransport
 
         _session =
             _server.SessionRepository.ResumeOrCreateSession(
-                resumableSessionId, clientPublicKey, _clientMetadata.IpPort, _server, this)
+                resumableSessionId, messageEncryption, clientPublicKey, _clientMetadata.IpPort, _server, this)
                     .GetAwaiter().GetResult();
 
         _session.BeforeDispose += BeforeDisposeSession;

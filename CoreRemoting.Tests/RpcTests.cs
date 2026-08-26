@@ -582,7 +582,7 @@ public class RpcTests : IClassFixture<ServerFixture>
         Assert.NotNull(ex);
         Assert.Contains("Missing Method", ex.Message);
 
-        _testOutputHelper.WriteLine(_serverFixture.LastServerError.ToString());
+        _testOutputHelper.WriteLine(_serverFixture.LastServerError?.ToString() ?? string.Empty);
         CheckServerErrorCount();
     }
 

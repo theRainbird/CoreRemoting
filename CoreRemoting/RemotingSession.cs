@@ -31,8 +31,8 @@ public sealed class RemotingSession : IAsyncDisposable
 
     private readonly IRemotingServer _server;
     private IRawMessageTransport _rawMessageTransport;
-    private readonly RsaKeyPair _keyPair;
     private readonly int _keySize;
+    private readonly RsaKeyPair _keyPair;
     private readonly Guid _sessionId;
     private byte[] _sharedSecret;
     private readonly byte[] _clientPublicKeyBlob;
@@ -66,12 +66,13 @@ public sealed class RemotingSession : IAsyncDisposable
     /// <summary>
     /// Creates a new instance of the RemotingSession class.
     /// </summary>
+    /// <param name="messageEncryption">Indicates whether message encryption is enabled</param>
     /// <param name="keySize">Key size of the RSA keys for asymmetric encryption</param>
     /// <param name="clientPublicKey">Public key of this session's client</param>
     /// <param name="clientAddress">Client's network address</param>
     /// <param name="server">Server instance, that hosts this session</param>
     /// <param name="rawMessageTransport">Component, that does the raw message transport (send and receive)</param>
-    internal RemotingSession(int keySize, byte[] clientPublicKey, string clientAddress,
+    internal RemotingSession(bool messageEncryption, int keySize, byte[] clientPublicKey, string clientAddress,
         IRemotingServer server, IRawMessageTransport rawMessageTransport)
     {
         _isDisposing = false;
@@ -79,9 +80,11 @@ public sealed class RemotingSession : IAsyncDisposable
         _sessionId = Guid.NewGuid();
         _lastActivityTimestamp = DateTime.Now;
         _isAuthenticated = false;
+        CreatedOn = DateTime.Now;
+        MessageEncryption = messageEncryption;
+
         _keySize = keySize;
         _keyPair = new RsaKeyPair(_keySize);
-        CreatedOn = DateTime.Now;
         _remoteDelegateInvocationEventAggregator = new RemoteDelegateInvocationEventAggregator();
         _server = server ?? throw new ArgumentNullException(nameof(server));
         _delegateProxyFactory = _server.ServiceRegistry.GetService<IDelegateProxyFactory>();
@@ -94,11 +97,9 @@ public sealed class RemotingSession : IAsyncDisposable
         _rawMessageTransport.ErrorOccured += OnErrorOccured;
         _rawMessageTransport.Disconnected += OnRawMessageTransportDisconnected;
 
-        MessageEncryption = clientPublicKey != null;
-
-        _sharedSecret = MessageEncryption ?
-            _server.Config.GenerateSharedKey(_sessionId) :
-            null;
+        _sharedSecret = MessageEncryption
+            ? _server.Config.GenerateSharedKey(_sessionId)
+            : null;
 
         _remoteDelegateInvocationEventAggregator.RemoteDelegateInvocationNeeded +=
             async (_, uniqueCallKey, handlerKey, arguments) =>

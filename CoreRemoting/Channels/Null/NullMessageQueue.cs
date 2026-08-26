@@ -55,8 +55,8 @@ public class NullMessageQueue
     /// Connects to the specified listener endpoint.
     /// </summary>
     /// <param name="endpoint">Listener endpoint</param>
-    /// <param name="metadata">Optional metadata strings</param>
-    public static string Connect(string endpoint, params string[] metadata)
+    /// <param name="metadata">Optional metadata parameters</param>
+    public static string Connect(string endpoint, Dictionary<string, string> metadata = null)
     {
         if (Listeners.TryGetValue(endpoint, out var _))
         {
@@ -75,7 +75,7 @@ public class NullMessageQueue
     /// <param name="receiver">Receiver endpoint.</param>
     /// <param name="message">Message to send.</param>
     /// <param name="metadata">Message metadata.</param>
-    public static void SendMessage(string sender, string receiver, byte[] message, params string[] metadata) =>
+    public static void SendMessage(string sender, string receiver, byte[] message, Dictionary<string, string> metadata = null) =>
         SendMessage($"{sender}:{receiver}", sender, receiver, message, metadata);
 
     /// <summary>
@@ -86,7 +86,7 @@ public class NullMessageQueue
     /// <param name="receiver">Receiver endpoint.</param>
     /// <param name="message">Message to send.</param>
     /// <param name="metadata">Message metadata.</param>
-    private static void SendMessage(string address, string sender, string receiver, byte[] message, params string[] metadata)
+    private static void SendMessage(string address, string sender, string receiver, byte[] message, Dictionary<string, string> metadata)
     {
         var adr = address ?? $"{sender}:{receiver}";
         var mre = Events.GetOrAdd(adr, address => new(false));

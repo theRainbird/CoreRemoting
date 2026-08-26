@@ -52,7 +52,8 @@ public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
 
         var cookies = WebSocketContext.CookieCollection;
         var messageEncryptionCookie = cookies[MessageEncryptionCookie];
-        if (messageEncryptionCookie?.Value == "1")
+        var messageEncryptionEnabled = messageEncryptionCookie?.Value == "1";
+        if (messageEncryptionEnabled)
         {
             var shakeHandsCookie = cookies[ClientPublicKeyCookie];
             clientPublicKey =
@@ -65,7 +66,7 @@ public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
         }
 
         Session = await RemotingServer.SessionRepository.ResumeOrCreateSession(
-            resumableSessionId, clientPublicKey, ClientAddress, RemotingServer, this)
+            resumableSessionId, messageEncryptionEnabled, clientPublicKey, ClientAddress, RemotingServer, this)
                 .ConfigureAwait(false);
 
         return Session.SessionId;

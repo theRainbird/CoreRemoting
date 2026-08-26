@@ -46,22 +46,29 @@ public class NullServerConnection : NullTransport, IAsyncDisposable
     /// </summary>
     private async Task<Guid> CreateRemotingSession()
     {
+        var messageEncryption = false;
         byte[] clientPublicKey = null;
 
         // get encryption metadata from NullMessage
-        if (ConnectionMessage.Metadata != null &&
-            ConnectionMessage.Metadata.Length == 2 &&
-            ConnectionMessage.Metadata.First() == nameof(RemotingClient.PublicKey))
+        if (ConnectionMessage.Metadata != null)
         {
-            clientPublicKey = Convert.FromBase64String(
-                ConnectionMessage.Metadata.Last());
+            var md = ConnectionMessage.Metadata;
+            if (md.TryGetValue(nameof(RemotingClient.MessageEncryption), out var me))
+            {
+                messageEncryption = Convert.ToBoolean(me);
+            }
+
+            if (md.TryGetValue(nameof(RemotingClient.PublicKey), out var pk))
+            {
+                clientPublicKey = Convert.FromBase64String(pk);
+            }
         }
 
         if (RemotingServer != null)
         {
             // note: null channel sessions are not resumable
             Session = await RemotingServer.SessionRepository.CreateSession(
-                clientPublicKey, ClientAddress, RemotingServer, this)
+                messageEncryption, clientPublicKey, ClientAddress, RemotingServer, this)
                     .ConfigureAwait(false);
 
             return Session.SessionId;

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace CoreRemoting.Channels.Null;
@@ -34,11 +35,16 @@ public class NullClientChannel : NullTransport, IClientChannel
     /// <inheritdoc />
     public Task ConnectAsync()
     {
-        var metadata = Array.Empty<string>();
-        if (RemotingClient?.MessageEncryption ?? false)
+        var encryption = $"{RemotingClient?.MessageEncryption ?? false}";
+        var metadata = new Dictionary<string, string>()
         {
-            metadata = [nameof(RemotingClient.PublicKey),
-                Convert.ToBase64String(RemotingClient.PublicKey)];
+            { nameof(RemotingClient.MessageEncryption), encryption },
+        };
+
+        if (RemotingClient?.PublicKey is not null and { Length: > 0 })
+        {
+            var clientPublicKey = Convert.ToBase64String(RemotingClient.PublicKey);
+            metadata[nameof(RemotingClient.PublicKey)] = clientPublicKey;
         }
 
         ThisEndpoint = NullMessageQueue.Connect(Url, metadata);

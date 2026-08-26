@@ -80,12 +80,13 @@ public class SessionRepository : ISessionRepository
     /// <summary>
     /// Creates a new session.
     /// </summary>
+    /// <param name="messageEncryption">Whether message encryption is enabled on client</param>
     /// <param name="clientPublicKey">Client's public key</param>
     /// <param name="clientAddress">Client's network address</param>
     /// <param name="server">Server instance</param>
     /// <param name="rawMessageTransport">Component that does the raw message transport</param>
     /// <returns>The newly created session</returns>
-    public async Task<RemotingSession> CreateSession(byte[] clientPublicKey, string clientAddress, IRemotingServer server, IRawMessageTransport rawMessageTransport)
+    public async Task<RemotingSession> CreateSession(bool messageEncryption, byte[] clientPublicKey, string clientAddress, IRemotingServer server, IRawMessageTransport rawMessageTransport)
     {
         if (server == null)
             throw new ArgumentException(nameof(server));
@@ -94,6 +95,7 @@ public class SessionRepository : ISessionRepository
             throw new ArgumentNullException(nameof(rawMessageTransport));
 
         var session = new RemotingSession(
+            messageEncryption,
             KeySize,
             clientPublicKey,
             clientAddress,

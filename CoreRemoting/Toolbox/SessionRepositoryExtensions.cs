@@ -19,6 +19,7 @@ public static class SessionRepositoryExtensions
     /// </summary>
     /// <param name="repository">Session repository.</param>
     /// <param name="sessionId">Session ID to resume, or null / <see cref="Guid.Empty"/> to skip resumption.</param>
+    /// <param name="messageEncryption">Whether message encryption is enabled on client.</param>
     /// <param name="clientPublicKey">Client's public key (validated on resume, stored on create).</param>
     /// <param name="clientAddress">Client's network address (used only when creating a new session).</param>
     /// <param name="server">Server instance (used only when creating a new session).</param>
@@ -27,6 +28,7 @@ public static class SessionRepositoryExtensions
     public static async Task<RemotingSession> ResumeOrCreateSession(
         this ISessionRepository repository,
         Guid? sessionId,
+        bool messageEncryption,
         byte[] clientPublicKey,
         string clientAddress,
         IRemotingServer server,
@@ -46,7 +48,7 @@ public static class SessionRepositoryExtensions
         }
 
         return await repository
-            .CreateSession(clientPublicKey, clientAddress, server, rawMessageTransport)
+            .CreateSession(messageEncryption, clientPublicKey, clientAddress, server, rawMessageTransport)
             .ConfigureAwait(false);
     }
 }

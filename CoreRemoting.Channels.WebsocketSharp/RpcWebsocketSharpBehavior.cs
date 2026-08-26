@@ -75,8 +75,8 @@ public class RpcWebsocketSharpBehavior : WebSocketBehavior, IRawMessageTransport
         Guid? resumableSessionId = null;
 
         var messageEncryptionCookie = Context.CookieCollection["MessageEncryption"];
-
-        if (messageEncryptionCookie?.Value == "1")
+        var messageEncryptionEnabled = messageEncryptionCookie?.Value == "1";
+        if (messageEncryptionEnabled)
         {
             var shakeHandsCookie = Context.CookieCollection["ShakeHands"];
 
@@ -90,7 +90,8 @@ public class RpcWebsocketSharpBehavior : WebSocketBehavior, IRawMessageTransport
         }
 
         return _server.SessionRepository.ResumeOrCreateSession(
-            resumableSessionId, clientPublicKey, Context.UserEndPoint.ToString(), _server, this)
+            resumableSessionId, messageEncryptionEnabled, clientPublicKey,
+            Context.UserEndPoint.ToString(), _server, this)
                 .GetAwaiter().GetResult();
     }
 

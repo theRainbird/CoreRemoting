@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFrameworks>net8.0</TargetFrameworks>
         <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
         <IsPackable>false</IsPackable>
         <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
@@ -12,6 +12,7 @@
     <ItemGroup>
         <Compile Remove="InvokerTests.cs" />
         <Compile Remove="InvokerTestsSafe.cs" />
+        <Compile Remove="QuicHandshakeMessageTests.cs" />
         <Compile Remove="RpcTests_Quic.cs" />
         <Compile Remove="RpcTests_WatsonTcp.cs" />
         <Compile Remove="RpcTests_WebsocketSharp.cs" />
@@ -19,14 +20,14 @@
         <Compile Remove="RpcTests_WsharpClientWsServer.cs" />
     </ItemGroup>
 
-    <!-- .NET 9.0 only: skip BinaryFormatter ->
+    <!-- .NET 9.0 only: skip BinaryFormatter -->
     <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0' ">
         <Compile Remove="BinarySerializationTests.cs" />
     </ItemGroup>
-    -->
 
     <!-- .NET 9.0 only: include Quic channel -->
     <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0' and '$(OS)' == 'Windows_NT' ">
+        <Compile Include="QuicHandshakeMessageTests.cs" />
         <Compile Include="RpcTests_Quic.cs">
             <DependentUpon>RpcTests.cs</DependentUpon>
         </Compile>

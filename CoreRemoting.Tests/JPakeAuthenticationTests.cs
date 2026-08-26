@@ -17,7 +17,6 @@ public class JPakeAuthenticationTests : IAsyncLifetime
 
     private readonly SampleAccountRepository _repository = new();
     private RemotingServer _serverPlain;
-    private RemotingServer _serverEncrypted;
 
     public Task InitializeAsync()
     {
