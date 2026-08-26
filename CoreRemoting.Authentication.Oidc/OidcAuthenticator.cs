@@ -50,7 +50,7 @@ public class OidcAuthenticator : IAuthenticator
     /// Authenticates the client with the provided token (and a step-up code, if requested by the server).
     /// </summary>
     /// <exception cref="SecurityException">Thrown, if the authentication failed or no step-up prompt was provided</exception>
-    public async Task Authenticate(Credential[] credentials, IAuthenticationProvider authProxy)
+    public async Task<AuthenticationResponseMessage> Authenticate(Credential[] credentials, IAuthenticationProvider authProxy)
     {
         if (authProxy == null)
             throw new ArgumentNullException(nameof(authProxy));
@@ -83,6 +83,8 @@ public class OidcAuthenticator : IAuthenticator
 
         if (!response.IsAuthenticated)
             throw new SecurityException(response.ErrorMessage ?? "OIDC authentication failed.");
+
+        return response;
     }
 
     private static Credential[] AppendCredential(Credential[] credentials, string name, string value) =>
