@@ -8,6 +8,7 @@ using CoreRemoting.Channels.NamedPipe;
 using CoreRemoting.Channels.Null;
 using CoreRemoting.Channels.Tcp;
 using CoreRemoting.Channels.Websocket;
+using CoreRemoting.Encryption;
 
 namespace CoreRemoting.Benchmark;
 
@@ -24,11 +25,15 @@ public enum RpcChannelScenario
 [MemoryDiagnoser]
 public class RpcBenchmark
 {
-    private RemotingServer _server = null!;
-    private RemotingClient _client = null!;
+    private RemotingServer _mainServer = null!;
+    private RemotingClient _mainClient = null!;
     private ITestService _proxy = null!;
-    private ClientConfig _clientConfig = null!;
-    private RemotingClient _connectClient = null!;
+
+    private RemotingServer _connectServer = null!;
+
+    // Параметры для ConnectAsync (вместо готового ClientConfig)
+    private bool _encryption;
+    private string? _connectPipeName;
 
     [Params(
         RpcChannelScenario.Null,
@@ -43,59 +48,78 @@ public class RpcBenchmark
     [GlobalSetup]
     public void Setup()
     {
-        var (serverChannel, clientChannel, encryption) = CreateChannelsForScenario(Scenario);
+        // Main server channels
+        var (mainServerChannel, mainClientChannel, encryption) = CreateChannelsForScenario(Scenario);
+        _encryption = encryption;
 
-        var serverConfig = new ServerConfig
+        var mainPipeName = Scenario == RpcChannelScenario.NamedPipe ? "MainPipe" : null;
+        _mainServer = new RemotingServer(new ServerConfig
         {
-            Channel = serverChannel,
+            Channel = mainServerChannel,
+            NetworkPort = 9192,
             HostName = "localhost",
             MessageEncryption = encryption,
-            KeySize = 1024,
-            RegisterServicesAction = container =>
-                container.RegisterService<ITestService, TestService>()
-        };
+            KeySize = 512,
+            ChannelConnectionName = mainPipeName,
+            RegisterServicesAction = c => c.RegisterService<ITestService, TestService>()
+        });
+        _mainServer.Start();
 
-        _server = new RemotingServer(serverConfig);
-        _server.Start();
-
-        _clientConfig = new ClientConfig
+        _mainClient = new RemotingClient(new ClientConfig
         {
-            Channel = clientChannel,
+            Channel = mainClientChannel,
             ServerHostName = "localhost",
-            ServerPort = _server.Config.NetworkPort,
+            ServerPort = 9192,
             MessageEncryption = encryption,
-            KeySize = 1024
-        };
+            KeySize = 512,
+            ChannelConnectionName = mainPipeName
+        });
+        _mainClient.Connect();
+        _proxy = _mainClient.CreateProxy<ITestService>();
 
-        _client = new RemotingClient(_clientConfig);
-        _client.Connect();
-        _proxy = _client.CreateProxy<ITestService>();
+        // Connect server — отдельный инстанс канала
+        var (connectServerChannel, _, _) = CreateChannelsForScenario(Scenario);
+        _connectPipeName = Scenario == RpcChannelScenario.NamedPipe ? "ConnectPipe" : null;
+        _connectServer = new RemotingServer(new ServerConfig
+        {
+            Channel = connectServerChannel,
+            NetworkPort = 9193,
+            HostName = "localhost",
+            MessageEncryption = encryption,
+            KeySize = 512,
+            ChannelConnectionName = _connectPipeName
+        });
+        _connectServer.Start();
     }
 
     [GlobalCleanup]
     public void Cleanup()
     {
-        _client?.Dispose();
-        _server?.Stop();
-        _server?.Dispose();
-    }
+        _mainClient?.Dispose();
+        _mainServer?.Stop();
+        _mainServer?.Dispose();
 
-    [IterationSetup]
-    public void ConnectSetup()
-    {
-        _connectClient = new RemotingClient(_clientConfig);
-    }
-
-    [IterationCleanup]
-    public void ConnectCleanup()
-    {
-        _connectClient?.Dispose();
+        _connectServer?.Stop();
+        _connectServer?.Dispose();
     }
 
     [Benchmark]
     public async Task ConnectAsync()
     {
-        await _connectClient.ConnectAsync();
+        // Создаём НОВЫЙ канал и конфиг для каждой итерации
+        var (_, clientChannel, _) = CreateChannelsForScenario(Scenario);
+        var config = new ClientConfig
+        {
+            Channel = clientChannel,
+            ServerHostName = "localhost",
+            ServerPort = 9193,
+            MessageEncryption = _encryption,
+            KeySize = 512,
+            ChannelConnectionName = _connectPipeName,
+        };
+
+        using var client = new RemotingClient(config);
+        await client.ConnectAsync();
     }
 
     [Benchmark]
@@ -107,32 +131,17 @@ public class RpcBenchmark
     [Benchmark]
     public void FireEvent() => _proxy.FireServiceEvent();
 
-    private static (IServerChannel server, IClientChannel client, bool encryption) CreateChannelsForScenario(RpcChannelScenario scenario)
+    private static (IServerChannel server, IClientChannel client, bool encryption)
+        CreateChannelsForScenario(RpcChannelScenario scenario) => scenario switch
     {
-        switch (scenario)
-        {
-            case RpcChannelScenario.Null:
-                return (new NullServerChannel(), new NullClientChannel(), false);
-
-            case RpcChannelScenario.NamedPipe:
-                return (new NamedPipeServerChannel(), new NamedPipeClientChannel(), false);
-
-            case RpcChannelScenario.Websocket_NoEncryption:
-                return (new WebsocketServerChannel(), new WebsocketClientChannel(), false);
-
-            case RpcChannelScenario.Websocket_Encryption:
-                return (new WebsocketServerChannel(), new WebsocketClientChannel(), true);
-
-            case RpcChannelScenario.Tcp_NoEncryption:
-                return (new TcpServerChannel(), new TcpClientChannel(), false);
-
-            case RpcChannelScenario.Tcp_Encryption:
-                return (new TcpServerChannel(), new TcpClientChannel(), true);
-
-            default:
-                throw new ArgumentOutOfRangeException(nameof(scenario), scenario, null);
-        }
-    }
+        RpcChannelScenario.Null => (new NullServerChannel(), new NullClientChannel(), false),
+        RpcChannelScenario.NamedPipe => (new NamedPipeServerChannel(), new NamedPipeClientChannel(), false),
+        RpcChannelScenario.Websocket_NoEncryption => (new WebsocketServerChannel(), new WebsocketClientChannel(), false),
+        RpcChannelScenario.Websocket_Encryption => (new WebsocketServerChannel(), new WebsocketClientChannel(), true),
+        RpcChannelScenario.Tcp_NoEncryption => (new TcpServerChannel(), new TcpClientChannel(), false),
+        RpcChannelScenario.Tcp_Encryption => (new TcpServerChannel(), new TcpClientChannel(), true),
+        _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, null)
+    };
 }
 
 public interface ITestService

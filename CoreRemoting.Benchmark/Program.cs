@@ -5,6 +5,6 @@ using CoreRemoting.Serialization.Binary;
 using CoreRemoting.Serialization.NeoBinary;
 using CoreRemoting.Benchmark;
 
-//var summary = BenchmarkRunner.Run<SerializationBenchmark>();
+BenchmarkRunner.Run<SerializationBenchmark>();
 BenchmarkRunner.Run<RpcBenchmark>();
-//BenchmarkRunner.Run<SessionKeyPairBenchmark>();
+BenchmarkRunner.Run<SessionKeyPairBenchmark>();
