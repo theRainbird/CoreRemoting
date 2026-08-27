@@ -323,7 +323,7 @@ public class SessionResumeTests
             ServerHostName = "localhost",
             ServerPort = serverPort,
             KeepSessionAliveInterval = 0,
-            RsaPrivateKeyBlob = rsaPrivateKeyBlob,
+            PrivateKeyBlob = rsaPrivateKeyBlob,
             ResumableSessionId = resumableSessionId
         };
 

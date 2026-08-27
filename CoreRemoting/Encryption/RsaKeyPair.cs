@@ -52,13 +52,13 @@ public class RsaKeyPair : ISessionKeyPair
     /// Signs the given data by delegating to <see cref="RsaSignature.CreateSignature"/>.
     /// </summary>
     /// <exception cref="InvalidOperationException">If this instance has no private key.</exception>
-    public byte[] Sign(byte[] data) =>
+    public byte[] CreateSignature(byte[] data) =>
         RsaSignature.CreateSignature(_keySize, PrivateKey, data);
 
     /// <summary>
     /// Verifies a signature by delegating to <see cref="RsaSignature.VerifySignature"/>.
     /// </summary>
-    public bool Verify(byte[] data, byte[] signature) =>
+    public bool VerifySignature(byte[] data, byte[] signature) =>
         RsaSignature.VerifySignature(_keySize, PublicKey, data, signature);
 
     /// <summary>

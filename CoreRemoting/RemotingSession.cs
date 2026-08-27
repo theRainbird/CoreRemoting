@@ -513,8 +513,7 @@ public sealed class RemotingSession : IAsyncDisposable
                         message: request,
                         serializer: _server.Serializer,
                         sharedSecret: _sharedSecret,
-                        sendersPublicKeyBlob: _clientPublicKeyBlob,
-                        sendersPublicKeySize: _keyPair?.KeySize ?? 0));
+                        sendersPublicKeyBlob: _clientPublicKeyBlob));
 
         if (goodbyeMessage.SessionId != _sessionId)
             return;
@@ -556,8 +555,7 @@ public sealed class RemotingSession : IAsyncDisposable
                         message: request,
                         serializer: _server.Serializer,
                         sharedSecret: _sharedSecret,
-                        sendersPublicKeyBlob: _clientPublicKeyBlob,
-                        sendersPublicKeySize: _keyPair?.KeySize ?? 0));
+                        sendersPublicKeyBlob: _clientPublicKeyBlob));
 
         var authResponseMessage = await _server.Authenticate(authRequestMessage);
 
@@ -631,8 +629,7 @@ public sealed class RemotingSession : IAsyncDisposable
                 message: request,
                 serializer: _server.Serializer,
                 sharedSecret: _sharedSecret,
-                sendersPublicKeyBlob: _clientPublicKeyBlob,
-                sendersPublicKeySize: _keyPair?.KeySize ?? 0);
+                sendersPublicKeyBlob: _clientPublicKeyBlob);
 
         using var scope = _server.ServiceRegistry.CreateScope();
         var serializedResult = Array.Empty<byte>();

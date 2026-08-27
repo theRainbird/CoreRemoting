@@ -52,11 +52,11 @@ public sealed class EcdsaSessionKeyPair : ISessionKeyPair
     public byte[] PrivateKey => _ecdsa.ExportPrivateKey();
 
     /// <inheritdoc/>
-    public byte[] Sign(byte[] data) =>
+    public byte[] CreateSignature(byte[] data) =>
         WrapException(() => _ecdsa.SignData(data, HashAlgorithmName.SHA256));
 
     /// <inheritdoc/>
-    public bool Verify(byte[] data, byte[] signature) =>
+    public bool VerifySignature(byte[] data, byte[] signature) =>
         _ecdsa.VerifyData(data, signature, HashAlgorithmName.SHA256);
 
     /// <inheritdoc/>

@@ -100,17 +100,17 @@ public class SessionKeyPairBenchmarkTests
         using var ecdsaSigner = new EcdsaSessionKeyPair();
 
         // Warm up each key before measuring (also forces key generation)
-        rsa2048Signer.Sign(challenge);
-        rsa4096Signer.Sign(challenge);
-        ecdsaSigner.Sign(challenge);
+        rsa2048Signer.CreateSignature(challenge);
+        rsa4096Signer.CreateSignature(challenge);
+        ecdsaSigner.CreateSignature(challenge);
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
 
-        var rsa2048Sign = Measure(signIterations, () => rsa2048Signer.Sign(challenge));
-        var rsa4096Sign = Measure(signIterations, () => rsa4096Signer.Sign(challenge));
-        var ecdsaSign = Measure(signIterations, () => ecdsaSigner.Sign(challenge));
+        var rsa2048Sign = Measure(signIterations, () => rsa2048Signer.CreateSignature(challenge));
+        var rsa4096Sign = Measure(signIterations, () => rsa4096Signer.CreateSignature(challenge));
+        var ecdsaSign = Measure(signIterations, () => ecdsaSigner.CreateSignature(challenge));
 
         PrintRow("RSA-2048", TimeSpan.FromMilliseconds(rsa2048Sign.TotalMilliseconds / signIterations),
             TimeSpan.FromMilliseconds(ecdsaSign.TotalMilliseconds / signIterations));
@@ -124,26 +124,26 @@ public class SessionKeyPairBenchmarkTests
         _output.WriteLine($"Verification ({verifyIterations} iterations, average):");
         _output.WriteLine("-----------------------------------------------------------");
 
-        var rsa2048Sig = rsa2048Signer.Sign(challenge);
-        var rsa4096Sig = rsa4096Signer.Sign(challenge);
-        var ecdsaSig = ecdsaSigner.Sign(challenge);
+        var rsa2048Sig = rsa2048Signer.CreateSignature(challenge);
+        var rsa4096Sig = rsa4096Signer.CreateSignature(challenge);
+        var ecdsaSig = ecdsaSigner.CreateSignature(challenge);
 
         using var rsa2048Verifier = new RsaKeyPair(rsa2048Signer.KeySize, rsa2048Signer.PublicKey);
         using var rsa4096Verifier = new RsaKeyPair(rsa4096Signer.KeySize, rsa4096Signer.PublicKey);
         using var ecdsaVerifier = EcdsaSessionKeyPair.FromPublicKey(ecdsaSigner.PublicKey);
 
         // Warm up
-        rsa2048Verifier.Verify(challenge, rsa2048Sig);
-        rsa4096Verifier.Verify(challenge, rsa4096Sig);
-        ecdsaVerifier.Verify(challenge, ecdsaSig);
+        rsa2048Verifier.VerifySignature(challenge, rsa2048Sig);
+        rsa4096Verifier.VerifySignature(challenge, rsa4096Sig);
+        ecdsaVerifier.VerifySignature(challenge, ecdsaSig);
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
 
-        var rsa2048Verify = Measure(verifyIterations, () => rsa2048Verifier.Verify(challenge, rsa2048Sig));
-        var rsa4096Verify = Measure(verifyIterations, () => rsa4096Verifier.Verify(challenge, rsa4096Sig));
-        var ecdsaVerify = Measure(verifyIterations, () => ecdsaVerifier.Verify(challenge, ecdsaSig));
+        var rsa2048Verify = Measure(verifyIterations, () => rsa2048Verifier.VerifySignature(challenge, rsa2048Sig));
+        var rsa4096Verify = Measure(verifyIterations, () => rsa4096Verifier.VerifySignature(challenge, rsa4096Sig));
+        var ecdsaVerify = Measure(verifyIterations, () => ecdsaVerifier.VerifySignature(challenge, ecdsaSig));
 
         PrintRow("RSA-2048", TimeSpan.FromMilliseconds(rsa2048Verify.TotalMilliseconds / verifyIterations),
             TimeSpan.FromMilliseconds(ecdsaVerify.TotalMilliseconds / verifyIterations));
@@ -313,13 +313,13 @@ public class SessionKeyPairBenchmarkTests
         {
             using var rsa = new RsaKeyPair(2048);
             var data = new byte[32];
-            var sig = rsa.Sign(data);
-            rsa.Verify(data, sig);
+            var sig = rsa.CreateSignature(data);
+            rsa.VerifySignature(data, sig);
             _ = rsa.PublicKey;
 
             using var ec = new EcdsaSessionKeyPair();
-            var ecSig = ec.Sign(data);
-            ec.Verify(data, ecSig);
+            var ecSig = ec.CreateSignature(data);
+            ec.VerifySignature(data, ecSig);
             _ = ec.PublicKey;
         }
 

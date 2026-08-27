@@ -13,9 +13,9 @@ public class RsaKeyPairAsSessionKeyPairTests
         using var keyPair = new RsaKeyPair(2048);
         var data = new byte[] { 1, 2, 3, 4, 5 };
 
-        var signature = keyPair.Sign(data);
+        var signature = keyPair.CreateSignature(data);
 
-        Assert.True(keyPair.Verify(data, signature));
+        Assert.True(keyPair.VerifySignature(data, signature));
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public class RsaKeyPairAsSessionKeyPairTests
         using var signer = new RsaKeyPair(2048);
         using var publicOnly = new RsaKeyPair(signer.KeySize, signer.PublicKey);
 
-        Assert.Throws<CryptographicException>(() => publicOnly.Sign([1]));
+        Assert.Throws<CryptographicException>(() => publicOnly.CreateSignature([1]));
     }
 
     [Fact]
@@ -50,10 +50,10 @@ public class RsaKeyPairAsSessionKeyPairTests
     {
         using var signer = new RsaKeyPair(2048);
         var data = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
-        var signature = signer.Sign(data);
+        var signature = signer.CreateSignature(data);
 
         using var verifier = SessionKeyPairFactory.FromPublicKey(signer.PublicKey);
-        Assert.True(verifier.Verify(data, signature));
+        Assert.True(verifier.VerifySignature(data, signature));
     }
 
     [Fact]
@@ -65,8 +65,8 @@ public class RsaKeyPairAsSessionKeyPairTests
         using var restored = new RsaKeyPair(original.KeySize, savedPrivateKey);
 
         var data = new byte[] { 1, 2, 3 };
-        Assert.True(restored.Verify(data, original.Sign(data)));
-        Assert.True(original.Verify(data, restored.Sign(data)));
+        Assert.True(restored.VerifySignature(data, original.CreateSignature(data)));
+        Assert.True(original.VerifySignature(data, restored.CreateSignature(data)));
     }
 
     [Fact]

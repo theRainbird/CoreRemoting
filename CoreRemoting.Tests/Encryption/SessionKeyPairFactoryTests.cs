@@ -27,9 +27,9 @@ public class SessionKeyPairFactoryTests
         using var keyPair = SessionKeyPairFactory.GenerateRsa(2048);
         var data = new byte[] { 1, 2, 3 };
 
-        var signature = keyPair.Sign(data);
+        var signature = keyPair.CreateSignature(data);
 
-        Assert.True(keyPair.Verify(data, signature));
+        Assert.True(keyPair.VerifySignature(data, signature));
     }
 
     [Fact]
@@ -46,9 +46,9 @@ public class SessionKeyPairFactoryTests
         using var keyPair = SessionKeyPairFactory.GenerateEcdsa();
         var data = new byte[] { 1, 2, 3 };
 
-        var signature = keyPair.Sign(data);
+        var signature = keyPair.CreateSignature(data);
 
-        Assert.True(keyPair.Verify(data, signature));
+        Assert.True(keyPair.VerifySignature(data, signature));
     }
 
     #endregion
@@ -80,11 +80,11 @@ public class SessionKeyPairFactoryTests
     {
         using var original = new RsaKeyPair(2048);
         var data = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
-        var signature = original.Sign(data);
+        var signature = original.CreateSignature(data);
 
         using var verifier = SessionKeyPairFactory.FromPublicKey(original.PublicKey);
 
-        Assert.True(verifier.Verify(data, signature));
+        Assert.True(verifier.VerifySignature(data, signature));
     }
 
     #endregion
@@ -106,11 +106,11 @@ public class SessionKeyPairFactoryTests
     {
         using var original = new EcdsaSessionKeyPair();
         var data = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
-        var signature = original.Sign(data);
+        var signature = original.CreateSignature(data);
 
         using var verifier = SessionKeyPairFactory.FromPublicKey(original.PublicKey);
 
-        Assert.True(verifier.Verify(data, signature));
+        Assert.True(verifier.VerifySignature(data, signature));
     }
 
     #endregion
@@ -132,13 +132,13 @@ public class SessionKeyPairFactoryTests
     {
         using var original = new RsaKeyPair(2048);
         var data = new byte[] { 0xCA, 0xFE };
-        var originalSignature = original.Sign(data);
+        var originalSignature = original.CreateSignature(data);
 
         using var restored = SessionKeyPairFactory.FromPrivateKey(original.PrivateKey);
-        var restoredSignature = restored.Sign(data);
+        var restoredSignature = restored.CreateSignature(data);
 
-        Assert.True(original.Verify(data, restoredSignature));
-        Assert.True(restored.Verify(data, originalSignature));
+        Assert.True(original.VerifySignature(data, restoredSignature));
+        Assert.True(restored.VerifySignature(data, originalSignature));
     }
 
     #endregion
@@ -160,13 +160,13 @@ public class SessionKeyPairFactoryTests
     {
         using var original = new EcdsaSessionKeyPair();
         var data = new byte[] { 0xCA, 0xFE };
-        var originalSignature = original.Sign(data);
+        var originalSignature = original.CreateSignature(data);
 
         using var restored = SessionKeyPairFactory.FromPrivateKey(original.PrivateKey);
-        var restoredSignature = restored.Sign(data);
+        var restoredSignature = restored.CreateSignature(data);
 
-        Assert.True(original.Verify(data, restoredSignature));
-        Assert.True(restored.Verify(data, originalSignature));
+        Assert.True(original.VerifySignature(data, restoredSignature));
+        Assert.True(restored.VerifySignature(data, originalSignature));
     }
 
     #endregion
@@ -189,9 +189,9 @@ public class SessionKeyPairFactoryTests
 
         // Challenge-response
         var challenge = new byte[] { 0xCA, 0xFE, 0xBA, 0xBE };
-        var signature = reconnectedClient.Sign(challenge);
+        var signature = reconnectedClient.CreateSignature(challenge);
 
-        Assert.True(serverValidator.Verify(challenge, signature));
+        Assert.True(serverValidator.VerifySignature(challenge, signature));
     }
 
     [Fact]
@@ -210,9 +210,9 @@ public class SessionKeyPairFactoryTests
 
         // Challenge-response
         var challenge = new byte[] { 0xCA, 0xFE, 0xBA, 0xBE };
-        var signature = reconnectedClient.Sign(challenge);
+        var signature = reconnectedClient.CreateSignature(challenge);
 
-        Assert.True(serverValidator.Verify(challenge, signature));
+        Assert.True(serverValidator.VerifySignature(challenge, signature));
     }
 
     #endregion

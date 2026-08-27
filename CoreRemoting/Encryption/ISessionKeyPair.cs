@@ -16,7 +16,7 @@ public interface ISessionKeyPair : IDisposable
     /// <param name="data">Data to sign (typically a challenge from the server).</param>
     /// <returns>Signature bytes.</returns>
     /// <exception cref="InvalidOperationException">If no private key is available.</exception>
-    byte[] Sign(byte[] data);
+    byte[] CreateSignature(byte[] data);
 
     /// <summary>
     /// Verifies a signature against the public key.
@@ -24,7 +24,7 @@ public interface ISessionKeyPair : IDisposable
     /// <param name="data">Data that was signed.</param>
     /// <param name="signature">Signature to verify.</param>
     /// <returns>True if the signature is valid.</returns>
-    bool Verify(byte[] data, byte[] signature);
+    bool VerifySignature(byte[] data, byte[] signature);
 
     /// <summary>
     /// Gets the public key.

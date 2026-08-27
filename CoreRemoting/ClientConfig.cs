@@ -119,11 +119,11 @@ public class ClientConfig
     public int WaitTimeForGoodbyeOnDisconnect { get; set; } = 10000;
 
     /// <summary>
-    /// Gets or sets the private key blob of the client RSA key pair (CSP-Blob, only relevant if message encryption is enabled).
+    /// Gets or sets the private key blob of the client session key pair used for message encryption or signing.
     /// If specified, this key pair will be used instead of a new one. This allows resuming a session after a
     /// process restart in combination with ResumableSessionId (the key size must match KeySize).
     /// </summary>
-    public byte[] RsaPrivateKeyBlob { get; set; }
+    public byte[] PrivateKeyBlob { get; set; }
 
     /// <summary>
     /// Gets or sets the ID of an existing server side session that should be resumed when connecting.

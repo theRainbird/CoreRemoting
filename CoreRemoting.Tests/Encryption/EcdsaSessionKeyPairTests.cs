@@ -27,17 +27,17 @@ public class EcdsaSessionKeyPairTests
         using var keyPair = new EcdsaSessionKeyPair();
         var data = new byte[] { 1, 2, 3, 4, 5 };
 
-        var signature = keyPair.Sign(data);
+        var signature = keyPair.CreateSignature(data);
 
-        Assert.True(keyPair.Verify(data, signature));
+        Assert.True(keyPair.VerifySignature(data, signature));
     }
 
     [Fact]
     public void Sign_DifferentData_ProducesDifferentSignatures()
     {
         using var keyPair = new EcdsaSessionKeyPair();
-        var sig1 = keyPair.Sign([1, 2, 3]);
-        var sig2 = keyPair.Sign([4, 5, 6]);
+        var sig1 = keyPair.CreateSignature([1, 2, 3]);
+        var sig2 = keyPair.CreateSignature([4, 5, 6]);
 
         Assert.NotEqual(sig1, sig2);
     }
@@ -46,9 +46,9 @@ public class EcdsaSessionKeyPairTests
     public void Verify_WrongData_ReturnsFalse()
     {
         using var keyPair = new EcdsaSessionKeyPair();
-        var signature = keyPair.Sign([1, 2, 3]);
+        var signature = keyPair.CreateSignature([1, 2, 3]);
 
-        Assert.False(keyPair.Verify([4, 5, 6], signature));
+        Assert.False(keyPair.VerifySignature([4, 5, 6], signature));
     }
 
     [Fact]
@@ -56,11 +56,11 @@ public class EcdsaSessionKeyPairTests
     {
         using var signer = new EcdsaSessionKeyPair();
         var data = new byte[] { 1, 2, 3 };
-        var signature = signer.Sign(data);
+        var signature = signer.CreateSignature(data);
 
         using var verifier = EcdsaSessionKeyPair.FromPublicKey(signer.PublicKey);
 
-        Assert.True(verifier.Verify(data, signature));
+        Assert.True(verifier.VerifySignature(data, signature));
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public class EcdsaSessionKeyPairTests
         using var signer = new EcdsaSessionKeyPair();
         using var verifier = EcdsaSessionKeyPair.FromPublicKey(signer.PublicKey);
 
-        Assert.Throws<CryptographicException>(() => verifier.Sign([1]));
+        Assert.Throws<CryptographicException>(() => verifier.CreateSignature([1]));
     }
 
     [Fact]
@@ -81,8 +81,8 @@ public class EcdsaSessionKeyPairTests
         using var recreated = new EcdsaSessionKeyPair(privateKey);
 
         var data = new byte[] { 1, 2, 3 };
-        Assert.True(recreated.Verify(data, original.Sign(data)));
-        Assert.True(original.Verify(data, recreated.Sign(data)));
+        Assert.True(recreated.VerifySignature(data, original.CreateSignature(data)));
+        Assert.True(original.VerifySignature(data, recreated.CreateSignature(data)));
     }
 
     [Fact]
