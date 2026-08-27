@@ -2,6 +2,11 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Columns;
+using BenchmarkDotNet.Reports;
+using Perfolizer.Horology;
+using Perfolizer.Metrology;
 using CoreRemoting;
 using CoreRemoting.Channels;
 using CoreRemoting.Channels.NamedPipe;
@@ -16,32 +21,43 @@ public enum RpcChannelScenario
 {
     Null,
     NamedPipe,
-    Websocket_NoEncryption,
-    Websocket_Encryption,
-    Tcp_NoEncryption,
-    Tcp_Encryption
+    Ws_Plain,
+    Ws_Encr,
+    Tcp_Plain,
+    Tcp_Encr
 }
 
 [MemoryDiagnoser]
+[Config(typeof(Config))]
 public class RpcBenchmark
 {
+    private class Config : ManualConfig
+    {
+        public Config()
+        {
+            HideColumns(Column.StdDev, Column.Error);
+
+            SummaryStyle = SummaryStyle.Default
+                .WithTimeUnit(TimeUnit.Microsecond)
+                .WithSizeUnit(SizeUnit.KB);
+        }
+    }
+
     private RemotingServer _mainServer = null!;
     private RemotingClient _mainClient = null!;
     private ITestService _proxy = null!;
 
     private RemotingServer _connectServer = null!;
-
-    // Параметры для ConnectAsync (вместо готового ClientConfig)
     private bool _encryption;
     private string? _connectPipeName;
 
     [Params(
         RpcChannelScenario.Null,
         RpcChannelScenario.NamedPipe,
-        RpcChannelScenario.Websocket_NoEncryption,
-        RpcChannelScenario.Websocket_Encryption,
-        RpcChannelScenario.Tcp_NoEncryption,
-        RpcChannelScenario.Tcp_Encryption
+        RpcChannelScenario.Ws_Plain,
+        RpcChannelScenario.Ws_Encr,
+        RpcChannelScenario.Tcp_Plain,
+        RpcChannelScenario.Tcp_Encr
     )]
     public RpcChannelScenario Scenario { get; set; }
 
@@ -77,7 +93,7 @@ public class RpcBenchmark
         _mainClient.Connect();
         _proxy = _mainClient.CreateProxy<ITestService>();
 
-        // Connect server — отдельный инстанс канала
+        // Separate server for ConnectAsync benchmark
         var (connectServerChannel, _, _) = CreateChannelsForScenario(Scenario);
         _connectPipeName = Scenario == RpcChannelScenario.NamedPipe ? "ConnectPipe" : null;
         _connectServer = new RemotingServer(new ServerConfig
@@ -106,7 +122,7 @@ public class RpcBenchmark
     [Benchmark]
     public async Task ConnectAsync()
     {
-        // Создаём НОВЫЙ канал и конфиг для каждой итерации
+        // Create a new channel and client config per iteration
         var (_, clientChannel, _) = CreateChannelsForScenario(Scenario);
         var config = new ClientConfig
         {
@@ -136,10 +152,10 @@ public class RpcBenchmark
     {
         RpcChannelScenario.Null => (new NullServerChannel(), new NullClientChannel(), false),
         RpcChannelScenario.NamedPipe => (new NamedPipeServerChannel(), new NamedPipeClientChannel(), false),
-        RpcChannelScenario.Websocket_NoEncryption => (new WebsocketServerChannel(), new WebsocketClientChannel(), false),
-        RpcChannelScenario.Websocket_Encryption => (new WebsocketServerChannel(), new WebsocketClientChannel(), true),
-        RpcChannelScenario.Tcp_NoEncryption => (new TcpServerChannel(), new TcpClientChannel(), false),
-        RpcChannelScenario.Tcp_Encryption => (new TcpServerChannel(), new TcpClientChannel(), true),
+        RpcChannelScenario.Ws_Plain => (new WebsocketServerChannel(), new WebsocketClientChannel(), false),
+        RpcChannelScenario.Ws_Encr => (new WebsocketServerChannel(), new WebsocketClientChannel(), true),
+        RpcChannelScenario.Tcp_Plain => (new TcpServerChannel(), new TcpClientChannel(), false),
+        RpcChannelScenario.Tcp_Encr => (new TcpServerChannel(), new TcpClientChannel(), true),
         _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, null)
     };
 }
