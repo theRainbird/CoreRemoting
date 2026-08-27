@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Running;
 using CoreRemoting;
 using CoreRemoting.Channels;
 using CoreRemoting.Channels.NamedPipe;
@@ -11,121 +11,129 @@ using CoreRemoting.Channels.Websocket;
 
 namespace CoreRemoting.Benchmark;
 
-/// <summary>
-/// Base class for RPC benchmarks.
-/// </summary>
-public abstract class RpcBenchmarkBase
+public enum RpcChannelScenario
 {
-    protected RemotingServer Server = null!;
-    protected RemotingClient Client = null!;
-    protected ITestService Proxy = null!;
+    Null,
+    NamedPipe,
+    Websocket_NoEncryption,
+    Websocket_Encryption,
+    Tcp_NoEncryption,
+    Tcp_Encryption
+}
 
-    /// <summary>
-    /// Encryption flag. Can be overridden in derived classes with [Params].
-    /// </summary>
-    public virtual bool Encryption { get; set; }
+[MemoryDiagnoser]
+public class RpcBenchmark
+{
+    private RemotingServer _server = null!;
+    private RemotingClient _client = null!;
+    private ITestService _proxy = null!;
+    private ClientConfig _clientConfig = null!;
+    private RemotingClient _connectClient = null!;
 
-    /// <summary>
-    /// Override to indicate whether the channel supports encryption.
-    /// </summary>
-    protected virtual bool SupportsEncryption => true;
-
-    protected abstract IServerChannel CreateServerChannel();
-
-    protected abstract IClientChannel CreateClientChannel();
+    [Params(
+        RpcChannelScenario.Null,
+        RpcChannelScenario.NamedPipe,
+        RpcChannelScenario.Websocket_NoEncryption,
+        RpcChannelScenario.Websocket_Encryption,
+        RpcChannelScenario.Tcp_NoEncryption,
+        RpcChannelScenario.Tcp_Encryption
+    )]
+    public RpcChannelScenario Scenario { get; set; }
 
     [GlobalSetup]
     public void Setup()
     {
-        // Force encryption off if channel does not support it.
-        if (!SupportsEncryption)
-            Encryption = false;
+        var (serverChannel, clientChannel, encryption) = CreateChannelsForScenario(Scenario);
 
-        // Configure and start the server.
         var serverConfig = new ServerConfig
         {
-            Channel = CreateServerChannel(),
-            MessageEncryption = Encryption,
+            Channel = serverChannel,
+            HostName = "localhost",
+            MessageEncryption = encryption,
             KeySize = 1024,
             RegisterServicesAction = container =>
                 container.RegisterService<ITestService, TestService>()
         };
-        Server = new RemotingServer(serverConfig);
-        Server.Start();
 
-        // Configure and connect the client.
-        var clientConfig = new ClientConfig
+        _server = new RemotingServer(serverConfig);
+        _server.Start();
+
+        _clientConfig = new ClientConfig
         {
-            Channel = CreateClientChannel(),
-            ServerPort = Server.Config.NetworkPort,
-            MessageEncryption = Encryption,
+            Channel = clientChannel,
+            ServerHostName = "localhost",
+            ServerPort = _server.Config.NetworkPort,
+            MessageEncryption = encryption,
             KeySize = 1024
         };
-        Client = new RemotingClient(clientConfig);
-        Client.Connect();
 
-        Proxy = Client.CreateProxy<ITestService>();
+        _client = new RemotingClient(_clientConfig);
+        _client.Connect();
+        _proxy = _client.CreateProxy<ITestService>();
     }
 
     [GlobalCleanup]
     public void Cleanup()
     {
-        Client?.Dispose();
-        Server?.Stop();
-        Server?.Dispose();
+        _client?.Dispose();
+        _server?.Stop();
+        _server?.Dispose();
+    }
+
+    [IterationSetup]
+    public void ConnectSetup()
+    {
+        _connectClient = new RemotingClient(_clientConfig);
+    }
+
+    [IterationCleanup]
+    public void ConnectCleanup()
+    {
+        _connectClient?.Dispose();
     }
 
     [Benchmark]
-    public string EchoCall() => Proxy.Echo("Hello");
+    public async Task ConnectAsync()
+    {
+        await _connectClient.ConnectAsync();
+    }
 
     [Benchmark]
-    public int GetCallCount() => Proxy.GetCallCount();
+    public string EchoCall() => _proxy.Echo("Hello");
 
     [Benchmark]
-    public void FireEvent() => Proxy.FireServiceEvent();
+    public int GetCallCount() => _proxy.GetCallCount();
+
+    [Benchmark]
+    public void FireEvent() => _proxy.FireServiceEvent();
+
+    private static (IServerChannel server, IClientChannel client, bool encryption) CreateChannelsForScenario(RpcChannelScenario scenario)
+    {
+        switch (scenario)
+        {
+            case RpcChannelScenario.Null:
+                return (new NullServerChannel(), new NullClientChannel(), false);
+
+            case RpcChannelScenario.NamedPipe:
+                return (new NamedPipeServerChannel(), new NamedPipeClientChannel(), false);
+
+            case RpcChannelScenario.Websocket_NoEncryption:
+                return (new WebsocketServerChannel(), new WebsocketClientChannel(), false);
+
+            case RpcChannelScenario.Websocket_Encryption:
+                return (new WebsocketServerChannel(), new WebsocketClientChannel(), true);
+
+            case RpcChannelScenario.Tcp_NoEncryption:
+                return (new TcpServerChannel(), new TcpClientChannel(), false);
+
+            case RpcChannelScenario.Tcp_Encryption:
+                return (new TcpServerChannel(), new TcpClientChannel(), true);
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(scenario), scenario, null);
+        }
+    }
 }
-
-// ----- Channel-specific benchmarks -----
-
-public class NullChannelBenchmark : RpcBenchmarkBase
-{
-    protected override bool SupportsEncryption => false;
-
-    protected override IServerChannel CreateServerChannel() => new NullServerChannel();
-    protected override IClientChannel CreateClientChannel() => new NullClientChannel();
-}
-
-public class NamedPipeBenchmark : RpcBenchmarkBase
-{
-    protected override bool SupportsEncryption => false;
-
-    protected override IServerChannel CreateServerChannel() => new NamedPipeServerChannel();
-    protected override IClientChannel CreateClientChannel() => new NamedPipeClientChannel();
-}
-
-public class WebsocketBenchmark : RpcBenchmarkBase
-{
-    [Params(false, true)]
-    public override bool Encryption { get; set; }
-
-    protected override bool SupportsEncryption => true;
-
-    protected override IServerChannel CreateServerChannel() => new WebsocketServerChannel();
-    protected override IClientChannel CreateClientChannel() => new WebsocketClientChannel();
-}
-
-public class TcpBenchmark : RpcBenchmarkBase
-{
-    [Params(false, true)]
-    public override bool Encryption { get; set; }
-
-    protected override bool SupportsEncryption => true;
-
-    protected override IServerChannel CreateServerChannel() => new TcpServerChannel();
-    protected override IClientChannel CreateClientChannel() => new TcpClientChannel();
-}
-
-// ----- Test service -----
 
 public interface ITestService
 {
