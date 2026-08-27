@@ -32,7 +32,7 @@ public sealed class RemotingSession : IAsyncDisposable
     private readonly IRemotingServer _server;
     private IRawMessageTransport _rawMessageTransport;
     private readonly int _keySize;
-    private readonly RsaKeyPair _keyPair;
+    private readonly ISessionKeyPair _keyPair;
     private readonly Guid _sessionId;
     private byte[] _sharedSecret;
     private readonly byte[] _clientPublicKeyBlob;
@@ -326,11 +326,6 @@ public sealed class RemotingSession : IAsyncDisposable
         _clientPublicKeyBlob != null &&
         clientPublicKeyBlob != null &&
         _clientPublicKeyBlob.SequenceEqual(clientPublicKeyBlob);
-
-    /// <summary>
-    /// Gets the server side RSA key pair of this session.
-    /// </summary>
-    internal RsaKeyPair KeyPair => _keyPair;
 
     /// <summary>
     /// Gets the remote delegate invocation event aggregator.
