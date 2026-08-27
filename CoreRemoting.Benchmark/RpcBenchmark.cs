@@ -93,7 +93,7 @@ public class RpcBenchmark
         _mainClient.Connect();
         _proxy = _mainClient.CreateProxy<ITestService>();
 
-        // Separate server for ConnectAsync benchmark
+        // Separate server for Connect benchmark
         var (connectServerChannel, _, _) = CreateChannelsForScenario(Scenario);
         _connectPipeName = Scenario == RpcChannelScenario.NamedPipe ? "ConnectPipe" : null;
         _connectServer = new RemotingServer(new ServerConfig
@@ -120,7 +120,7 @@ public class RpcBenchmark
     }
 
     [Benchmark]
-    public async Task ConnectAsync()
+    public void Connect()
     {
         // Create a new channel and client config per iteration
         var (_, clientChannel, _) = CreateChannelsForScenario(Scenario);
@@ -135,14 +135,14 @@ public class RpcBenchmark
         };
 
         using var client = new RemotingClient(config);
-        await client.ConnectAsync();
+        client.Connect();
     }
 
     [Benchmark]
     public string EchoCall() => _proxy.Echo("Hello");
 
     [Benchmark]
-    public int GetCallCount() => _proxy.GetCallCount();
+    public int CallCount() => _proxy.CallCount;
 
     [Benchmark]
     public void FireEvent() => _proxy.FireServiceEvent();
@@ -163,7 +163,7 @@ public class RpcBenchmark
 public interface ITestService
 {
     string Echo(string message);
-    int GetCallCount();
+    int CallCount { get; }
     event Action? ServiceEvent;
     void FireServiceEvent();
 }
@@ -172,7 +172,7 @@ public class TestService : ITestService
 {
     private int _callCount;
 
-    public int GetCallCount() => _callCount;
+    public int CallCount => _callCount;
 
     public event Action? ServiceEvent;
 
