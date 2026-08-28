@@ -76,4 +76,26 @@ public class RsaKeyPairAsSessionKeyPairTests
         using var restored = SessionKeyPairFactory.FromPublicKey(original.PublicKey);
         Assert.Equal(4096, ((RsaKeyPair)restored).KeySize);
     }
+
+    [Fact]
+    public void Sign_DifferentData_ProducesDifferentSignatures()
+    {
+        using var keyPair = new RsaKeyPair(4096);
+        var sig1 = keyPair.CreateSignature([1, 2, 3]);
+        var sig2 = keyPair.CreateSignature([4, 5, 6]);
+        var sig3 = keyPair.CreateSignature([]);
+
+        Assert.NotEqual(sig1, sig2);
+        Assert.NotEqual(sig1, sig3);
+    }
+
+    [Fact]
+    public void Sign_Verify_Works()
+    {
+        using var keyPair = new RsaKeyPair(4096);
+        var data = new byte[] { 1, 2, 3, 4, 5 };
+
+        var signature = keyPair.CreateSignature(data);
+        Assert.True(keyPair.VerifySignature(data, signature));
+    }
 }

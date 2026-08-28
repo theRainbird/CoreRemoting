@@ -247,9 +247,17 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         get
         {
             lock (_sessionLock)
-                return _sessionId == Guid.Empty ? _config.ResumableSessionId : _sessionId;
+                return _sessionId == Guid.Empty
+                    ? _config.ResumableSessionId
+                    : _sessionId;
         }
     }
+
+    /// <summary>
+    /// Gets the resumable session signature to verify client authenticity.
+    /// </summary>
+    public byte[] SessionSignature =>
+        _keyPair.CreateSignature(ResumableSessionId?.ToByteArray() ?? []);
 
     /// <summary>
     /// Gets whether the connection to the server is established or not.

@@ -53,6 +53,7 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
 
         var messageEncryption = false;
         Guid? resumableSessionId = null;
+        byte[] sessionSignature = null;
         byte[] clientPublicKey = handshakeMessage;
 
         if (handshakeMessage is not null)
@@ -60,6 +61,7 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
             var handshake = QuicHandshakeMessage.FromByteArray(handshakeMessage);
             messageEncryption = handshake.MessageEncryption;
             resumableSessionId = handshake.ResumableSessionId;
+            sessionSignature = handshake.SessionSignature;
             clientPublicKey = handshake.ClientPublicKey;
         }
 
@@ -69,9 +71,9 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
 
         Session =
             await RemotingServer.SessionRepository.ResumeOrCreateSession(
-                resumableSessionId, messageEncryption, clientPublicKey,
-                Connection.RemoteEndPoint.ToString(), RemotingServer, this)
-                    .ConfigureAwait(false);
+                resumableSessionId, messageEncryption, sessionSignature, clientPublicKey,
+                    Connection.RemoteEndPoint.ToString(), RemotingServer, this)
+                        .ConfigureAwait(false);
 
         return Session.SessionId;
     }

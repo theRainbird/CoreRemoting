@@ -75,6 +75,7 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
         {
             MessageEncryption = Client.MessageEncryption,
             ResumableSessionId = Client.ResumableSessionId,
+            SessionSignature = Client.SessionSignature,
             ClientPublicKey = Client.PublicKey,
         };
 

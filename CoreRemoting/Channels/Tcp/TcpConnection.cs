@@ -91,31 +91,39 @@ public class TcpConnection : IRawMessageTransport
         bool messageEncryption = false;
         byte[] clientPublicKey = null;
         Guid? resumableSessionId = null;
+        byte[] sessionSignature = null;
 
         if (metadata != null)
         {
             messageEncryption = ((System.Text.Json.JsonElement)metadata["MessageEncryption"]).GetBoolean();
 
-            if (messageEncryption)
+            if (metadata.TryGetValue("ShakeHands", out var shakeHandsValue))
             {
-                var shakeHands = ((System.Text.Json.JsonElement)metadata["ShakeHands"]).GetString();
-
-                if (shakeHands != null)
+                var shakeHands = ((System.Text.Json.JsonElement)shakeHandsValue).GetString();
+                if (!string.IsNullOrEmpty(shakeHands))
                     clientPublicKey = Convert.FromBase64String(shakeHands);
+            }
 
-                if (metadata.TryGetValue("ResumeSessionId", out var resumeValue))
-                {
-                    var resumeId = ((System.Text.Json.JsonElement)resumeValue).GetString();
-                    if (!string.IsNullOrEmpty(resumeId))
-                        resumableSessionId = new Guid(Convert.FromBase64String(resumeId));
-                }
+            if (metadata.TryGetValue("ResumeSessionId", out var resumeValue))
+            {
+                var resumeId = ((System.Text.Json.JsonElement)resumeValue).GetString();
+                if (!string.IsNullOrEmpty(resumeId))
+                    resumableSessionId = new Guid(Convert.FromBase64String(resumeId));
+            }
+
+            if (metadata.TryGetValue("SessionSignature", out var signatureValue))
+            {
+                var signature = ((System.Text.Json.JsonElement)signatureValue).GetString();
+                if (!string.IsNullOrEmpty(signature))
+                    sessionSignature = Convert.FromBase64String(signature);
             }
         }
 
         _session =
             _server.SessionRepository.ResumeOrCreateSession(
-                resumableSessionId, messageEncryption, clientPublicKey, _clientMetadata.IpPort, _server, this)
-                    .GetAwaiter().GetResult();
+                resumableSessionId, messageEncryption, sessionSignature,
+                    clientPublicKey, _clientMetadata.IpPort, _server, this)
+                        .GetAwaiter().GetResult();
 
         _session.BeforeDispose += BeforeDisposeSession;
         return true;

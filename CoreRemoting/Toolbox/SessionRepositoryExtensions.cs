@@ -20,6 +20,7 @@ public static class SessionRepositoryExtensions
     /// <param name="repository">Session repository.</param>
     /// <param name="sessionId">Session ID to resume, or null / <see cref="Guid.Empty"/> to skip resumption.</param>
     /// <param name="messageEncryption">Whether message encryption is enabled on client.</param>
+    /// <param name="sessionSignature">Client's session signature to prove its authenticity.</param>
     /// <param name="clientPublicKey">Client's public key (validated on resume, stored on create).</param>
     /// <param name="clientAddress">Client's network address (used only when creating a new session).</param>
     /// <param name="server">Server instance (used only when creating a new session).</param>
@@ -29,6 +30,7 @@ public static class SessionRepositoryExtensions
         this ISessionRepository repository,
         Guid? sessionId,
         bool messageEncryption,
+        byte[] sessionSignature,
         byte[] clientPublicKey,
         string clientAddress,
         IRemotingServer server,
@@ -40,7 +42,7 @@ public static class SessionRepositoryExtensions
         if (sessionId.HasValue && sessionId.Value != Guid.Empty)
         {
             var resumed = await repository
-                .TryResumeSession(sessionId.Value, clientPublicKey, rawMessageTransport)
+                .TryResumeSession(sessionId.Value, sessionSignature, clientPublicKey, rawMessageTransport)
                 .ConfigureAwait(false);
 
             if (resumed != null)

@@ -123,10 +123,10 @@ public class RpcBenchmark
     }
 
     [Benchmark]
-    public string EchoCall() => _proxy.Echo("Hello");
+    public string Method() => _proxy.Echo("Hello");
 
     [Benchmark]
-    public int CallCount() => _proxy.CallCount;
+    public int Property() => _proxy.CallCount;
 
     [Benchmark]
     public void FireEvent() => _proxy.FireServiceEvent();

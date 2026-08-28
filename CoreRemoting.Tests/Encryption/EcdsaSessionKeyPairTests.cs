@@ -38,8 +38,10 @@ public class EcdsaSessionKeyPairTests
         using var keyPair = new EcdsaSessionKeyPair();
         var sig1 = keyPair.CreateSignature([1, 2, 3]);
         var sig2 = keyPair.CreateSignature([4, 5, 6]);
+        var sig3 = keyPair.CreateSignature([]);
 
         Assert.NotEqual(sig1, sig2);
+        Assert.NotEqual(sig1, sig3);
     }
 
     [Fact]

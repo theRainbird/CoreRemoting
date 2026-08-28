@@ -33,6 +33,11 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     protected const string ResumeSessionIdCookie = "ResumeSessionId";
 
     /// <summary>
+    /// Handshake cookies: optional session signature to prove client's authenticity.
+    /// </summary>
+    protected const string SessionSignatureCookie = "SessionSignature";
+
+    /// <summary>
     /// Buffer size to read incoming messages.
     /// Note: LOH threshold is ~85 kilobytes
     /// </summary>

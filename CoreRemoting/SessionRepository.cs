@@ -129,15 +129,16 @@ public class SessionRepository : ISessionRepository
     /// The presented public key has to match the public key of the original connection (hijack protection).
     /// </summary>
     /// <param name="sessionId">Session ID of the session to be resumed</param>
+    /// <param name="sessionSignature">Client's session signature to prove its authenticity.</param>
     /// <param name="clientPublicKey">Client's public key, as presented by the reconnecting client</param>
     /// <param name="rawMessageTransport">Component that does the raw message transport of the reconnected client</param>
     /// <returns>The resumed session (a new complete handshake message is sent to the client), or null if the session doesn't exist or can't be resumed</returns>
-    public async Task<RemotingSession> TryResumeSession(Guid sessionId, byte[] clientPublicKey, IRawMessageTransport rawMessageTransport)
+    public async Task<RemotingSession> TryResumeSession(Guid sessionId, byte[] sessionSignature, byte[] clientPublicKey, IRawMessageTransport rawMessageTransport)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
             return null;
 
-        if (!session.CanBeResumedWith(clientPublicKey))
+        if (!session.CanBeResumedWith(clientPublicKey, sessionSignature))
             return null;
 
         try

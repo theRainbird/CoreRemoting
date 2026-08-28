@@ -48,13 +48,20 @@ public class WebsocketSharpClientChannel : IClientChannel, IRawMessageTransport
             _webSocket.SetCookie(new Cookie(
                 "ShakeHands",
                 Convert.ToBase64String(client.PublicKey)));
+        }
 
-            if (client.ResumableSessionId != null)
-            {
-                _webSocket.SetCookie(new Cookie(
-                    "ResumeSessionId",
-                    Convert.ToBase64String(client.ResumableSessionId.Value.ToByteArray())));
-            }
+        if (client.ResumableSessionId != null)
+        {
+            _webSocket.SetCookie(new Cookie(
+                "ResumeSessionId",
+                Convert.ToBase64String(client.ResumableSessionId.Value.ToByteArray())));
+        }
+
+        if (client.SessionSignature != null)
+        {
+            _webSocket.SetCookie(new Cookie(
+                "SessionSignature",
+                Convert.ToBase64String(client.SessionSignature)));
         }
 
         _webSocket.Log.Output = (timestamp, text) => Console.WriteLine("{0}: {1}", timestamp, text);

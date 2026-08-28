@@ -31,11 +31,13 @@ public interface ISessionRepository : IAsyncDisposable
     /// The presented public key has to match the public key of the original connection (hijack protection).
     /// </summary>
     /// <param name="sessionId">Session ID of the session to be resumed</param>
+    /// <param name="sessionSignature">Client's session signature to prove its authenticity.</param>
     /// <param name="clientPublicKey">Client's public key, as presented by the reconnecting client</param>
     /// <param name="rawMessageTransport">Component that does the raw message transport of the reconnected client</param>
     /// <returns>The resumed session, or null if the session doesn't exist or can't be resumed (callers then have to fall back to creating a new session)</returns>
     Task<RemotingSession> TryResumeSession(
         Guid sessionId,
+        byte[] sessionSignature,
         byte[] clientPublicKey,
         IRawMessageTransport rawMessageTransport);
 

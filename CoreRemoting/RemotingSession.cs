@@ -84,7 +84,7 @@ public sealed class RemotingSession : IAsyncDisposable
         MessageEncryption = messageEncryption;
 
         _keySize = keySize;
-        _keyPair = new RsaKeyPair(_keySize);
+        _keyPair = SessionKeyPairFactory.Generate(messageEncryption, _keySize);
         _remoteDelegateInvocationEventAggregator = new RemoteDelegateInvocationEventAggregator();
         _server = server ?? throw new ArgumentNullException(nameof(server));
         _delegateProxyFactory = _server.ServiceRegistry.GetService<IDelegateProxyFactory>();
@@ -165,11 +165,7 @@ public sealed class RemotingSession : IAsyncDisposable
                 new SignedMessageData
                 {
                     MessageRawData = rawContent,
-                    Signature =
-                        RsaSignature.CreateSignature(
-                            keySize: _keySize,
-                            sendersPrivateKeyBlob: _keyPair.PrivateKey,
-                            rawData: rawContent)
+                    Signature = _keyPair.CreateSignature(rawContent),
                 };
 
             wireMessage.Data = _server.Serializer.Serialize(signedMessageData);
@@ -319,13 +315,15 @@ public sealed class RemotingSession : IAsyncDisposable
     /// The key has to match exactly the public key of the original connection (hijack protection).
     /// </summary>
     /// <param name="clientPublicKeyBlob">Public key blob presented by the reconnecting client</param>
-    internal bool CanBeResumedWith(byte[] clientPublicKeyBlob) =>
+    /// <param name="sessionSignature">Client's session signature to prove its authenticity</param>
+    internal bool CanBeResumedWith(byte[] clientPublicKeyBlob, byte[] sessionSignature) =>
         IsParked &&
         !_isDisposing &&
-        MessageEncryption &&
         _clientPublicKeyBlob != null &&
         clientPublicKeyBlob != null &&
-        _clientPublicKeyBlob.SequenceEqual(clientPublicKeyBlob);
+        _clientPublicKeyBlob.SequenceEqual(clientPublicKeyBlob) &&
+        SessionKeyPairFactory.FromPublicKey(clientPublicKeyBlob)
+            .VerifySignature(_sessionId.ToByteArray(), sessionSignature);
 
     /// <summary>
     /// Gets the remote delegate invocation event aggregator.

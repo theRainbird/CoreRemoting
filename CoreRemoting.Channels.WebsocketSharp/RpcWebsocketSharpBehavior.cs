@@ -73,26 +73,27 @@ public class RpcWebsocketSharpBehavior : WebSocketBehavior, IRawMessageTransport
     {
         byte[] clientPublicKey = null;
         Guid? resumableSessionId = null;
+        byte[] sessionSignature = null;
 
         var messageEncryptionCookie = Context.CookieCollection["MessageEncryption"];
         var messageEncryptionEnabled = messageEncryptionCookie?.Value == "1";
-        if (messageEncryptionEnabled)
-        {
-            var shakeHandsCookie = Context.CookieCollection["ShakeHands"];
 
-            clientPublicKey =
-                Convert.FromBase64String(
-                    shakeHandsCookie.Value);
+        var shakeHandsCookie = Context.CookieCollection["ShakeHands"];
+        if (shakeHandsCookie != null)
+            clientPublicKey = Convert.FromBase64String(shakeHandsCookie.Value);
 
-            var resumeSessionIdCookie = Context.CookieCollection["ResumeSessionId"];
-            if (resumeSessionIdCookie != null)
-                resumableSessionId = new Guid(Convert.FromBase64String(resumeSessionIdCookie.Value));
-        }
+        var resumeSessionIdCookie = Context.CookieCollection["ResumeSessionId"];
+        if (resumeSessionIdCookie != null)
+            resumableSessionId = new Guid(Convert.FromBase64String(resumeSessionIdCookie.Value));
+
+        var signatureCookie = Context.CookieCollection["SessionSignature"];
+        if (signatureCookie != null)
+            sessionSignature = Convert.FromBase64String(signatureCookie.Value);
 
         return _server.SessionRepository.ResumeOrCreateSession(
-            resumableSessionId, messageEncryptionEnabled, clientPublicKey,
-            Context.UserEndPoint.ToString(), _server, this)
-                .GetAwaiter().GetResult();
+            resumableSessionId, messageEncryptionEnabled, sessionSignature,
+                clientPublicKey, Context.UserEndPoint.ToString(), _server, this)
+                    .GetAwaiter().GetResult();
     }
 
     /// <summary>
