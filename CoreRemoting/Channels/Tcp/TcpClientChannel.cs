@@ -45,12 +45,11 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
             { "MessageEncryption", client.MessageEncryption }
         };
 
-        if (client.MessageEncryption)
-        {
-            _handshakeMetadata.Add("ShakeHands", Convert.ToBase64String(client.PublicKey));
+        if (client.PublicKey is byte[] publicKey)
+            _handshakeMetadata["ShakeHands"] =
+                Convert.ToBase64String(publicKey);
 
-            ApplyResumeSessionId(client);
-        }
+        ApplyResumeSessionId(client);
     }
 
     /// <summary>
