@@ -8,6 +8,11 @@ using CoreRemoting.Channels.NamedPipe;
 using CoreRemoting.Channels.Null;
 using CoreRemoting.Channels.Tcp;
 using CoreRemoting.Channels.Websocket;
+
+#if NET9_0_OR_GREATER
+using CoreRemoting.Channels.Quic;
+#endif
+
 using Perfolizer.Horology;
 using Perfolizer.Metrology;
 
@@ -17,10 +22,12 @@ public enum RpcChannel
 {
     Null,
     NamedPipe,
-    Ws_Plain,
-    Ws_Encr,
-    Tcp_Plain,
-    Tcp_Encr
+    QuicPlain,
+    QuicEncr,
+    WsockPlain,
+    WsockEncr,
+    TcpPlain,
+    TcpEncr
 }
 
 [MemoryDiagnoser]
@@ -57,10 +64,14 @@ public class RpcBenchmark
     [Params(
         RpcChannel.Null,
         RpcChannel.NamedPipe,
-        RpcChannel.Ws_Plain,
-        RpcChannel.Ws_Encr,
-        RpcChannel.Tcp_Plain,
-        RpcChannel.Tcp_Encr
+        RpcChannel.WsockPlain,
+        RpcChannel.WsockEncr,
+#if NET9_0_OR_GREATER
+        RpcChannel.QuicPlain,
+        RpcChannel.QuicEncr,
+#endif
+        RpcChannel.TcpPlain,
+        RpcChannel.TcpEncr
     )]
     public RpcChannel Channel { get; set; }
 
@@ -135,8 +146,11 @@ public class RpcBenchmark
     {
         RpcChannel.Null => new NullServerChannel(),
         RpcChannel.NamedPipe => new NamedPipeServerChannel(),
-        RpcChannel.Ws_Plain or RpcChannel.Ws_Encr => new WebsocketServerChannel(),
-        RpcChannel.Tcp_Plain or RpcChannel.Tcp_Encr => new TcpServerChannel(),
+#if NET9_0_OR_GREATER
+        RpcChannel.QuicPlain or RpcChannel.QuicEncr => new QuicServerChannel(),
+#endif
+        RpcChannel.WsockPlain or RpcChannel.WsockEncr => new WebsocketServerChannel(),
+        RpcChannel.TcpPlain or RpcChannel.TcpEncr => new TcpServerChannel(),
         _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, null)
     };
 
@@ -144,14 +158,21 @@ public class RpcBenchmark
     {
         RpcChannel.Null => new NullClientChannel(),
         RpcChannel.NamedPipe => new NamedPipeClientChannel(),
-        RpcChannel.Ws_Plain or RpcChannel.Ws_Encr => new WebsocketClientChannel(),
-        RpcChannel.Tcp_Plain or RpcChannel.Tcp_Encr => new TcpClientChannel(),
+#if NET9_0_OR_GREATER
+        RpcChannel.QuicPlain or RpcChannel.QuicEncr => new QuicClientChannel(),
+#endif
+        RpcChannel.WsockPlain or RpcChannel.WsockEncr => new WebsocketClientChannel(),
+        RpcChannel.TcpPlain or RpcChannel.TcpEncr => new TcpClientChannel(),
         _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, null)
     };
 
     private static bool IsEncryptionEnabled(RpcChannel scenario) => scenario switch
     {
-        RpcChannel.Ws_Encr or RpcChannel.Tcp_Encr => true,
+#if NET9_0_OR_GREATER
+        RpcChannel.QuicEncr => true,
+#endif
+        RpcChannel.WsockEncr => true,
+        RpcChannel.TcpEncr => true,
         _ => false
     };
 }
