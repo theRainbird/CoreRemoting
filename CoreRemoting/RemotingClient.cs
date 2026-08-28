@@ -453,6 +453,24 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     }
 
     /// <summary>
+    /// Kills the client transport without sending a goodbye message (simulates network failure).
+    /// </summary>
+    /// <param name="delayMs">Delay, in milliseconds.</param>
+    /// <remarks>
+    /// This method is used for unit testing only.
+    /// </remarks>
+    internal async Task HardKill(int delayMs = 200)
+    {
+        // simulate network failure
+        await _channel.DisconnectAsync()
+            .ConfigureAwait(false);
+
+        // wait for the server-side disconnect handling (parking) to complete
+        await Task.Delay(delayMs)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Starts the keep session alive timer.
     /// </summary>
     private void StartKeepSessionAliveTimer()

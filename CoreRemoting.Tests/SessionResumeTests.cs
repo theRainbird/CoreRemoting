@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -32,8 +33,11 @@ public class SessionResumeTests
     protected virtual bool AuthenticationRequiredForNegativeTests => false;
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Client_should_resume_parked_session_after_abrupt_disconnect()
     {
+        using var ctx = ValidationSyncContext.Install();
+
         var serverErrorCount = 0;
         Exception lastServerError = null;
         int networkPort = Interlocked.Increment(ref _nextPort);
@@ -52,7 +56,9 @@ public class SessionResumeTests
             using var client = CreateClient(
                 networkPort,
                 authenticationRequired: AuthenticationRequiredForResumeTests);
-            await client.ConnectAsync();
+
+            await client.ConnectAsync()
+                .ConfigureAwait(false);
 
             Assert.True(client.HasSession);
 
@@ -63,7 +69,8 @@ public class SessionResumeTests
             Assert.Equal("test", proxy.TestMethod("test"));
 
             // abruptly kill the transport (no goodbye message, session must be parked on server)
-            await HardKill(client);
+            await client.HardKill()
+                .ConfigureAwait(false);
 
             // parked sessions stay in the repository until swept by inactivity
             Assert.Single(server.SessionRepository.Sessions);
@@ -72,7 +79,8 @@ public class SessionResumeTests
                 "Session should be parked after an abrupt disconnect");
 
             // reconnect the same client instance (same RSA key pair, session ID still known)
-            await client.ConnectAsync();
+            await client.ConnectAsync()
+                .ConfigureAwait(false);
 
             // server resumed the existing session instead of creating a new one
             Assert.Equal(originalSessionId, client.SessionId);
@@ -88,7 +96,8 @@ public class SessionResumeTests
         }
         finally
         {
-            await Task.Delay(500);
+            await Task.Delay(500)
+                .ConfigureAwait(false);
 
             if (lastServerError != null)
                 throw new Exception($"Unexpected server error: {lastServerError}");
@@ -100,8 +109,11 @@ public class SessionResumeTests
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Client_with_persisted_key_material_should_resume_session_after_reinstantiation()
     {
+        using var ctx = ValidationSyncContext.Install();
+
         var serverErrorCount = 0;
         Exception lastServerError = null;
         int networkPort = Interlocked.Increment(ref _nextPort);
@@ -121,7 +133,8 @@ public class SessionResumeTests
                 networkPort,
                 authenticationRequired: AuthenticationRequiredForResumeTests))
             {
-                await firstClient.ConnectAsync();
+                await firstClient.ConnectAsync()
+                    .ConfigureAwait(false);
 
                 Guid? sessionId = firstClient.SessionId;
                 byte[] privateKeyBlob = firstClient.PrivateKey;
@@ -130,7 +143,8 @@ public class SessionResumeTests
                 Assert.NotNull(privateKeyBlob);
 
                 // abruptly disconnect so the session is parked and keeps its key material
-                await HardKill(firstClient);
+                await firstClient.HardKill()
+                    .ConfigureAwait(false);
 
                 // simulate process restart: the app persisted session ID + client RSA private key,
                 // a new client instance must resume the same session with the same identity
@@ -140,7 +154,8 @@ public class SessionResumeTests
                     privateKeyBlob: privateKeyBlob,
                     resumableSessionId: sessionId);
 
-                await secondClient.ConnectAsync();
+                await secondClient.ConnectAsync()
+                    .ConfigureAwait(false);
 
                 Assert.Equal(sessionId, secondClient.SessionId);
                 Assert.Single(server.SessionRepository.Sessions);
@@ -157,7 +172,8 @@ public class SessionResumeTests
         }
         finally
         {
-            await Task.Delay(500);
+            await Task.Delay(500)
+                .ConfigureAwait(false);
 
             if (lastServerError != null)
                 throw new Exception($"Unexpected server error: {lastServerError}");
@@ -169,8 +185,11 @@ public class SessionResumeTests
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Client_with_mismatching_key_material_should_not_resume_parked_session()
     {
+        using var ctx = ValidationSyncContext.Install();
+
         var serverErrorCount = 0;
         Exception lastServerError = null;
         int networkPort = Interlocked.Increment(ref _nextPort);
@@ -192,9 +211,13 @@ public class SessionResumeTests
                 networkPort,
                 authenticationRequired: AuthenticationRequiredForNegativeTests))
             {
-                await firstClient.ConnectAsync();
+                await firstClient.ConnectAsync()
+                    .ConfigureAwait(false);
+
                 sessionId = client_GetSessionId(firstClient);
-                await HardKill(firstClient);
+
+                await firstClient.HardKill()
+                    .ConfigureAwait(false);
             }
 
             // wrong RSA key + stale session ID: the server has to reject the resume attempt
@@ -204,7 +227,8 @@ public class SessionResumeTests
                 resumableSessionId: sessionId);
 
             var exception =
-                await Assert.ThrowsAsync<RemotingException>(() => secondClient.ConnectAsync());
+                await Assert.ThrowsAsync<RemotingException>(secondClient.ConnectAsync)
+                    .ConfigureAwait(false);
 
             Assert.Contains("refused to resume", exception.Message);
 
@@ -214,7 +238,8 @@ public class SessionResumeTests
         }
         finally
         {
-            await Task.Delay(500);
+            await Task.Delay(500)
+                .ConfigureAwait(false);
 
             if (lastServerError != null)
                 throw new Exception($"Unexpected server error: {lastServerError}");
@@ -226,8 +251,11 @@ public class SessionResumeTests
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Resumable_session_id_should_fail_when_session_was_disposed_gently()
     {
+        using var ctx = ValidationSyncContext.Install();
+
         var serverErrorCount = 0;
         Exception lastServerError = null;
         int networkPort = Interlocked.Increment(ref _nextPort);
@@ -249,12 +277,17 @@ public class SessionResumeTests
                 networkPort,
                 authenticationRequired: AuthenticationRequiredForNegativeTests))
             {
-                await firstClient.ConnectAsync();
+                await firstClient.ConnectAsync()
+                    .ConfigureAwait(false);
+
                 sessionId = client_GetSessionId(firstClient);
 
                 // graceful disconnect sends a goodbye message and disposes the session (no parking)
-                await firstClient.DisposeAsync();
-                await Task.Delay(500);
+                await firstClient.DisposeAsync()
+                    .ConfigureAwait(false);
+
+                await Task.Delay(500)
+                    .ConfigureAwait(false);
 
                 Assert.Empty(server.SessionRepository.Sessions);
             }
@@ -266,13 +299,15 @@ public class SessionResumeTests
 
             // session no longer exists, so the server created a new one and the strict check fails
             var exception =
-                await Assert.ThrowsAsync<RemotingException>(() => secondClient.ConnectAsync());
+                await Assert.ThrowsAsync<RemotingException>(secondClient.ConnectAsync)
+                    .ConfigureAwait(false);
 
             Assert.Contains("refused to resume", exception.Message);
         }
         finally
         {
-            await Task.Delay(500);
+            await Task.Delay(500)
+                .ConfigureAwait(false);
 
             if (lastServerError != null)
                 throw new Exception($"Unexpected server error: {lastServerError}");
@@ -288,22 +323,6 @@ public class SessionResumeTests
         var sessionId = client.SessionId;
         Assert.NotNull(sessionId);
         return sessionId.Value;
-    }
-
-    /// <summary>
-    /// Kills the client transport without sending a goodbye message (simulates network failure).
-    /// </summary>
-    private static async Task HardKill(RemotingClient client)
-    {
-        var channel =
-            (IClientChannel)typeof(RemotingClient).GetField(
-                "_channel", BindingFlags.NonPublic | BindingFlags.Instance)
-            .GetValue(client);
-
-        await channel.DisconnectAsync();
-
-        // wait for the server-side disconnect handling (parking) to complete
-        await Task.Delay(500);
     }
 
     private RemotingClient CreateClient(
