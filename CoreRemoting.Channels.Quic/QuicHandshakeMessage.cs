@@ -50,7 +50,7 @@ internal class QuicHandshakeMessage
     /// Deserializes the handshake message from a byte array.
     /// </summary>
     /// <param name="data">Serialized byte array, can be null.</param>
-    public static QuicHandshakeMessage FromByteArray(byte[]? data)
+    public static QuicHandshakeMessage FromByteArray(byte[] data)
     {
         if (data is not { Length: > 0 })
             return new QuicHandshakeMessage();
