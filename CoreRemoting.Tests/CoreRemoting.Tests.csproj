@@ -18,6 +18,7 @@
         <Compile Remove="RpcTests_WebsocketSharp.cs" />
         <Compile Remove="RpcTests_WsClientWsharpServer.cs" />
         <Compile Remove="RpcTests_WsharpClientWsServer.cs" />
+        <Compile Remove="SessionResumeTestsQuic.cs" />
     </ItemGroup>
 
     <!-- .NET 9.0 only: skip BinaryFormatter -->
@@ -30,6 +31,9 @@
         <Compile Include="QuicHandshakeMessageTests.cs" />
         <Compile Include="RpcTests_Quic.cs">
             <DependentUpon>RpcTests.cs</DependentUpon>
+        </Compile>
+        <Compile Include="SessionResumeTestsQuic.cs">
+            <DependentUpon>SessionResumeTests.cs</DependentUpon>
         </Compile>
         <ProjectReference Include="..\CoreRemoting.Channels.Quic\CoreRemoting.Channels.Quic.csproj" />
     </ItemGroup>

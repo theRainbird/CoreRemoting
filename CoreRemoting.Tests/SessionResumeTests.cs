@@ -38,24 +38,15 @@ public class SessionResumeTests
     {
         using var ctx = ValidationSyncContext.Install();
 
-        var serverErrorCount = 0;
-        Exception lastServerError = null;
         int networkPort = Interlocked.Increment(ref _nextPort);
 
-        var server = StartServer(
-            networkPort: networkPort,
-            authenticationRequired: AuthenticationRequiredForResumeTests,
-            onServerError: (s, ex) =>
-            {
-                Interlocked.Increment(ref serverErrorCount);
-                lastServerError = ex;
-            });
+        var server = StartServer(networkPort,
+            AuthenticationRequiredForResumeTests);
 
         try
         {
-            using var client = CreateClient(
-                networkPort,
-                authenticationRequired: AuthenticationRequiredForResumeTests);
+            using var client = CreateClient(networkPort,
+                AuthenticationRequiredForResumeTests);
 
             await client.ConnectAsync()
                 .ConfigureAwait(false);
@@ -99,10 +90,7 @@ public class SessionResumeTests
             await Task.Delay(500)
                 .ConfigureAwait(false);
 
-            if (lastServerError != null)
-                throw new Exception($"Unexpected server error: {lastServerError}");
-
-            Assert.Equal(0, serverErrorCount);
+            CheckServerErrorCount();
 
             server.Stop();
         }
@@ -114,24 +102,14 @@ public class SessionResumeTests
     {
         using var ctx = ValidationSyncContext.Install();
 
-        var serverErrorCount = 0;
-        Exception lastServerError = null;
         int networkPort = Interlocked.Increment(ref _nextPort);
 
-        var server = StartServer(
-            networkPort: networkPort,
-            authenticationRequired: AuthenticationRequiredForResumeTests,
-            onServerError: (s, ex) =>
-            {
-                Interlocked.Increment(ref serverErrorCount);
-                lastServerError = ex;
-            });
+        var server = StartServer(networkPort, AuthenticationRequiredForResumeTests);
 
         try
         {
-            using (var firstClient = CreateClient(
-                networkPort,
-                authenticationRequired: AuthenticationRequiredForResumeTests))
+            using (var firstClient = CreateClient(networkPort,
+                AuthenticationRequiredForResumeTests))
             {
                 await firstClient.ConnectAsync()
                     .ConfigureAwait(false);
@@ -148,9 +126,8 @@ public class SessionResumeTests
 
                 // simulate process restart: the app persisted session ID + client RSA private key,
                 // a new client instance must resume the same session with the same identity
-                using var secondClient = CreateClient(
-                    networkPort,
-                    authenticationRequired: AuthenticationRequiredForResumeTests,
+                using var secondClient = CreateClient(networkPort,
+                    AuthenticationRequiredForResumeTests,
                     privateKeyBlob: privateKeyBlob,
                     resumableSessionId: sessionId);
 
@@ -175,10 +152,7 @@ public class SessionResumeTests
             await Task.Delay(500)
                 .ConfigureAwait(false);
 
-            if (lastServerError != null)
-                throw new Exception($"Unexpected server error: {lastServerError}");
-
-            Assert.Equal(0, serverErrorCount);
+            CheckServerErrorCount();
 
             server.Stop();
         }
@@ -190,26 +164,16 @@ public class SessionResumeTests
     {
         using var ctx = ValidationSyncContext.Install();
 
-        var serverErrorCount = 0;
-        Exception lastServerError = null;
         int networkPort = Interlocked.Increment(ref _nextPort);
 
-        var server = StartServer(
-            networkPort: networkPort,
-            authenticationRequired: AuthenticationRequiredForNegativeTests,
-            onServerError: (s, ex) =>
-            {
-                Interlocked.Increment(ref serverErrorCount);
-                lastServerError = ex;
-            });
+        var server = StartServer(networkPort, AuthenticationRequiredForNegativeTests);
 
         try
         {
             Guid sessionId;
 
-            using (var firstClient = CreateClient(
-                networkPort,
-                authenticationRequired: AuthenticationRequiredForNegativeTests))
+            using (var firstClient = CreateClient(networkPort,
+                AuthenticationRequiredForNegativeTests))
             {
                 await firstClient.ConnectAsync()
                     .ConfigureAwait(false);
@@ -221,9 +185,8 @@ public class SessionResumeTests
             }
 
             // wrong RSA key + stale session ID: the server has to reject the resume attempt
-            using var secondClient = CreateClient(
-                networkPort,
-                authenticationRequired: AuthenticationRequiredForNegativeTests,
+            using var secondClient = CreateClient(networkPort,
+                AuthenticationRequiredForNegativeTests,
                 resumableSessionId: sessionId);
 
             var exception =
@@ -241,10 +204,7 @@ public class SessionResumeTests
             await Task.Delay(500)
                 .ConfigureAwait(false);
 
-            if (lastServerError != null)
-                throw new Exception($"Unexpected server error: {lastServerError}");
-
-            Assert.Equal(0, serverErrorCount);
+            CheckServerErrorCount();
 
             server.Stop();
         }
@@ -256,26 +216,16 @@ public class SessionResumeTests
     {
         using var ctx = ValidationSyncContext.Install();
 
-        var serverErrorCount = 0;
-        Exception lastServerError = null;
         int networkPort = Interlocked.Increment(ref _nextPort);
 
-        var server = StartServer(
-            networkPort: networkPort,
-            authenticationRequired: AuthenticationRequiredForNegativeTests,
-            onServerError: (s, ex) =>
-            {
-                Interlocked.Increment(ref serverErrorCount);
-                lastServerError = ex;
-            });
+        var server = StartServer(networkPort, AuthenticationRequiredForNegativeTests);
 
         try
         {
             Guid sessionId;
 
-            using (var firstClient = CreateClient(
-                networkPort,
-                authenticationRequired: AuthenticationRequiredForNegativeTests))
+            using (var firstClient = CreateClient(networkPort,
+                AuthenticationRequiredForNegativeTests))
             {
                 await firstClient.ConnectAsync()
                     .ConfigureAwait(false);
@@ -292,9 +242,8 @@ public class SessionResumeTests
                 Assert.Empty(server.SessionRepository.Sessions);
             }
 
-            using var secondClient = CreateClient(
-                networkPort,
-                authenticationRequired: AuthenticationRequiredForNegativeTests,
+            using var secondClient = CreateClient(networkPort,
+                AuthenticationRequiredForNegativeTests,
                 resumableSessionId: sessionId);
 
             // session no longer exists, so the server created a new one and the strict check fails
@@ -309,10 +258,7 @@ public class SessionResumeTests
             await Task.Delay(500)
                 .ConfigureAwait(false);
 
-            if (lastServerError != null)
-                throw new Exception($"Unexpected server error: {lastServerError}");
-
-            Assert.Equal(0, serverErrorCount);
+            CheckServerErrorCount();
 
             server.Stop();
         }
@@ -357,10 +303,29 @@ public class SessionResumeTests
         return new RemotingClient(config);
     }
 
+    protected int serverErrorCount;
+
+    protected Exception lastServerError;
+
+    protected virtual void CheckServerErrorCount()
+    {
+        if (lastServerError != null)
+            throw new Exception($"Unexpected server error: {lastServerError}");
+
+        Assert.Equal(0, serverErrorCount);
+    }
+
+    private void OnServerError(object s, Exception ex)
+    {
+        Interlocked.Increment(ref serverErrorCount);
+
+        lastServerError = ex;
+    }
+
     private RemotingServer StartServer(
         int networkPort,
         bool authenticationRequired,
-        EventHandler<Exception> onServerError)
+        EventHandler<Exception> onServerError = null)
     {
         var config = new ServerConfig()
         {
@@ -387,8 +352,11 @@ public class SessionResumeTests
             }
         };
 
+        serverErrorCount = 0;
+        lastServerError = null;
+
         var server = new RemotingServer(config);
-        server.Error += onServerError;
+        server.Error += onServerError ?? OnServerError;
         server.Start();
 
         // wait until the channel is actually listening (WatsonTcp binds asynchronously)

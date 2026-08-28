@@ -169,8 +169,18 @@ public abstract class QuicTransport : IAsyncDisposable
     /// <inheritdoc />
     public virtual async Task DisconnectAsync()
     {
-        await Connection.CloseAsync(0x0C)
-            .ConfigureAwait(false);
+        try
+        {
+            await Connection.CloseAsync(0x0C)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            LastException = ex as NetworkException ??
+                new NetworkException(ex.Message, ex);
+
+            OnErrorOccured(ex.Message, LastException);
+        }
 
         IsConnected = false;
         OnDisconnected();
