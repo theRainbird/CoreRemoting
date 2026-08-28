@@ -75,13 +75,22 @@
       <Compile Update="DicTests_Microsoft.cs">
         <DependentUpon>DicTests.cs</DependentUpon>
       </Compile>
-      <Compile Update="RpcTests_Websockets.cs">
+      <Compile Update="RpcTests_NamedPipe.cs">
         <DependentUpon>RpcTests.cs</DependentUpon>
       </Compile>
       <Compile Update="RpcTests_NullChannel.cs">
         <DependentUpon>RpcTests.cs</DependentUpon>
       </Compile>
+      <Compile Update="RpcTests_Websockets.cs">
+        <DependentUpon>RpcTests.cs</DependentUpon>
+      </Compile>
       <Compile Update="SessionResumeTestsNoEncryption.cs">
+        <DependentUpon>SessionResumeTests.cs</DependentUpon>
+      </Compile>
+      <Compile Update="SessionResumeTestsWebSockets.cs">
+        <DependentUpon>SessionResumeTests.cs</DependentUpon>
+      </Compile>
+      <Compile Update="SessionResumeTestsWsockNoEncr.cs">
         <DependentUpon>SessionResumeTests.cs</DependentUpon>
       </Compile>
       <Compile Update="SessionTests_Websockets.cs">

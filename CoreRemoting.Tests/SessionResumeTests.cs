@@ -137,7 +137,7 @@ public class SessionResumeTests
                 using var secondClient = CreateClient(
                     networkPort,
                     authenticationRequired: AuthenticationRequiredForResumeTests,
-                    rsaPrivateKeyBlob: privateKeyBlob,
+                    privateKeyBlob: privateKeyBlob,
                     resumableSessionId: sessionId);
 
                 await secondClient.ConnectAsync();
@@ -309,19 +309,19 @@ public class SessionResumeTests
     private RemotingClient CreateClient(
         int serverPort,
         bool authenticationRequired,
-        byte[] rsaPrivateKeyBlob = null,
+        byte[] privateKeyBlob = null,
         Guid? resumableSessionId = null)
     {
         var config = new ClientConfig()
         {
             Channel = ClientChannel,
-            ConnectionTimeout = 0,
+            ConnectionTimeout = 30,
             MessageEncryption = MessageEncryption,
             KeySize = KeySize,
             ServerHostName = "localhost",
             ServerPort = serverPort,
             KeepSessionAliveInterval = 0,
-            PrivateKeyBlob = rsaPrivateKeyBlob,
+            PrivateKeyBlob = privateKeyBlob,
             ResumableSessionId = resumableSessionId
         };
 

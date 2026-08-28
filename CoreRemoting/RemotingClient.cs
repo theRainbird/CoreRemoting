@@ -51,6 +51,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     private TaskCompletionSource<bool> _authenticationCompletedTaskSource;
     private readonly AsyncManualResetEvent _goodbyeCompletedEvent;
     private bool _isAuthenticated;
+    private bool _isDisposing;
     private int _isConnected;
     private const int _true = 1;
     private const int _false = 0;
@@ -233,6 +234,9 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     {
         get
         {
+            if (_isDisposing)
+                return null;
+
             lock (_sessionLock)
                 return _sessionId == Guid.Empty ? null : _sessionId;
         }
@@ -246,6 +250,9 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     {
         get
         {
+            if (_isDisposing)
+                return null;
+
             lock (_sessionLock)
                 return _sessionId == Guid.Empty
                     ? _config.ResumableSessionId
@@ -273,10 +280,11 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     {
         get
         {
+            if (_isDisposing)
+                return false;
+
             lock (_sessionLock)
-            {
                 return _sessionId != Guid.Empty;
-            }
         }
     }
 
@@ -1013,6 +1021,8 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
+        _isDisposing = true;
+
         if (DefaultRemotingClient == this)
             DefaultRemotingClient = null;
 
