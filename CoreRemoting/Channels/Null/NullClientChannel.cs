@@ -41,9 +41,9 @@ public class NullClientChannel : NullTransport, IClientChannel
             { nameof(RemotingClient.MessageEncryption), encryption },
         };
 
-        if (RemotingClient?.PublicKey is not null and { Length: > 0 })
+        if (RemotingClient?.PublicKey is byte[] publicKey and { Length: > 0 })
         {
-            var clientPublicKey = Convert.ToBase64String(RemotingClient.PublicKey);
+            var clientPublicKey = Convert.ToBase64String(publicKey);
             metadata[nameof(RemotingClient.PublicKey)] = clientPublicKey;
         }
 

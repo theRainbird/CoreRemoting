@@ -59,12 +59,13 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <param name="client">CoreRemoting client</param>
     private void ApplyResumeSessionId(IRemotingClient client)
     {
-        if (client.ResumableSessionId != null && client.SessionSignature is byte[] signature)
-        {
+        if (client.ResumableSessionId != null)
             _handshakeMetadata["ResumeSessionId"] = Convert.ToBase64String(
                 client.ResumableSessionId.Value.ToByteArray());
-            _handshakeMetadata["SessionSignature"] = Convert.ToBase64String(signature);
-        }
+
+        if (client.SessionSignature is byte[] signature)
+            _handshakeMetadata["SessionSignature"] =
+                Convert.ToBase64String(signature);
     }
 
     /// <summary>

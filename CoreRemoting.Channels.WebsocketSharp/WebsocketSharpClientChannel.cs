@@ -57,11 +57,11 @@ public class WebsocketSharpClientChannel : IClientChannel, IRawMessageTransport
                 Convert.ToBase64String(client.ResumableSessionId.Value.ToByteArray())));
         }
 
-        if (client.SessionSignature != null)
+        if (client.SessionSignature is byte[] signature)
         {
             _webSocket.SetCookie(new Cookie(
                 "SessionSignature",
-                Convert.ToBase64String(client.SessionSignature)));
+                Convert.ToBase64String(signature)));
         }
 
         _webSocket.Log.Output = (timestamp, text) => Console.WriteLine("{0}: {1}", timestamp, text);

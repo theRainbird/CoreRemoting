@@ -257,7 +257,9 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// Gets the resumable session signature to verify client authenticity.
     /// </summary>
     public byte[] SessionSignature =>
-        _keyPair.CreateSignature(ResumableSessionId?.ToByteArray() ?? []);
+        ResumableSessionId?.ToByteArray() is byte[] sessionId
+            ? _keyPair.CreateSignature(sessionId)
+            : null;
 
     /// <summary>
     /// Gets whether the connection to the server is established or not.

@@ -72,11 +72,11 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
                 domain: Uri.Host));
         }
 
-        if (client.SessionSignature != null)
+        if (client.SessionSignature is byte[] signature)
         {
             ClientWebSocket.Options.Cookies.Add(new Cookie(
                 name: SessionSignatureCookie,
-                value: Convert.ToBase64String(client.SessionSignature),
+                value: Convert.ToBase64String(signature),
                 path: Uri.LocalPath,
                 domain: Uri.Host));
         }
