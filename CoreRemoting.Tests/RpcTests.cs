@@ -1570,6 +1570,54 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "Required by ValidationSyncContext")]
+    public async Task BeginCall_event_handler_can_bypass_authentication_for_chosen_method_if_server_is_running_on_legacy_mode()
+    {
+        void BypassAuthorizationForEcho(object sender, ServerRpcContext e) =>
+            e.AuthenticationRequired =
+                e.MethodCallMessage.MethodName != "Echo";
+
+        using var ctx = ValidationSyncContext.Install();
+        _serverFixture.Server.Config.AuthenticationRequired = true;
+        _serverFixture.Server.Config.UseLegacySessionKeyDerivation = true;
+        _serverFixture.Server.BeginCall += BypassAuthorizationForEcho;
+
+        try
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                AuthenticationTimeout = 2,
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            // note: this scenario is actually not supported
+            // except for the legacy session key derivation mode
+            // we cannot establish unauthenticated connection
+            // if the server says it's required on the modern version
+            await client.ConnectAsync().ConfigureAwait(false);
+
+            // try allowed method "Echo"
+            var proxy = client.CreateProxy<ITestService>();
+            Assert.Equal("This method is allowed", proxy.Echo("This method is allowed"));
+
+            // try disallowed method "Reverse"
+            var ex = Assert.Throws<RemoteInvocationException>(() => proxy.Reverse("This method is not allowed"));
+            Assert.Contains("auth", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            _serverFixture.Server.BeginCall -= BypassAuthorizationForEcho;
+            _serverFixture.Server.Config.AuthenticationRequired = false;
+            _serverFixture.Server.Config.UseLegacySessionKeyDerivation = false;
+        }
+    }
+
+    [Fact]
     public void BeginCall_event_handler_can_enforce_authentication_for_chosen_method()
     {
         void BypassAuthorizationForEcho(object sender, ServerRpcContext e) =>
@@ -1721,4 +1769,6 @@ public class RpcTests : IClassFixture<ServerFixture>
             _serverFixture.ServerErrorCount = 0;
         }
     }
+
+
 }
