@@ -24,6 +24,13 @@ public class SessionResumeTests
     // custom port range for these tests (9095+ is used by other test classes)
     private static int _nextPort = 9300;
 
+    protected virtual IServerChannel ServerChannel => null;
+    protected virtual IClientChannel ClientChannel => null;
+    protected virtual bool MessageEncryption => true;
+    protected virtual int KeySize => 1024;
+    protected virtual bool AuthenticationRequiredForResumeTests => true;
+    protected virtual bool AuthenticationRequiredForNegativeTests => false;
+
     [Fact]
     public async Task Client_should_resume_parked_session_after_abrupt_disconnect()
     {
@@ -33,7 +40,7 @@ public class SessionResumeTests
 
         var server = StartServer(
             networkPort: networkPort,
-            authenticationRequired: true,
+            authenticationRequired: AuthenticationRequiredForResumeTests,
             onServerError: (s, ex) =>
             {
                 Interlocked.Increment(ref serverErrorCount);
@@ -42,7 +49,9 @@ public class SessionResumeTests
 
         try
         {
-            using var client = CreateClient(networkPort, authenticationRequired: true);
+            using var client = CreateClient(
+                networkPort,
+                authenticationRequired: AuthenticationRequiredForResumeTests);
             await client.ConnectAsync();
 
             Assert.True(client.HasSession);
@@ -99,7 +108,7 @@ public class SessionResumeTests
 
         var server = StartServer(
             networkPort: networkPort,
-            authenticationRequired: true,
+            authenticationRequired: AuthenticationRequiredForResumeTests,
             onServerError: (s, ex) =>
             {
                 Interlocked.Increment(ref serverErrorCount);
@@ -108,7 +117,9 @@ public class SessionResumeTests
 
         try
         {
-            using (var firstClient = CreateClient(networkPort, authenticationRequired: true))
+            using (var firstClient = CreateClient(
+                networkPort,
+                authenticationRequired: AuthenticationRequiredForResumeTests))
             {
                 await firstClient.ConnectAsync();
 
@@ -125,7 +136,7 @@ public class SessionResumeTests
                 // a new client instance must resume the same session with the same identity
                 using var secondClient = CreateClient(
                     networkPort,
-                    authenticationRequired: true,
+                    authenticationRequired: AuthenticationRequiredForResumeTests,
                     rsaPrivateKeyBlob: privateKeyBlob,
                     resumableSessionId: sessionId);
 
@@ -166,7 +177,7 @@ public class SessionResumeTests
 
         var server = StartServer(
             networkPort: networkPort,
-            authenticationRequired: false,
+            authenticationRequired: AuthenticationRequiredForNegativeTests,
             onServerError: (s, ex) =>
             {
                 Interlocked.Increment(ref serverErrorCount);
@@ -177,7 +188,9 @@ public class SessionResumeTests
         {
             Guid sessionId;
 
-            using (var firstClient = CreateClient(networkPort, authenticationRequired: false))
+            using (var firstClient = CreateClient(
+                networkPort,
+                authenticationRequired: AuthenticationRequiredForNegativeTests))
             {
                 await firstClient.ConnectAsync();
                 sessionId = client_GetSessionId(firstClient);
@@ -187,7 +200,7 @@ public class SessionResumeTests
             // wrong RSA key + stale session ID: the server has to reject the resume attempt
             using var secondClient = CreateClient(
                 networkPort,
-                authenticationRequired: false,
+                authenticationRequired: AuthenticationRequiredForNegativeTests,
                 resumableSessionId: sessionId);
 
             var exception =
@@ -221,7 +234,7 @@ public class SessionResumeTests
 
         var server = StartServer(
             networkPort: networkPort,
-            authenticationRequired: false,
+            authenticationRequired: AuthenticationRequiredForNegativeTests,
             onServerError: (s, ex) =>
             {
                 Interlocked.Increment(ref serverErrorCount);
@@ -232,7 +245,9 @@ public class SessionResumeTests
         {
             Guid sessionId;
 
-            using (var firstClient = CreateClient(networkPort, authenticationRequired: false))
+            using (var firstClient = CreateClient(
+                networkPort,
+                authenticationRequired: AuthenticationRequiredForNegativeTests))
             {
                 await firstClient.ConnectAsync();
                 sessionId = client_GetSessionId(firstClient);
@@ -246,7 +261,7 @@ public class SessionResumeTests
 
             using var secondClient = CreateClient(
                 networkPort,
-                authenticationRequired: false,
+                authenticationRequired: AuthenticationRequiredForNegativeTests,
                 resumableSessionId: sessionId);
 
             // session no longer exists, so the server created a new one and the strict check fails
@@ -291,7 +306,7 @@ public class SessionResumeTests
         await Task.Delay(500);
     }
 
-    private static RemotingClient CreateClient(
+    private RemotingClient CreateClient(
         int serverPort,
         bool authenticationRequired,
         byte[] rsaPrivateKeyBlob = null,
@@ -299,9 +314,10 @@ public class SessionResumeTests
     {
         var config = new ClientConfig()
         {
+            Channel = ClientChannel,
             ConnectionTimeout = 0,
-            MessageEncryption = true,
-            KeySize = 1024,
+            MessageEncryption = MessageEncryption,
+            KeySize = KeySize,
             ServerHostName = "localhost",
             ServerPort = serverPort,
             KeepSessionAliveInterval = 0,
@@ -322,17 +338,18 @@ public class SessionResumeTests
         return new RemotingClient(config);
     }
 
-    private static RemotingServer StartServer(
+    private RemotingServer StartServer(
         int networkPort,
         bool authenticationRequired,
         EventHandler<Exception> onServerError)
     {
         var config = new ServerConfig()
         {
+            Channel = ServerChannel,
             IsDefault = false,
-            UniqueServerInstanceName = $"SessionResumeTestServer_{networkPort}",
-            MessageEncryption = true,
-            KeySize = 1024,
+            UniqueServerInstanceName = $"SessionResumeTestServer_{networkPort}_{GetType().Name}",
+            MessageEncryption = MessageEncryption,
+            KeySize = KeySize,
             NetworkPort = networkPort,
             AuthenticationRequired = authenticationRequired,
             AuthenticationProvider = authenticationRequired
