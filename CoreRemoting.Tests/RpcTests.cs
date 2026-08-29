@@ -1678,15 +1678,15 @@ public class RpcTests : IClassFixture<ServerFixture>
 
     [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
-    public async Task Server_with_MessageEncryption_disabled_accepts_both_encrypted_and_unencrypted_clients()
+    public virtual async Task Server_with_MessageEncryption_disabled_accepts_both_encrypted_and_unencrypted_clients()
     {
         using var ctx = ValidationSyncContext.Install();
 
         using var client1 = new RemotingClient(new ClientConfig()
         {
-            ConnectionTimeout = 0,
+            ConnectionTimeout = 20,
             Channel = ClientChannel,
-            MessageEncryption = false,
+            MessageEncryption = true,
             ServerPort = _serverFixture.Server.Config.NetworkPort,
         });
 
@@ -1699,9 +1699,9 @@ public class RpcTests : IClassFixture<ServerFixture>
 
         using var client2 = new RemotingClient(new ClientConfig()
         {
-            ConnectionTimeout = 0,
+            ConnectionTimeout = 20,
             Channel = ClientChannel,
-            MessageEncryption = true,
+            MessageEncryption = false,
             ServerPort = _serverFixture.Server.Config.NetworkPort,
         });
 
@@ -1711,6 +1711,49 @@ public class RpcTests : IClassFixture<ServerFixture>
         var proxy2 = client2.CreateProxy<ITestService>();
         var echoed2 = proxy2.Echo("@echo on");
         Assert.Equal("@echo on", echoed2);
+
+        CheckServerErrorCount();
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public virtual async Task Server_with_MessageEncryption_enabled_accepts_only_encrypted_clients()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        _serverFixture.Server.Config.MessageEncryption = true;
+        try
+        {
+            using var client1 = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 20,
+                Channel = ClientChannel,
+                MessageEncryption = true,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            await client1.ConnectAsync()
+                .ConfigureAwait(false);
+
+            var proxy1 = client1.CreateProxy<ITestService>();
+            var echoed1 = proxy1.Echo("@echo off");
+            Assert.Equal("@echo off", echoed1);
+
+            using var client2 = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 20,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            await Assert.ThrowsAsync<SecurityException>(client2.ConnectAsync)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _serverFixture.Server.Config.MessageEncryption = false;
+        }
 
         CheckServerErrorCount();
     }

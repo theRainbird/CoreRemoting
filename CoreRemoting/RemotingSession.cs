@@ -191,6 +191,7 @@ public sealed class RemotingSession : IAsyncDisposable
         {
             SessionId = _sessionId,
             AuthenticationRequired = _server.Config.AuthenticationRequired,
+            MessageEncryptionRequired = _server.Config.MessageEncryption,
             SharedSecret = _sharedSecret,
         });
     }

@@ -713,6 +713,14 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             _authenticationRequired = handshakeMessage.AuthenticationRequired;
         }
 
+        // server requires message encryption, but the client's connection is unencrypted
+        if (handshakeMessage.MessageEncryptionRequired && !MessageEncryption)
+        {
+            var exception = new SecurityException("RemotingServer requires message encryption.");
+            _handshakeCompletedTaskSource.TrySetException(exception);
+            throw exception;
+        }
+
         // the client explicitly requested to resume a specific session (ClientConfig.ResumableSessionId),
         // but the server created a new session instead -> fail the connection
         var requestedSessionId = _config.ResumableSessionId;

@@ -11,10 +11,16 @@ namespace CoreRemoting.RpcMessaging;
 public class CompleteHandshakeMessage
 {
     /// <summary>
-    /// Gets or sets the value indicating whether the authentication is required
+    /// Gets or sets a value indicating whether the authentication is required
     /// </summary>
     [DataMember]
     public bool AuthenticationRequired { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether message encryption is required
+    /// </summary>
+    [DataMember]
+    public bool MessageEncryptionRequired { get; set; }
 
     /// <summary>
     /// Gets or sets the shared secret for symmetric encryption, if message encryption is enabled.
