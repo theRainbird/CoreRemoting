@@ -98,7 +98,7 @@ public class OidcAuthenticationProvider : IOidcAuthenticationProvider
         if (_options.StepUpValidator == null)
             return Success(identity);
 
-        // pattern B: remember the validated identity and request a step-up code from the client
+        // remember the validated identity and request a step-up code from the client
         _pendingAuthentications[stateKey] = identity;
 
         return new AuthenticationResponseMessage

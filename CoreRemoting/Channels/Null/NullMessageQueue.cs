@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 using CoreRemoting.Threading;
 
 namespace CoreRemoting.Channels.Null;
@@ -101,13 +104,32 @@ public class NullMessageQueue
     /// <param name="address">Address, either sender:receiver or receiver for incoming connections.</param>
     /// <param name="sender">Sender endpoint.</param>
     /// <param name="receiver">Receiver endpoint.</param>
-    public static async IAsyncEnumerable<NullMessage> ReceiveMessagesAsync(string address, string sender, string receiver)
+    /// <param name="cancellationToken">Token used to cancel the wait. When cancelled the enumerator ends
+    /// without draining the queue so a cancelled receiver never steals a pending message.</param>
+    public static async IAsyncEnumerable<NullMessage> ReceiveMessagesAsync(
+        string address, string sender, string receiver,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var adr = address ?? $"{sender}:{receiver}";
         var mre = Events.GetOrAdd(adr, address => new(false));
         var queue = Queues.GetOrAdd(adr, address => new());
 
-        await mre.WaitAsync().ConfigureAwait(false);
+        if (cancellationToken.CanBeCanceled)
+        {
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using (cancellationToken.Register(() => tcs.TrySetResult(true)))
+            {
+                await Task.WhenAny(mre.WaitAsync(), tcs.Task).ConfigureAwait(false);
+            }
+        }
+        else
+        {
+            await mre.WaitAsync().ConfigureAwait(false);
+        }
+
+        if (cancellationToken.IsCancellationRequested)
+            yield break;
+
         mre.Reset();
 
         while (queue.TryDequeue(out var message))

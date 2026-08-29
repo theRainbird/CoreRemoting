@@ -45,6 +45,7 @@
       <PackageReference Include="Serialize.Linq" Version="4.0.167" />
       <PackageReference Include="stakx.DynamicProxy.AsyncInterceptor" Version="0.1.0" />
       <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.10" />
+      <PackageReference Include="System.Formats.Asn1" Version="8.0.1" />
       <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
       <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.7.0" />
       <PackageReference Include="System.Security.Cryptography.Algorithms" Version="4.3.1" />

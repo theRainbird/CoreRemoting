@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Channels.Websocket;
 using static CoreRemoting.Channels.Null.NullMessageQueue;
@@ -33,6 +34,8 @@ public class NullServerChannel : IServerChannel
 
     internal ConcurrentDictionary<Guid, NullServerConnection> Connections { get; } = new();
 
+    private CancellationTokenSource _acceptCts;
+
     /// <inheritdoc/>
     public string Url { get; private set; }
 
@@ -56,11 +59,14 @@ public class NullServerChannel : IServerChannel
         IsListening = true;
         StartListener(Url);
 
+        _acceptCts = new CancellationTokenSource();
+        var token = _acceptCts.Token;
+
         _ = Task.Factory.StartNew(async () =>
         {
-            while (IsListening)
-                await ReceiveConnections();
-        });
+            while (!token.IsCancellationRequested && IsListening)
+                await ReceiveConnections(token);
+        }, token);
     }
 
     /// <inheritdoc/>
@@ -71,12 +77,16 @@ public class NullServerChannel : IServerChannel
             IsListening = false;
             StopListener(Url);
         }
+
+        _acceptCts?.Cancel();
+        _acceptCts?.Dispose();
+        _acceptCts = null;
     }
 
-    private async Task ReceiveConnections()
+    private async Task ReceiveConnections(CancellationToken token)
     {
         await foreach (var msg in
-            ReceiveMessagesAsync(Url, string.Empty, Url)
+            ReceiveMessagesAsync(Url, string.Empty, Url, token)
                 .ConfigureAwait(false))
         {
             var connection = new NullServerConnection(msg, Server);

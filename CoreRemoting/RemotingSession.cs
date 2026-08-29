@@ -556,15 +556,27 @@ public sealed class RemotingSession : IAsyncDisposable
         if (_isAuthenticated = authResponseMessage.IsAuthenticated)
             Identity = authResponseMessage.AuthenticatedIdentity;
 
-        // a server in legacy key derivation mode (or without message encryption) cannot re-key the session,
-        // so strip the negotiated shared key from the response to keep both endpoints consistent
-        var negotiatedSharedKey = MessageEncryption &&
-            !_server.Config.UseLegacySessionKeyDerivation ?
-                authResponseMessage.NegotiatedSharedKey : null;
+        // In normal mode (message encryption enabled, not legacy) the server re-keys the session to the
+        // negotiated shared key, so the key has to be sent to the client inside the (already encrypted)
+        // auth response to let it derive the very same new shared secret. A server in legacy key
+        // derivation mode (or without message encryption) cannot re-key the session, so the negotiated
+        // shared key is nulled here to keep both endpoints consistent.
+        var canRekey = 
+            MessageEncryption && 
+            !_server.Config.UseLegacySessionKeyDerivation;
+        
+        var negotiatedSharedKey = 
+            canRekey 
+                ? authResponseMessage.NegotiatedSharedKey 
+                : null;
 
-        // make sure that negotiated shared key never goes over the wire
-        authResponseMessage.NegotiatedSharedKey =
-            negotiatedSharedKey is not null ? [] : null;
+        // the negotiated shared key travels encrypted inside the auth response, so it does not leak
+        // over the wire in plaintext. Keep it in the response when the server re-keys the session,
+        // so the client can derive the very same new shared secret; null it otherwise.
+        authResponseMessage.NegotiatedSharedKey = 
+            canRekey 
+                ? negotiatedSharedKey 
+                : null;
 
         var serializedAuthResponse = _server.Serializer.Serialize(authResponseMessage);
 
