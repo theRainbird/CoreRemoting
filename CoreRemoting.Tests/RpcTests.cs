@@ -1677,6 +1677,45 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public async Task Server_with_MessageEncryption_disabled_accepts_both_encrypted_and_unencrypted_clients()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client1 = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            Channel = ClientChannel,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        await client1.ConnectAsync()
+            .ConfigureAwait(false);
+
+        var proxy1 = client1.CreateProxy<ITestService>();
+        var echoed1 = proxy1.Echo("@echo off");
+        Assert.Equal("@echo off", echoed1);
+
+        using var client2 = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            Channel = ClientChannel,
+            MessageEncryption = true,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        await client2.ConnectAsync()
+            .ConfigureAwait(false);
+
+        var proxy2 = client2.CreateProxy<ITestService>();
+        var echoed2 = proxy2.Echo("@echo on");
+        Assert.Equal("@echo on", echoed2);
+
+        CheckServerErrorCount();
+    }
+
+    [Fact]
     public void CreateProxy_methods_should_produce_equivalent_results()
     {
         using var ctx = ValidationSyncContext.Install();
