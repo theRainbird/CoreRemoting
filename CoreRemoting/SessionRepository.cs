@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security;
 using System.Threading.Tasks;
 using System.Timers;
 using CoreRemoting.Channels;
@@ -80,12 +81,13 @@ public class SessionRepository : ISessionRepository
     /// <summary>
     /// Creates a new session.
     /// </summary>
+    /// <param name="messageEncryption">Whether message encryption is enabled on client</param>
     /// <param name="clientPublicKey">Client's public key</param>
     /// <param name="clientAddress">Client's network address</param>
     /// <param name="server">Server instance</param>
     /// <param name="rawMessageTransport">Component that does the raw message transport</param>
     /// <returns>The newly created session</returns>
-    public async Task<RemotingSession> CreateSession(byte[] clientPublicKey, string clientAddress, IRemotingServer server, IRawMessageTransport rawMessageTransport)
+    public async Task<RemotingSession> CreateSession(bool messageEncryption, byte[] clientPublicKey, string clientAddress, IRemotingServer server, IRawMessageTransport rawMessageTransport)
     {
         if (server == null)
             throw new ArgumentException(nameof(server));
@@ -94,6 +96,7 @@ public class SessionRepository : ISessionRepository
             throw new ArgumentNullException(nameof(rawMessageTransport));
 
         var session = new RemotingSession(
+            messageEncryption,
             KeySize,
             clientPublicKey,
             clientAddress,
@@ -127,15 +130,16 @@ public class SessionRepository : ISessionRepository
     /// The presented public key has to match the public key of the original connection (hijack protection).
     /// </summary>
     /// <param name="sessionId">Session ID of the session to be resumed</param>
+    /// <param name="sessionSignature">Client's session signature to prove its authenticity.</param>
     /// <param name="clientPublicKey">Client's public key, as presented by the reconnecting client</param>
     /// <param name="rawMessageTransport">Component that does the raw message transport of the reconnected client</param>
     /// <returns>The resumed session (a new complete handshake message is sent to the client), or null if the session doesn't exist or can't be resumed</returns>
-    public async Task<RemotingSession> TryResumeSession(Guid sessionId, byte[] clientPublicKey, IRawMessageTransport rawMessageTransport)
+    public async Task<RemotingSession> TryResumeSession(Guid sessionId, byte[] sessionSignature, byte[] clientPublicKey, IRawMessageTransport rawMessageTransport)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
             return null;
 
-        if (!session.CanBeResumedWith(clientPublicKey))
+        if (!session.CanBeResumedWith(clientPublicKey, sessionSignature))
             return null;
 
         try

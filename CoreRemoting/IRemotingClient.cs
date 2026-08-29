@@ -39,6 +39,11 @@ public interface IRemotingClient : IAsyncDisposable, IDisposable
     Guid? ResumableSessionId { get; }
 
     /// <summary>
+    /// Gets the resumable session signature to verify client authenticity.
+    /// </summary>
+    byte[] SessionSignature { get; }
+
+    /// <summary>
     /// Gets or sets the invocation timeout in milliseconds.
     /// </summary>
     int? InvocationTimeout { get; set; }

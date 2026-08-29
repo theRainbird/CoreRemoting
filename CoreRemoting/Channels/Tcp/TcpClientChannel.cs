@@ -45,12 +45,11 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
             { "MessageEncryption", client.MessageEncryption }
         };
 
-        if (client.MessageEncryption)
-        {
-            _handshakeMetadata.Add("ShakeHands", Convert.ToBase64String(client.PublicKey));
+        if (client.PublicKey is byte[] publicKey)
+            _handshakeMetadata["ShakeHands"] =
+                Convert.ToBase64String(publicKey);
 
-            ApplyResumeSessionId(client);
-        }
+        ApplyResumeSessionId(client);
     }
 
     /// <summary>
@@ -59,9 +58,13 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <param name="client">CoreRemoting client</param>
     private void ApplyResumeSessionId(IRemotingClient client)
     {
-        if (client.MessageEncryption && client.ResumableSessionId != null)
-            _handshakeMetadata["ResumeSessionId"] =
-                Convert.ToBase64String(client.ResumableSessionId.Value.ToByteArray());
+        if (client.ResumableSessionId != null)
+            _handshakeMetadata["ResumeSessionId"] = Convert.ToBase64String(
+                client.ResumableSessionId.Value.ToByteArray());
+
+        if (client.SessionSignature is byte[] signature)
+            _handshakeMetadata["SessionSignature"] =
+                Convert.ToBase64String(signature);
     }
 
     /// <summary>

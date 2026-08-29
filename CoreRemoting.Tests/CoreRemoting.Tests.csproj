@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFrameworks>net8.0</TargetFrameworks>
         <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
         <IsPackable>false</IsPackable>
         <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
@@ -12,23 +12,28 @@
     <ItemGroup>
         <Compile Remove="InvokerTests.cs" />
         <Compile Remove="InvokerTestsSafe.cs" />
+        <Compile Remove="QuicHandshakeMessageTests.cs" />
         <Compile Remove="RpcTests_Quic.cs" />
         <Compile Remove="RpcTests_WatsonTcp.cs" />
         <Compile Remove="RpcTests_WebsocketSharp.cs" />
         <Compile Remove="RpcTests_WsClientWsharpServer.cs" />
         <Compile Remove="RpcTests_WsharpClientWsServer.cs" />
+        <Compile Remove="SessionResumeTestsQuic.cs" />
     </ItemGroup>
 
-    <!-- .NET 9.0 only: skip BinaryFormatter ->
+    <!-- .NET 9.0 only: skip BinaryFormatter -->
     <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0' ">
         <Compile Remove="BinarySerializationTests.cs" />
     </ItemGroup>
-    -->
 
     <!-- .NET 9.0 only: include Quic channel -->
-    <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0' and '$(OS)' == 'Windows_NT' ">
+    <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0' ">
+        <Compile Include="QuicHandshakeMessageTests.cs" />
         <Compile Include="RpcTests_Quic.cs">
             <DependentUpon>RpcTests.cs</DependentUpon>
+        </Compile>
+        <Compile Include="SessionResumeTestsQuic.cs">
+            <DependentUpon>SessionResumeTests.cs</DependentUpon>
         </Compile>
         <ProjectReference Include="..\CoreRemoting.Channels.Quic\CoreRemoting.Channels.Quic.csproj" />
     </ItemGroup>
@@ -68,24 +73,31 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Compile Remove="DicTests_DryIoc.cs" />
-      <Compile Include="DicTests_DryIoc.cs">
+      <Compile Update="DicTests_DryIoc.cs">
         <DependentUpon>DicTests.cs</DependentUpon>
       </Compile>
-      <Compile Remove="DicTests_Microsoft.cs" />
-      <Compile Include="DicTests_Microsoft.cs">
+      <Compile Update="DicTests_Microsoft.cs">
         <DependentUpon>DicTests.cs</DependentUpon>
       </Compile>
-      <Compile Remove="RpcTests_Websockets.cs" />
-      <Compile Include="RpcTests_Websockets.cs">
+      <Compile Update="RpcTests_NamedPipe.cs">
         <DependentUpon>RpcTests.cs</DependentUpon>
       </Compile>
-      <Compile Remove="RpcTests_NullChannel.cs" />
-      <Compile Include="RpcTests_NullChannel.cs">
+      <Compile Update="RpcTests_NullChannel.cs">
         <DependentUpon>RpcTests.cs</DependentUpon>
       </Compile>
-      <Compile Remove="SessionTests_Websockets.cs" />
-      <Compile Include="SessionTests_Websockets.cs">
+      <Compile Update="RpcTests_Websockets.cs">
+        <DependentUpon>RpcTests.cs</DependentUpon>
+      </Compile>
+      <Compile Update="SessionResumeTestsNoEncryption.cs">
+        <DependentUpon>SessionResumeTests.cs</DependentUpon>
+      </Compile>
+      <Compile Update="SessionResumeTestsWebSockets.cs">
+        <DependentUpon>SessionResumeTests.cs</DependentUpon>
+      </Compile>
+      <Compile Update="SessionResumeTestsWsockNoEncr.cs">
+        <DependentUpon>SessionResumeTests.cs</DependentUpon>
+      </Compile>
+      <Compile Update="SessionTests_Websockets.cs">
         <DependentUpon>SessionTests.cs</DependentUpon>
       </Compile>
     </ItemGroup>

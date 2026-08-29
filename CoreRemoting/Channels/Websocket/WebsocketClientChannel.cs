@@ -54,23 +54,33 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
             path: Uri.LocalPath,
             domain: Uri.Host));
 
-        if (client.MessageEncryption)
+        if (client.PublicKey != null)
         {
             ClientWebSocket.Options.Cookies.Add(new Cookie(
                 name: ClientPublicKeyCookie,
                 value: Convert.ToBase64String(client.PublicKey),
                 path: Uri.LocalPath,
                 domain: Uri.Host));
-
-            if (client.ResumableSessionId != null)
-            {
-                ClientWebSocket.Options.Cookies.Add(new Cookie(
-                    name: ResumeSessionIdCookie,
-                    value: Convert.ToBase64String(client.ResumableSessionId.Value.ToByteArray()),
-                    path: Uri.LocalPath,
-                    domain: Uri.Host));
-            }
         }
+
+        if (client.ResumableSessionId != null)
+        {
+            ClientWebSocket.Options.Cookies.Add(new Cookie(
+                name: ResumeSessionIdCookie,
+                value: Convert.ToBase64String(client.ResumableSessionId.Value.ToByteArray()),
+                path: Uri.LocalPath,
+                domain: Uri.Host));
+        }
+
+        if (client.SessionSignature is byte[] signature)
+        {
+            ClientWebSocket.Options.Cookies.Add(new Cookie(
+                name: SessionSignatureCookie,
+                value: Convert.ToBase64String(signature),
+                path: Uri.LocalPath,
+                domain: Uri.Host));
+        }
+
     }
 
     /// <inheritdoc />

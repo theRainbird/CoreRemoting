@@ -1,4 +1,6 @@
-﻿namespace CoreRemoting.Channels.Null;
+﻿using System.Collections.Generic;
+
+namespace CoreRemoting.Channels.Null;
 
 /// <summary>
 /// Channel message.
@@ -7,7 +9,7 @@
 /// <param name="receiver">Receiver endpoint</param>
 /// <param name="message">Message payload</param>
 /// <param name="metadata">Message metadata</param>
-public class NullMessage(string sender, string receiver, byte[] message, params string[] metadata)
+public class NullMessage(string sender, string receiver, byte[] message, Dictionary<string, string> metadata)
 {
     /// <summary>
     /// Gets message sender.
@@ -27,5 +29,5 @@ public class NullMessage(string sender, string receiver, byte[] message, params 
     /// <summary>
     /// Gets the metadata.
     /// </summary>
-    public string[] Metadata { get; } = metadata;
+    public Dictionary<string, string> Metadata { get; } = metadata;
 }

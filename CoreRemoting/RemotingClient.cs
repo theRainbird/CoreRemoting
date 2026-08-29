@@ -33,7 +33,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
     private IClientChannel _channel;
     private IRawMessageTransport _rawMessageTransport;
-    private readonly RsaKeyPair _keyPair;
+    private readonly ISessionKeyPair _keyPair;
     private readonly ClientDelegateRegistry _delegateRegistry;
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly ClientConfig _config;
@@ -51,6 +51,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     private TaskCompletionSource<bool> _authenticationCompletedTaskSource;
     private readonly AsyncManualResetEvent _goodbyeCompletedEvent;
     private bool _isAuthenticated;
+    private bool _isDisposing;
     private int _isConnected;
     private const int _true = 1;
     private const int _false = 0;
@@ -106,10 +107,9 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         _config = config;
 
-        if (MessageEncryption)
-            _keyPair = config.RsaPrivateKeyBlob != null
-                ? new RsaKeyPair(config.KeySize, config.RsaPrivateKeyBlob)
-                : new RsaKeyPair(config.KeySize);
+        _keyPair = config.PrivateKeyBlob != null
+            ? SessionKeyPairFactory.FromPrivateKey(config.PrivateKeyBlob)
+            : SessionKeyPairFactory.Generate(MessageEncryption, config.KeySize);
 
         _channel = config.Channel ?? new TcpClientChannel();
 
@@ -234,6 +234,9 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     {
         get
         {
+            if (_isDisposing)
+                return null;
+
             lock (_sessionLock)
                 return _sessionId == Guid.Empty ? null : _sessionId;
         }
@@ -247,10 +250,23 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     {
         get
         {
+            if (_isDisposing)
+                return null;
+
             lock (_sessionLock)
-                return _sessionId == Guid.Empty ? _config.ResumableSessionId : _sessionId;
+                return _sessionId == Guid.Empty
+                    ? _config.ResumableSessionId
+                    : _sessionId;
         }
     }
+
+    /// <summary>
+    /// Gets the resumable session signature to verify client authenticity.
+    /// </summary>
+    public byte[] SessionSignature =>
+        ResumableSessionId?.ToByteArray() is byte[] sessionId
+            ? _keyPair.CreateSignature(sessionId)
+            : null;
 
     /// <summary>
     /// Gets whether the connection to the server is established or not.
@@ -264,10 +280,11 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     {
         get
         {
+            if (_isDisposing)
+                return false;
+
             lock (_sessionLock)
-            {
                 return _sessionId != Guid.Empty;
-            }
         }
     }
 
@@ -433,6 +450,24 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         Identity = null;
 
         AfterDisconnect?.Invoke();
+    }
+
+    /// <summary>
+    /// Kills the client transport without sending a goodbye message (simulates network failure).
+    /// </summary>
+    /// <param name="delayMs">Delay, in milliseconds.</param>
+    /// <remarks>
+    /// This method is used for unit testing only.
+    /// </remarks>
+    internal async Task HardKill(int delayMs = 200)
+    {
+        // simulate network failure
+        await _channel.DisconnectAsync()
+            .ConfigureAwait(false);
+
+        // wait for the server-side disconnect handling (parking) to complete
+        await Task.Delay(delayMs)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -646,10 +681,11 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
             _serverPublicKeyBlob = encryptedSecret.SendersPublicKeyBlob;
 
-            if (!RsaSignature.VerifySignature(
-                keySize: _keyPair?.KeySize ?? 0,
-                sendersPublicKeyBlob: _serverPublicKeyBlob,
-                rawData: signedMessageData.MessageRawData,
+            using var verifier =
+                SessionKeyPairFactory.FromPublicKey(_serverPublicKeyBlob);
+
+            if (!verifier.VerifySignature(
+                data: signedMessageData.MessageRawData,
                 signature: signedMessageData.Signature))
                 throw new SecurityException("Verification of message signature failed.");
 
@@ -675,6 +711,14 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             _sharedSecret = MessageEncryption ? handshakeMessage.SharedSecret ?? _sessionId.ToByteArray() : null;
             _sharedSecretLength = _sharedSecret?.Length ?? 0;
             _authenticationRequired = handshakeMessage.AuthenticationRequired;
+        }
+
+        // server requires message encryption, but the client's connection is unencrypted
+        if (handshakeMessage.MessageEncryptionRequired && !MessageEncryption)
+        {
+            var exception = new SecurityException("RemotingServer requires message encryption.");
+            _handshakeCompletedTaskSource.TrySetException(exception);
+            throw exception;
         }
 
         // the client explicitly requested to resume a specific session (ClientConfig.ResumableSessionId),
@@ -704,15 +748,16 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <param name="message">Deserialized WireMessage that contains a AuthenticationResponseMessage</param>
     private void ProcessAuthenticationResponseMessage(WireMessage message)
     {
+        var decryptedData =
+            MessageEncryptionManager.GetDecryptedMessageData(
+                message: message,
+                serializer: Serializer,
+                sharedSecret: _sharedSecret,
+                sendersPublicKeyBlob: _serverPublicKeyBlob);
+
         var authResponseMessage =
             Serializer
-                .Deserialize<AuthenticationResponseMessage>(
-                    MessageEncryptionManager.GetDecryptedMessageData(
-                        message: message,
-                        serializer: Serializer,
-                        sharedSecret: _sharedSecret,
-                        sendersPublicKeyBlob: _serverPublicKeyBlob,
-                        sendersPublicKeySize: _keyPair?.KeySize ?? 0));
+                .Deserialize<AuthenticationResponseMessage>(decryptedData);
 
         _authenticationResponseTaskSource.TrySetResult(authResponseMessage);
 
@@ -756,8 +801,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                         message: message,
                         serializer: Serializer,
                         sharedSecret: _sharedSecret,
-                        sendersPublicKeyBlob: _serverPublicKeyBlob,
-                        sendersPublicKeySize: _keyPair?.KeySize ?? 0));
+                        sendersPublicKeyBlob: _serverPublicKeyBlob));
 
         var localDelegate =
             _delegateRegistry.GetDelegateByHandlerKey(delegateInvocationMessage.HandlerKey);
@@ -812,8 +856,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                             message: message,
                             serializer: Serializer,
                             sharedSecret: _sharedSecret,
-                            sendersPublicKeyBlob: _serverPublicKeyBlob,
-                            sendersPublicKeySize: _keyPair?.KeySize ?? 0));
+                            sendersPublicKeyBlob: _serverPublicKeyBlob));
 
                 clientRpcContext.RemoteException = remoteException;
             }
@@ -835,8 +878,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                         message: message,
                         serializer: Serializer,
                         sharedSecret: _sharedSecret,
-                        sendersPublicKeyBlob: _serverPublicKeyBlob,
-                        sendersPublicKeySize: _keyPair?.KeySize ?? 0);
+                        sendersPublicKeyBlob: _serverPublicKeyBlob);
 
                 var resultMessage =
                     Serializer
@@ -1005,6 +1047,8 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
+        _isDisposing = true;
+
         if (DefaultRemotingClient == this)
             DefaultRemotingClient = null;
 

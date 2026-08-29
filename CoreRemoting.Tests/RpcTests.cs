@@ -582,7 +582,7 @@ public class RpcTests : IClassFixture<ServerFixture>
         Assert.NotNull(ex);
         Assert.Contains("Missing Method", ex.Message);
 
-        _testOutputHelper.WriteLine(_serverFixture.LastServerError.ToString());
+        _testOutputHelper.WriteLine(_serverFixture.LastServerError?.ToString() ?? string.Empty);
         CheckServerErrorCount();
     }
 
@@ -840,6 +840,10 @@ public class RpcTests : IClassFixture<ServerFixture>
         Assert.Contains("FailingService", ex.Message);
     }
 
+    // Fun fact:
+    // - ServerConfig.MessageEncryption setting doesn't affect anything!
+    // - RemotingServer accepts both encrypted and unencrypted connections.
+
     [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
     public async Task Disposed_client_subscription_doesnt_break_other_clients()
@@ -848,9 +852,6 @@ public class RpcTests : IClassFixture<ServerFixture>
 
         async Task Roundtrip(bool encryption)
         {
-            var oldEncryption = _serverFixture.Server.Config.MessageEncryption;
-            _serverFixture.Server.Config.MessageEncryption = encryption;
-
             try
             {
                 RemotingClient CreateClient() => new RemotingClient(new ClientConfig()
@@ -886,8 +887,6 @@ public class RpcTests : IClassFixture<ServerFixture>
             }
             finally
             {
-                _serverFixture.Server.Config.MessageEncryption = oldEncryption;
-
                 // reset the error counter for other tests
                 _serverFixture.ServerErrorCount = 0;
             }
@@ -1571,6 +1570,54 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "Required by ValidationSyncContext")]
+    public async Task BeginCall_event_handler_can_bypass_authentication_for_chosen_method_if_server_is_running_on_legacy_mode()
+    {
+        void BypassAuthorizationForEcho(object sender, ServerRpcContext e) =>
+            e.AuthenticationRequired =
+                e.MethodCallMessage.MethodName != "Echo";
+
+        using var ctx = ValidationSyncContext.Install();
+        _serverFixture.Server.Config.AuthenticationRequired = true;
+        _serverFixture.Server.Config.UseLegacySessionKeyDerivation = true;
+        _serverFixture.Server.BeginCall += BypassAuthorizationForEcho;
+
+        try
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                AuthenticationTimeout = 2,
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            // note: this scenario is actually not supported
+            // except for the legacy session key derivation mode
+            // we cannot establish unauthenticated connection
+            // if the server says it's required on the modern version
+            await client.ConnectAsync().ConfigureAwait(false);
+
+            // try allowed method "Echo"
+            var proxy = client.CreateProxy<ITestService>();
+            Assert.Equal("This method is allowed", proxy.Echo("This method is allowed"));
+
+            // try disallowed method "Reverse"
+            var ex = Assert.Throws<RemoteInvocationException>(() => proxy.Reverse("This method is not allowed"));
+            Assert.Contains("auth", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            _serverFixture.Server.BeginCall -= BypassAuthorizationForEcho;
+            _serverFixture.Server.Config.AuthenticationRequired = false;
+            _serverFixture.Server.Config.UseLegacySessionKeyDerivation = false;
+        }
+    }
+
+    [Fact]
     public void BeginCall_event_handler_can_enforce_authentication_for_chosen_method()
     {
         void BypassAuthorizationForEcho(object sender, ServerRpcContext e) =>
@@ -1627,6 +1674,88 @@ public class RpcTests : IClassFixture<ServerFixture>
             _serverFixture.Server.Config.AuthenticationProvider = null;
             _serverFixture.Server.BeginCall -= BypassAuthorizationForEcho;
         }
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public virtual async Task Server_with_MessageEncryption_disabled_accepts_both_encrypted_and_unencrypted_clients()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client1 = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 20,
+            Channel = ClientChannel,
+            MessageEncryption = true,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        await client1.ConnectAsync()
+            .ConfigureAwait(false);
+
+        var proxy1 = client1.CreateProxy<ITestService>();
+        var echoed1 = proxy1.Echo("@echo off");
+        Assert.Equal("@echo off", echoed1);
+
+        using var client2 = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 20,
+            Channel = ClientChannel,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        await client2.ConnectAsync()
+            .ConfigureAwait(false);
+
+        var proxy2 = client2.CreateProxy<ITestService>();
+        var echoed2 = proxy2.Echo("@echo on");
+        Assert.Equal("@echo on", echoed2);
+
+        CheckServerErrorCount();
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public virtual async Task Server_with_MessageEncryption_enabled_accepts_only_encrypted_clients()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        _serverFixture.Server.Config.MessageEncryption = true;
+        try
+        {
+            using var client1 = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 20,
+                Channel = ClientChannel,
+                MessageEncryption = true,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            await client1.ConnectAsync()
+                .ConfigureAwait(false);
+
+            var proxy1 = client1.CreateProxy<ITestService>();
+            var echoed1 = proxy1.Echo("@echo off");
+            Assert.Equal("@echo off", echoed1);
+
+            using var client2 = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 20,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            await Assert.ThrowsAsync<SecurityException>(client2.ConnectAsync)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _serverFixture.Server.Config.MessageEncryption = false;
+        }
+
+        CheckServerErrorCount();
     }
 
     [Fact]
@@ -1722,4 +1851,6 @@ public class RpcTests : IClassFixture<ServerFixture>
             _serverFixture.ServerErrorCount = 0;
         }
     }
+
+
 }

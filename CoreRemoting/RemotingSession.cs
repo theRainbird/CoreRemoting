@@ -31,8 +31,8 @@ public sealed class RemotingSession : IAsyncDisposable
 
     private readonly IRemotingServer _server;
     private IRawMessageTransport _rawMessageTransport;
-    private readonly RsaKeyPair _keyPair;
     private readonly int _keySize;
+    private readonly ISessionKeyPair _keyPair;
     private readonly Guid _sessionId;
     private byte[] _sharedSecret;
     private readonly byte[] _clientPublicKeyBlob;
@@ -66,12 +66,13 @@ public sealed class RemotingSession : IAsyncDisposable
     /// <summary>
     /// Creates a new instance of the RemotingSession class.
     /// </summary>
+    /// <param name="messageEncryption">Indicates whether message encryption is enabled</param>
     /// <param name="keySize">Key size of the RSA keys for asymmetric encryption</param>
     /// <param name="clientPublicKey">Public key of this session's client</param>
     /// <param name="clientAddress">Client's network address</param>
     /// <param name="server">Server instance, that hosts this session</param>
     /// <param name="rawMessageTransport">Component, that does the raw message transport (send and receive)</param>
-    internal RemotingSession(int keySize, byte[] clientPublicKey, string clientAddress,
+    internal RemotingSession(bool messageEncryption, int keySize, byte[] clientPublicKey, string clientAddress,
         IRemotingServer server, IRawMessageTransport rawMessageTransport)
     {
         _isDisposing = false;
@@ -79,9 +80,11 @@ public sealed class RemotingSession : IAsyncDisposable
         _sessionId = Guid.NewGuid();
         _lastActivityTimestamp = DateTime.Now;
         _isAuthenticated = false;
-        _keySize = keySize;
-        _keyPair = new RsaKeyPair(_keySize);
         CreatedOn = DateTime.Now;
+        MessageEncryption = messageEncryption;
+
+        _keySize = keySize;
+        _keyPair = SessionKeyPairFactory.Generate(messageEncryption, _keySize);
         _remoteDelegateInvocationEventAggregator = new RemoteDelegateInvocationEventAggregator();
         _server = server ?? throw new ArgumentNullException(nameof(server));
         _delegateProxyFactory = _server.ServiceRegistry.GetService<IDelegateProxyFactory>();
@@ -94,11 +97,9 @@ public sealed class RemotingSession : IAsyncDisposable
         _rawMessageTransport.ErrorOccured += OnErrorOccured;
         _rawMessageTransport.Disconnected += OnRawMessageTransportDisconnected;
 
-        MessageEncryption = clientPublicKey != null;
-
-        _sharedSecret = MessageEncryption ?
-            _server.Config.GenerateSharedKey(_sessionId) :
-            null;
+        _sharedSecret = MessageEncryption
+            ? _server.Config.GenerateSharedKey(_sessionId)
+            : null;
 
         _remoteDelegateInvocationEventAggregator.RemoteDelegateInvocationNeeded +=
             async (_, uniqueCallKey, handlerKey, arguments) =>
@@ -164,11 +165,7 @@ public sealed class RemotingSession : IAsyncDisposable
                 new SignedMessageData
                 {
                     MessageRawData = rawContent,
-                    Signature =
-                        RsaSignature.CreateSignature(
-                            keySize: _keySize,
-                            sendersPrivateKeyBlob: _keyPair.PrivateKey,
-                            rawData: rawContent)
+                    Signature = _keyPair.CreateSignature(rawContent),
                 };
 
             wireMessage.Data = _server.Serializer.Serialize(signedMessageData);
@@ -194,6 +191,7 @@ public sealed class RemotingSession : IAsyncDisposable
         {
             SessionId = _sessionId,
             AuthenticationRequired = _server.Config.AuthenticationRequired,
+            MessageEncryptionRequired = _server.Config.MessageEncryption,
             SharedSecret = _sharedSecret,
         });
     }
@@ -318,18 +316,15 @@ public sealed class RemotingSession : IAsyncDisposable
     /// The key has to match exactly the public key of the original connection (hijack protection).
     /// </summary>
     /// <param name="clientPublicKeyBlob">Public key blob presented by the reconnecting client</param>
-    internal bool CanBeResumedWith(byte[] clientPublicKeyBlob) =>
+    /// <param name="sessionSignature">Client's session signature to prove its authenticity</param>
+    internal bool CanBeResumedWith(byte[] clientPublicKeyBlob, byte[] sessionSignature) =>
         IsParked &&
         !_isDisposing &&
-        MessageEncryption &&
         _clientPublicKeyBlob != null &&
         clientPublicKeyBlob != null &&
-        _clientPublicKeyBlob.SequenceEqual(clientPublicKeyBlob);
-
-    /// <summary>
-    /// Gets the server side RSA key pair of this session.
-    /// </summary>
-    internal RsaKeyPair KeyPair => _keyPair;
+        _clientPublicKeyBlob.SequenceEqual(clientPublicKeyBlob) &&
+        SessionKeyPairFactory.FromPublicKey(clientPublicKeyBlob)
+            .VerifySignature(_sessionId.ToByteArray(), sessionSignature);
 
     /// <summary>
     /// Gets the remote delegate invocation event aggregator.
@@ -512,8 +507,7 @@ public sealed class RemotingSession : IAsyncDisposable
                         message: request,
                         serializer: _server.Serializer,
                         sharedSecret: _sharedSecret,
-                        sendersPublicKeyBlob: _clientPublicKeyBlob,
-                        sendersPublicKeySize: _keyPair?.KeySize ?? 0));
+                        sendersPublicKeyBlob: _clientPublicKeyBlob));
 
         if (goodbyeMessage.SessionId != _sessionId)
             return;
@@ -555,8 +549,7 @@ public sealed class RemotingSession : IAsyncDisposable
                         message: request,
                         serializer: _server.Serializer,
                         sharedSecret: _sharedSecret,
-                        sendersPublicKeyBlob: _clientPublicKeyBlob,
-                        sendersPublicKeySize: _keyPair?.KeySize ?? 0));
+                        sendersPublicKeyBlob: _clientPublicKeyBlob));
 
         var authResponseMessage = await _server.Authenticate(authRequestMessage);
 
@@ -630,8 +623,7 @@ public sealed class RemotingSession : IAsyncDisposable
                 message: request,
                 serializer: _server.Serializer,
                 sharedSecret: _sharedSecret,
-                sendersPublicKeyBlob: _clientPublicKeyBlob,
-                sendersPublicKeySize: _keyPair?.KeySize ?? 0);
+                sendersPublicKeyBlob: _clientPublicKeyBlob);
 
         using var scope = _server.ServiceRegistry.CreateScope();
         var serializedResult = Array.Empty<byte>();

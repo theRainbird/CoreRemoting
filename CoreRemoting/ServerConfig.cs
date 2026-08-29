@@ -50,6 +50,10 @@ public class ServerConfig
     /// <summary>
     /// Gets or sets whether messages should be encrypted or not.
     /// </summary>
+    /// <remarks>
+    /// When ServerConfig.MessageEncryption is enabled, ClientConfig.MessageEncryption is required.
+    /// When disabled, the server will accept both encrypted and unencrypted client connections.
+    /// </remarks>
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
     public bool MessageEncryption { get; set; } = true;
 

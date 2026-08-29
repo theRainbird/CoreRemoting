@@ -262,6 +262,7 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 
 		// note: named pipe sessions are not resumable
 		_session = await _server.SessionRepository.CreateSession(
+			false,
 			null,
 			$"NamedPipe:{_connectionId}",
 			_server,

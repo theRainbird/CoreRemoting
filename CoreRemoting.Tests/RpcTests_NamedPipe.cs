@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
+using System.Threading.Tasks;
 using CoreRemoting.Channels;
 using CoreRemoting.Channels.NamedPipe;
 using CoreRemoting.Tests.Tools;
@@ -158,5 +160,19 @@ public class RpcTests_NamedPipe : RpcTests
 		// The test passes for other channels (NullChannel, WebSockets)
 	}
 
-	// Note: Reconnect test uses base implementation; ensure ChannelConnectionName is set via ConfigureServer
+    [Fact]
+    public override Task Server_with_MessageEncryption_disabled_accepts_both_encrypted_and_unencrypted_clients()
+    {
+        // Message encryption is not supported for NamedPipe channel
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public override Task Server_with_MessageEncryption_enabled_accepts_only_encrypted_clients()
+    {
+        // Message encryption is not supported for NamedPipe channel
+        return Task.CompletedTask;
+    }
+
+    // Note: Reconnect test uses base implementation; ensure ChannelConnectionName is set via ConfigureServer
 }

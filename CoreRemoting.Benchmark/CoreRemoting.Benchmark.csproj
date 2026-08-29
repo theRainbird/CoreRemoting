@@ -1,5 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\CoreRemoting\CoreRemoting.csproj" />
     <ProjectReference Include="..\CoreRemoting.Serialization.Binary\CoreRemoting.Serialization.Binary.csproj" />
@@ -10,12 +18,10 @@
     <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
   </ItemGroup>
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
-  </PropertyGroup>
+  <!-- .NET 9.0 only: exclude BinaryFormatter, include Quic channel -->
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0' ">
+    <Compile Remove="SerializationBenchmark.cs" />
+    <ProjectReference Include="..\CoreRemoting.Channels.Quic\CoreRemoting.Channels.Quic.csproj" />
+  </ItemGroup>
 
 </Project>

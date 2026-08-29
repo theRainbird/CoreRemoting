@@ -75,13 +75,13 @@ public class RpcTests_NullChannel : RpcTests
         var client = NullMessageQueue.Connect(server);
 
         // send two messages to the server
-        NullMessageQueue.SendMessage(client, server, [1, 2, 3], "First");
+        NullMessageQueue.SendMessage(client, server, [1, 2, 3], new() { { "First", "1" } });
         NullMessageQueue.SendMessage(client, server, [4, 5]);
 
         // receive two messages from server
         await foreach (var msg in NullMessageQueue.ReceiveMessagesAsync(null, client, server))
         {
-            var expected = msg.Metadata.Length > 0 ? "123" : "45";
+            var expected = msg.Metadata?.Count > 0 ? "123" : "45";
             Assert.Equal(expected, string.Concat(msg.Message));
         }
 

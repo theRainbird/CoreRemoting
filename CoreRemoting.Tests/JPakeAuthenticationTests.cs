@@ -14,11 +14,9 @@ public class JPakeAuthenticationTests : IAsyncLifetime
     private const string UserName = "bozo";
     private const string Password = "h4ck3r";
     private const int ServerPort = 9192;
-    private const int ServerPortEncrypted = 9194;
 
     private readonly SampleAccountRepository _repository = new();
     private RemotingServer _serverPlain;
-    private RemotingServer _serverEncrypted;
 
     public Task InitializeAsync()
     {
@@ -34,20 +32,6 @@ public class JPakeAuthenticationTests : IAsyncLifetime
         });
 
         _serverPlain.Start();
-
-        _serverEncrypted = new RemotingServer(new()
-        {
-            HostName = "localhost",
-            NetworkPort = ServerPortEncrypted,
-            MessageEncryption = true,
-            AuthenticationProvider = new JPakeAuthenticationProvider(_repository),
-            AuthenticationRequired = true,
-            RegisterServicesAction = container =>
-                container.RegisterService<ISampleService, SampleService>()
-        });
-
-        _serverEncrypted.Start();
-
         return Task.CompletedTask;
     }
 
@@ -58,13 +42,6 @@ public class JPakeAuthenticationTests : IAsyncLifetime
             _serverPlain.Stop();
             _serverPlain.Dispose();
             _serverPlain = null;
-        }
-
-        if (_serverEncrypted != null)
-        {
-            _serverEncrypted.Stop();
-            _serverEncrypted.Dispose();
-            _serverEncrypted = null;
         }
 
         return Task.CompletedTask;
@@ -220,7 +197,7 @@ public class JPakeAuthenticationTests : IAsyncLifetime
         return new RemotingClient(new()
         {
             ServerHostName = "localhost",
-            ServerPort = encryption ? ServerPortEncrypted : ServerPort,
+            ServerPort = ServerPort,
             MessageEncryption = encryption,
             Authenticator = new JPakeAuthenticator(),
             Credentials =

@@ -1,7 +1,7 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Authentication;
@@ -25,43 +25,31 @@ public class SessionResumeTests
     // custom port range for these tests (9095+ is used by other test classes)
     private static int _nextPort = 9300;
 
-    // SRP-6a parameters matching the existing SRP tests
-    private static readonly SrpParameters SrpParametersInstance = SrpParameters.Create<SHA384>(@"
-        FFFFFFFF FFFFFFFF C90FDAA2 2168C234 C4C6628B 80DC1CD1 29024E08
-        8A67CC74 020BBEA6 3B139B22 514A0879 8E3404DD EF9519B3 CD3A431B
-        302B0A6D F25F1437 4FE1356D 6D51C245 E485B576 625E7EC6 F44C42E9
-        A637ED6B 0BFF5CB6 F406B7ED EE386BFB 5A899FA5 AE9F2411 7C4B1FE6
-        49286651 ECE45B3D C2007CB8 A163BF05 98DA4836 1C55D39A 69163FA8
-        FD24CF5F 83655D23 DCA3AD96 1C62F356 208552BB 9ED52907 7096966D
-        670C354E 4ABC9804 F1746C08 CA18217C 32905E46 2E36CE3B E39E772C
-        180E8603 9B2783A2 EC07A28F B5C55DF0 6F4C52C9 DE2BCBF6 95581718
-        3995497C EA956AE5 15D22618 98FA0510 15728E5A 8AAAC42D AD33170D
-        04507A33 A85521AB DF1CBA64 ECFB8504 58DBEF0A 8AEA7157 5D060C7D
-        B3970F85 A6E1E4C7 ABF5AE8C DB0933D7 1E8C94E0 4A25619D CEE3D226
-        1AD2EE6B F12FFA06 D98A0864 D8760273 3EC86A64 521F2B18 177B200C
-        BBE11757 7A615D6C 770988C0 BAD946E2 08E24FA0 74E5AB31 43DB5BFC
-        E0FD108E 4B82D120 A93AD2CA FFFFFFFF FFFFFFFF", "05");
+    protected virtual IServerChannel ServerChannel => null;
+    protected virtual IClientChannel ClientChannel => null;
+    protected virtual bool MessageEncryption => true;
+    protected virtual int KeySize => 1024;
+    protected virtual bool AuthenticationRequiredForResumeTests => true;
+    protected virtual bool AuthenticationRequiredForNegativeTests => false;
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Client_should_resume_parked_session_after_abrupt_disconnect()
     {
-        var serverErrorCount = 0;
-        Exception lastServerError = null;
+        using var ctx = ValidationSyncContext.Install();
+
         int networkPort = Interlocked.Increment(ref _nextPort);
 
-        var server = StartServer(
-            networkPort: networkPort,
-            authenticationRequired: true,
-            onServerError: (s, ex) =>
-            {
-                Interlocked.Increment(ref serverErrorCount);
-                lastServerError = ex;
-            });
+        var server = StartServer(networkPort,
+            AuthenticationRequiredForResumeTests);
 
         try
         {
-            using var client = CreateClient(networkPort, authenticationRequired: true);
-            await client.ConnectAsync();
+            using var client = CreateClient(networkPort,
+                AuthenticationRequiredForResumeTests);
+
+            await client.ConnectAsync()
+                .ConfigureAwait(false);
 
             Assert.True(client.HasSession);
 
@@ -72,7 +60,8 @@ public class SessionResumeTests
             Assert.Equal("test", proxy.TestMethod("test"));
 
             // abruptly kill the transport (no goodbye message, session must be parked on server)
-            await HardKill(client);
+            await client.HardKill()
+                .ConfigureAwait(false);
 
             // parked sessions stay in the repository until swept by inactivity
             Assert.Single(server.SessionRepository.Sessions);
@@ -81,7 +70,8 @@ public class SessionResumeTests
                 "Session should be parked after an abrupt disconnect");
 
             // reconnect the same client instance (same RSA key pair, session ID still known)
-            await client.ConnectAsync();
+            await client.ConnectAsync()
+                .ConfigureAwait(false);
 
             // server resumed the existing session instead of creating a new one
             Assert.Equal(originalSessionId, client.SessionId);
@@ -97,38 +87,32 @@ public class SessionResumeTests
         }
         finally
         {
-            await Task.Delay(500);
+            await Task.Delay(500)
+                .ConfigureAwait(false);
 
-            if (lastServerError != null)
-                throw new Exception($"Unexpected server error: {lastServerError}");
-
-            Assert.Equal(0, serverErrorCount);
+            CheckServerErrorCount();
 
             server.Stop();
         }
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Client_with_persisted_key_material_should_resume_session_after_reinstantiation()
     {
-        var serverErrorCount = 0;
-        Exception lastServerError = null;
+        using var ctx = ValidationSyncContext.Install();
+
         int networkPort = Interlocked.Increment(ref _nextPort);
 
-        var server = StartServer(
-            networkPort: networkPort,
-            authenticationRequired: true,
-            onServerError: (s, ex) =>
-            {
-                Interlocked.Increment(ref serverErrorCount);
-                lastServerError = ex;
-            });
+        var server = StartServer(networkPort, AuthenticationRequiredForResumeTests);
 
         try
         {
-            using (var firstClient = CreateClient(networkPort, authenticationRequired: true))
+            using (var firstClient = CreateClient(networkPort,
+                AuthenticationRequiredForResumeTests))
             {
-                await firstClient.ConnectAsync();
+                await firstClient.ConnectAsync()
+                    .ConfigureAwait(false);
 
                 Guid? sessionId = firstClient.SessionId;
                 byte[] privateKeyBlob = firstClient.PrivateKey;
@@ -137,17 +121,18 @@ public class SessionResumeTests
                 Assert.NotNull(privateKeyBlob);
 
                 // abruptly disconnect so the session is parked and keeps its key material
-                await HardKill(firstClient);
+                await firstClient.HardKill()
+                    .ConfigureAwait(false);
 
                 // simulate process restart: the app persisted session ID + client RSA private key,
                 // a new client instance must resume the same session with the same identity
-                using var secondClient = CreateClient(
-                    networkPort,
-                    authenticationRequired: true,
-                    rsaPrivateKeyBlob: privateKeyBlob,
+                using var secondClient = CreateClient(networkPort,
+                    AuthenticationRequiredForResumeTests,
+                    privateKeyBlob: privateKeyBlob,
                     resumableSessionId: sessionId);
 
-                await secondClient.ConnectAsync();
+                await secondClient.ConnectAsync()
+                    .ConfigureAwait(false);
 
                 Assert.Equal(sessionId, secondClient.SessionId);
                 Assert.Single(server.SessionRepository.Sessions);
@@ -164,52 +149,49 @@ public class SessionResumeTests
         }
         finally
         {
-            await Task.Delay(500);
+            await Task.Delay(500)
+                .ConfigureAwait(false);
 
-            if (lastServerError != null)
-                throw new Exception($"Unexpected server error: {lastServerError}");
-
-            Assert.Equal(0, serverErrorCount);
+            CheckServerErrorCount();
 
             server.Stop();
         }
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Client_with_mismatching_key_material_should_not_resume_parked_session()
     {
-        var serverErrorCount = 0;
-        Exception lastServerError = null;
+        using var ctx = ValidationSyncContext.Install();
+
         int networkPort = Interlocked.Increment(ref _nextPort);
 
-        var server = StartServer(
-            networkPort: networkPort,
-            authenticationRequired: false,
-            onServerError: (s, ex) =>
-            {
-                Interlocked.Increment(ref serverErrorCount);
-                lastServerError = ex;
-            });
+        var server = StartServer(networkPort, AuthenticationRequiredForNegativeTests);
 
         try
         {
             Guid sessionId;
 
-            using (var firstClient = CreateClient(networkPort, authenticationRequired: false))
+            using (var firstClient = CreateClient(networkPort,
+                AuthenticationRequiredForNegativeTests))
             {
-                await firstClient.ConnectAsync();
+                await firstClient.ConnectAsync()
+                    .ConfigureAwait(false);
+
                 sessionId = client_GetSessionId(firstClient);
-                await HardKill(firstClient);
+
+                await firstClient.HardKill()
+                    .ConfigureAwait(false);
             }
 
             // wrong RSA key + stale session ID: the server has to reject the resume attempt
-            using var secondClient = CreateClient(
-                networkPort,
-                authenticationRequired: false,
+            using var secondClient = CreateClient(networkPort,
+                AuthenticationRequiredForNegativeTests,
                 resumableSessionId: sessionId);
 
             var exception =
-                await Assert.ThrowsAsync<RemotingException>(() => secondClient.ConnectAsync());
+                await Assert.ThrowsAsync<RemotingException>(secondClient.ConnectAsync)
+                    .ConfigureAwait(false);
 
             Assert.Contains("refused to resume", exception.Message);
 
@@ -219,68 +201,64 @@ public class SessionResumeTests
         }
         finally
         {
-            await Task.Delay(500);
+            await Task.Delay(500)
+                .ConfigureAwait(false);
 
-            if (lastServerError != null)
-                throw new Exception($"Unexpected server error: {lastServerError}");
-
-            Assert.Equal(0, serverErrorCount);
+            CheckServerErrorCount();
 
             server.Stop();
         }
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Resumable_session_id_should_fail_when_session_was_disposed_gently()
     {
-        var serverErrorCount = 0;
-        Exception lastServerError = null;
+        using var ctx = ValidationSyncContext.Install();
+
         int networkPort = Interlocked.Increment(ref _nextPort);
 
-        var server = StartServer(
-            networkPort: networkPort,
-            authenticationRequired: false,
-            onServerError: (s, ex) =>
-            {
-                Interlocked.Increment(ref serverErrorCount);
-                lastServerError = ex;
-            });
+        var server = StartServer(networkPort, AuthenticationRequiredForNegativeTests);
 
         try
         {
             Guid sessionId;
 
-            using (var firstClient = CreateClient(networkPort, authenticationRequired: false))
+            using (var firstClient = CreateClient(networkPort,
+                AuthenticationRequiredForNegativeTests))
             {
-                await firstClient.ConnectAsync();
+                await firstClient.ConnectAsync()
+                    .ConfigureAwait(false);
+
                 sessionId = client_GetSessionId(firstClient);
 
                 // graceful disconnect sends a goodbye message and disposes the session (no parking)
-                await firstClient.DisposeAsync();
-                await Task.Delay(500);
+                await firstClient.DisposeAsync()
+                    .ConfigureAwait(false);
+
+                await Task.Delay(500)
+                    .ConfigureAwait(false);
 
                 Assert.Empty(server.SessionRepository.Sessions);
             }
 
-            using var secondClient = CreateClient(
-                networkPort,
-                authenticationRequired: false,
+            using var secondClient = CreateClient(networkPort,
+                AuthenticationRequiredForNegativeTests,
                 resumableSessionId: sessionId);
 
             // session no longer exists, so the server created a new one and the strict check fails
             var exception =
-                await Assert.ThrowsAsync<RemotingException>(() => secondClient.ConnectAsync());
+                await Assert.ThrowsAsync<RemotingException>(secondClient.ConnectAsync)
+                    .ConfigureAwait(false);
 
             Assert.Contains("refused to resume", exception.Message);
         }
         finally
         {
-            await Task.Delay(500);
+            await Task.Delay(500)
+                .ConfigureAwait(false);
 
-            if (lastServerError != null)
-                throw new Exception($"Unexpected server error: {lastServerError}");
-
-            Assert.Equal(0, serverErrorCount);
+            CheckServerErrorCount();
 
             server.Stop();
         }
@@ -293,43 +271,28 @@ public class SessionResumeTests
         return sessionId.Value;
     }
 
-    /// <summary>
-    /// Kills the client transport without sending a goodbye message (simulates network failure).
-    /// </summary>
-    private static async Task HardKill(RemotingClient client)
-    {
-        var channel =
-            (IClientChannel)typeof(RemotingClient).GetField(
-                "_channel", BindingFlags.NonPublic | BindingFlags.Instance)
-            .GetValue(client);
-
-        await channel.DisconnectAsync();
-
-        // wait for the server-side disconnect handling (parking) to complete
-        await Task.Delay(500);
-    }
-
-    private static RemotingClient CreateClient(
+    private RemotingClient CreateClient(
         int serverPort,
         bool authenticationRequired,
-        byte[] rsaPrivateKeyBlob = null,
+        byte[] privateKeyBlob = null,
         Guid? resumableSessionId = null)
     {
         var config = new ClientConfig()
         {
-            ConnectionTimeout = 0,
-            MessageEncryption = true,
-            KeySize = 1024,
+            Channel = ClientChannel,
+            ConnectionTimeout = 30,
+            MessageEncryption = MessageEncryption,
+            KeySize = KeySize,
             ServerHostName = "localhost",
             ServerPort = serverPort,
             KeepSessionAliveInterval = 0,
-            RsaPrivateKeyBlob = rsaPrivateKeyBlob,
+            PrivateKeyBlob = privateKeyBlob,
             ResumableSessionId = resumableSessionId
         };
 
         if (authenticationRequired)
         {
-            config.Authenticator = new SrpAuthenticator(SrpParametersInstance);
+            config.Authenticator = new SrpAuthenticator();
             config.Credentials =
             [
                 new() { Name = USERNAME, Value = UserName },
@@ -340,21 +303,41 @@ public class SessionResumeTests
         return new RemotingClient(config);
     }
 
-    private static RemotingServer StartServer(
+    protected int serverErrorCount;
+
+    protected Exception lastServerError;
+
+    protected virtual void CheckServerErrorCount()
+    {
+        if (lastServerError != null)
+            throw new Exception($"Unexpected server error: {lastServerError}");
+
+        Assert.Equal(0, serverErrorCount);
+    }
+
+    private void OnServerError(object s, Exception ex)
+    {
+        Interlocked.Increment(ref serverErrorCount);
+
+        lastServerError = ex;
+    }
+
+    private RemotingServer StartServer(
         int networkPort,
         bool authenticationRequired,
-        EventHandler<Exception> onServerError)
+        EventHandler<Exception> onServerError = null)
     {
         var config = new ServerConfig()
         {
+            Channel = ServerChannel,
             IsDefault = false,
-            UniqueServerInstanceName = $"SessionResumeTestServer_{networkPort}",
-            MessageEncryption = true,
-            KeySize = 1024,
+            UniqueServerInstanceName = $"SessionResumeTestServer_{networkPort}_{GetType().Name}",
+            MessageEncryption = MessageEncryption,
+            KeySize = KeySize,
             NetworkPort = networkPort,
             AuthenticationRequired = authenticationRequired,
             AuthenticationProvider = authenticationRequired
-                ? new SrpAuthenticationProvider(new SampleAccountRepository(), SrpParametersInstance)
+                ? new SrpAuthenticationProvider(new SampleAccountRepository())
                 : null,
             RegisterServicesAction = container =>
             {
@@ -369,8 +352,11 @@ public class SessionResumeTests
             }
         };
 
+        serverErrorCount = 0;
+        lastServerError = null;
+
         var server = new RemotingServer(config);
-        server.Error += onServerError;
+        server.Error += onServerError ?? OnServerError;
         server.Start();
 
         // wait until the channel is actually listening (WatsonTcp binds asynchronously)
@@ -390,7 +376,7 @@ public class SessionResumeTests
 
         public SampleAccountRepository()
         {
-            var srpClient = new SrpClient(SrpParametersInstance);
+            var srpClient = new SrpClient();
             var salt = srpClient.GenerateSalt();
             var privateKey = srpClient.DerivePrivateKey(salt, UserName, Password);
             var verifier = srpClient.DeriveVerifier(privateKey);
