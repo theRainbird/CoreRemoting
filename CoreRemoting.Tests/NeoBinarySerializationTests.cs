@@ -228,6 +228,49 @@ namespace CoreRemoting.Tests.Serialization.NeoBinary
 		}
 
 		[Fact]
+		public void NeoBinarySerializerAdapter_should_validate_assembly_qualified_generic_types()
+		{
+			var config = new NeoBinarySerializerConfig
+			{
+				AllowUnknownTypes = false,
+				UseTypeReferences = true
+			};
+			config.AllowType<string>();
+
+			var serializer = new NeoBinarySerializerAdapter(config);
+
+			// List<string> is serialized with an assembly-qualified generic type name
+			// (List`1[[System.String, ...]]) which triggers the [[...PublicKeyToken=...]]
+			// type-resolution path.
+			var list = new List<string> { "a", "b" };
+			var serialized = serializer.Serialize(list);
+
+			// The closed generic type is not allowed and must be rejected by the type
+			// validator during type resolution (not only for simple/complex object types).
+			Assert.Throws<NeoBinaryUnsafeDeserializationException>(() =>
+				serializer.Deserialize<List<string>>(serialized));
+		}
+
+		[Fact]
+		public void NeoBinarySerializerAdapter_should_remain_usable_after_failed_deserialization()
+		{
+			var serializer = new NeoBinarySerializerAdapter();
+
+			// A malformed payload (missing NEOB magic) must fail deserialization.
+			var malformed = new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04 };
+			Assert.ThrowsAny<Exception>(() => serializer.Deserialize<byte[]>(malformed));
+
+			// The serializer must still produce correct results for subsequent operations on
+			// the same thread (the thread-local context must not leak into the next operation).
+			var good = new TestComplexObject { Id = 7, Name = "survivor" };
+			var goodData = serializer.Serialize(good);
+			var roundtripped = serializer.Deserialize<TestComplexObject>(goodData);
+
+			Assert.Equal(good.Id, roundtripped.Id);
+			Assert.Equal(good.Name, roundtripped.Name);
+		}
+
+		[Fact]
 		public void NeoBinarySerializerAdapter_should_handle_null_values()
 		{
 			var serializer = new NeoBinarySerializerAdapter();

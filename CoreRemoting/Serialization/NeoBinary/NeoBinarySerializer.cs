@@ -34,43 +34,8 @@ public partial class NeoBinarySerializer
     private readonly IlTypeSerializer _ilSerializer = new();
     private readonly SerializerCache _serializerCache = new();
 
-    // Static constructor to ensure test assemblies are loaded for type resolution
-    static NeoBinarySerializer()
-    {
-        // Pre-load test assemblies to ensure type availability in concurrent scenarios
-        try
-        {
-            var currentAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-            var testAssemblyLoaded = currentAssemblies.Any(a =>
-                a.GetName().Name.Contains("CoreRemoting.Tests"));
-
-            if (!testAssemblyLoaded)
-            {
-                // Try to load test assembly by name pattern
-                var assemblyPaths = new[]
-                {
-                    "CoreRemoting.Tests.dll",
-                    "CoreRemoting.Tests.ExternalTypes.dll"
-                };
-
-                foreach (var path in assemblyPaths)
-                {
-                    try
-                    {
-                        Assembly.LoadFrom(path);
-                    }
-                    catch
-                    {
-                        // Ignore loading failures
-                    }
-                }
-            }
-        }
-        catch
-        {
-            // Ignore any errors during assembly preloading
-        }
-    }
+    // No static constructor: test assemblies are loaded by the test host/runner and resolved
+    // via FindTypeInLoadedAssemblies. The serializer must not reference or load test assemblies.
 
     // Legacy caches for backward compatibility
     private readonly ConcurrentDictionary<Type, string> _typeNameCache = new();
@@ -234,32 +199,40 @@ public partial class NeoBinarySerializer
             _currentContext = null;
         }
 
-        // Read and validate header
-        ReadHeader(reader);
-        ValidateStreamState(reader, "After header read");
-
-        // Peek at the first byte to determine if it's a simple type
-        var firstByte = reader.ReadByte();
-        if (firstByte == 0) return null;
-
-        // Fast path for primitive types - avoid overhead of reference tracking
-        if (firstByte == 3) // Simple object marker
+        try
         {
-            var type = ReadTypeInfo(reader);
-            return DeserializePrimitive(type, reader);
+            // Read and validate header
+            ReadHeader(reader);
+            ValidateStreamState(reader, "After header read");
+
+            // Peek at the first byte to determine if it's a simple type
+            var firstByte = reader.ReadByte();
+            if (firstByte == 0) return null;
+
+            // Fast path for primitive types - avoid overhead of reference tracking
+            if (firstByte == 3) // Simple object marker
+            {
+                var type = ReadTypeInfo(reader);
+                return DeserializePrimitive(type, reader);
+            }
+
+            // Put the byte back for complex object processing
+            serializationStream.Position = serializationStream.Position - 1;
+            var deserializedObjects = new Dictionary<int, object>();
+            var result = DeserializeObject(reader, deserializedObjects);
+
+            // After the full graph is constructed, resolve any remaining forward references
+            // that couldn't be set during nested deserialization (e.g., back-references).
+            ResolvePendingForwardReferences(deserializedObjects);
+
+            return result;
         }
-
-        // Put the byte back for complex object processing
-        serializationStream.Position = serializationStream.Position - 1;
-        var deserializedObjects = new Dictionary<int, object>();
-        var result = DeserializeObject(reader, deserializedObjects);
-
-        // After the full graph is constructed, resolve any remaining forward references
-        // that couldn't be set during nested deserialization (e.g., back-references).
-        ResolvePendingForwardReferences(deserializedObjects);
-
-        _currentContext = null;
-        return result;
+        finally
+        {
+            // Reset the thread-local context even if an exception occurred, so it never
+            // leaks into a subsequent operation on the same thread.
+            _currentContext = null;
+        }
     }
 
     private void WriteHeader(BinaryWriter writer)
@@ -869,25 +842,28 @@ public partial class NeoBinarySerializer
             if (string.IsNullOrEmpty(typeNameNew) && string.IsNullOrEmpty(assemblyNameNew) &&
                 string.IsNullOrEmpty(assemblyVersionNew))
                 tResolved = typeof(object);
-            else
+            else if (!string.IsNullOrEmpty(typeNameNew) && typeNameNew.Contains("[[") &&
+                     typeNameNew.Contains("PublicKeyToken="))
             {
-                // Check if typeNameNew already contains assembly information (complex generic types)
-                if (!string.IsNullOrEmpty(typeNameNew) && typeNameNew.Contains("[[") && 
-                    typeNameNew.Contains("PublicKeyToken="))
+                // Complex generic type with assembly-qualified generic arguments (e.g.
+                // Expression<Func<int,int>>). ResolveAssemblyNeutralType correctly parses the
+                // assembly-qualified generic argument descriptors that ResolveTypeCore cannot.
+                // Validate the resolved result through the centralized security gate so that no
+                // type-resolution path bypasses TypeValidator.ValidateType().
+                var candidate = ResolveAssemblyNeutralType(typeNameNew);
+                if (candidate != null)
                 {
-                    // This is a complex generic type with embedded assembly info
-                    // Try to resolve it directly first
-                    tResolved = ResolveAssemblyNeutralType(typeNameNew);
-                    if (tResolved == null)
-                    {
-                        // Fallback to normal resolution
-                        tResolved = ResolveTypeCore(typeNameNew, assemblyNameNew, assemblyVersionNew);
-                    }
+                    TypeValidator.ValidateType(candidate);
+                    tResolved = candidate;
                 }
                 else
                 {
                     tResolved = ResolveTypeCore(typeNameNew, assemblyNameNew, assemblyVersionNew);
                 }
+            }
+            else
+            {
+                tResolved = ResolveTypeCore(typeNameNew, assemblyNameNew, assemblyVersionNew);
             }
 
             // ensure table size/order correctness
@@ -1124,7 +1100,7 @@ public partial class NeoBinarySerializer
     }
 
     /// <summary>
-    /// Enhanced type resolution with multiple fallback strategies for test types.
+    /// Type resolution with multiple fallback strategies.
     /// </summary>
     /// <param name="typeName">The type name to resolve</param>
     /// <returns>Resolved type or null</returns>
@@ -1135,29 +1111,7 @@ public partial class NeoBinarySerializer
         if (type != null) return type;
 
         // Strategy 2: Direct Type.GetType for system types
-        type = Type.GetType(typeName);
-        if (type != null) return type;
-
-        // Strategy 3: Force test assembly loading for custom types
-        if (typeName.Contains("TestComplexObject") || typeName.Contains("Concurrency"))
-        {
-            try
-            {
-                // Try to explicitly load the test assembly
-                var testAssembly = Assembly.LoadFrom("CoreRemoting.Tests.dll");
-                if (testAssembly != null)
-                {
-                    type = testAssembly.GetType(typeName);
-                    if (type != null) return type;
-                }
-            }
-            catch
-            {
-                // Ignore loading errors
-            }
-        }
-
-        return null;
+        return Type.GetType(typeName);
     }
 
     /// <summary>
