@@ -427,21 +427,6 @@ public partial class NeoBinarySerializer
                 $"Insufficient bytes remaining ({remainingBytes}) for marker reading in {context}");
     }
 
-    /// <summary>
-    /// Creates a stream checkpoint for rollback operations.
-    /// </summary>
-    /// <param name="reader">The binary reader</param>
-    /// <param name="context">Context description for debugging</param>
-    /// <returns>Stream position for rollback</returns>
-    private long CreateStreamCheckpoint(BinaryReader reader, string context)
-    {
-        if (!reader.BaseStream.CanSeek)
-            return -1; // Cannot checkpoint non-seekable streams
-
-        var position = reader.BaseStream.Position;
-
-        return position;
-    }
 
     /// <summary>
     /// Analyzes stream state for debugging and error reporting.
@@ -512,7 +497,6 @@ public partial class NeoBinarySerializer
         ValidateStreamState(reader, "DeserializeObject start");
         ValidateStreamIntegrity(reader, "DeserializeObject start");
         var streamPosition = reader.BaseStream.CanSeek ? reader.BaseStream.Position : -1;
-        var checkpoint = CreateStreamCheckpoint(reader, "Read marker");
         var marker = reader.ReadByte();
 
         // Enhanced marker validation
@@ -1366,7 +1350,6 @@ public partial class NeoBinarySerializer
                 Serializer = this
             };
 
-            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 var serializer = _ilSerializer.CreateCompactSerializer(type);
@@ -1374,7 +1357,6 @@ public partial class NeoBinarySerializer
             }
             finally
             {
-                stopwatch.Stop();
                 // We don't have per-type stats here; still record global count
                 _serializerCache.RecordSerialization();
             }
@@ -1552,24 +1534,6 @@ public partial class NeoBinarySerializer
 
         // For value types, we can use default(T) and box it
         if (type.IsValueType) return Activator.CreateInstance(type)!;
-
-        // Try using System.Runtime.Serialization.ObjectManager for .NET Core/5+
-        try
-        {
-            // For .NET Core 3.0+ and .NET 5+, we can use reflection to access internal methods
-            var runtimeType = typeof(Type).Assembly.GetType("System.RuntimeType");
-            if (runtimeType != null)
-            {
-                var getUninitializedObjectMethod = runtimeType.GetMethod("GetUninitializedObject",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-                if (getUninitializedObjectMethod != null)
-                    return getUninitializedObjectMethod.Invoke(null, [type])!;
-            }
-        }
-        catch
-        {
-            // Internal method not available or failed
-        }
 
         // Last resort: try to create using the most accessible constructor with default parameters
         var constructors =

@@ -268,72 +268,83 @@ partial class NeoBinarySerializer
 	/// </summary>
 	private Type ResolveAssemblyNeutralType(string typeName)
 	{
-		return _resolvedTypeCache.GetOrAdd(typeName, tn =>
+		// Cache only successful resolutions. Caching null results would permanently
+		// block resolving a type whose assembly is loaded later (dynamically), so
+		// misses are intentionally left uncached and retried on the next attempt.
+		if (_resolvedTypeCache.TryGetValue(typeName, out var cachedResult) && cachedResult != null)
+			return cachedResult;
+
+		var resolved = ResolveAssemblyNeutralTypeCore(typeName);
+		if (resolved != null)
+			_resolvedTypeCache[typeName] = resolved;
+		return resolved;
+	}
+
+	private Type ResolveAssemblyNeutralTypeCore(string typeName)
+	{
+		// First try assembly search (for custom types)
+		var t = FindTypeInLoadedAssemblies(typeName);
+		if (t != null)
+			return t;
+
+		// Fallback to Type.GetType (for system types)
+		// Clean invalid assembly tokens that can cause parsing errors
+		var cleanTn = CleanAssemblyQualifiedName(typeName);
+		try
 		{
-			// First try assembly search (for custom types)
-			var t = FindTypeInLoadedAssemblies(tn);
-			if (t != null) 
+			t = Type.GetType(cleanTn);
+			if (t != null)
 				return t;
+		}
+		catch (FileLoadException)
+		{
+			// Type.GetType failed due to invalid assembly name, try with just the type name
+			t = Type.GetType(ExtractTypeName(typeName));
+			if (t != null)
+				return t;
+		}
 
-			// Fallback to Type.GetType (for system types)
-			// Clean invalid assembly tokens that can cause parsing errors
-			var cleanTn = CleanAssemblyQualifiedName(tn);
-			try
-			{
-				t = Type.GetType(cleanTn);
-				if (t != null) 
-					return t;
-			}
-			catch (FileLoadException)
-			{
-				// Type.GetType failed due to invalid assembly name, try with just the type name
-				t = Type.GetType(ExtractTypeName(tn));
-				if (t != null) 
-					return t;
-			}
+		// Handle simple array types (single dimension)
+		if (typeName.EndsWith("[]", StringComparison.Ordinal))
+		{
+			var elementTypeName = typeName.Substring(0, typeName.Length - 2);
+			var elementType = ResolveAssemblyNeutralType(elementTypeName);
+			if (elementType != null)
+				return elementType.MakeArrayType();
+		}
 
-			// Handle simple array types (single dimension)
-			if (tn.EndsWith("[]", StringComparison.Ordinal))
-			{
-				var elementTypeName = tn.Substring(0, tn.Length - 2);
-				var elementType = ResolveAssemblyNeutralType(elementTypeName);
-				if (elementType != null)
-					return elementType.MakeArrayType();
-			}
+		// If looks like a generic with our [[...]] notation
+		var idx = typeName.IndexOf("[[", StringComparison.Ordinal);
+		if (idx <= 0)
+			return FindTypeInLoadedAssemblies(typeName);
 
-			// If looks like a generic with our [[...]] notation
-			var idx = tn.IndexOf("[[", StringComparison.Ordinal);
-			if (idx <= 0) 
-				return FindTypeInLoadedAssemblies(tn);
-			
-			var defName = tn.Substring(0, idx);
-			var argsPart = tn.Substring(idx);
+		var defName = typeName.Substring(0, idx);
+		var argsPart = typeName.Substring(idx);
 
-			var defType = FindTypeInLoadedAssemblies(defName) ?? Type.GetType(defName);
-			if (defType == null)
+		var defType = FindTypeInLoadedAssemblies(defName) ?? Type.GetType(defName);
+		if (defType == null)
+			return null;
+
+		var argNames = ParseGenericArgumentNames(argsPart);
+		var argTypes = new Type[argNames.Count];
+		for (var i = 0; i < argNames.Count; i++)
+		{
+			var at = ResolveAssemblyNeutralTypeWithFallback(argNames[i]);
+
+			if (at == null)
 				return null;
 
-			var argNames = ParseGenericArgumentNames(argsPart);
-			var argTypes = new Type[argNames.Count];
-			for (var i = 0; i < argNames.Count; i++)
-			{
-				var at = ResolveAssemblyNeutralTypeWithFallback(argNames[i]);
-					
-				if (at == null) 
-					return null;
-					
-				argTypes[i] = at;
-			}
+			argTypes[i] = at;
+		}
 
-			try
-			{
-				return defType.MakeGenericType(argTypes);
-			}
-			catch
-			{
-				return null;
-			}
-		});
+		try
+		{
+			return defType.MakeGenericType(argTypes);
+		}
+		catch
+		{
+			return null;
+		}
 	}
 
 	/// <summary>
