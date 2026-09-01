@@ -352,8 +352,8 @@ public abstract class OidcTokenAcquirer
     private static string GenerateRandomToken(int byteLength)
     {
         var bytes = new byte[byteLength];
-        using (var rng = new RNGCryptoServiceProvider())
-            rng.GetBytes(bytes);
+        using var rng = RandomNumberGenerator.Create();
+        rng.GetBytes(bytes);
 
         return Base64Url.Encode(bytes);
     }

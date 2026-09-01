@@ -166,8 +166,8 @@ public class OidcAuthenticationProvider : IOidcAuthenticationProvider
 
         if (_options.NegotiateNewSessionKey)
         {
-            using var randomGenerator = new RNGCryptoServiceProvider();
             var sessionKey = new byte[32];
+            using var randomGenerator = RandomNumberGenerator.Create();
             randomGenerator.GetBytes(sessionKey);
             response.NegotiatedSharedKey = sessionKey;
         }

@@ -2,7 +2,6 @@
 
     <PropertyGroup>
         <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
-        <RootNamespace>CoreRemoting.Authentication</RootNamespace>
         <AssemblyName>CoreRemoting.Authentication.Oidc</AssemblyName>
         <PackageVersion>1.0.0</PackageVersion>
         <Authors>Alexey Yakovlev</Authors>

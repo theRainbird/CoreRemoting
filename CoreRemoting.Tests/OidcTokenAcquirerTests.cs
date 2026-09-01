@@ -299,7 +299,7 @@ public class OidcTokenAcquirerTests
 
         await requirer.GetTokenAsync();
 
-        Assert.Equal(idp.TokenRequestCount, 1);
+        Assert.Equal(1, idp.TokenRequestCount);
         Assert.Equal("mock-authorization-code", idp.LastCode);
         Assert.NotNull(idp.LastCodeVerifier);
         Assert.Equal(43, idp.LastCodeVerifier.Length);
