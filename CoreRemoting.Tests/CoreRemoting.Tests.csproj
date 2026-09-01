@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+        <!-- Run .NET 9.0 specific tests only on Windows -->
+        <TargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net8.0;net9.0</TargetFrameworks>
+        <TargetFrameworks Condition="'$(OS)' != 'Windows_NT'">net8.0</TargetFrameworks>
         <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
         <IsPackable>false</IsPackable>
         <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>

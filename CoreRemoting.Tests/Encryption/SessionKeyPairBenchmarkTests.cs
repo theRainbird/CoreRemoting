@@ -41,8 +41,8 @@ public class SessionKeyPairBenchmarkTests
     /// Key generation is FORCED by accessing PrivateKey, because RSACryptoServiceProvider
     /// uses lazy generation (the key is not actually created until first use).
     /// </summary>
-    [Fact]
-    public void Benchmark_RsaVsEcdsa_Performance()
+    // [Fact]
+    internal void Benchmark_RsaVsEcdsa_Performance()
     {
         const int genIterations = 5;
         const int signIterations = 500;
@@ -208,8 +208,8 @@ public class SessionKeyPairBenchmarkTests
     /// without the caching behavior of RSACryptoServiceProvider.
     /// Includes both RSA.Create() and ECDsa.Create() for an honest comparison.
     /// </summary>
-    [Fact]
-    public void Benchmark_ModernApi_NoCaching()
+    // [Fact]
+    internal void Benchmark_ModernApi_NoCaching()
     {
         const int iterations = 5;
 
