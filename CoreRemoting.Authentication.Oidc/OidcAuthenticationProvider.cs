@@ -169,7 +169,7 @@ public class OidcAuthenticationProvider : IOidcAuthenticationProvider
             var sessionKey = new byte[32];
             using var randomGenerator = RandomNumberGenerator.Create();
             randomGenerator.GetBytes(sessionKey);
-            response.NegotiatedSharedKey = sessionKey;
+            response.NegotiatedSharedKey = new(sessionKey, isSerialized: true);
         }
 
         return response;

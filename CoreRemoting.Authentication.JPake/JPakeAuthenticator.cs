@@ -124,7 +124,7 @@ public class JPakeAuthenticator : IAuthenticator
         participant.ValidateRound3PayloadReceived(serverRound3, keyingMaterial);
 
         // Derive negotiated shared key
-        response3.NegotiatedSharedKey = keyingMaterial.ToByteArray();
+        response3.NegotiatedSharedKey = new(keyingMaterial.ToByteArray());
         return response3;
     }
 }

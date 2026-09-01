@@ -188,7 +188,7 @@ public class JPakeAuthenticationProvider : IAuthenticationProvider
             IsCompleted = true,
             IsAuthenticated = true,
             AuthenticatedIdentity = identity,
-            NegotiatedSharedKey = keyingMaterial.ToByteArray(),
+            NegotiatedSharedKey = new(keyingMaterial.ToByteArray()),
             Parameters =
             [
                 new() { Name = ROUND3_MAC, Value = JPakeSerializer.Serialize(serverRound3.MacTag) },

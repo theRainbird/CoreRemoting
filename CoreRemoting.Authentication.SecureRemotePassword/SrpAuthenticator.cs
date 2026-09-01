@@ -64,7 +64,7 @@ public class SrpAuthenticator : IAuthenticator
         // restore the negotiated SRP session key using the locally derived key
         if (response2.NegotiatedSharedKey is not null)
             response2.NegotiatedSharedKey =
-                SrpInteger.FromHex(clientSession.Key).ToByteArray();
+                new(SrpInteger.FromHex(clientSession.Key).ToByteArray());
 
         return response2;
     }
