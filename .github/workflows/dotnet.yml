@@ -44,8 +44,14 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y libmsquic
-        # verify the installation
         ldconfig -p | grep libmsquic || echo "libmsquic not found in ldconfig"
+
+    - name: Prepare QUIC log directory (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        mkdir -p ${{ runner.temp }}/quic
+        touch ${{ runner.temp }}/quic/quic.log
+        chmod 666 ${{ runner.temp }}/quic/quic.log
 
     - name: Restore dependencies
       run: dotnet restore
@@ -55,3 +61,17 @@ jobs:
 
     - name: Test
       run: dotnet test --no-build --verbosity normal
+      env:
+        QUIC_LOG_FILE: ${{ runner.temp }}/quic/quic.log
+        QUIC_LOG_LEVEL: 5
+
+    - name: Upload QUIC log on failure
+      if: failure() && runner.os == 'Linux'
+      uses: actions/upload-artifact@v4
+      with:
+        name: quic-log-${{ matrix.os }}
+        path: ${{ runner.temp }}/quic/quic.log
+
+    - name: Show QUIC log on failure (optional)
+      if: failure() && runner.os == 'Linux'
+      run: cat ${{ runner.temp }}/quic/quic.log || echo "No log file found"
