@@ -31,15 +31,27 @@ jobs:
       uses: actions/checkout@v7
       with:
         fetch-depth: 0
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v6
       with:
         dotnet-version: | 
           8.0.x
           9.0.x
+
+    - name: Install libmsquic (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libmsquic
+        # verify the installation
+        ldconfig -p | grep libmsquic || echo "libmsquic not found in ldconfig"
+
     - name: Restore dependencies
       run: dotnet restore
+
     - name: Build
       run: dotnet build --no-restore
+
     - name: Test
       run: dotnet test --no-build --verbosity normal
