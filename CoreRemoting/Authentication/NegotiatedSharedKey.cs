@@ -48,8 +48,7 @@ public class NegotiatedSharedKey
     /// <summary>
     /// Gets a value indicating whether input keying material exists.
     /// </summary>
-    public bool ContainsKeyMaterial =>
-        InputKeyMaterial is not null and { Length: > 0 };
+    public bool ContainsKeyMaterial => InputKeyMaterial is { Length: > 0 };
 
     /// <summary>
     /// Clones the current instance of the negotiated shared key for serialization.

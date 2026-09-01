@@ -61,10 +61,16 @@ public class SrpAuthenticator : IAuthenticator
         var serverSessionProof = response2[SERVER_SESSION_PROOF];
         SrpClient.VerifySession(clientEphemeral.Public, clientSession, serverSessionProof);
 
-        // restore the negotiated SRP session key using the locally derived key
-        if (response2.NegotiatedSharedKey is not null)
+        // if shared key is negotiated, check that keying material wasn't sent over the wire
+        if (response2.NegotiatedSharedKey is {} key)
+        {
+            if (key.ContainsKeyMaterial)
+                throw new SecurityException("Negotiated shared key is compromised.");
+
+            // restore the negotiated SRP session key using the locally derived key
             response2.NegotiatedSharedKey =
                 new(SrpInteger.FromHex(clientSession.Key).ToByteArray());
+        }
 
         return response2;
     }

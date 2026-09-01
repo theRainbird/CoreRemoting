@@ -60,7 +60,7 @@ jobs:
       run: dotnet build --no-restore
 
     - name: Test
-      run: dotnet test --no-build --verbosity normal -- -parallel none
+      run: dotnet test --no-build --verbosity normal
       env:
         QUIC_LOG_FILE: ${{ runner.temp }}/quic/quic.log
         QUIC_LOG_LEVEL: 5

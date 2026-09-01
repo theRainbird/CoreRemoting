@@ -14,11 +14,11 @@ namespace CoreRemoting.Authentication.JPake;
 /// </summary>
 public class JPakeAuthenticationProvider : IAuthenticationProvider
 {
-    private readonly IJPakeAccountRepository _repository;
-    private readonly JPakePrimeOrderGroup _group;
-    private readonly SecureRandom _random;
-    private readonly string _unknownUserPassword;
-
+    private IJPakeAccountRepository Repository { get; }
+    private JPakePrimeOrderGroup Group { get; }
+    private SecureRandom Random { get; }
+    private string UnknownUserPassword { get; }
+    private bool UseNegotiatedSessionKey { get; }
     internal ConcurrentDictionary<string, SessionData> PendingAuthentications { get; } = new();
 
     /// <summary>
@@ -26,12 +26,16 @@ public class JPakeAuthenticationProvider : IAuthenticationProvider
     /// </summary>
     /// <param name="repository">User account repository.</param>
     /// <param name="group">Optional J-PAKE prime order group (should match client parameters).</param>
-    public JPakeAuthenticationProvider(IJPakeAccountRepository repository, JPakePrimeOrderGroup group = null)
+    /// <param name="useNegotiatedSessionKey">If true, the derived SRP session key is sent to the client as the
+    /// negotiated shared key and both endpoints use it for symmetric message encryption after successful
+    /// authentication (replaces the default session key from the handshake). Default is true.</param>
+    public JPakeAuthenticationProvider(IJPakeAccountRepository repository, JPakePrimeOrderGroup group = null, bool useNegotiatedSessionKey = true)
     {
-        _repository = repository;
-        _group = group ?? JPakePrimeOrderGroups.NIST_2048;
-        _random = new SecureRandom();
-        _unknownUserPassword = GenerateRandomPassword();
+        Repository = repository;
+        Group = group ?? JPakePrimeOrderGroups.NIST_2048;
+        Random = new();
+        UnknownUserPassword = GenerateRandomPassword();
+        UseNegotiatedSessionKey = useNegotiatedSessionKey;
     }
 
     /// <summary>
@@ -66,13 +70,13 @@ public class JPakeAuthenticationProvider : IAuthenticationProvider
         var sessionId = authRequest[OPTIONAL_SESSION_ID] ?? RemotingSession.Current.SessionId.ToString();
 
         // Find account or use fake password for non-existent users
-        var account = await _repository.FindByName(userName).ConfigureAwait(false);
+        var account = await Repository.FindByName(userName).ConfigureAwait(false);
         var password = account != null
             ? account.Password
-            : _unknownUserPassword;
+            : UnknownUserPassword;
 
         // Create server's Round 1
-        var serverParticipant = new JPakeParticipant(PARTICIPANT_ID_SERVER, password.ToCharArray(), _group, new Sha256Digest(), _random);
+        var serverParticipant = new JPakeParticipant(PARTICIPANT_ID_SERVER, password.ToCharArray(), Group, new Sha256Digest(), Random);
         var serverRound1 = serverParticipant.CreateRound1PayloadToSend();
 
         // Process client's Round 1
@@ -181,19 +185,23 @@ public class JPakeAuthenticationProvider : IAuthenticationProvider
         if (session.Account == null)
             return Error();
 
-        var identity = await _repository.GetIdentity(session.Account).ConfigureAwait(false);
+        var identity = await Repository.GetIdentity(session.Account).ConfigureAwait(false);
 
         var response = new AuthenticationResponseMessage
         {
             IsCompleted = true,
             IsAuthenticated = true,
             AuthenticatedIdentity = identity,
-            NegotiatedSharedKey = new(keyingMaterial.ToByteArray()),
             Parameters =
             [
                 new() { Name = ROUND3_MAC, Value = JPakeSerializer.Serialize(serverRound3.MacTag) },
             ],
         };
+
+        // optionally negotiate the shared key for message encryption
+        if (UseNegotiatedSessionKey)
+            response.NegotiatedSharedKey =
+                new(keyingMaterial.ToByteArray());
 
         return response;
     }

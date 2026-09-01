@@ -124,7 +124,14 @@ public class JPakeAuthenticator : IAuthenticator
         participant.ValidateRound3PayloadReceived(serverRound3, keyingMaterial);
 
         // Derive negotiated shared key
-        response3.NegotiatedSharedKey = new(keyingMaterial.ToByteArray());
+        if (response3.NegotiatedSharedKey is {} key)
+        {
+            if (key.ContainsKeyMaterial && authProxy is not JPakeAuthenticationProvider)
+                throw new SecurityException("Negotiated shared key is compromised.");
+
+            response3.NegotiatedSharedKey = new(keyingMaterial.ToByteArray());
+        }
+
         return response3;
     }
 }
