@@ -47,7 +47,7 @@ public class AuthenticationResponseMessage
     /// authentication is completed, replacing the default session key from the handshake.
     /// </summary>
     [DataMember(IsRequired = false)]
-    public byte[] NegotiatedSharedKey { get; set; }
+    public NegotiatedSharedKey NegotiatedSharedKey { get; set; }
 
     /// <summary>
     /// Gets the value of the given parameter, or null.

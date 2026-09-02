@@ -564,10 +564,10 @@ public sealed class RemotingSession : IAsyncDisposable
         var canRekey = 
             MessageEncryption && 
             !_server.Config.UseLegacySessionKeyDerivation;
-        
+
         var negotiatedSharedKey = 
             canRekey 
-                ? authResponseMessage.NegotiatedSharedKey 
+                ? authResponseMessage.NegotiatedSharedKey
                 : null;
 
         // the negotiated shared key travels encrypted inside the auth response, so it does not leak
@@ -575,7 +575,7 @@ public sealed class RemotingSession : IAsyncDisposable
         // so the client can derive the very same new shared secret; null it otherwise.
         authResponseMessage.NegotiatedSharedKey = 
             canRekey 
-                ? negotiatedSharedKey 
+                ? negotiatedSharedKey?.GetSerializableCopy()
                 : null;
 
         var serializedAuthResponse = _server.Serializer.Serialize(authResponseMessage);
@@ -595,9 +595,9 @@ public sealed class RemotingSession : IAsyncDisposable
         // if the authentication protocol negotiated a new shared key, re-key the session.
         // Both endpoints switch to the negotiated key right after this final response,
         // so the next message is already encrypted with it on both sides.
-        if (_isAuthenticated && negotiatedSharedKey is not null and { Length: > 0 })
+        if (_isAuthenticated && negotiatedSharedKey is { ContainsKeyMaterial: true })
         {
-            var inputKeyMaterial = negotiatedSharedKey;
+            var inputKeyMaterial = negotiatedSharedKey.InputKeyMaterial;
             var config = _server.Config;
             var secretLength = config.SharedKeySize / 8;
             var derivedSharedKey = config.HkdfProvider.DeriveKey(inputKeyMaterial, secretLength, _sessionId, nameof(CoreRemoting));

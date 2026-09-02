@@ -106,7 +106,8 @@ public class JPakeAuthenticationTests : IAsyncLifetime
         Assert.NotNull(response.AuthenticatedIdentity);
         Assert.Equal(UserName, response.AuthenticatedIdentity.Name);
         Assert.NotNull(response.NegotiatedSharedKey);
-        Assert.NotEmpty(response.NegotiatedSharedKey);
+        Assert.NotNull(response.NegotiatedSharedKey.InputKeyMaterial);
+        Assert.NotEmpty(response.NegotiatedSharedKey.InputKeyMaterial);
     }
 
     [Fact]

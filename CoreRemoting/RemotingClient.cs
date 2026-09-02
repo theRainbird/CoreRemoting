@@ -583,9 +583,9 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         // Both endpoints switch to the negotiated key right after this final response,
         // so the next message is already encrypted with it on both sides.
         var authResponseMessage = await authResponse.ConfigureAwait(false);
-        if (MessageEncryption && authResponseMessage?.NegotiatedSharedKey is not null and { Length: > 0 })
+        if (MessageEncryption && authResponseMessage is { NegotiatedSharedKey.ContainsKeyMaterial: true })
         {
-            var inputKeyMaterial = authResponseMessage.NegotiatedSharedKey;
+            var inputKeyMaterial = authResponseMessage.NegotiatedSharedKey.InputKeyMaterial;
             var secretLength = _config.SharedKeySize / 8;
             var derivedSharedKey = _config.HkdfProvider.DeriveKey(inputKeyMaterial, secretLength, _sessionId, nameof(CoreRemoting));
             lock (_sessionLock)
