@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Security;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 using Newtonsoft.Json.Linq;
 
 namespace CoreRemoting.Authentication.Oidc;
@@ -11,50 +12,27 @@ namespace CoreRemoting.Authentication.Oidc;
 /// <summary>
 /// Caches the JWKS (JSON Web Key Set) and the discovery document of an identity provider.
 /// </summary>
-public class JwksCache
+public sealed class JwksCache : IAsyncDisposable, IDisposable
 {
-    private static readonly object _httpClientLock = new();
-    private static HttpClient _sharedHttpClient;
-
-    /// <summary>
-    /// Gets or sets whether invalid server certificates (e.g., self-signed certs of a LAN identity provider) are
-    /// accepted when fetching the discovery document and the JWKS. DEV-ONLY: should be false in production; install
-    /// the CA certificate instead. The setting is applied to the lazily created shared client.
-    /// </summary>
-    public static bool AcceptSelfSignedCerts { get; set; } = false;
-
-    /// <summary>
-    /// Gets the lazily created shared HTTP client. The handler's certificate validation is configured once, based on
-    /// <see cref="AcceptSelfSignedCerts"/>, the first time the client is accessed.
-    /// </summary>
-    private static HttpClient SharedClient
-    {
-        get
-        {
-            lock (_httpClientLock)
-            {
-                if (_sharedHttpClient != null)
-                    return _sharedHttpClient;
-
-                var handler = new HttpClientHandler();
-
-#if NET8_0_OR_GREATER
-                if (AcceptSelfSignedCerts)
-                {
-                    handler.ServerCertificateCustomValidationCallback += (sender, cert, chain, error) => true;
-                }
-#endif
-
-                _sharedHttpClient = new HttpClient(handler, disposeHandler: true);
-                return _sharedHttpClient;
-            }
-        }
-    }
-
     private static readonly TimeSpan UriTtl = TimeSpan.FromHours(24);
     private static readonly TimeSpan KeysTtl = TimeSpan.FromSeconds(60);
 
+    private readonly HttpClient _httpClient;
     private readonly string _issuer;
+
+    private static HttpClient CreateHttpClient(bool acceptSelfSignedCerts)
+    {
+        var handler = new HttpClientHandler();
+
+#if NET8_0_OR_GREATER
+        if (acceptSelfSignedCerts)
+        {
+            handler.ServerCertificateCustomValidationCallback += (sender, cert, chain, error) => true;
+        }
+#endif
+
+        return new HttpClient(handler, disposeHandler: true);
+    }
 
     private string _jwksUri;
     private DateTime _jwksUriFetchedAtUtc;
@@ -66,9 +44,15 @@ public class JwksCache
     /// Initializes a new instance of the <see cref="JwksCache"/> class.
     /// </summary>
     /// <param name="issuer">Issuer URL of the identity provider</param>
-    public JwksCache(string issuer)
+    /// <param name="developAcceptSelfSignedCerts">
+    /// When set to true, invalid server certificates (e.g., self-signed certs of a LAN identity provider) are accepted
+    /// when fetching the discovery document and the JWKS. DEV-ONLY: should be false in production; install the CA
+    /// certificate instead. Only affects the <see cref="HttpClient"/> owned by this instance.
+    /// </param>
+    public JwksCache(string issuer, bool developAcceptSelfSignedCerts = false)
     {
         _issuer = issuer ?? throw new ArgumentNullException(nameof(issuer));
+        _httpClient = CreateHttpClient(developAcceptSelfSignedCerts);
     }
 
     /// <summary>
@@ -133,12 +117,12 @@ public class JwksCache
         return _keys;
     }
 
-    private static async Task<JObject> FetchJsonObjectAsync(Uri uri)
+    private async Task<JObject> FetchJsonObjectAsync(Uri uri)
     {
         HttpResponseMessage response;
         try
         {
-            response = await SharedClient.GetAsync(uri).ConfigureAwait(false);
+            response = await _httpClient.GetAsync(uri).ConfigureAwait(false);
         }
         catch (HttpRequestException e)
         {
@@ -159,4 +143,18 @@ public class JwksCache
             throw new SecurityException($"The OIDC document at '{uri}' isn't valid JSON: {e.Message}", e);
         }
     }
+
+    /// <summary>
+    /// Disposes the <see cref="HttpClient"/> owned by this instance.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        _httpClient.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Disposes the <see cref="HttpClient"/> owned by this instance.
+    /// </summary>
+    public void Dispose() => DisposeAsync().JustWait();
 }

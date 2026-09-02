@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 using System.Security;
 using CoreRemoting;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Authentication.Oidc;
 
@@ -14,12 +15,14 @@ namespace CoreRemoting.Authentication.Oidc;
 /// configured (Pattern B, multi-phase authentication based on IsCompleted/Parameters). An optional fallback provider
 /// is used when no OIDC token was provided ("OIDC first" chaining).
 /// </summary>
-public class OidcAuthenticationProvider : IOidcAuthenticationProvider
+public class OidcAuthenticationProvider : IOidcAuthenticationProvider, IAsyncDisposable, IDisposable
 {
+    private static readonly TimeSpan PendingAuthTtl = TimeSpan.FromMinutes(5);
+
     private readonly OidcOptions _options;
     private readonly IAuthenticationProvider _fallbackProvider;
-    private readonly JwksCache _jwksCache;
-    private readonly ConcurrentDictionary<string, RemotingIdentity> _pendingAuthentications = new();
+    private JwksCache _jwksCache;
+    private readonly ConcurrentDictionary<string, PendingAuthentication> _pendingAuthentications = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="OidcAuthenticationProvider"/> class.
@@ -55,8 +58,7 @@ public class OidcAuthenticationProvider : IOidcAuthenticationProvider
 
         _options = options;
         _fallbackProvider = fallbackProvider;
-        _jwksCache = new JwksCache(options.Issuer);
-        JwksCache.AcceptSelfSignedCerts = options.DevelopAcceptSelfSignedCerts;
+        _jwksCache = new JwksCache(options.Issuer, options.DevelopAcceptSelfSignedCerts);
     }
 
     /// <summary>
@@ -68,6 +70,8 @@ public class OidcAuthenticationProvider : IOidcAuthenticationProvider
     {
         if (authRequestMessage == null)
             throw new ArgumentNullException(nameof(authRequestMessage));
+
+        SweepExpiredAuthentications();
 
         var stateKey = GetStateKey(authRequestMessage);
 
@@ -99,7 +103,11 @@ public class OidcAuthenticationProvider : IOidcAuthenticationProvider
             return Success(identity);
 
         // remember the validated identity and request a step-up code from the client
-        _pendingAuthentications[stateKey] = identity;
+        _pendingAuthentications[stateKey] = new PendingAuthentication
+        {
+            Identity = identity,
+            ExpiresAtUtc = DateTime.UtcNow + PendingAuthTtl,
+        };
 
         return new AuthenticationResponseMessage
         {
@@ -113,13 +121,25 @@ public class OidcAuthenticationProvider : IOidcAuthenticationProvider
         };
     }
 
+    private void SweepExpiredAuthentications()
+    {
+        var now = DateTime.UtcNow;
+        foreach (var key in _pendingAuthentications.Keys.ToArray())
+        {
+            if (_pendingAuthentications.TryGetValue(key, out var pending) && pending.ExpiresAtUtc <= now)
+                _pendingAuthentications.TryRemove(key, out _);
+        }
+    }
+
     /// <summary>
     /// Processes a step-up code (pattern B).
     /// </summary>
     private AuthenticationResponseMessage ProcessStepUp(string stateKey, string stepUpCode)
     {
-        if (!_pendingAuthentications.TryRemove(stateKey, out var identity))
+        if (!_pendingAuthentications.TryRemove(stateKey, out var pending))
             return Fail("There's no pending OIDC step-up validation for this session.");
+
+        var identity = pending.Identity;
 
         // the validator delegate is invoked with the validated identity name and the provided code
         if (_options.StepUpValidator(identity.Name, stepUpCode))
@@ -195,4 +215,36 @@ public class OidcAuthenticationProvider : IOidcAuthenticationProvider
     private static bool IsLocalhost(string host) =>
         string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(host, "127.0.0.1", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Disposes the <see cref="JwksCache"/> (and its <see cref="HttpClient"/>), invalidating the cached JWKS.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        await _jwksCache.DisposeAsync().ConfigureAwait(false);
+        _jwksCache = null;
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Disposes the <see cref="JwksCache"/> (and its <see cref="HttpClient"/>), invalidating the cached JWKS.
+    /// </summary>
+    public void Dispose() => DisposeAsync().JustWait();
+
+    /// <summary>
+    /// Tracks a validated identity that is awaiting a step-up code, including an expiry so abandoned sessions
+    /// can't grow the pending dictionary unbounded.
+    /// </summary>
+    private sealed class PendingAuthentication
+    {
+        /// <summary>
+        /// Gets the validated identity.
+        /// </summary>
+        public RemotingIdentity Identity { get; set; }
+
+        /// <summary>
+        /// Gets the point in time after which this pending authentication is considered expired.
+        /// </summary>
+        public DateTime ExpiresAtUtc { get; set; }
+    }
 }

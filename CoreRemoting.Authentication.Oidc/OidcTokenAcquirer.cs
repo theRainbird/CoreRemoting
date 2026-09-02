@@ -10,6 +10,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 using Newtonsoft.Json.Linq;
 
 namespace CoreRemoting.Authentication.Oidc;
@@ -24,12 +25,18 @@ namespace CoreRemoting.Authentication.Oidc;
 /// recommended approach for native/desktop applications. Subclasses can override
 /// <see cref="RequestAuthorizationCodeAsync"/> to implement a different interactive strategy.
 /// </remarks>
-public abstract class OidcTokenAcquirer
+public abstract class OidcTokenAcquirer : IAsyncDisposable, IDisposable
 {
+    private static readonly TimeSpan DiscoveryTtl = TimeSpan.FromHours(24);
+
     private readonly OidcClientOptions _options;
     private readonly HttpClient _httpClient;
+    private bool _ownsHttpClient;
     private readonly object _discoveryLock = new();
     private JObject _cachedDiscovery;
+    private DateTime _discoveryFetchedAtUtc;
+    private JObject _flowDiscovery;
+    private Pkce _flowPkce;
     private string _currentAuthorizationState;
 
     /// <summary>
@@ -52,6 +59,7 @@ public abstract class OidcTokenAcquirer
         if (options.HttpClient != null)
         {
             _httpClient = options.HttpClient;
+            _ownsHttpClient = false;
         }
         else
         {
@@ -65,6 +73,7 @@ public abstract class OidcTokenAcquirer
 #endif
 
             _httpClient = new HttpClient(handler, disposeHandler: true);
+            _ownsHttpClient = true;
         }
 
         BrowserOpener = options.BrowserOpener ?? DefaultBrowserOpener;
@@ -91,6 +100,9 @@ public abstract class OidcTokenAcquirer
 
         var pkce = Pkce.Create();
         _currentAuthorizationState = GenerateRandomToken(32);
+
+        _flowDiscovery = discovery;
+        _flowPkce = pkce;
 
         var redirectUri = ResolveRedirectUri();
         var authorizationUri = BuildAuthorizationUrl(discovery, pkce, redirectUri, _currentAuthorizationState);
@@ -119,79 +131,104 @@ public abstract class OidcTokenAcquirer
     private async Task<string> RunLoopbackRedirectAsync(
         Uri authorizationUri, string redirectUri, CancellationToken cancellationToken)
     {
-        using var listener = new HttpListener();
-        listener.Prefixes.Add(redirectUri);
-        listener.Start();
+        const int maxAttempts = 5;
 
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var receiveTask = listener.GetContextAsync();
-
-        BrowserOpener(authorizationUri);
-
-        Task completedTask = await Task.WhenAny(
-            receiveTask, Task.Delay(_options.AuthorizationTimeout, linkedCts.Token))
-            .ConfigureAwait(false);
-
-        if (completedTask != receiveTask)
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
-            if (cancellationToken.IsCancellationRequested)
-                throw new OperationCanceledException(cancellationToken);
+            if (attempt > 0)
+            {
+                redirectUri = ResolveLoopbackRedirectUri();
+                authorizationUri = BuildAuthorizationUrl(_flowDiscovery, _flowPkce, redirectUri, _currentAuthorizationState);
+            }
 
-            throw new TimeoutException(
-                $"The authorization redirect wasn't received within " +
-                $"{_options.AuthorizationTimeout.TotalSeconds:0} seconds.");
+            using var listener = new HttpListener();
+            listener.Prefixes.Add(redirectUri);
+
+            try
+            {
+                listener.Start();
+            }
+            catch (SocketException e)
+            {
+                if (attempt == maxAttempts - 1)
+                    throw new InvalidOperationException(
+                        $"The loopback redirect listener at '{redirectUri}' couldn't be started: {e.Message}.", e);
+
+                continue;
+            }
+
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var receiveTask = listener.GetContextAsync();
+
+            BrowserOpener(authorizationUri);
+
+            Task completedTask = await Task.WhenAny(
+                receiveTask, Task.Delay(_options.AuthorizationTimeout, linkedCts.Token))
+                .ConfigureAwait(false);
+
+            if (completedTask != receiveTask)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    throw new OperationCanceledException(cancellationToken);
+
+                throw new TimeoutException(
+                    $"The authorization redirect wasn't received within " +
+                    $"{_options.AuthorizationTimeout.TotalSeconds:0} seconds.");
+            }
+
+            HttpListenerContext context;
+            try
+            {
+                context = await receiveTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+
+            try
+            {
+                var values = ParseQuery(context.Request.Url?.Query ?? string.Empty);
+
+                if (values.TryGetValue("error", out var error))
+                    throw new InvalidOperationException(
+                        $"The identity provider rejected the authorization request: {error}.");
+
+                if (!values.TryGetValue("code", out var code) || string.IsNullOrEmpty(code))
+                    throw new InvalidOperationException(
+                        "The identity provider didn't return an authorization code in the redirect.");
+
+                var returnedState = values.TryGetValue("state", out var state) ? state : null;
+                if (!string.Equals(returnedState, _currentAuthorizationState, StringComparison.Ordinal))
+                    throw new InvalidOperationException("The 'state' value of the authorization redirect doesn't match.");
+
+                var buffer = Encoding.UTF8.GetBytes(
+                    "<html><body><h2>Authentication successful</h2>" +
+                    "<p>You can close this window and return to the application.</p></body></html>");
+
+                context.Response.StatusCode = 200;
+                context.Response.ContentType = "text/html; charset=utf-8";
+                context.Response.ContentLength64 = buffer.Length;
+                context.Response.OutputStream.Write(buffer, 0, buffer.Length);
+                context.Response.OutputStream.Close();
+
+                return code;
+            }
+            finally
+            {
+                try { listener.Stop(); } catch { /* listener teardown errors are not relevant to the caller */ }
+                try { listener.Close(); } catch { /* listener teardown errors are not relevant to the caller */ }
+            }
         }
 
-        HttpListenerContext context;
-        try
-        {
-            context = await receiveTask.ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-
-        try
-        {
-            var values = ParseQuery(context.Request.Url?.Query ?? string.Empty);
-
-            if (values.TryGetValue("error", out var error))
-                throw new InvalidOperationException(
-                    $"The identity provider rejected the authorization request: {error}.");
-
-            if (!values.TryGetValue("code", out var code) || string.IsNullOrEmpty(code))
-                throw new InvalidOperationException(
-                    "The identity provider didn't return an authorization code in the redirect.");
-
-            var returnedState = values.TryGetValue("state", out var state) ? state : null;
-            if (!string.Equals(returnedState, _currentAuthorizationState, StringComparison.Ordinal))
-                throw new InvalidOperationException("The 'state' value of the authorization redirect doesn't match.");
-
-            var buffer = Encoding.UTF8.GetBytes(
-                "<html><body><h2>Authentication successful</h2>" +
-                "<p>You can close this window and return to the application.</p></body></html>");
-
-            context.Response.StatusCode = 200;
-            context.Response.ContentType = "text/html; charset=utf-8";
-            context.Response.ContentLength64 = buffer.Length;
-            context.Response.OutputStream.Write(buffer, 0, buffer.Length);
-            context.Response.OutputStream.Close();
-
-            return code;
-        }
-        finally
-        {
-            try { listener.Stop(); } catch { /* listener teardown errors are not relevant to the caller */ }
-            try { listener.Close(); } catch { /* listener teardown errors are not relevant to the caller */ }
-        }
+        throw new InvalidOperationException("The loopback redirect listener couldn't be started.");
     }
 
     private async Task<JObject> GetDiscoveryDocumentAsync(CancellationToken cancellationToken)
     {
         lock (_discoveryLock)
         {
-            if (_cachedDiscovery != null)
+            if (_cachedDiscovery != null && DateTime.UtcNow - _discoveryFetchedAtUtc < DiscoveryTtl)
                 return _cachedDiscovery;
         }
 
@@ -223,7 +260,10 @@ public abstract class OidcTokenAcquirer
         lock (_discoveryLock)
         {
             if (_cachedDiscovery == null)
+            {
                 _cachedDiscovery = document;
+                _discoveryFetchedAtUtc = DateTime.UtcNow;
+            }
         }
 
         return document;
@@ -236,6 +276,9 @@ public abstract class OidcTokenAcquirer
 
         return $"http://127.0.0.1:{GetFreeTcpPort()}/";
     }
+
+    private string ResolveLoopbackRedirectUri() =>
+        $"http://127.0.0.1:{GetFreeTcpPort()}/";
 
     private static int GetFreeTcpPort()
     {
@@ -309,8 +352,16 @@ public abstract class OidcTokenAcquirer
                 $"The OIDC token request to '{tokenEndpoint}' failed: {e.Message}", e);
         }
 
+        response.EnsureSuccessStatusCode();
+
         var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         var tokenResponse = JObject.Parse(json);
+
+        if (tokenResponse["error"] is JToken error)
+            throw new InvalidOperationException(
+                $"The OIDC token request to '{tokenEndpoint}' was rejected: {error}." +
+                (tokenResponse["error_description"] is JToken description && description.Type != JTokenType.Null
+                    ? $" {description}" : string.Empty));
 
         if (_options.TokenKind == OidcTokenKind.AccessToken)
         {
@@ -376,6 +427,25 @@ public abstract class OidcTokenAcquirer
             Console.WriteLine($"Please open manually: {uri}");
         }
     }
+
+    /// <summary>
+    /// Disposes the internally created <see cref="HttpClient"/>. A user-provided <see cref="HttpClient"/> is left untouched.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (_ownsHttpClient)
+        {
+            _httpClient.Dispose();
+            _ownsHttpClient = false;
+        }
+
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Disposes the internally created <see cref="HttpClient"/>. A user-provided <see cref="HttpClient"/> is left untouched.
+    /// </summary>
+    public void Dispose() => DisposeAsync().JustWait();
 
     /// <summary>
     /// Implements PKCE (code verifier + code challenge) as described in RFC 7636.

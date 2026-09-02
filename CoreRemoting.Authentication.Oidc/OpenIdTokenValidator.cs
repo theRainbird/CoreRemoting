@@ -82,14 +82,28 @@ internal static class OpenIdTokenValidator
         if (TryGetValue(claims, "sub", out var subject) == false || string.IsNullOrEmpty(subject))
             throw new SecurityException("The OIDC token doesn't contain a 'sub' claim.");
 
+        var expectedIssuer = options.Issuer.TrimEnd('/');
         if (TryGetValue(claims, "iss", out var issuer) == false ||
-            !string.Equals(issuer, options.Issuer, StringComparison.Ordinal))
-            throw new SecurityException($"The OIDC token was issued by '{issuer ?? ""}', but '{options.Issuer}' was expected.");
+            !string.Equals(issuer?.TrimEnd('/'), expectedIssuer, StringComparison.Ordinal))
+            throw new SecurityException($"The OIDC token was issued by '{issuer ?? ""}', but '{expectedIssuer}' was expected.");
 
         if (!claims.TryGetValue("aud", out var audiences) ||
             !audiences.Any(audience => options.AllowedAudiences
                 .Any(allowedAudience => string.Equals(allowedAudience, audience, StringComparison.Ordinal))))
             throw new SecurityException("The OIDC token wasn't issued for any of the allowed audiences.");
+
+        // RFC 7519 §2.3: if the token has multiple audiences, the authorized party (azp) claim must be present
+        // and equal to one of the audiences.
+        if (audiences.Length > 1)
+        {
+            if (!TryGetValue(claims, "azp", out var authorizedParty) || string.IsNullOrEmpty(authorizedParty))
+                throw new SecurityException(
+                    "The OIDC token with multiple audiences is missing the 'azp' (authorized party) claim.");
+
+            if (!audiences.Any(audience => string.Equals(audience, authorizedParty, StringComparison.Ordinal)))
+                throw new SecurityException(
+                    "The 'azp' (authorized party) claim of the OIDC token doesn't match any of its audiences.");
+        }
 
         if (TryGetValue(claims, "exp", out var expiryValue) == false ||
             !long.TryParse(expiryValue, out var expirySeconds))
@@ -134,7 +148,7 @@ internal static class OpenIdTokenValidator
             throw new SecurityException($"The signature of the OIDC token couldn't be parsed: {e.Message}", e);
         }
 
-        using var rsa = new RSACryptoServiceProvider();
+        using var rsa = RSA.Create();
         rsa.ImportParameters(key.RsaParameters);
 
         var signedData = Encoding.UTF8.GetBytes(segments[0] + "." + segments[1]);

@@ -10,6 +10,7 @@
 - Target frameworks: .NET Standard 2.0 and .NET 8.0 (except Quic channel project, which runs only on .NET 9.0)
 - Use xUnit for testing with ITestOutputHelper for output
 - Follow C# naming conventions (PascalCase for public members, camelCase for private)
+- Protocol / interoperability constants (e.g. credential names, wire identifiers) use SCREAMING_SNAKE_CASE (e.g. `OIDC_TOKEN`, `STEP_UP_CODE`, `OPTIONAL_SESSION_ID`). Keep this format; do not refactor them to PascalCase (`oidcToken`)
 - Use async/await patterns for async operations
 - Implement IDisposable/IAsyncDisposable for cleanup
 - Use dependency injection (Microsoft DI or Castle Windsor)
