@@ -4,7 +4,7 @@
     <TargetFrameworks>net9.0</TargetFrameworks>
     <RootNamespace>CoreRemoting.Channels.Quic</RootNamespace>
     <AssemblyName>CoreRemoting.Channels.Quic</AssemblyName>
-    <PackageVersion>1.2.1</PackageVersion>
+    <PackageVersion>1.4.0.0</PackageVersion>
     <Authors>Alexey Yakovlev</Authors>
     <Description>Quic channels for CoreRemoting</Description>
     <Copyright>2024 Alexey Yakovlev</Copyright>
@@ -14,7 +14,7 @@
     <Title>CoreRemoting.Channels.Quic</Title>
     <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <AssemblyVersion>1.2.1</AssemblyVersion>
+    <AssemblyVersion>1.4.0.0</AssemblyVersion>
     <LangVersion>12</LangVersion>
   </PropertyGroup>
 

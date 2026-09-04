@@ -4,7 +4,7 @@
         <TargetFramework>netstandard2.0</TargetFramework>
         <RootNamespace>CoreRemoting.Authentication</RootNamespace>
         <AssemblyName>CoreRemoting.Authentication.GenericOsAuthProvider</AssemblyName>
-        <PackageVersion>1.2.2</PackageVersion>
+        <PackageVersion>1.4.0.0</PackageVersion>
         <Authors>Hagen Siegel</Authors>
         <Description>Generic OS user authentication provider for CoreRemoting</Description>
         <Copyright>2024 Hagen Siegel</Copyright>
@@ -15,7 +15,7 @@
         <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageTags>Remoting RPC Network Authentication Windows Linux</PackageTags>
-        <AssemblyVersion>1.2.2</AssemblyVersion>
+        <AssemblyVersion>1.4.0.0</AssemblyVersion>
         <LangVersion>10</LangVersion>
         <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
     </PropertyGroup>

@@ -7,6 +7,7 @@ HostName| Host name or IP address                                               
 NetworkPort| Network port to listen on                                                                                         |int|9090
 MessageEncryption| Specifies if communication should be encrypted on message level<br>_See also: [Message Encryption](Security.md)_  |bool|true 
 KeySize| key size for asymmetric encryption _(only relevant, if message encryption is enabled)_                            |int|4096
+UseLegacySessionKeyDerivation| Use legacy session key derivation, where the symmetric shared secret is derived from the session ID _(for compatibility with old clients)_<br>_See also: [Session Key Derivation](Security.md)_ |bool|false
 Serializer| Specifies the serializer to be used                                                                               |ISerializerAdapter|BsonSerializerAdapter
 Dependency InjectionContainer| DI container used to resolve services                                                                             |IDependency InjectionContainer|CastleWindsorDependency InjectionContainer
 RegisterServicesAction| **Optional:** Action that is called on server startup, to register services in the DI container                   |Action<IDependencyInjectionContainer>|null
