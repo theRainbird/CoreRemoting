@@ -586,8 +586,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         if (MessageEncryption && authResponseMessage is { NegotiatedSharedKey.ContainsKeyMaterial: true })
         {
             var inputKeyMaterial = authResponseMessage.NegotiatedSharedKey.InputKeyMaterial;
-            var secretLength = _config.SharedKeySize / 8;
-            var derivedSharedKey = _config.HkdfProvider.DeriveKey(inputKeyMaterial, secretLength, _sessionId, nameof(CoreRemoting));
+            var derivedSharedKey = _config.HkdfProvider.DeriveKey(inputKeyMaterial, _sharedSecretLength, _sessionId, nameof(CoreRemoting));
             lock (_sessionLock)
                 _sharedSecret = derivedSharedKey;
         }
