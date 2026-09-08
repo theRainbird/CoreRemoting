@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using CoreRemoting.RpcMessaging;
 
 namespace CoreRemoting;
 
@@ -95,4 +97,9 @@ public interface IRemotingClient : IAsyncDisposable, IDisposable
     /// Gets whether this CoreRemoting client instance has a session or not.
     /// </summary>
     bool HasSession { get; }
+
+    /// <summary>
+    /// Gets the handshake metadata for the communication channel.
+    /// </summary>
+    ClientHandshakeMessage HandshakeMessage { get; }
 }

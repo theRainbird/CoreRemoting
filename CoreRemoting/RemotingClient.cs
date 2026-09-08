@@ -295,6 +295,17 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
     public RemotingIdentity Identity { get; private set; }
 
+    /// <summary>
+    /// Gets the handshake metadata message for the communication channel.
+    /// </summary>
+    public ClientHandshakeMessage HandshakeMessage => new()
+    {
+        MessageEncryption = MessageEncryption,
+        ClientPublicKey = PublicKey,
+        ResumableSessionId = ResumableSessionId,
+        SessionSignature = SessionSignature,
+    };
+
     #endregion
 
     #region Connection management

@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+        <TargetFrameworks>net9.0;net8.0</TargetFrameworks>
         <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
         <IsPackable>false</IsPackable>
         <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
-    </PropertyGroup>
+   </PropertyGroup>
 
     <!-- Exclude the unnecessary tests to save Github Actions time -->
     <!-- WatsonTcp is the default channel, WebSocketSharp is optional, BinaryFormatter is .net8 only, Quic is .net9 only -->
