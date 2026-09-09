@@ -16,7 +16,7 @@ public class ClientHandshakeMessage
     /// Gets all client handshake metadata.
     /// </summary>
     [DataMember]
-    public Dictionary<string, string> Metadata { get; set; }
+    public Dictionary<string, string> Metadata { get; set; } = new();
 
     /// <summary>
     /// Sets the value of the given property.

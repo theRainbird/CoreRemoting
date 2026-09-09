@@ -96,7 +96,7 @@ public class TcpConnection : IRawMessageTransport
             ClientAddress = _clientMetadata.IpPort,
         };
 
-        // old versions used to send client public key as "ShakeHands"
+        // handle legacy client public key metadata sent as "ShakeHands"
         if (metadata.TryGetValue("ShakeHands", out var shakeHandsValue))
         {
             var shakeHands = ((System.Text.Json.JsonElement)shakeHandsValue).GetString();

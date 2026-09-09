@@ -1,6 +1,9 @@
 ﻿using System;
+using System.Linq;
+using System.Net;
 using System.Net.WebSockets;
 using System.Threading.Tasks;
+using CoreRemoting.RpcMessaging;
 using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
@@ -47,30 +50,23 @@ public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
     /// </summary>
     private async Task<Guid> CreateRemotingSession()
     {
-        byte[] clientPublicKey = null;
-        Guid? resumableSessionId = null;
-        byte[] sessionSignature = null;
-
         var cookies = WebSocketContext.CookieCollection;
-        var messageEncryptionCookie = cookies[MessageEncryptionCookie];
-        var messageEncryptionEnabled = messageEncryptionCookie?.Value == "1";
+        var handshake = new ClientHandshakeMessage()
+        {
+            Metadata = cookies.OfType<Cookie>().ToDictionary(c => c.Name, c => c.Value),
+            ClientAddress = ClientAddress,
+        };
 
-        var shakeHandsCookie = cookies[ClientPublicKeyCookie];
-        if (shakeHandsCookie != null)
-            clientPublicKey = Convert.FromBase64String(shakeHandsCookie.Value);
+        // handle legacy client public key cookie name
+        if (cookies[LegacyClientPublicKeyCookie] != null)
+        {
+            handshake.Metadata[nameof(handshake.ClientPublicKey)] =
+                cookies[LegacyClientPublicKeyCookie].Value;
+        }
 
-        var resumeSessionIdCookie = cookies[ResumeSessionIdCookie];
-        if (resumeSessionIdCookie != null)
-            resumableSessionId = new Guid(Convert.FromBase64String(resumeSessionIdCookie.Value));
-
-        var signatureCookie = cookies[SessionSignatureCookie];
-        if (signatureCookie != null)
-            sessionSignature = Convert.FromBase64String(signatureCookie.Value);
-
-        Session = await RemotingServer.SessionRepository.ResumeOrCreateSession(
-            resumableSessionId, messageEncryptionEnabled, sessionSignature,
-                clientPublicKey, ClientAddress, RemotingServer, this)
-                    .ConfigureAwait(false);
+        Session = await RemotingServer.SessionRepository
+            .ResumeOrCreateSession(handshake, RemotingServer, this)
+                .ConfigureAwait(false);
 
         return Session.SessionId;
     }
