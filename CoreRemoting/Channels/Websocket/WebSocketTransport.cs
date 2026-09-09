@@ -18,11 +18,6 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     protected bool _listening;
 
     /// <summary>
-    /// Legacy handshake cookie name for client public key.
-    /// </summary>
-    protected const string LegacyClientPublicKeyCookie = "ShakeHands";
-
-    /// <summary>
     /// Buffer size to read incoming messages.
     /// Note: LOH threshold is ~85 kilobytes
     /// </summary>

@@ -96,14 +96,6 @@ public class TcpConnection : IRawMessageTransport
             ClientAddress = _clientMetadata.IpPort,
         };
 
-        // handle legacy client public key metadata sent as "ShakeHands"
-        if (metadata.TryGetValue("ShakeHands", out var shakeHandsValue))
-        {
-            var shakeHands = ((System.Text.Json.JsonElement)shakeHandsValue).GetString();
-            if (!string.IsNullOrEmpty(shakeHands))
-                handshake.ClientPublicKey = Convert.FromBase64String(shakeHands);
-        }
-
         _session = _server.SessionRepository
             .ResumeOrCreateSession(handshake, _server, this)
                 .GetAwaiter().GetResult();

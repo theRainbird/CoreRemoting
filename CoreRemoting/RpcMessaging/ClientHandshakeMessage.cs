@@ -101,8 +101,8 @@ public class ClientHandshakeMessage
     [IgnoreDataMember]
     public byte[] ClientPublicKey
     {
-        get => GetValue<byte[]>(nameof(ClientPublicKey));
-        set => SetValue(nameof(ClientPublicKey), value);
+        get => GetValue<byte[]>("ShakeHands");
+        set => SetValue("ShakeHands", value);
     }
 
     /// <summary>

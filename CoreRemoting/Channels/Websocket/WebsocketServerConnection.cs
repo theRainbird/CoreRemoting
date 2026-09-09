@@ -51,18 +51,11 @@ public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
     private async Task<Guid> CreateRemotingSession()
     {
         var cookies = WebSocketContext.CookieCollection;
-        var handshake = new ClientHandshakeMessage()
+        var handshake = new ClientHandshakeMessage
         {
             Metadata = cookies.OfType<Cookie>().ToDictionary(c => c.Name, c => c.Value),
             ClientAddress = ClientAddress,
         };
-
-        // handle legacy client public key cookie name
-        if (cookies[LegacyClientPublicKeyCookie] != null)
-        {
-            handshake.Metadata[nameof(handshake.ClientPublicKey)] =
-                cookies[LegacyClientPublicKeyCookie].Value;
-        }
 
         Session = await RemotingServer.SessionRepository
             .ResumeOrCreateSession(handshake, RemotingServer, this)

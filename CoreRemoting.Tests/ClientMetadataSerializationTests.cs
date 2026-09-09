@@ -133,8 +133,9 @@ public class ClientHandshakeMessageSerializationTests
 
         Assert.Contains("\"Metadata\"", json);
         Assert.Contains("MessageEncryption", json);
-        Assert.Contains("ClientPublicKey", json);
+        Assert.Contains("ShakeHands", json);
         Assert.Contains("\"ResumableSessionId\"", json);
+        Assert.DoesNotContain("\"ClientPublicKey\":", json);
         Assert.DoesNotContain("\"SessionSignature\":", json);
     }
 
@@ -177,9 +178,9 @@ public class ClientHandshakeMessageSerializationTests
     }
 
     [Theory]
-    [InlineData("{\"Metadata\":{\"MessageEncryption\":\"1\",\"ClientPublicKey\":\"AQID\"}}", true, new byte[] { 1, 2, 3 })]
-    [InlineData("{\"Metadata\":{\"MessageEncryption\":\"True\",\"ClientPublicKey\":\"BAUG\"}}", true, new byte[] { 4, 5, 6 })]
-    [InlineData("{\"Metadata\":{\"MessageEncryption\":\"false\",\"ClientPublicKey\":\"\"}}", false, null)]
+    [InlineData("{\"Metadata\":{\"MessageEncryption\":\"1\",\"ShakeHands\":\"AQID\"}}", true, new byte[] { 1, 2, 3 })]
+    [InlineData("{\"Metadata\":{\"MessageEncryption\":\"True\",\"ShakeHands\":\"BAUG\"}}", true, new byte[] { 4, 5, 6 })]
+    [InlineData("{\"Metadata\":{\"MessageEncryption\":\"false\",\"ShakeHands\":\"\"}}", false, null)]
     public void Json_DeserializeFromManualJson(string json, bool expectedEncryption, byte[] expectedKey)
     {
         var restored = JsonAdapter.Deserialize<ClientHandshakeMessage>(Encoding.UTF8.GetBytes(json));
@@ -257,7 +258,7 @@ public class ClientHandshakeMessageSerializationTests
 
         Assert.Equal(2, restored.Metadata.Count);
         Assert.Contains("MessageEncryption", restored.Metadata);
-        Assert.Contains("ClientPublicKey", restored.Metadata);
+        Assert.Contains("ShakeHands", restored.Metadata);
         Assert.DoesNotContain("ResumableSessionId", restored.Metadata);
         Assert.DoesNotContain("SessionSignature", restored.Metadata);
     }
