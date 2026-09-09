@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using CoreRemoting.RpcMessaging;
+using CoreRemoting.Serialization;
 
 namespace CoreRemoting;
 
@@ -18,6 +19,11 @@ public interface IRemotingClient : IAsyncDisposable, IDisposable
     /// Gets the configuration settings used by the CoreRemoting client instance.
     /// </summary>
     ClientConfig Config { get; }
+
+    /// <summary>
+    /// Gets the configured serializer.
+    /// </summary>
+    ISerializerAdapter Serializer { get; }
 
     /// <summary>
     /// Gets the public key of this CoreRemoting client instance.

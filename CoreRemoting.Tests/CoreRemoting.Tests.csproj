@@ -13,7 +13,6 @@
         <Compile Remove="BinarySerializationTests.cs" />
         <Compile Remove="InvokerTests.cs" />
         <Compile Remove="InvokerTestsSafe.cs" />
-        <Compile Remove="QuicHandshakeMessageTests.cs" />
         <Compile Remove="RpcTests_Quic.cs" />
         <Compile Remove="RpcTests_WatsonTcp.cs" />
         <Compile Remove="RpcTests_WebsocketSharp.cs" />
@@ -31,7 +30,6 @@
 
     <!-- .NET 9.0 only: include Quic channel -->
     <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0' And '$(OS)' == 'Windows_NT' ">
-        <Compile Include="QuicHandshakeMessageTests.cs" />
         <Compile Include="RpcTests_Quic.cs">
             <DependentUpon>RpcTests.cs</DependentUpon>
         </Compile>

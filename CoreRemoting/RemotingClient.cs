@@ -195,7 +195,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <summary>
     /// Gets the configured serializer.
     /// </summary>
-    internal ISerializerAdapter Serializer { get; }
+    public ISerializerAdapter Serializer { get; }
 
     /// <summary>
     /// Gets the local client delegate registry.
