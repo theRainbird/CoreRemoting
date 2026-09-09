@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using CoreRemoting.Channels;
+using CoreRemoting.RpcMessaging;
 
 namespace CoreRemoting.Toolbox;
 
@@ -51,6 +52,51 @@ public static class SessionRepositoryExtensions
 
         return await repository
             .CreateSession(messageEncryption, clientPublicKey, clientAddress, server, rawMessageTransport)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Attempts to resume an existing session, or creates a new one if resumption isn't possible.
+    /// <para>
+    /// Resumption is skipped when sessionId is null or <see cref="Guid.Empty"/>.
+    /// If <see cref="ISessionRepository.TryResumeSession"/> returns null (session not found,
+    /// public key mismatch, or session can't be resumed), a new session is created as a fallback.
+    /// </para>
+    /// </summary>
+    /// <param name="repository">Session repository.</param>
+    /// <param name="handshake">Client handshake metadata, <see cref="ClientHandshakeMessage"/>.</param>
+    /// <param name="server">Server instance (used only when creating a new session).</param>
+    /// <param name="rawMessageTransport">Raw message transport of the current connection.</param>
+    /// <returns>The resumed session, or a newly created one if resumption failed.</returns>
+    public static async Task<RemotingSession> ResumeOrCreateSession(
+        this ISessionRepository repository,
+        ClientHandshakeMessage handshake,
+        IRemotingServer server,
+        IRawMessageTransport rawMessageTransport)
+    {
+        if (repository == null)
+            throw new ArgumentNullException(nameof(repository));
+
+        var sessionId = handshake.ResumableSessionId;
+        if (sessionId.HasValue && sessionId.Value != Guid.Empty)
+        {
+            var resumed = await repository
+                .TryResumeSession(sessionId.Value,
+                    handshake.SessionSignature,
+                    handshake.ClientPublicKey,
+                    rawMessageTransport)
+                .ConfigureAwait(false);
+
+            if (resumed != null)
+                return resumed;
+        }
+
+        return await repository
+            .CreateSession(handshake.MessageEncryption,
+                handshake.ClientPublicKey,
+                handshake.ClientAddress,
+                server,
+                rawMessageTransport)
             .ConfigureAwait(false);
     }
 }

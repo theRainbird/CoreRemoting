@@ -16,7 +16,7 @@ public class ClientHandshakeMessage
     /// Gets all client handshake metadata.
     /// </summary>
     [DataMember]
-    public Dictionary<string, string> Metadata { get; } = new();
+    public Dictionary<string, string> Metadata { get; set; }
 
     /// <summary>
     /// Sets the value of the given property.
@@ -28,6 +28,8 @@ public class ClientHandshakeMessage
     /// <param name="value">The value to set.</param>
     public void SetValue<T>(string name, T value)
     {
+        Metadata ??= new();
+
         if (value == null)
         {
             Metadata.Remove(name);
@@ -56,6 +58,8 @@ public class ClientHandshakeMessage
     /// <param name="defaultValue">Default value to return if key is not found</param>
     public T GetValue<T>(string name, T defaultValue = default)
     {
+        Metadata ??= new();
+
         if (!Metadata.TryGetValue(name, out var strValue) || string.IsNullOrEmpty(strValue))
             return defaultValue;
 
@@ -119,5 +123,15 @@ public class ClientHandshakeMessage
     {
         get => GetValue<byte[]>(nameof(SessionSignature));
         set => SetValue(nameof(SessionSignature), value);
+    }
+
+    /// <summary>
+    /// Gets or sets client's address.
+    /// </summary>
+    [IgnoreDataMember]
+    public string ClientAddress
+    {
+        get => GetValue(nameof(ClientAddress), default(string));
+        set => SetValue(nameof(ClientAddress), value);
     }
 }

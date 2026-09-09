@@ -48,11 +48,11 @@ public class ClientHandshakeMessageSerializationTests
         yield return new object[] { BsonAdapter };
     }
 
-    private static T Roundtrip<T>(T obj, ISerializerAdapter adapter)
-        => adapter.Deserialize<T>(adapter.Serialize(obj));
+    private static T Roundtrip<T>(T obj, ISerializerAdapter adapter) =>
+        adapter.Deserialize<T>(adapter.Serialize(obj));
 
-    private static string SerializeToJsonString<T>(T obj)
-        => Encoding.UTF8.GetString(JsonAdapter.Serialize(obj));
+    private static string SerializeToJsonString<T>(T obj) =>
+        Encoding.UTF8.GetString(JsonAdapter.Serialize(obj));
 
     [Theory]
     [MemberData(nameof(AllAdapters))]
@@ -100,6 +100,7 @@ public class ClientHandshakeMessageSerializationTests
             ResumableSessionId = Guid.NewGuid(),
             SessionSignature = [0xAA, 0xBB]
         };
+
         original.SetValue("ChannelName", "quic");
         original.SetValue("ChannelPort", 443);
         original.SetValue("RemoteAddress", IPAddress.Parse("10.0.0.1"));
@@ -115,9 +116,7 @@ public class ClientHandshakeMessageSerializationTests
         Assert.Equal("quic", restored.GetValue<string>("ChannelName"));
         Assert.Equal(443, restored.GetValue<int>("ChannelPort"));
         Assert.Equal(IPAddress.Parse("10.0.0.1"), restored.GetValue<IPAddress>("RemoteAddress"));
-        Assert.Equal(
-            original.GetValue<DateTime>("ConnectedAt"),
-            restored.GetValue<DateTime>("ConnectedAt"));
+        Assert.Equal(original.GetValue<DateTime>("ConnectedAt"), restored.GetValue<DateTime>("ConnectedAt"));
     }
 
     [Fact]
