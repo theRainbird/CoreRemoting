@@ -30,4 +30,9 @@ public class NullMessage(string sender, string receiver, byte[] message, Diction
     /// Gets the metadata.
     /// </summary>
     public Dictionary<string, string> Metadata { get; } = metadata;
+
+    /// <summary>
+    /// Gets a value indicating whether this message is a disconnection signal.
+    /// </summary>
+    public bool IsStopSignal => Message is null && Metadata is { Count: 0 };
 }

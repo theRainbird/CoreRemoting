@@ -47,14 +47,6 @@ public class NullClientChannel : NullTransport, IClientChannel
     }
 
     /// <inheritdoc />
-    public override async Task DisconnectAsync()
-    {
-        await base.DisconnectAsync().ConfigureAwait(false);
-        IsConnected = false;
-        OnDisconnected();
-    }
-
-    /// <inheritdoc />
     public override async ValueTask DisposeAsync()
     {
         await DisconnectAsync().ConfigureAwait(false);

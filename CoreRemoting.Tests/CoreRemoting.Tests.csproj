@@ -94,6 +94,12 @@
       <Compile Update="SessionResumeTestsNoEncryption.cs">
         <DependentUpon>SessionResumeTests.cs</DependentUpon>
       </Compile>
+      <Compile Update="SessionResumeTestsNullChannel.cs">
+        <DependentUpon>SessionResumeTests.cs</DependentUpon>
+      </Compile>
+      <Compile Update="SessionResumeTestsNullNoEncr.cs">
+        <DependentUpon>SessionResumeTests.cs</DependentUpon>
+      </Compile>
       <Compile Update="SessionResumeTestsWebSockets.cs">
         <DependentUpon>SessionResumeTests.cs</DependentUpon>
       </Compile>
