@@ -66,7 +66,8 @@ public class NullServerChannel : IServerChannel
         {
             while (!token.IsCancellationRequested && IsListening)
                 await ReceiveConnections(token);
-        }, token);
+        },
+        token);
     }
 
     /// <inheritdoc/>

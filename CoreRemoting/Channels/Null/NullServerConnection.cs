@@ -3,6 +3,8 @@ using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using CoreRemoting.Channels.Null;
+using CoreRemoting.RpcMessaging;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
 
@@ -46,29 +48,16 @@ public class NullServerConnection : NullTransport, IAsyncDisposable
     /// </summary>
     private async Task<Guid> CreateRemotingSession()
     {
-        var messageEncryption = false;
-        byte[] clientPublicKey = null;
-
-        // get encryption metadata from NullMessage
-        if (ConnectionMessage.Metadata != null)
+        var handshake = new ClientHandshakeMessage
         {
-            var md = ConnectionMessage.Metadata;
-            if (md.TryGetValue(nameof(RemotingClient.MessageEncryption), out var me))
-            {
-                messageEncryption = Convert.ToBoolean(me);
-            }
-
-            if (md.TryGetValue(nameof(RemotingClient.PublicKey), out var pk))
-            {
-                clientPublicKey = Convert.FromBase64String(pk);
-            }
-        }
+            Metadata = ConnectionMessage?.Metadata,
+            ClientAddress = ClientAddress,
+        };
 
         if (RemotingServer != null)
         {
-            // note: null channel sessions are not resumable
-            Session = await RemotingServer.SessionRepository.CreateSession(
-                messageEncryption, clientPublicKey, ClientAddress, RemotingServer, this)
+            Session = await RemotingServer.SessionRepository
+                .ResumeOrCreateSession(handshake, RemotingServer, this)
                     .ConfigureAwait(false);
 
             return Session.SessionId;
