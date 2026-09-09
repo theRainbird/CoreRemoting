@@ -120,6 +120,10 @@ public abstract class QuicTransport : IAsyncDisposable
         }
         catch (Exception ex)
         {
+            // treat ConnectionAborted error signal as normal behavior
+            if (ex is QuicException qx && qx.QuicError == QuicError.ConnectionAborted)
+                return false;
+
             LastException = ex as NetworkException ??
                 new NetworkException(ex.Message, ex);
 

@@ -112,6 +112,11 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 	public event EventHandler Disposed;
 
 	/// <summary>
+	/// Tracing handler.
+	/// </summary>
+	public Action<string> TraceWriteLine { get; set; }
+
+	/// <summary>
 	/// Gets or sets the last exception.
 	/// </summary>
 	public NetworkException LastException { get; set; }
@@ -174,7 +179,7 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 				if (messageData.Length > 0)
 				{
 					// Debug logging for NamedPipe message handling
-					Console.Error.WriteLine(
+					TraceWriteLine?.Invoke(
 						$"[NamedPipe] Received message of {messageData.Length} bytes for session {_connectionId}");
 					ReceiveMessage?.Invoke(messageData);
 				}

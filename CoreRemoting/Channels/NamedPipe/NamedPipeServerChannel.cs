@@ -93,6 +93,11 @@ public class NamedPipeServerChannel : IServerChannel
 	/// </summary>
 	public bool IsListening => _isListening;
 
+	/// <summary>
+	/// Tracing handler.
+	/// </summary>
+	public Action<string> TraceWriteLine { get; set; }
+
 	private async Task AcceptClientsAsync()
 	{
 		while (!_cancellationTokenSource.Token.IsCancellationRequested)
@@ -114,8 +119,11 @@ public class NamedPipeServerChannel : IServerChannel
 						_ = connection.DisposeAsync();
 					};
 
+					// set up tracing
+					connection.TraceWriteLine = s => TraceWriteLine?.Invoke(s);
+
 					// Start handling this client
-					_ = Task.Run(() => connection.HandleClientAsync());
+					_ = Task.Run(connection.HandleClientAsync);
 				}
 			}
 			catch (OperationCanceledException)
