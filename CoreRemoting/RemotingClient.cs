@@ -269,6 +269,11 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             : null;
 
     /// <summary>
+    /// Gets the currently used shared key size.
+    /// </summary>
+    internal int SharedKeySize => _sharedSecretLength * 8;
+
+    /// <summary>
     /// Gets whether the connection to the server is established or not.
     /// </summary>
     public bool IsConnected => _channel?.IsConnected ?? false;
@@ -302,6 +307,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     {
         MessageEncryption = MessageEncryption,
         ClientPublicKey = PublicKey,
+        SharedKeySize = Config.SharedKeySize,
         ResumableSessionId = ResumableSessionId,
         SessionSignature = SessionSignature,
     };

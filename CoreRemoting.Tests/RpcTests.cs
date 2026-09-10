@@ -1761,6 +1761,37 @@ public class RpcTests : IClassFixture<ServerFixture>
         CheckServerErrorCount();
     }
 
+    [Theory]
+    [InlineData(256, 256)]
+    [InlineData(384, 384)]
+    [InlineData(128, 256)] // server minimum wins
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public virtual async Task Server_enforces_minimum_SharedKeySize(int requestedKeySize, int expectedKeySize)
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        _serverFixture.Server.Config.SharedKeySize = 256;
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 20,
+            Channel = ClientChannel,
+            MessageEncryption = true,
+            SharedKeySize = requestedKeySize,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        await client.ConnectAsync()
+            .ConfigureAwait(false);
+
+        var proxy = client.CreateProxy<ITestService>();
+        var echoed = proxy.Echo("@echo off");
+        Assert.Equal("@echo off", echoed);
+        Assert.Equal(expectedKeySize, client.SharedKeySize);
+
+        CheckServerErrorCount();
+    }
+
     [Fact]
     public void CreateProxy_methods_should_produce_equivalent_results()
     {

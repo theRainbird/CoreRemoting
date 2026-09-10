@@ -149,13 +149,18 @@ public static class Extensions
     /// </summary>
     /// <param name="config">Configuration data for the remoting server.</param>
     /// <param name="sessionId">Session identity, used in legacy mode.</param>
-    public static byte[] GenerateSharedKey(this ServerConfig config, Guid sessionId)
+    /// <param name="sharedKeySize">Shared key size, specified by the client.</param>
+    public static byte[] GenerateSharedKey(this ServerConfig config, Guid sessionId, int sharedKeySize)
     {
         if (config.UseLegacySessionKeyDerivation)
             return sessionId.ToByteArray();
 
+        // server configuration specifies the minimal shared key size
+        if (sharedKeySize < config.SharedKeySize)
+            sharedKeySize = config.SharedKeySize;
+
         using var rng = RandomNumberGenerator.Create();
-        var sharedKey = new byte[config.SharedKeySize / 8];
+        var sharedKey = new byte[sharedKeySize / 8];
         rng.GetBytes(sharedKey);
         return sharedKey;
     }

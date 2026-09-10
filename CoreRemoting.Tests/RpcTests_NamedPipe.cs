@@ -132,49 +132,4 @@ public class RpcTests_NamedPipe : RpcTests
 
         Assert.Equal(0, _serverFixture.ServerErrorCount);
     }
-
-    [Fact]
-    public override void Call_on_Proxy_should_be_invoked_on_remote_service_with_MessageEncryption()
-    {
-        // Verify than NamedPipe channel now supports message encryption
-        base.Call_on_Proxy_should_be_invoked_on_remote_service_with_MessageEncryption();
-    }
-
-    [Fact]
-    public override void Large_messages_are_sent_and_received()
-    {
-        // Validate that the NamedPipe channel can handle large payloads now that
-        // chunked writes and robust reads are implemented.
-        base.Large_messages_are_sent_and_received();
-    }
-
-    [Fact]
-    public override void Authentication_can_fail_then_succeed()
-    {
-        // Verify than NamedPipe channel now supports authentication scenarios
-        base.Authentication_can_fail_then_succeed();
-    }
-
-    [Fact]
-    public override void Authentication_handler_can_check_client_address()
-    {
-        // Verify than NamedPipe channel now supports authentication address check test
-        base.Authentication_handler_can_check_client_address();
-    }
-
-    [Fact]
-    public override Task Server_with_MessageEncryption_disabled_accepts_both_encrypted_and_unencrypted_clients()
-    {
-        // Message encryption is now supported for NamedPipe channel
-        return base.Server_with_MessageEncryption_disabled_accepts_both_encrypted_and_unencrypted_clients();
-    }
-
-    [Fact]
-    public override Task Server_with_MessageEncryption_enabled_accepts_only_encrypted_clients()
-    {
-        // Message encryption is now supported for NamedPipe channel
-        return base.Server_with_MessageEncryption_enabled_accepts_only_encrypted_clients();
-    }
-
-    // Note: Reconnect test uses base implementation; ensure ChannelConnectionName is set via ConfigureServer
 }

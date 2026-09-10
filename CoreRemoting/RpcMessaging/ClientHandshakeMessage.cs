@@ -126,6 +126,16 @@ public class ClientHandshakeMessage
     }
 
     /// <summary>
+    /// Gets or sets the shared key size.
+    /// </summary>
+    [IgnoreDataMember]
+    public int SharedKeySize
+    {
+        get => GetValue(nameof(SharedKeySize), 256);
+        set => SetValue(nameof(SharedKeySize), value);
+    }
+
+    /// <summary>
     /// Gets or sets client's address.
     /// </summary>
     [IgnoreDataMember]

@@ -48,6 +48,7 @@ public static class SessionRepositoryExtensions
 
         return await repository
             .CreateSession(handshake.MessageEncryption,
+                handshake.SharedKeySize,
                 handshake.ClientPublicKey,
                 handshake.ClientAddress,
                 server,

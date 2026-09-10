@@ -14,6 +14,7 @@ public interface ISessionRepository : IAsyncDisposable
     /// Creates a new session.
     /// </summary>
     /// <param name="messageEncryption">Whether message encryption is enabled on client</param>
+    /// <param name="sharedKeySize">Shared key size requested by the client.</param>
     /// <param name="clientPublicKey">Client's public key</param>
     /// <param name="clientAddress">Client's network address</param>
     /// <param name="server">Server instance</param>
@@ -21,6 +22,7 @@ public interface ISessionRepository : IAsyncDisposable
     /// <returns>The newly created session</returns>
     Task<RemotingSession> CreateSession(
         bool messageEncryption,
+        int sharedKeySize,
         byte[] clientPublicKey,
         string clientAddress,
         IRemotingServer server,

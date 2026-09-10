@@ -32,6 +32,7 @@ public sealed class RemotingSession : IAsyncDisposable
     private readonly IRemotingServer _server;
     private IRawMessageTransport _rawMessageTransport;
     private readonly int _keySize;
+    private readonly int _sharedKeySize;
     private readonly ISessionKeyPair _keyPair;
     private readonly Guid _sessionId;
     private byte[] _sharedSecret;
@@ -68,11 +69,13 @@ public sealed class RemotingSession : IAsyncDisposable
     /// </summary>
     /// <param name="messageEncryption">Indicates whether message encryption is enabled</param>
     /// <param name="keySize">Key size of the RSA keys for asymmetric encryption</param>
+    /// <param name="sharedKeySize">Shared key size for symmetric encryption</param>
     /// <param name="clientPublicKey">Public key of this session's client</param>
     /// <param name="clientAddress">Client's network address</param>
     /// <param name="server">Server instance, that hosts this session</param>
     /// <param name="rawMessageTransport">Component, that does the raw message transport (send and receive)</param>
-    internal RemotingSession(bool messageEncryption, int keySize, byte[] clientPublicKey, string clientAddress,
+    internal RemotingSession(bool messageEncryption, int keySize,
+        int sharedKeySize, byte[] clientPublicKey, string clientAddress,
         IRemotingServer server, IRawMessageTransport rawMessageTransport)
     {
         _isDisposing = false;
@@ -85,6 +88,7 @@ public sealed class RemotingSession : IAsyncDisposable
 
         _keySize = keySize;
         _keyPair = SessionKeyPairFactory.Generate(messageEncryption, _keySize);
+        _sharedKeySize = sharedKeySize;
         _remoteDelegateInvocationEventAggregator = new RemoteDelegateInvocationEventAggregator();
         _server = server ?? throw new ArgumentNullException(nameof(server));
         _delegateProxyFactory = _server.ServiceRegistry.GetService<IDelegateProxyFactory>();
@@ -98,7 +102,7 @@ public sealed class RemotingSession : IAsyncDisposable
         _rawMessageTransport.Disconnected += OnRawMessageTransportDisconnected;
 
         _sharedSecret = MessageEncryption
-            ? _server.Config.GenerateSharedKey(_sessionId)
+            ? _server.Config.GenerateSharedKey(_sessionId, _sharedKeySize)
             : null;
 
         _remoteDelegateInvocationEventAggregator.RemoteDelegateInvocationNeeded +=
