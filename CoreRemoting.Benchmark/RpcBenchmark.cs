@@ -3,34 +3,11 @@ using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Reports;
-using CoreRemoting.Channels;
-using CoreRemoting.Channels.NamedPipe;
-using CoreRemoting.Channels.Null;
-using CoreRemoting.Channels.Tcp;
-using CoreRemoting.Channels.Websocket;
-
-#if NET9_0_OR_GREATER
-using CoreRemoting.Channels.Quic;
-#endif
-
 using Perfolizer.Horology;
 using Perfolizer.Metrology;
+using static CoreRemoting.Benchmark.Setup;
 
 namespace CoreRemoting.Benchmark;
-
-public enum RpcChannel
-{
-    Null,
-    NullEncr,
-    NPipe,
-    NPipeEncr,
-    Quic,
-    QuicEncr,
-    Wsock,
-    WsockEncr,
-    Tcp,
-    TcpEncr
-}
 
 [MemoryDiagnoser]
 [Config(typeof(Config))]
@@ -40,13 +17,7 @@ public class RpcBenchmark
     {
         public Config()
         {
-            AddJob(
-                Job.Default
-            //    Job.ShortRun
-            //        .WithWarmupCount(2)
-            //        .WithIterationCount(5)
-            //        .WithId("Fast")
-            );
+            AddJob(Job.Default);
 
             HideColumns(Column.StdDev, Column.Error);
 
@@ -60,53 +31,32 @@ public class RpcBenchmark
     private RemotingClient _mainClient = null!;
     private ITestService _proxy = null!;
 
-    private bool _encryption;
-    private string? _pipeName;
-
-    [Params(
-        RpcChannel.Null,
-        RpcChannel.NullEncr,
-        RpcChannel.NPipe,
-        RpcChannel.NPipeEncr,
-        RpcChannel.Wsock,
-        RpcChannel.WsockEncr,
-#if NET9_0_OR_GREATER
-        RpcChannel.Quic,
-        RpcChannel.QuicEncr,
-#endif
-        RpcChannel.Tcp,
-        RpcChannel.TcpEncr
-    )]
-    public RpcChannel Channel { get; set; }
+    [ParamsSource(typeof(Setup), nameof(Scenarios))]
+    public ICase Setup { get; set; } = null!;
 
     [GlobalSetup]
-    public void Setup()
+    public void SetupServer()
     {
-        var serverChannel = CreateServerChannel(Channel);
-        var clientChannel = CreateClientChannel(Channel);
-        _encryption = IsEncryptionEnabled(Channel);
-        _pipeName = Channel == RpcChannel.NPipe ? "BenchmarkPipe" : null;
-
         _server = new RemotingServer(new ServerConfig
         {
-            Channel = serverChannel,
+            Channel = Setup.CreateServer(),
             NetworkPort = 9192,
             HostName = "localhost",
-            MessageEncryption = _encryption,
+            MessageEncryption = Setup.Encrypted,
             KeySize = 512,
-            ChannelConnectionName = _pipeName,
+            ChannelConnectionName = Setup.ConnectionName,
             RegisterServicesAction = c => c.RegisterService<ITestService, TestService>()
         });
         _server.Start();
 
         _mainClient = new RemotingClient(new ClientConfig
         {
-            Channel = clientChannel,
+            Channel = Setup.CreateClient(),
             ServerHostName = "localhost",
             ServerPort = 9192,
-            MessageEncryption = _encryption,
+            MessageEncryption = Setup.Encrypted,
             KeySize = 512,
-            ChannelConnectionName = _pipeName
+            ChannelConnectionName = Setup.ConnectionName
         });
         _mainClient.Connect();
         _proxy = _mainClient.CreateProxy<ITestService>();
@@ -125,12 +75,12 @@ public class RpcBenchmark
     {
         var config = new ClientConfig
         {
-            Channel = CreateClientChannel(Channel),
+            Channel = Setup.CreateClient(),
             ServerHostName = "localhost",
             ServerPort = 9192,
-            MessageEncryption = _encryption,
+            MessageEncryption = Setup.Encrypted,
             KeySize = 512,
-            ChannelConnectionName = _pipeName,
+            ChannelConnectionName = Setup.ConnectionName
         };
 
         using var client = new RemotingClient(config);
@@ -145,42 +95,6 @@ public class RpcBenchmark
 
     [Benchmark]
     public void FireEvent() => _proxy.FireServiceEvent();
-
-    private static IServerChannel CreateServerChannel(RpcChannel scenario) => scenario switch
-    {
-        RpcChannel.Null or RpcChannel.NullEncr => new NullServerChannel(),
-        RpcChannel.NPipe or RpcChannel.NPipeEncr => new NamedPipeServerChannel(),
-#if NET9_0_OR_GREATER
-        RpcChannel.Quic or RpcChannel.QuicEncr => new QuicServerChannel(),
-#endif
-        RpcChannel.Wsock or RpcChannel.WsockEncr => new WebsocketServerChannel(),
-        RpcChannel.Tcp or RpcChannel.TcpEncr => new TcpServerChannel(),
-        _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, null)
-    };
-
-    private static IClientChannel CreateClientChannel(RpcChannel scenario) => scenario switch
-    {
-        RpcChannel.Null or RpcChannel.NullEncr => new NullClientChannel(),
-        RpcChannel.NPipe or RpcChannel.NPipeEncr => new NamedPipeClientChannel(),
-#if NET9_0_OR_GREATER
-        RpcChannel.Quic or RpcChannel.QuicEncr => new QuicClientChannel(),
-#endif
-        RpcChannel.Wsock or RpcChannel.WsockEncr => new WebsocketClientChannel(),
-        RpcChannel.Tcp or RpcChannel.TcpEncr => new TcpClientChannel(),
-        _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, null)
-    };
-
-    private static bool IsEncryptionEnabled(RpcChannel scenario) => scenario switch
-    {
-#if NET9_0_OR_GREATER
-        RpcChannel.QuicEncr => true,
-#endif
-        RpcChannel.WsockEncr => true,
-        RpcChannel.TcpEncr => true,
-        RpcChannel.NullEncr => true,
-        RpcChannel.NPipeEncr => true,
-        _ => false
-    };
 }
 
 public interface ITestService
