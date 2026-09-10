@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Pipes;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.RpcMessaging;
 using CoreRemoting.Threading;
 
 namespace CoreRemoting.Channels.NamedPipe;
@@ -44,6 +45,11 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 
 	/// <inheritdoc />
 	public event Action Disconnected;
+
+	/// <summary>
+	/// Tracing handler.
+	/// </summary>
+	public Action<string> TraceWriteLine { get; set; }
 
 	/// <summary>
 	/// Initializes the channel.
@@ -124,18 +130,22 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 	{
 		try
 		{
-			// Send initial empty message to trigger server handshake response
+			// Send client handshake message to trigger server handshake response
 			// Only send if still connected
 			if (_isConnected && _pipeClient?.IsConnected == true)
 			{
-				await SendMessageAsync(new byte[0]).ConfigureAwait(false);
+				var serializer = _remotingClient.Serializer;
+				var handshake = _remotingClient.HandshakeMessage;
+				var handshakeBytes = serializer.Serialize(handshake);
+
+				await SendMessageAsync(handshakeBytes).ConfigureAwait(false);
 			}
 		}
 		catch (Exception ex)
 		{
 			// Log handshake error but don't fail connection
 			// Expected during authentication failures or connection drops
-			Console.Error.WriteLine($"Handshake failed: {ex.Message}");
+			TraceWriteLine?.Invoke($"Handshake failed: {ex.Message}");
 		}
 	}
 

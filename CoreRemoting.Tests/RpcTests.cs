@@ -1261,7 +1261,8 @@ public class RpcTests : IClassFixture<ServerFixture>
 
                 // allow only localhost connections
                 return address.Contains("127.0.0.1") || // ipv4
-                       address.Contains("[::1]"); // ipv6
+                       address.Contains("[::1]") || // ipv6
+                       address.StartsWith("NamedPipe:"); // pipes
             }
         };
 

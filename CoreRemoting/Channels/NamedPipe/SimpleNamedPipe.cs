@@ -4,7 +4,9 @@ using System.IO;
 using System.IO.Pipes;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.RpcMessaging;
 using CoreRemoting.Threading;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.NamedPipe;
 
@@ -159,9 +161,17 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 	{
 		try
 		{
+			// The first message is the handshake
+			var handshakeBytes = await ReadMessageAsync();
+			var handshake = handshakeBytes is { Length: > 0 }
+				? _server.Serializer.Deserialize<ClientHandshakeMessage>(handshakeBytes)
+				: new ClientHandshakeMessage();
+
+			handshake.ClientAddress = $"NamedPipe:{_connectionId}";
+
 			// Create session immediately for NamedPipe connections
 			// This ensures proper session context for scoped services
-			var sessionCreated = await CreateSessionAsNeeded(null).ConfigureAwait(false);
+			var sessionCreated = await CreateSessionAsNeeded(handshake).ConfigureAwait(false);
 			if (!sessionCreated)
 			{
 				// Session creation failed, stop processing
@@ -260,19 +270,13 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 		}
 	}
 
-	private async Task<bool> CreateSessionAsNeeded(Dictionary<string, object> metadata)
+	private async Task<bool> CreateSessionAsNeeded(ClientHandshakeMessage handshake)
 	{
 		if (_session != null)
 			return false;
 
-		// note: named pipe sessions are not resumable
-		_session = await _server.SessionRepository.CreateSession(
-			false,
-			null,
-			$"NamedPipe:{_connectionId}",
-			_server,
-			this)
-			.ConfigureAwait(false);
+		_session = await _server.SessionRepository
+			.ResumeOrCreateSession(handshake, _server, this);
 
 		_session.BeforeDispose += BeforeDisposeSession;
 

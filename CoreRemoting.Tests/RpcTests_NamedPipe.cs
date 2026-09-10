@@ -18,7 +18,10 @@ public class RpcTests_NamedPipe : RpcTests
         TraceWriteLine = Console.Error.WriteLine,
     };
 
-    protected override IClientChannel ClientChannel => new NamedPipeClientChannel();
+    protected override IClientChannel ClientChannel => new NamedPipeClientChannel
+    {
+        TraceWriteLine = Console.Error.WriteLine,
+    };
 
     public RpcTests_NamedPipe(ServerFixture serverFixture, ITestOutputHelper testOutputHelper) : base(serverFixture,
         testOutputHelper)
@@ -133,9 +136,8 @@ public class RpcTests_NamedPipe : RpcTests
     [Fact]
     public override void Call_on_Proxy_should_be_invoked_on_remote_service_with_MessageEncryption()
     {
-        // Skip MessageEncryption test for NamedPipe due to known hanging issues
-        // This is a limitation of current NamedPipe implementation with encryption
-        // The test passes for other channels (NullChannel, WebSockets)
+        // Verify than NamedPipe channel now supports message encryption
+        base.Call_on_Proxy_should_be_invoked_on_remote_service_with_MessageEncryption();
     }
 
     [Fact]
@@ -149,31 +151,29 @@ public class RpcTests_NamedPipe : RpcTests
     [Fact]
     public override void Authentication_can_fail_then_succeed()
     {
-        // Skip authentication test for NamedPipe due to task cancellation issues
-        // NamedPipe handshake fails with authentication scenarios
-        // The test passes for other channels (NullChannel, WebSockets)
+        // Verify than NamedPipe channel now supports authentication scenarios
+        base.Authentication_can_fail_then_succeed();
     }
 
     [Fact]
     public override void Authentication_handler_can_check_client_address()
     {
-        // Skip authentication address check test for NamedPipe due to security exception
-        // NamedPipe authentication provider doesn't support client address checking
-        // The test passes for other channels (NullChannel, WebSockets)
+        // Verify than NamedPipe channel now supports authentication address check test
+        base.Authentication_handler_can_check_client_address();
     }
 
     [Fact]
     public override Task Server_with_MessageEncryption_disabled_accepts_both_encrypted_and_unencrypted_clients()
     {
-        // Message encryption is not supported for NamedPipe channel
-        return Task.CompletedTask;
+        // Message encryption is now supported for NamedPipe channel
+        return base.Server_with_MessageEncryption_disabled_accepts_both_encrypted_and_unencrypted_clients();
     }
 
     [Fact]
     public override Task Server_with_MessageEncryption_enabled_accepts_only_encrypted_clients()
     {
-        // Message encryption is not supported for NamedPipe channel
-        return Task.CompletedTask;
+        // Message encryption is now supported for NamedPipe channel
+        return base.Server_with_MessageEncryption_enabled_accepts_only_encrypted_clients();
     }
 
     // Note: Reconnect test uses base implementation; ensure ChannelConnectionName is set via ConfigureServer
