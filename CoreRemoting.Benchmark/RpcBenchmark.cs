@@ -21,12 +21,14 @@ namespace CoreRemoting.Benchmark;
 public enum RpcChannel
 {
     Null,
-    NamedPipe,
-    QuicPlain,
+    NullEncr,
+    NPipe,
+    NPipeEncr,
+    Quic,
     QuicEncr,
-    WsockPlain,
+    Wsock,
     WsockEncr,
-    TcpPlain,
+    Tcp,
     TcpEncr
 }
 
@@ -63,14 +65,16 @@ public class RpcBenchmark
 
     [Params(
         RpcChannel.Null,
-        RpcChannel.NamedPipe,
-        RpcChannel.WsockPlain,
+        RpcChannel.NullEncr,
+        RpcChannel.NPipe,
+        RpcChannel.NPipeEncr,
+        RpcChannel.Wsock,
         RpcChannel.WsockEncr,
 #if NET9_0_OR_GREATER
-        RpcChannel.QuicPlain,
+        RpcChannel.Quic,
         RpcChannel.QuicEncr,
 #endif
-        RpcChannel.TcpPlain,
+        RpcChannel.Tcp,
         RpcChannel.TcpEncr
     )]
     public RpcChannel Channel { get; set; }
@@ -81,7 +85,7 @@ public class RpcBenchmark
         var serverChannel = CreateServerChannel(Channel);
         var clientChannel = CreateClientChannel(Channel);
         _encryption = IsEncryptionEnabled(Channel);
-        _pipeName = Channel == RpcChannel.NamedPipe ? "BenchmarkPipe" : null;
+        _pipeName = Channel == RpcChannel.NPipe ? "BenchmarkPipe" : null;
 
         _server = new RemotingServer(new ServerConfig
         {
@@ -144,25 +148,25 @@ public class RpcBenchmark
 
     private static IServerChannel CreateServerChannel(RpcChannel scenario) => scenario switch
     {
-        RpcChannel.Null => new NullServerChannel(),
-        RpcChannel.NamedPipe => new NamedPipeServerChannel(),
+        RpcChannel.Null or RpcChannel.NullEncr => new NullServerChannel(),
+        RpcChannel.NPipe or RpcChannel.NPipeEncr => new NamedPipeServerChannel(),
 #if NET9_0_OR_GREATER
-        RpcChannel.QuicPlain or RpcChannel.QuicEncr => new QuicServerChannel(),
+        RpcChannel.Quic or RpcChannel.QuicEncr => new QuicServerChannel(),
 #endif
-        RpcChannel.WsockPlain or RpcChannel.WsockEncr => new WebsocketServerChannel(),
-        RpcChannel.TcpPlain or RpcChannel.TcpEncr => new TcpServerChannel(),
+        RpcChannel.Wsock or RpcChannel.WsockEncr => new WebsocketServerChannel(),
+        RpcChannel.Tcp or RpcChannel.TcpEncr => new TcpServerChannel(),
         _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, null)
     };
 
     private static IClientChannel CreateClientChannel(RpcChannel scenario) => scenario switch
     {
-        RpcChannel.Null => new NullClientChannel(),
-        RpcChannel.NamedPipe => new NamedPipeClientChannel(),
+        RpcChannel.Null or RpcChannel.NullEncr => new NullClientChannel(),
+        RpcChannel.NPipe or RpcChannel.NPipeEncr => new NamedPipeClientChannel(),
 #if NET9_0_OR_GREATER
-        RpcChannel.QuicPlain or RpcChannel.QuicEncr => new QuicClientChannel(),
+        RpcChannel.Quic or RpcChannel.QuicEncr => new QuicClientChannel(),
 #endif
-        RpcChannel.WsockPlain or RpcChannel.WsockEncr => new WebsocketClientChannel(),
-        RpcChannel.TcpPlain or RpcChannel.TcpEncr => new TcpClientChannel(),
+        RpcChannel.Wsock or RpcChannel.WsockEncr => new WebsocketClientChannel(),
+        RpcChannel.Tcp or RpcChannel.TcpEncr => new TcpClientChannel(),
         _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, null)
     };
 
@@ -173,6 +177,8 @@ public class RpcBenchmark
 #endif
         RpcChannel.WsockEncr => true,
         RpcChannel.TcpEncr => true,
+        RpcChannel.NullEncr => true,
+        RpcChannel.NPipeEncr => true,
         _ => false
     };
 }

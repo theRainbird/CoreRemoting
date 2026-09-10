@@ -76,37 +76,16 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Compile Update="DicTests_DryIoc.cs">
+      <Compile Update="DicTests_*.cs">
         <DependentUpon>DicTests.cs</DependentUpon>
       </Compile>
-      <Compile Update="DicTests_Microsoft.cs">
-        <DependentUpon>DicTests.cs</DependentUpon>
-      </Compile>
-      <Compile Update="RpcTests_NamedPipe.cs">
+      <Compile Update="RpcTests_*.cs">
         <DependentUpon>RpcTests.cs</DependentUpon>
       </Compile>
-      <Compile Update="RpcTests_NullChannel.cs">
-        <DependentUpon>RpcTests.cs</DependentUpon>
-      </Compile>
-      <Compile Update="RpcTests_Websockets.cs">
-        <DependentUpon>RpcTests.cs</DependentUpon>
-      </Compile>
-      <Compile Update="SessionResumeTestsNoEncryption.cs">
+      <Compile Update="SessionResumeTests?*.cs">
         <DependentUpon>SessionResumeTests.cs</DependentUpon>
       </Compile>
-      <Compile Update="SessionResumeTestsNullChannel.cs">
-        <DependentUpon>SessionResumeTests.cs</DependentUpon>
-      </Compile>
-      <Compile Update="SessionResumeTestsNullNoEncr.cs">
-        <DependentUpon>SessionResumeTests.cs</DependentUpon>
-      </Compile>
-      <Compile Update="SessionResumeTestsWebSockets.cs">
-        <DependentUpon>SessionResumeTests.cs</DependentUpon>
-      </Compile>
-      <Compile Update="SessionResumeTestsWsockNoEncr.cs">
-        <DependentUpon>SessionResumeTests.cs</DependentUpon>
-      </Compile>
-      <Compile Update="SessionTests_Websockets.cs">
+      <Compile Update="SessionTests_*.cs">
         <DependentUpon>SessionTests.cs</DependentUpon>
       </Compile>
     </ItemGroup>
