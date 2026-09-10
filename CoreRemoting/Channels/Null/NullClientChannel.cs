@@ -35,17 +35,7 @@ public class NullClientChannel : NullTransport, IClientChannel
     /// <inheritdoc />
     public Task ConnectAsync()
     {
-        var encryption = $"{RemotingClient?.MessageEncryption ?? false}";
-        var metadata = new Dictionary<string, string>()
-        {
-            { nameof(RemotingClient.MessageEncryption), encryption },
-        };
-
-        if (RemotingClient?.PublicKey is byte[] publicKey and { Length: > 0 })
-        {
-            var clientPublicKey = Convert.ToBase64String(publicKey);
-            metadata[nameof(RemotingClient.PublicKey)] = clientPublicKey;
-        }
+        var metadata = RemotingClient?.HandshakeMessage?.Metadata;
 
         ThisEndpoint = NullMessageQueue.Connect(Url, metadata);
         RemoteEndpoint = Url;
@@ -54,14 +44,6 @@ public class NullClientChannel : NullTransport, IClientChannel
         OnConnected();
 
         return Task.CompletedTask;
-    }
-
-    /// <inheritdoc />
-    public override async Task DisconnectAsync()
-    {
-        await base.DisconnectAsync().ConfigureAwait(false);
-        IsConnected = false;
-        OnDisconnected();
     }
 
     /// <inheritdoc />

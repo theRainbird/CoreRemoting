@@ -16,26 +16,6 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     /// True when listening to incoming messages.
     /// </summary>
     protected bool _listening;
-    
-    /// <summary>
-    /// Handshake cookies: message encryption flag.
-    /// </summary>
-    protected const string MessageEncryptionCookie = "MessageEncryption";
-
-    /// <summary>
-    /// Handshake cookies: client public key.
-    /// </summary>
-    protected const string ClientPublicKeyCookie = "ShakeHands";
-
-    /// <summary>
-    /// Handshake cookies: optional session ID of a parked session that should be resumed (base64 encoded GUID).
-    /// </summary>
-    protected const string ResumeSessionIdCookie = "ResumeSessionId";
-
-    /// <summary>
-    /// Handshake cookies: optional session signature to prove client's authenticity.
-    /// </summary>
-    protected const string SessionSignatureCookie = "SessionSignature";
 
     /// <summary>
     /// Buffer size to read incoming messages.

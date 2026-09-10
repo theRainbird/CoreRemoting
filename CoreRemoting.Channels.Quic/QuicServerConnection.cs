@@ -2,6 +2,7 @@
 using System.Net.Quic;
 using System.Text;
 using System.Threading.Tasks;
+using CoreRemoting.RpcMessaging;
 using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Quic;
@@ -48,32 +49,17 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
     private async Task<Guid> CreateRemotingSession()
     {
         // read handshake message
-        var handshakeMessage = await ReadIncomingMessage()
+        var handshakeBytes = await ReadIncomingMessage()
             .ConfigureAwait(false);
 
-        var messageEncryption = false;
-        Guid? resumableSessionId = null;
-        byte[] sessionSignature = null;
-        byte[] clientPublicKey = handshakeMessage;
+        // deserialize handshake and add client address
+        var serializer = RemotingServer.Serializer;
+        var handshakeMessage = serializer.Deserialize<ClientHandshakeMessage>(handshakeBytes);
+        handshakeMessage.ClientAddress = Connection.RemoteEndPoint.ToString();
 
-        if (handshakeMessage is not null)
-        {
-            var handshake = QuicHandshakeMessage.FromByteArray(handshakeMessage);
-            messageEncryption = handshake.MessageEncryption;
-            resumableSessionId = handshake.ResumableSessionId;
-            sessionSignature = handshake.SessionSignature;
-            clientPublicKey = handshake.ClientPublicKey;
-        }
-
-        // disable message encryption if public key is empty
-        if (clientPublicKey != null && clientPublicKey.Length == 0)
-            clientPublicKey = null;
-
-        Session =
-            await RemotingServer.SessionRepository.ResumeOrCreateSession(
-                resumableSessionId, messageEncryption, sessionSignature, clientPublicKey,
-                    Connection.RemoteEndPoint.ToString(), RemotingServer, this)
-                        .ConfigureAwait(false);
+        Session = await RemotingServer.SessionRepository
+            .ResumeOrCreateSession(handshakeMessage, RemotingServer, this)
+                .ConfigureAwait(false);
 
         return Session.SessionId;
     }

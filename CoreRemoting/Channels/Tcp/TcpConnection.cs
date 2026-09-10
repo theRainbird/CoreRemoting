@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using CoreRemoting.RpcMessaging;
 using CoreRemoting.Toolbox;
 using WatsonTcp;
 
@@ -88,42 +90,15 @@ public class TcpConnection : IRawMessageTransport
         if (_session != null)
             return false;
 
-        bool messageEncryption = false;
-        byte[] clientPublicKey = null;
-        Guid? resumableSessionId = null;
-        byte[] sessionSignature = null;
-
-        if (metadata != null)
+        var handshake = new ClientHandshakeMessage
         {
-            messageEncryption = ((System.Text.Json.JsonElement)metadata["MessageEncryption"]).GetBoolean();
+            Metadata = metadata?.ToDictionary(kv => kv.Key, kv => $"{kv.Value}"),
+            ClientAddress = _clientMetadata.IpPort,
+        };
 
-            if (metadata.TryGetValue("ShakeHands", out var shakeHandsValue))
-            {
-                var shakeHands = ((System.Text.Json.JsonElement)shakeHandsValue).GetString();
-                if (!string.IsNullOrEmpty(shakeHands))
-                    clientPublicKey = Convert.FromBase64String(shakeHands);
-            }
-
-            if (metadata.TryGetValue("ResumeSessionId", out var resumeValue))
-            {
-                var resumeId = ((System.Text.Json.JsonElement)resumeValue).GetString();
-                if (!string.IsNullOrEmpty(resumeId))
-                    resumableSessionId = new Guid(Convert.FromBase64String(resumeId));
-            }
-
-            if (metadata.TryGetValue("SessionSignature", out var signatureValue))
-            {
-                var signature = ((System.Text.Json.JsonElement)signatureValue).GetString();
-                if (!string.IsNullOrEmpty(signature))
-                    sessionSignature = Convert.FromBase64String(signature);
-            }
-        }
-
-        _session =
-            _server.SessionRepository.ResumeOrCreateSession(
-                resumableSessionId, messageEncryption, sessionSignature,
-                    clientPublicKey, _clientMetadata.IpPort, _server, this)
-                        .GetAwaiter().GetResult();
+        _session = _server.SessionRepository
+            .ResumeOrCreateSession(handshake, _server, this)
+                .GetAwaiter().GetResult();
 
         _session.BeforeDispose += BeforeDisposeSession;
         return true;

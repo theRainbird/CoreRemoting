@@ -195,7 +195,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <summary>
     /// Gets the configured serializer.
     /// </summary>
-    internal ISerializerAdapter Serializer { get; }
+    public ISerializerAdapter Serializer { get; }
 
     /// <summary>
     /// Gets the local client delegate registry.
@@ -269,6 +269,11 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             : null;
 
     /// <summary>
+    /// Gets the currently used shared key size.
+    /// </summary>
+    internal int SharedKeySize => _sharedSecretLength * 8;
+
+    /// <summary>
     /// Gets whether the connection to the server is established or not.
     /// </summary>
     public bool IsConnected => _channel?.IsConnected ?? false;
@@ -294,6 +299,18 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// </summary>
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
     public RemotingIdentity Identity { get; private set; }
+
+    /// <summary>
+    /// Gets the handshake metadata message for the communication channel.
+    /// </summary>
+    public ClientHandshakeMessage HandshakeMessage => new()
+    {
+        MessageEncryption = MessageEncryption,
+        ClientPublicKey = PublicKey,
+        SharedKeySize = Config.SharedKeySize,
+        ResumableSessionId = ResumableSessionId,
+        SessionSignature = SessionSignature,
+    };
 
     #endregion
 

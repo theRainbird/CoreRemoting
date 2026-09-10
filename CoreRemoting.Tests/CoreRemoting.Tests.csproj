@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+        <TargetFrameworks>net9.0;net8.0</TargetFrameworks>
         <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
         <IsPackable>false</IsPackable>
         <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
-    </PropertyGroup>
+   </PropertyGroup>
 
     <!-- Exclude the unnecessary tests to save Github Actions time -->
     <!-- WatsonTcp is the default channel, WebSocketSharp is optional, BinaryFormatter is .net8 only, Quic is .net9 only -->
@@ -13,7 +13,6 @@
         <Compile Remove="BinarySerializationTests.cs" />
         <Compile Remove="InvokerTests.cs" />
         <Compile Remove="InvokerTestsSafe.cs" />
-        <Compile Remove="QuicHandshakeMessageTests.cs" />
         <Compile Remove="RpcTests_Quic.cs" />
         <Compile Remove="RpcTests_WatsonTcp.cs" />
         <Compile Remove="RpcTests_WebsocketSharp.cs" />
@@ -31,7 +30,6 @@
 
     <!-- .NET 9.0 only: include Quic channel -->
     <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0' And '$(OS)' == 'Windows_NT' ">
-        <Compile Include="QuicHandshakeMessageTests.cs" />
         <Compile Include="RpcTests_Quic.cs">
             <DependentUpon>RpcTests.cs</DependentUpon>
         </Compile>
@@ -94,6 +92,12 @@
         <DependentUpon>RpcTests.cs</DependentUpon>
       </Compile>
       <Compile Update="SessionResumeTestsNoEncryption.cs">
+        <DependentUpon>SessionResumeTests.cs</DependentUpon>
+      </Compile>
+      <Compile Update="SessionResumeTestsNullChannel.cs">
+        <DependentUpon>SessionResumeTests.cs</DependentUpon>
+      </Compile>
+      <Compile Update="SessionResumeTestsNullNoEncr.cs">
         <DependentUpon>SessionResumeTests.cs</DependentUpon>
       </Compile>
       <Compile Update="SessionResumeTestsWebSockets.cs">

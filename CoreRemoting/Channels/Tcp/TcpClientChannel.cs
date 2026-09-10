@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using CoreRemoting.Threading;
 using WatsonTcp;
@@ -40,31 +41,18 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
         _tcpClient = new WatsonTcpClient(client.Config.ServerHostName, client.Config.ServerPort);
         _tcpClient.Settings.NoDelay = true;
 
-        _handshakeMetadata = new()
-        {
-            { "MessageEncryption", client.MessageEncryption }
-        };
-
-        if (client.PublicKey is byte[] publicKey)
-            _handshakeMetadata["ShakeHands"] =
-                Convert.ToBase64String(publicKey);
-
-        ApplyResumeSessionId(client);
+        ApplyHandshakeMetadata(client);
     }
 
     /// <summary>
-    /// Updates the handshake metadata with the ID of a session that should be resumed.
+    /// Updates the handshake metadata with the encryption settings, 
+    /// the ID of a session that should be resumed, and so on.
     /// </summary>
     /// <param name="client">CoreRemoting client</param>
-    private void ApplyResumeSessionId(IRemotingClient client)
+    private void ApplyHandshakeMetadata(IRemotingClient client)
     {
-        if (client.ResumableSessionId != null)
-            _handshakeMetadata["ResumeSessionId"] = Convert.ToBase64String(
-                client.ResumableSessionId.Value.ToByteArray());
-
-        if (client.SessionSignature is byte[] signature)
-            _handshakeMetadata["SessionSignature"] =
-                Convert.ToBase64String(signature);
+        _handshakeMetadata = client.HandshakeMessage.Metadata
+            .ToDictionary(kv => kv.Key, kv => kv.Value as object);
     }
 
     /// <summary>
@@ -78,7 +66,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
         if (_tcpClient.Connected)
             return;
 
-        ApplyResumeSessionId(_client);
+        ApplyHandshakeMetadata(_client);
 
         _tcpClient.Events.ExceptionEncountered += OnError;
         _tcpClient.Events.MessageReceived += OnMessage;

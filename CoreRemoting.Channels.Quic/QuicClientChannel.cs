@@ -71,21 +71,15 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
         ClientWriter = new(ClientStream, Encoding.UTF8, leaveOpen: true);
 
         // prepare handshake message
-        var handshakeMessage = new QuicHandshakeMessage
-        {
-            MessageEncryption = Client.MessageEncryption,
-            ResumableSessionId = Client.ResumableSessionId,
-            SessionSignature = Client.SessionSignature,
-            ClientPublicKey = Client.PublicKey,
-        };
+        var handshakeMessage = Client.HandshakeMessage;
+        var handshakeBytes = Client.Serializer.Serialize(handshakeMessage);
 
         // start listening for incoming messages
         IsConnected = true;
         await StartListening();
 
         // send handshake message
-        await SendMessageAsync(handshakeMessage.ToByteArray())
-            .ConfigureAwait(false);
+        await SendMessageAsync(handshakeBytes).ConfigureAwait(false);
 
         OnConnected();
     }

@@ -39,29 +39,12 @@ public class WebsocketSharpClientChannel : IClientChannel, IRawMessageTransport
 
         _webSocket = new WebSocket(url) { NoDelay = true };
 
-        _webSocket.SetCookie(new Cookie(
-            name: "MessageEncryption",
-            value: client.MessageEncryption ? "1" : "0"));
-
-        if (client.MessageEncryption)
+        // send handshake metadata items as cookies
+        foreach (var kv in client.HandshakeMessage.Metadata)
         {
             _webSocket.SetCookie(new Cookie(
-                "ShakeHands",
-                Convert.ToBase64String(client.PublicKey)));
-        }
-
-        if (client.ResumableSessionId != null)
-        {
-            _webSocket.SetCookie(new Cookie(
-                "ResumeSessionId",
-                Convert.ToBase64String(client.ResumableSessionId.Value.ToByteArray())));
-        }
-
-        if (client.SessionSignature is byte[] signature)
-        {
-            _webSocket.SetCookie(new Cookie(
-                "SessionSignature",
-                Convert.ToBase64String(signature)));
+                name: kv.Key,
+                value: kv.Value));
         }
 
         _webSocket.Log.Output = (timestamp, text) => Console.WriteLine("{0}: {1}", timestamp, text);
