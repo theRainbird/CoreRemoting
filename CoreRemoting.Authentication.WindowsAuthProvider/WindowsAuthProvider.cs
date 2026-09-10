@@ -60,25 +60,32 @@ namespace CoreRemoting.Authentication
                 identityName = domain + "\\" + userName;                
             }
             
-            var isAuthenticated = principalContext.ValidateCredentials(userName ?? string.Empty, password ?? string.Empty);
-
-            if (isAuthenticated)
+            try
             {
-                var principal = UserPrincipal.FindByIdentity(principalContext, identityName ?? string.Empty);
-                var userIsMemberOf = 
-                    principal == null
-                        ? Array.Empty<string>()
-                        : principal.GetAuthorizationGroups().Select(group => group.Name);
+                var isAuthenticated = principalContext.ValidateCredentials(userName ?? string.Empty, password ?? string.Empty);
 
-                authenticatedIdentity =
-                    new RemotingIdentity()
-                    {
-                        Name = identityName,
-                        IsAuthenticated = true,
-                        Roles = userIsMemberOf.ToArray()
-                    };
+                if (isAuthenticated)
+                {
+                    using var principal = UserPrincipal.FindByIdentity(principalContext, identityName ?? string.Empty);
+                    var userIsMemberOf = 
+                        principal == null
+                            ? Array.Empty<string>()
+                            : principal.GetAuthorizationGroups().Select(group => group.Name);
 
-                return true;
+                    authenticatedIdentity =
+                        new RemotingIdentity()
+                        {
+                            Name = identityName,
+                            IsAuthenticated = true,
+                            Roles = userIsMemberOf.ToArray()
+                        };
+
+                    return true;
+                }
+            }
+            finally
+            {
+                principalContext.Dispose();
             }
 
             return false;
