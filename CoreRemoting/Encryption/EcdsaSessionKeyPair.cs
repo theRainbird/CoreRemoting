@@ -52,6 +52,9 @@ public sealed class EcdsaSessionKeyPair : ISessionKeyPair
     }
 
     /// <inheritdoc/>
+    public int KeySize => _ecdsa.KeySize;
+
+    /// <inheritdoc/>
     public byte[] PublicKey => _publicKey ??= _ecdsa.ExportPublicKey();
 
     /// <inheritdoc/>

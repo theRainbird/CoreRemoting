@@ -27,6 +27,11 @@ public interface ISessionKeyPair : IDisposable
     bool VerifySignature(byte[] data, byte[] signature);
 
     /// <summary>
+    /// Gets the currently used key size, for reference.
+    /// </summary>
+    int KeySize { get; }
+
+    /// <summary>
     /// Gets the public key.
     /// </summary>
     byte[] PublicKey { get; }
