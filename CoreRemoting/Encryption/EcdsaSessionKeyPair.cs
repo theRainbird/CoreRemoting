@@ -46,7 +46,7 @@ public sealed class EcdsaSessionKeyPair : ISessionKeyPair
     /// <returns>A key pair instance that can only verify signatures.</returns>
     public static EcdsaSessionKeyPair FromPublicKey(byte[] publicKey)
     {
-        using var ecdsa = ECDsa.Create();
+        var ecdsa = ECDsa.Create();
         ecdsa.ImportPublicKey(publicKey);
         return new EcdsaSessionKeyPair(ecdsa, publicKey);
     }
