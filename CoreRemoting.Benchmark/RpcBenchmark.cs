@@ -72,8 +72,8 @@ public class RpcBenchmark
         _server?.Dispose();
     }
 
-    [IterationSetup(Target = nameof(Connect))]
-    public void SetupConnect()
+    [Benchmark]
+    public void Connect()
     {
         var config = new ClientConfig
         {
@@ -85,21 +85,8 @@ public class RpcBenchmark
             ChannelConnectionName = Setup.ConnectionName
         };
 
-        _clientForConnect = new RemotingClient(config);
-    }
-
-    [IterationCleanup(Target = nameof(Connect))]
-    public void CleanupConnect()
-    {
-        _clientForConnect?.Dispose();
-    }
-
-    private RemotingClient? _clientForConnect;
-
-    [Benchmark]
-    public void Connect()
-    {
-        _clientForConnect!.Connect();
+        using var client = new RemotingClient(config);
+        client.Connect();
     }
 
     [Benchmark]
