@@ -32,7 +32,7 @@ public class RpcBenchmark
     private ITestService _proxy = null!;
 
     [ParamsSource(typeof(Setup), nameof(Scenarios))]
-    public ICase Setup { get; set; } = null!;
+    public IScenario Setup { get; set; } = null!;
 
     [GlobalSetup]
     public void SetupServer()
@@ -42,11 +42,12 @@ public class RpcBenchmark
             Channel = Setup.CreateServer(),
             NetworkPort = 9192,
             HostName = "localhost",
-            MessageEncryption = Setup.Encrypted,
+            MessageEncryption = Setup.MessageEncryption,
             KeySize = 512,
             ChannelConnectionName = Setup.ConnectionName,
             RegisterServicesAction = c => c.RegisterService<ITestService, TestService>()
         });
+
         _server.Start();
 
         _mainClient = new RemotingClient(new ClientConfig
@@ -54,10 +55,11 @@ public class RpcBenchmark
             Channel = Setup.CreateClient(),
             ServerHostName = "localhost",
             ServerPort = 9192,
-            MessageEncryption = Setup.Encrypted,
+            MessageEncryption = Setup.MessageEncryption,
             KeySize = 512,
             ChannelConnectionName = Setup.ConnectionName
         });
+
         _mainClient.Connect();
         _proxy = _mainClient.CreateProxy<ITestService>();
     }
@@ -70,21 +72,34 @@ public class RpcBenchmark
         _server?.Dispose();
     }
 
-    [Benchmark]
-    public void Connect()
+    [IterationSetup(Target = nameof(Connect))]
+    public void SetupConnect()
     {
         var config = new ClientConfig
         {
             Channel = Setup.CreateClient(),
             ServerHostName = "localhost",
             ServerPort = 9192,
-            MessageEncryption = Setup.Encrypted,
+            MessageEncryption = Setup.MessageEncryption,
             KeySize = 512,
             ChannelConnectionName = Setup.ConnectionName
         };
 
-        using var client = new RemotingClient(config);
-        client.Connect();
+        _clientForConnect = new RemotingClient(config);
+    }
+
+    [IterationCleanup(Target = nameof(Connect))]
+    public void CleanupConnect()
+    {
+        _clientForConnect?.Dispose();
+    }
+
+    private RemotingClient? _clientForConnect;
+
+    [Benchmark]
+    public void Connect()
+    {
+        _clientForConnect!.Connect();
     }
 
     [Benchmark]

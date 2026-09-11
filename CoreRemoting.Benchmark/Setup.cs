@@ -1,5 +1,4 @@
-﻿using System;
-using CoreRemoting.Channels;
+﻿using CoreRemoting.Channels;
 using CoreRemoting.Channels.NamedPipe;
 using CoreRemoting.Channels.Null;
 using CoreRemoting.Channels.Tcp;
@@ -13,58 +12,48 @@ namespace CoreRemoting.Benchmark;
 
 public static class Setup
 {
-    public interface ICase
+    public interface IScenario
     {
         IServerChannel CreateServer();
         IClientChannel CreateClient();
-        bool Encrypted { get; }
+        bool MessageEncryption { get; }
         string ConnectionName { get; }
     }
 
-    // --- Two-parameter case: plain -------------------------------------------
-
-    private class Case<TServer, TClient> : ICase
+    private class Plain<TServer, TClient> : IScenario
         where TServer : IServerChannel, new()
         where TClient : IClientChannel, new()
     {
         public IServerChannel CreateServer() => new TServer();
         public IClientChannel CreateClient() => new TClient();
-        public virtual bool Encrypted => false;
+        public virtual bool MessageEncryption => false;
         public string ConnectionName { get; } = "Bench" + Guid.NewGuid();
         public override string ToString() => $"{Short(typeof(TServer).Name)}_Plain";
         protected static string Short(string name) =>
         	name.Replace("ServerChannel", "").Replace("ClientChannel", "");
     }
 
-    // --- Three-parameter case: encrypted -------------------------------------
-
-    private sealed class Case<TServer, TClient, TSecure> : Case<TServer, TClient>
+    private sealed class Encrypted<TServer, TClient> : Plain<TServer, TClient>
         where TServer : IServerChannel, new()
         where TClient : IClientChannel, new()
     {
-        public override bool Encrypted => true;
+        public override bool MessageEncryption => true;
         public override string ToString() => $"{Short(typeof(TServer).Name)}_Secure";
     }
 
-    // --- Dummy marker for the third generic parameter ------------------------
-
-    private sealed class Secure;
-
-    // --- Scenarios сatalog ---------------------------------------------------
-
-    public static ICase[] Scenarios { get; } =
+    public static IScenario[] Scenarios { get; } =
     [
-        new Case<NullServerChannel, NullClientChannel>(),
-        new Case<NullServerChannel, NullClientChannel, Secure>(),
-        new Case<NamedPipeServerChannel, NamedPipeClientChannel>(),
-        new Case<NamedPipeServerChannel, NamedPipeClientChannel, Secure>(),
-        new Case<TcpServerChannel, TcpClientChannel>(),
-        new Case<TcpServerChannel, TcpClientChannel, Secure>(),
-        new Case<WebsocketServerChannel, WebsocketClientChannel>(),
-        new Case<WebsocketServerChannel, WebsocketClientChannel, Secure>(),
+        new Plain<NullServerChannel, NullClientChannel>(),
+        new Encrypted<NullServerChannel, NullClientChannel>(),
+        new Plain<NamedPipeServerChannel, NamedPipeClientChannel>(),
+        new Encrypted<NamedPipeServerChannel, NamedPipeClientChannel>(),
+        new Plain<TcpServerChannel, TcpClientChannel>(),
+        new Encrypted<TcpServerChannel, TcpClientChannel>(),
+        new Plain<WebsocketServerChannel, WebsocketClientChannel>(),
+        new Encrypted<WebsocketServerChannel, WebsocketClientChannel>(),
       #if NET9_0_OR_GREATER
-        new Case<QuicServerChannel, QuicClientChannel>(),
-        new Case<QuicServerChannel, QuicClientChannel, Secure>(),
+        new Plain<QuicServerChannel, QuicClientChannel>(),
+        new Encrypted<QuicServerChannel, QuicClientChannel>(),
       #endif
     ];
 }
