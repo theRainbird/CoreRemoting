@@ -1762,6 +1762,37 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Theory]
+    [InlineData(1024)]
+    [InlineData(2048)]
+    [InlineData(4096)]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public virtual async Task Server_and_client_can_use_different_KeySize(int clientKeySize)
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        _serverFixture.Server.Config.KeySize = 2048;
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 20,
+            Channel = ClientChannel,
+            MessageEncryption = true,
+            KeySize = clientKeySize,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        await client.ConnectAsync()
+            .ConfigureAwait(false);
+
+        var proxy = client.CreateProxy<ITestService>();
+        var echoed = proxy.Echo("@echo off");
+        Assert.Equal("@echo off", echoed);
+        Assert.Equal(clientKeySize, client.KeySize);
+
+        CheckServerErrorCount();
+    }
+
+    [Theory]
     [InlineData(256, 256)]
     [InlineData(384, 384)]
     [InlineData(128, 256)] // server minimum wins

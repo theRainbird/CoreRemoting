@@ -269,6 +269,11 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             : null;
 
     /// <summary>
+    /// Gets the currently used key size.
+    /// </summary>
+    internal int KeySize => _keyPair.KeySize;
+
+    /// <summary>
     /// Gets the currently used shared key size.
     /// </summary>
     internal int SharedKeySize => _sharedSecretLength * 8;
