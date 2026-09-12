@@ -50,6 +50,7 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
             ClientAuthenticationOptions = new()
             {
                 // accept self-signed certificates generated on-the-fly
+                TargetHost = Uri.Host,
                 RemoteCertificateValidationCallback = (sender, certificate, chain, errors) => true,
                 ApplicationProtocols =
                 [

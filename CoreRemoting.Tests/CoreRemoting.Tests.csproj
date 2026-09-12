@@ -30,16 +30,13 @@
 
     <!-- .NET 9.0 only: include Quic channel -->
     <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0'">
-        <ProjectReference Include="..\CoreRemoting.Channels.Quic\CoreRemoting.Channels.Quic.csproj" />
-    </ItemGroup>
-
-    <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0' And '$(OS)' == 'Windows_NT' ">
         <Compile Include="RpcTests_Quic.cs">
             <DependentUpon>RpcTests.cs</DependentUpon>
         </Compile>
         <Compile Include="SessionResumeTestsQuic.cs">
             <DependentUpon>SessionResumeTests.cs</DependentUpon>
         </Compile>
+        <ProjectReference Include="..\CoreRemoting.Channels.Quic\CoreRemoting.Channels.Quic.csproj" />
     </ItemGroup>
 
     <ItemGroup>
