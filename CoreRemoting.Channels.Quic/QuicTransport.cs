@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Quic;
 using System.Threading.Tasks;
@@ -17,6 +18,17 @@ public abstract class QuicTransport : IAsyncDisposable
     /// Gets or sets the maximal size of network message.
     /// </summary>
     public int MaxMessageSize { get; set; } = 1024 * 1024 * 128;
+
+    /// <summary>
+    /// Quic protocol errors treated as normal shutdown, not failures.
+    /// </summary>
+    internal static readonly HashSet<QuicError> ShutdownSignals = new()
+    {
+        QuicError.ConnectionAborted,
+        QuicError.StreamAborted,
+        QuicError.OperationAborted,
+        QuicError.ConnectionRefused
+    };
 
     /// <inheritdoc />
     public NetworkException LastException { get; set; }
@@ -113,19 +125,19 @@ public abstract class QuicTransport : IAsyncDisposable
 
             // message length + message body
             ClientWriter.Write7BitEncodedInt(rawMessage.Length);
-            await ClientStream.WriteAsync(rawMessage, 0, rawMessage.Length)
-                .ConfigureAwait(false);
+            await ClientStream.WriteAsync(rawMessage, 0, rawMessage.Length).ConfigureAwait(false);
+            await ClientStream.FlushAsync().ConfigureAwait(false);
 
             return true;
         }
         catch (Exception ex)
         {
-            // treat ConnectionAborted error signal as normal behavior
-            if (ex is QuicException qx && qx.QuicError == QuicError.ConnectionAborted)
+            // treat ConnectionAborted and other abort-related error signal as normal shutdown
+            if (ex is QuicException qx && ShutdownSignals.Contains(qx.QuicError))
                 return false;
 
             LastException = ex as NetworkException ??
-                new NetworkException(ex.Message, ex);
+            new NetworkException(ex.Message, ex);
 
             OnErrorOccured(ex.Message, ex);
             return false;
@@ -158,8 +170,8 @@ public abstract class QuicTransport : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            // treat ConnectionAborted error signal as normal behavior
-            if (ex is QuicException qx && qx.QuicError == QuicError.ConnectionAborted)
+            // treat ConnectionAborted and other abort-related error signal as normal shutdown
+            if (ex is QuicException qx && ShutdownSignals.Contains(qx.QuicError))
                 return;
 
             LastException = ex as NetworkException ??

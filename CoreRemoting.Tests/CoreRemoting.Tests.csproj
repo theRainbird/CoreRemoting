@@ -29,7 +29,7 @@
     </ItemGroup>
 
     <!-- .NET 9.0 only: include Quic channel -->
-    <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0' And '$(OS)' == 'Windows_NT' ">
+    <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0'">
         <Compile Include="RpcTests_Quic.cs">
             <DependentUpon>RpcTests.cs</DependentUpon>
         </Compile>
