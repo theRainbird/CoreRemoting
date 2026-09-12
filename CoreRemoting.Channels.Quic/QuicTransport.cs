@@ -113,8 +113,8 @@ public abstract class QuicTransport : IAsyncDisposable
 
             // message length + message body
             ClientWriter.Write7BitEncodedInt(rawMessage.Length);
-            await ClientStream.WriteAsync(rawMessage, 0, rawMessage.Length)
-                .ConfigureAwait(false);
+            await ClientStream.WriteAsync(rawMessage, 0, rawMessage.Length).ConfigureAwait(false);
+            await ClientStream.FlushAsync().ConfigureAwait(false);
 
             return true;
         }

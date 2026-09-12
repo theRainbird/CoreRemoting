@@ -75,14 +75,23 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
         var handshakeMessage = Client.HandshakeMessage;
         var handshakeBytes = Client.Serializer.Serialize(handshakeMessage);
 
-        // start listening for incoming messages
-        IsConnected = true;
-        await StartListening();
+        try
+        {
+            // start listening for incoming messages
+            IsConnected = true;
+            await StartListening();
 
-        // send handshake message
-        await SendMessageAsync(handshakeBytes).ConfigureAwait(false);
+            // send handshake message
+            await SendMessageAsync(handshakeBytes)
+                .ConfigureAwait(false);
 
-        OnConnected();
+            OnConnected();
+        }
+        catch
+        {
+            IsConnected = false;
+            throw;
+        }
     }
 
     /// <inheritdoc />
@@ -104,6 +113,9 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
         ClientReader = null;
         ClientWriter.Dispose();
         ClientWriter = null;
+
+        await ClientStream.DisposeAsync()
+            .ConfigureAwait(false);
 
         await base.DisposeAsync()
             .ConfigureAwait(false);
