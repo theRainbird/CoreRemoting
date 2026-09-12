@@ -50,9 +50,9 @@ internal class CertificateHelper
         // Sign
         using var crt = req.CreateSelfSigned(now, now.AddDays(14)); // 14 days is the max duration of a certificate for this type
 
-        var password = Guid.NewGuid().ToString();
-        var pfx = crt.Export(X509ContentType.Pfx, password);
-        var cert = X509CertificateLoader.LoadPkcs12(pfx, password);
+        // Export without password
+        var pfx = crt.Export(X509ContentType.Pfx);
+        var cert = X509CertificateLoader.LoadPkcs12(pfx, password: null);
         return cert;
     }
 }
