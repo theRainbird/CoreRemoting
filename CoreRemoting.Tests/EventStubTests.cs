@@ -6,6 +6,7 @@ using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
 using Xunit;
+using static CoreRemoting.RemoteDelegates.EventStub;
 
 namespace CoreRemoting.Tests;
 
@@ -36,6 +37,11 @@ public class EventStubTests
     public interface ISampleDescendant2 : ISampleDescendant1, ISampleInterface
     {
         event EventHandler<CancelEventArgs> NewCancelEvent;
+    }
+
+    public interface ISampleUnrelated
+    {
+        event EventHandler SomeOtherEvent;
     }
 
     public class SampleService : ISampleInterface
@@ -172,7 +178,7 @@ public class EventStubTests
 
         // check if it is not called
         handler(this, new CancelEventArgs());
-        Assert.Equal(2, await fired.WaitForValue(2).Timeout(1));
+        Assert.Equal(3, await fired.WaitForValue(3).Timeout(1));
         Assert.False(await firedAgain.WaitForValue(2).Expire(0.1));
     }
 
@@ -360,7 +366,7 @@ public class EventStubTests
         var simpleEventHandler = (EventHandler)simpleHandler;
 
         // add event handler
-        var stub = EventStub.Create<ISampleInterface>();
+        var stub = new EventStore<ISampleInterface>();
         stub.AddHandler(s => nameof(s.SimpleEvent), simpleEventHandler);
 
         // invoke event handler
@@ -375,5 +381,102 @@ public class EventStubTests
         stub.RemoveHandler(s => nameof(s.SimpleEvent), simpleEventHandler);
         await Assert.ThrowsAsync<TimeoutException>(async () =>
             await simpleEventFired.WaitForValue(3).Timeout(1));
+    }
+
+    // --- EventStore wrapper tests ---
+
+    [Fact]
+    public void EventStore_creates_its_own_stub()
+    {
+        var store = new EventStore<ISampleInterface>();
+
+        Assert.NotNull(store.Stub);
+        Assert.Equal(typeof(ISampleInterface), store.Stub.InterfaceType);
+    }
+
+    [Fact]
+    public void EventStore_wraps_existing_stub()
+    {
+        var eventStub = new EventStub(typeof(ISampleInterface));
+        var store = new EventStore<ISampleInterface>(eventStub);
+
+        Assert.Same(eventStub, store.Stub);
+        Assert.Same(
+            eventStub[nameof(ISampleInterface.SimpleEvent)],
+            store[nameof(ISampleInterface.SimpleEvent)]);
+    }
+
+    [Fact]
+    public void EventStore_created_from_stub_shares_state_with_it()
+    {
+        var eventStub = new EventStub(typeof(ISampleInterface));
+        var store = eventStub.CreateStore<ISampleInterface>();
+
+        Assert.Same(eventStub, store.Stub);
+
+        // adding via store is visible via original stub
+        var handler = new EventHandler((s, e) => { });
+        store.AddHandler(nameof(ISampleInterface.SimpleEvent), handler);
+
+        var combined = eventStub[nameof(ISampleInterface.SimpleEvent)];
+        Assert.Equal(1, EventStub.GetHandlerCount(combined));
+
+        // removing via original stub is visible via store
+        eventStub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), handler);
+        combined = store[nameof(ISampleInterface.SimpleEvent)];
+        Assert.Equal(0, EventStub.GetHandlerCount(combined));
+    }
+
+    [Fact]
+    public async Task EventStore_invokes_events_on_wrapped_stub()
+    {
+        var eventStub = new EventStub(typeof(ISampleInterface));
+        var store = eventStub.CreateStore<ISampleInterface>();
+
+        var fired = new AsyncCounter();
+        store.AddHandler(
+            nameof(ISampleInterface.SimpleEvent),
+            new EventHandler((s, e) => fired++));
+
+        store.Invoke(nameof(ISampleInterface.SimpleEvent), this, EventArgs.Empty);
+        Assert.Equal(1, await fired.WaitForValue(1).Timeout(1));
+
+        // now wire the original stub to a component and fire events through it
+        var component = new SampleService();
+        eventStub.WireTo(component);
+        component.FireHandlers(0);
+        Assert.Equal(2, await fired.WaitForValue(2).Timeout(1));
+    }
+
+    [Fact]
+    public void EventStore_rejects_incompatible_stub()
+    {
+        var eventStub = new EventStub(typeof(ISampleInterface));
+
+        Assert.Throws<ArgumentException>(() =>
+            new EventStore<ISampleUnrelated>(eventStub));
+    }
+
+    [Fact]
+    public void EventStore_accepts_stub_of_derived_interface()
+    {
+        // stub built for a descendant interface, wrapper for the ancestor
+        var eventStub = new EventStub(typeof(ISampleDescendant2));
+        var store = new EventStore<ISampleInterface>(eventStub);
+
+        Assert.Same(eventStub, store.Stub);
+        Assert.NotNull(store[nameof(ISampleInterface.SimpleEvent)]);
+    }
+
+    [Fact]
+    public void EventStore_treats_null_stub_as_fresh_stub()
+    {
+        var store1 = new EventStore<ISampleInterface>();
+        var store2 = new EventStore<ISampleInterface>(null);
+
+        Assert.NotNull(store1.Stub);
+        Assert.NotNull(store2.Stub);
+        Assert.NotSame(store1.Stub, store2.Stub);
+        Assert.Equal(typeof(ISampleInterface), store2.Stub.InterfaceType);
     }
 }

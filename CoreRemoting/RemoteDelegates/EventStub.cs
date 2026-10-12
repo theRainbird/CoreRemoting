@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Reflection;
 using System.Reflection.Emit;
 using CoreRemoting.Toolbox;
@@ -466,49 +465,106 @@ public class EventStub
         DelegateInvoker.Invoke(this[eventName], arguments);
 
     /// <summary>
-    /// Creates <see cref="EventStub"/> for the <typeparamref name="TInterface"/> interface.
+    /// Creates a strong-typed <see cref="EventStore{TInterface}"/> wrapping this stub.
     /// </summary>
-    /// <typeparam name="TInterface"></typeparam>
-    public static EventStore<TInterface> Create<TInterface>()
-        where TInterface : class =>
-            new EventStore<TInterface>();
+    /// <typeparam name="TInterface">Interface type.</typeparam>
+    public EventStore<TInterface> CreateStore<TInterface>() where TInterface : class =>
+        new EventStore<TInterface>(this);
 
     /// <summary>
-    /// Strong-typed event store for <typeparamref name="TInterface"/>, for unit tests.
+    /// Strong-typed wrapper around <see cref="EventStub"/>, for unit tests.
+    /// Does not own the stub — all calls are delegated to <see cref="Stub"/>.
     /// </summary>
     /// <typeparam name="TInterface">Interface.</typeparam>
-    public class EventStore<TInterface> : EventStub
-        where TInterface : class
+    public sealed class EventStore<TInterface> where TInterface : class
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="EventStore{TInterface}"/>.
+        /// Wraps the given <paramref name="stub"/>, or creates a fresh
+        /// <see cref="EventStub"/> when <paramref name="stub"/> is <c>null</c>.
         /// </summary>
-        public EventStore() : base(typeof(TInterface))
+        /// <param name="stub">The event stub to wrap, or <c>null</c> to create a new one.</param>
+        public EventStore(EventStub stub = null)
         {
+            Stub = stub ?? new EventStub(typeof(TInterface));
+
+            var expected = typeof(TInterface);
+            var actual = Stub.InterfaceType;
+
+            if (!expected.IsAssignableFrom(actual) && !actual.IsAssignableFrom(expected))
+            {
+                throw new ArgumentException(
+                    $"Event stub for '{actual}' is not compatible with '{expected}'.",
+                    nameof(stub));
+            }
         }
+
+        /// <summary>
+        /// Gets the wrapped event stub.
+        /// </summary>
+        public EventStub Stub { get; }
+
+        /// <summary>
+        /// Gets the <see cref="Delegate" /> with the specified event or delegate property name.
+        /// </summary>
+        /// <param name="name">Name of the event or delegate property.</param>
+        public Delegate this[string name] => Stub[name];
 
         /// <summary>
         /// Invokes the specified event with provided arguments.
         /// </summary>
-        /// <param name="getName">A function that returns event name.</param>
+        /// <param name="getName">
+        /// A function that returns event name. Must not use its argument
+        /// (e.g. <c>s => nameof(s.SimpleEvent)</c>).
+        /// </param>
         /// <param name="arguments">Event arguments.</param>
         public void Invoke(Func<TInterface, string> getName, params object[] arguments) =>
-            Invoke(getName(null), arguments);
+            Stub.Invoke(getName(null), arguments);
 
         /// <summary>
-        /// Gets the <see cref="Delegate" /> with the specified event property name.
+        /// Invokes the specified event with provided arguments.
         /// </summary>
-        /// <param name="getName">A function that returns event name.</param>
+        /// <param name="eventName">The event name.</param>
+        /// <param name="arguments">Event arguments.</param>
+        public void Invoke(string eventName, params object[] arguments) =>
+            Stub.Invoke(eventName, arguments);
+
+        /// <summary>
+        /// Adds the handler for the given event or delegate property.
+        /// </summary>
+        /// <param name="getName">
+        /// A function that returns event name. Must not use its argument
+        /// (e.g. <c>s => nameof(s.SimpleEvent)</c>).
+        /// </param>
         /// <param name="handler">Event handler to add.</param>
         public void AddHandler(Func<TInterface, string> getName, Delegate handler) =>
-            AddHandler(getName(null), handler);
+            Stub.AddHandler(getName(null), handler);
 
         /// <summary>
-        /// Gets the <see cref="Delegate" /> with the specified event property name.
+        /// Adds the handler for the given event or delegate property.
         /// </summary>
-        /// <param name="getName">A function that returns event name.</param>
+        /// <param name="name">The event name.</param>
         /// <param name="handler">Event handler to add.</param>
+        public void AddHandler(string name, Delegate handler) =>
+            Stub.AddHandler(name, handler);
+
+        /// <summary>
+        /// Removes the handler for the given event or delegate property.
+        /// </summary>
+        /// <param name="getName">
+        /// A function that returns event name. Must not use its argument
+        /// (e.g. <c>s => nameof(s.SimpleEvent)</c>).
+        /// </param>
+        /// <param name="handler">Event handler to remove.</param>
         public void RemoveHandler(Func<TInterface, string> getName, Delegate handler) =>
-            RemoveHandler(getName(null), handler);
+            Stub.RemoveHandler(getName(null), handler);
+
+        /// <summary>
+        /// Removes the handler for the given event or delegate property.
+        /// </summary>
+        /// <param name="name">The event name.</param>
+        /// <param name="handler">Event handler to remove.</param>
+        public void RemoveHandler(string name, Delegate handler) =>
+            Stub.RemoveHandler(name, handler);
     }
 }
