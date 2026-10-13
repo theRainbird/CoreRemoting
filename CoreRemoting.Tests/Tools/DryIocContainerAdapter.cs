@@ -36,7 +36,7 @@ public class DryIocContainerAdapter : DependencyInjectionContainerBase, IDepende
     public override IEnumerable<Type> GetAllRegisteredTypes() => []; // TODO
 
     public override bool IsRegistered<TServiceInterface>(string serviceName = "") =>
-        RootContainer.IsRegistered<TServiceInterface>(serviceName);
+        RootContainer.IsRegistered<TServiceInterface>(GetKey<TServiceInterface>(serviceName));
 
     private static object GetKey<TServiceInterface>(string serviceName) =>
         GetKey(typeof(TServiceInterface), serviceName);

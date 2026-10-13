@@ -227,6 +227,9 @@ public class DicTests
         c.RegisterService<ITestService, TestService>(ServiceLifetime.Singleton);
         c.RegisterService<IServiceWithContainer, ServiceWithContainer>(ServiceLifetime.SingleCall);
 
+        Assert.True(c.IsRegistered<ITestService>());
+        Assert.True(c.IsRegistered<IServiceWithContainer>());
+
         var svc = c.GetService<IServiceWithContainer>();
         Assert.NotNull(svc);
         Assert.Same(c, svc.Container);
