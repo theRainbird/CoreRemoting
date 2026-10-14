@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
+using CoreRemoting.Channels;
+using CoreRemoting.Channels.Null;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Tests.Tools;
 using CoreRemoting.Threading;
@@ -10,13 +13,16 @@ using Xunit.Abstractions;
 
 namespace CoreRemoting.Tests;
 
-[Collection("CoreRemoting")]
-public class EventDispatcherTests : RpcTests_Base
+public partial class EventDispatcherTests : RpcTests_Base
 {
     public EventDispatcherTests(ServerFixture serverFixture, ITestOutputHelper testOutputHelper)
         : base(serverFixture, testOutputHelper)
     {
     }
+
+    protected override IServerChannel ServerChannel => new NullServerChannel();
+
+    protected override IClientChannel ClientChannel => new NullClientChannel();
 
     // Used to test the "unregistered service" path. Not registered anywhere.
     public interface INotRegisteredService
@@ -44,7 +50,7 @@ public class EventDispatcherTests : RpcTests_Base
     }
 
     [Fact]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Dispatcher_invokes_event_via_generic_overload()
     {
         using var ctx = ValidationSyncContext.Install();
@@ -65,7 +71,7 @@ public class EventDispatcherTests : RpcTests_Base
     }
 
     [Fact]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Dispatcher_invokes_event_via_string_overload()
     {
         using var ctx = ValidationSyncContext.Install();
@@ -87,7 +93,7 @@ public class EventDispatcherTests : RpcTests_Base
     }
 
     [Fact]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Dispatcher_passes_arguments_to_event_handlers()
     {
         using var ctx = ValidationSyncContext.Install();
@@ -121,7 +127,7 @@ public class EventDispatcherTests : RpcTests_Base
     [InlineData("TestService_SingleCall_Factory")]
     [InlineData("TestService_Scoped_Service")]
     [InlineData("TestService_Scoped_Factory")]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Dispatcher_can_invoke_events_for_any_service_lifetime(string serviceName)
     {
         using var ctx = ValidationSyncContext.Install();
@@ -141,7 +147,7 @@ public class EventDispatcherTests : RpcTests_Base
     }
 
     [Fact]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Dispatcher_doesnt_throw_if_there_are_no_subscribers()
     {
         using var ctx = ValidationSyncContext.Install();
@@ -154,7 +160,7 @@ public class EventDispatcherTests : RpcTests_Base
 
         GetDispatcher().Invoke<ITestService>(s => nameof(s.ServiceEvent));
 
-        // Give the server a moment to settle in case the invocation is async.
+        // Give the server a moment to settle
         await Task.Delay(100).ConfigureAwait(false);
 
         CheckServerErrorCount();
@@ -189,5 +195,48 @@ public class EventDispatcherTests : RpcTests_Base
 
         Assert.Throws<KeyNotFoundException>(() =>
             dispatcher.Invoke<ITestService>(s => "NoSuchEvent"));
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public async Task Service_can_inject_dispatcher_and_relay_another_service_event()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = CreateConnectedClient();
+        var testProxy = client.CreateProxy<ITestService>();
+        var relayProxy = client.CreateProxy<IEventRelay>();
+
+        var fired = new AsyncCounter();
+        testProxy.ServiceEvent += () => fired++;
+
+        // Materialize the target service on the server before relaying its event.
+        testProxy.Echo("warmup");
+
+        relayProxy.RelayTestServiceEvent();
+
+        await fired.WaitForValue(1).Timeout(1).ConfigureAwait(false);
+        CheckServerErrorCount();
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public async Task Service_can_inject_dispatcher_and_relay_event_by_name()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = CreateConnectedClient();
+        var testProxy = client.CreateProxy<ITestService>();
+        var relayProxy = client.CreateProxy<IEventRelay>();
+
+        var fired = new AsyncCounter();
+        testProxy.ServiceEvent += () => fired++;
+
+        testProxy.Echo("warmup");
+
+        relayProxy.RelayTestServiceEventByName();
+
+        await fired.WaitForValue(1).Timeout(1).ConfigureAwait(false);
+        CheckServerErrorCount();
     }
 }

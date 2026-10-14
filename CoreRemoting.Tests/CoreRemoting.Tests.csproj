@@ -79,6 +79,9 @@
       <Compile Update="DicTests_*.cs">
         <DependentUpon>DicTests.cs</DependentUpon>
       </Compile>
+      <Compile Update="EventDispatcherTests_*.cs">
+        <DependentUpon>EventDispatcherTests.cs</DependentUpon>
+      </Compile>
       <Compile Update="RpcTests_*.cs">
         <DependentUpon>RpcTests.cs</DependentUpon>
       </Compile>

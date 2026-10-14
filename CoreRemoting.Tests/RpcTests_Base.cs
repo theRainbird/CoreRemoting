@@ -1,8 +1,6 @@
 using System;
-using System.Diagnostics;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Channels;
-using CoreRemoting.Threading;
 using Xunit;
 using Xunit.Abstractions;
 

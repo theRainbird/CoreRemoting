@@ -62,6 +62,7 @@ public class ServerFixture : IDisposable
                         factoryDelegate: () => new TestService(),
                         lifetime: ServiceLifetime.Scoped,
                         serviceName: "TestService_Scoped_Factory");
+                    container.RegisterService<IEventRelay, EventRelay>();
 
                     // Service for async tests
                     container.RegisterService<IAsyncService, AsyncService>(
