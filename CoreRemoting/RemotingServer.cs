@@ -69,6 +69,10 @@ public sealed class RemotingServer : IRemotingServer
             lifetime: ServiceLifetime.Singleton,
             asHiddenSystemService: true);
 
+        _container.RegisterService<IEventDispatcher, EventDispatcher>(
+            lifetime: ServiceLifetime.Singleton,
+            asHiddenSystemService: true);
+
         _config.RegisterServicesAction?.Invoke(_container);
 
         Channel = _config.Channel ?? new TcpServerChannel();

@@ -20,49 +20,12 @@ using Xunit.Abstractions;
 
 namespace CoreRemoting.Tests;
 
-[Collection("CoreRemoting")]
-public class RpcTests : IClassFixture<ServerFixture>
+public class RpcTests : RpcTests_Base
 {
-    protected readonly ServerFixture _serverFixture;
-    protected readonly ITestOutputHelper _testOutputHelper;
-    protected bool _remoteServiceCalled;
-
-    protected virtual IServerChannel ServerChannel => null;
-
-    protected virtual IClientChannel ClientChannel => null;
-
     public RpcTests(ServerFixture serverFixture, ITestOutputHelper testOutputHelper)
-    {
-        _serverFixture = serverFixture;
-        _testOutputHelper = testOutputHelper;
-
-        // Allow derived test classes to tweak server configuration before server start
-        ConfigureServer(_serverFixture.ServerConfig);
-
-        _serverFixture.TestService.TestMethodFake = arg =>
-        {
-            _remoteServiceCalled = true;
-            return arg;
-        };
-
-        _serverFixture.Start(ServerChannel);
-
-        // setup event handler invoker
-        EventStub.DelegateInvoker = DelegateInvoker;
-    }
-
-    /// <summary>
-    /// Gives derived tests a chance to configure the server before it starts.
-    /// </summary>
-    /// <param name="config">Server configuration object that will be used to create the server.</param>
-    protected virtual void ConfigureServer(ServerConfig config)
+        : base(serverFixture, testOutputHelper)
     {
     }
-
-    /// <summary>
-    /// Gets the delegate invoker to be used for event handler tests.
-    /// </summary>
-    protected virtual IDelegateInvoker DelegateInvoker => new SafeDynamicInvoker();
 
     [Fact]
     public void ValidationSyncContext_is_installed()
@@ -70,23 +33,6 @@ public class RpcTests : IClassFixture<ServerFixture>
         using var ctx = ValidationSyncContext.Install();
 
         Assert.IsType<ValidationSyncContext>(SynchronizationContext.Current);
-    }
-
-    private void CheckServerErrorCount()
-    {
-        try
-        {
-            Assert.Equal(0, _serverFixture.ServerErrorCount);
-        }
-        finally
-        {
-            if (_serverFixture.ServerErrorCount != 0)
-            {
-                var msg = $"LastServerError: {_serverFixture.LastServerError}";
-                _testOutputHelper.WriteLine(msg);
-                Console.WriteLine(msg);
-            }
-        }
     }
 
     [Fact]
@@ -669,9 +615,9 @@ public class RpcTests : IClassFixture<ServerFixture>
 
             var proxy = client.CreateProxy<ITestService>();
             var ex = (await Assert.ThrowsAsync<RemoteInvocationException>(async () =>
-                {
-                    await proxy.ErrorAsync(nameof(ErrorAsync_method_throws_Exception)).ConfigureAwait(false);
-                })
+            {
+                await proxy.ErrorAsync(nameof(ErrorAsync_method_throws_Exception)).ConfigureAwait(false);
+            })
                 .ConfigureAwait(false)).GetInnermostException();
 
             Assert.NotNull(ex);
