@@ -40,9 +40,10 @@ public sealed class ClientDelegateRegistry
 
         if (handlerKey == Guid.Empty)
         {
-            handlerKey = Guid.NewGuid();
+            var delegateInfo = new ClientDelegateInfo(clientDelegate, serviceProxy);
+            handlerKey = delegateInfo.HandlerKey;
 
-            if (_registry.TryAdd(handlerKey, new ClientDelegateInfo(clientDelegate, serviceProxy)))
+            if (_registry.TryAdd(handlerKey, delegateInfo))
                 return handlerKey;
 
             throw new ApplicationException("Unable to add client delegate to registry. Possible race condition?");
@@ -77,6 +78,16 @@ public sealed class ClientDelegateRegistry
     public Delegate GetDelegateByHandlerKey(Guid handlerKey)
     {
         return _registry.TryGetValue(handlerKey, out var value) ? value.ClientDelegate : null;
+    }
+
+    /// <summary>
+    /// Gets a registered client delegate info by its handler key.
+    /// </summary>
+    /// <param name="handlerKey">Unique handler key</param>
+    /// <returns>Client delegate</returns>
+    internal ClientDelegateInfo GetDelegateInfoByHandlerKey(Guid handlerKey)
+    {
+        return _registry.TryGetValue(handlerKey, out var value) ? value : null;
     }
 
     /// <summary>

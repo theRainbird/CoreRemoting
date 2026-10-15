@@ -121,7 +121,7 @@ public class ServerFixture : IDisposable
 
         try
         {
-            Server.Start();    
+            Server.Start();
         }
         catch (System.Net.Sockets.SocketException e) when (e.Message == "Address already in use")
         {

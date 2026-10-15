@@ -14,8 +14,9 @@ public class ClientDelegateInfo
     /// <param name="serviceProxy">Proxy object of the remote service, which invokes the client delegate as callback</param>
     public ClientDelegateInfo(Delegate clientDelegate, object serviceProxy)
     {
-        ClientDelegate = clientDelegate;
-        ServiceProxy = serviceProxy;
+        ClientDelegate = clientDelegate ?? throw new ArgumentNullException(nameof(clientDelegate));
+        ServiceProxy = serviceProxy ?? throw new ArgumentNullException(nameof(serviceProxy));
+        HandlerKey = Guid.NewGuid();
     }
 
     /// <summary>
@@ -27,4 +28,10 @@ public class ClientDelegateInfo
     /// Gets the service proxy.
     /// </summary>
     public object ServiceProxy { get; }
+
+    /// <summary>
+    /// Gets the unique handler key assigned to this subscription.
+    /// Assigned once at construction and never changes.
+    /// </summary>
+    public Guid HandlerKey { get; }
 }
