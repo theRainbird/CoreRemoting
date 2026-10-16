@@ -372,6 +372,75 @@ public class RpcTests : RpcTests_Base
         CheckServerErrorCount();
     }
 
+    [Theory]
+    [InlineData("TestService_Singleton_Service", true)]
+    [InlineData("TestService_Singleton_Service", false)]
+    [InlineData("TestService_Singleton_Factory", true)]
+    [InlineData("TestService_Singleton_Factory", false)]
+    [InlineData("TestService_SingleCall_Service", true)]
+    [InlineData("TestService_SingleCall_Service", false)]
+    [InlineData("TestService_SingleCall_Factory", true)]
+    [InlineData("TestService_SingleCall_Factory", false)]
+    [InlineData("TestService_Scoped_Service", true)]
+    [InlineData("TestService_Scoped_Service", false)]
+    [InlineData("TestService_Scoped_Factory", true)]
+    [InlineData("TestService_Scoped_Factory", false)]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Multicast_subscription_semantics_are_preserved(string serviceName, bool sameHandler)
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            Channel = ClientChannel,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        client.Connect();
+
+        var proxy = client.CreateProxy<ITestService>(serviceName);
+        var fired = new AsyncCounter();
+
+        // Two lambda expressions at different source positions compile to
+        // two distinct methods, so their delegates are not equal. When
+        // sameHandler is true, all three variables point to the same delegate.
+        var handler1 = () => { fired++; };
+        var handler2 = sameHandler ? handler1 : () => fired++;
+        var handler3 = sameHandler ? handler1 : () => fired++;
+
+        // Three subscriptions -> three invocations per fire.
+        proxy.ServiceEvent += handler1;
+        proxy.ServiceEvent += handler2;
+        proxy.ServiceEvent += handler3;
+        proxy.FireServiceEvent();
+        await fired.WaitForValue(3).Timeout(1).ConfigureAwait(false);
+        Assert.Equal(3, fired.Value);
+
+        // Remove one subscription -> two invocations per fire.
+        proxy.ServiceEvent -= handler1;
+        proxy.FireServiceEvent();
+        await fired.WaitForValue(5).Timeout(1).ConfigureAwait(false);
+        Assert.Equal(5, fired.Value);
+
+        // Remove one more -> one invocation per fire.
+        proxy.ServiceEvent -= handler2;
+        proxy.FireServiceEvent();
+        await fired.WaitForValue(6).Timeout(1).ConfigureAwait(false);
+        Assert.Equal(6, fired.Value);
+
+        // Remove the last one -> no invocations.
+        proxy.ServiceEvent -= handler3;
+        proxy.FireServiceEvent();
+        Assert.False(await fired.WaitForValue(7).Expire(0.5).ConfigureAwait(false));
+        Assert.Equal(6, fired.Value);
+
+        CheckServerErrorCount();
+    }
+
     [Fact]
     public void External_types_should_work_as_remote_service_parameters()
     {
