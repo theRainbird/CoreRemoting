@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace CoreRemoting.RemoteDelegates;
@@ -8,10 +7,16 @@ namespace CoreRemoting.RemoteDelegates;
 /// <summary>
 /// Registry for client delegates paired with service proxies.
 /// </summary>
+/// <remarks>
+/// A subscription is identified by the pair (delegate, service proxy), not
+/// by the delegate alone: the same delegate subscribed to events of two
+/// different proxies produces two independent registrations, so shutting
+/// down one proxy doesn't affect the other.
+/// </remarks>
 public sealed class ClientDelegateRegistry
 {
     private readonly ConcurrentDictionary<Guid, ClientDelegateInfo> _registry;
-    private readonly ConcurrentDictionary<Delegate, Guid> _reverseIndex;
+    private readonly ConcurrentDictionary<(Delegate Delegate, object Proxy), Guid> _reverseIndex;
 
     /// <summary>
     /// Creates a new instance of the ClientDelegateRegistry class.
@@ -19,12 +24,14 @@ public sealed class ClientDelegateRegistry
     public ClientDelegateRegistry()
     {
         _registry = new ConcurrentDictionary<Guid, ClientDelegateInfo>();
-        _reverseIndex = new ConcurrentDictionary<Delegate, Guid>();
+        _reverseIndex = new ConcurrentDictionary<(Delegate, object), Guid>();
     }
 
     /// <summary>
     /// Registers a client delegate as callback target for remote delegate invocation.
-    /// If the delegate is already registered, returns the existing handler key.
+    /// If the same delegate is already registered for the same service proxy,
+    /// returns the existing handler key. Different proxies yield different keys
+    /// even for the same delegate.
     /// </summary>
     /// <param name="clientDelegate">Client delegate</param>
     /// <param name="serviceProxy">Service proxy of the remote service</param>
@@ -39,14 +46,16 @@ public sealed class ClientDelegateRegistry
         if (serviceProxy == null)
             throw new ArgumentNullException(nameof(serviceProxy));
 
-        // Fast path: already registered.
-        if (_reverseIndex.TryGetValue(clientDelegate, out var existing))
+        var indexKey = (clientDelegate, serviceProxy);
+
+        // Fast path: already registered for this proxy.
+        if (_reverseIndex.TryGetValue(indexKey, out var existing))
             return existing;
 
         var info = new ClientDelegateInfo(clientDelegate, serviceProxy);
 
         // Whoever wins the reverse-index race owns the registration.
-        var claimed = _reverseIndex.GetOrAdd(clientDelegate, info.HandlerKey);
+        var claimed = _reverseIndex.GetOrAdd(indexKey, info.HandlerKey);
 
         if (claimed != info.HandlerKey)
             return claimed; // lost the race, discard the freshly created info
@@ -54,27 +63,11 @@ public sealed class ClientDelegateRegistry
         if (!_registry.TryAdd(info.HandlerKey, info))
         {
             // Should never happen for a fresh Guid, but leave no dangling entry behind.
-            _reverseIndex.TryRemove(clientDelegate, out _);
+            _reverseIndex.TryRemove(indexKey, out _);
             throw new ApplicationException("Unable to add client delegate to registry. Possible race condition?");
         }
 
         return info.HandlerKey;
-    }
-
-    /// <summary>
-    /// Finds a specified registered client delegate and returns its unique handler key.
-    /// </summary>
-    /// <param name="delegate">Client delegate</param>
-    /// <returns>Unique handler key, or <see cref="Guid.Empty"/> if not found</returns>
-    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
-    public Guid FindDelegate(Delegate @delegate)
-    {
-        if (@delegate == null)
-            return Guid.Empty;
-
-        return _reverseIndex.TryGetValue(@delegate, out var handlerKey)
-            ? handlerKey
-            : Guid.Empty;
     }
 
     /// <summary>
@@ -86,15 +79,9 @@ public sealed class ClientDelegateRegistry
         _registry.TryGetValue(handlerKey, out var value) ? value.ClientDelegate : null;
 
     /// <summary>
-    /// Gets registration info by its handler key.
-    /// </summary>
-    /// <param name="handlerKey">Unique handler key</param>
-    /// <returns>Registration info, or <c>null</c> if not found</returns>
-    public ClientDelegateInfo GetDelegateInfoByHandlerKey(Guid handlerKey) =>
-        _registry.TryGetValue(handlerKey, out var value) ? value : null;
-
-    /// <summary>
     /// Unregisters all client delegates that are paired with a specified service proxy.
+    /// Subscriptions made through other proxies are not affected, even if they use
+    /// the same delegate instance.
     /// </summary>
     /// <param name="serviceProxy">Service proxy</param>
     public void UnregisterClientDelegatesOfServiceProxy(object serviceProxy)
@@ -110,31 +97,8 @@ public sealed class ClientDelegateRegistry
         foreach (var key in keysToRemove)
         {
             if (_registry.TryRemove(key, out var info))
-                _reverseIndex.TryRemove(info.ClientDelegate, out _);
+                _reverseIndex.TryRemove((info.ClientDelegate, info.ServiceProxy), out _);
         }
-    }
-
-    /// <summary>
-    /// Unregisters a specified client delegate by its handler key.
-    /// </summary>
-    /// <param name="handlerKey">Unique handler key</param>
-    internal void UnregisterClientDelegate(Guid handlerKey)
-    {
-        if (_registry.TryRemove(handlerKey, out var info))
-            _reverseIndex.TryRemove(info.ClientDelegate, out _);
-    }
-
-    /// <summary>
-    /// Unregisters a specified client delegate.
-    /// </summary>
-    /// <param name="clientDelegate">Client delegate</param>
-    internal void UnregisterClientDelegate(Delegate clientDelegate)
-    {
-        if (clientDelegate == null)
-            return;
-
-        if (_reverseIndex.TryRemove(clientDelegate, out var handlerKey))
-            _registry.TryRemove(handlerKey, out _);
     }
 
     /// <summary>

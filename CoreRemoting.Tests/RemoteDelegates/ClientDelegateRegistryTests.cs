@@ -45,7 +45,7 @@ public class ClientDelegateRegistryTests
     }
 
     [Fact]
-    public void Register_same_delegate_twice_returns_same_guid()
+    public void Register_same_delegate_for_same_proxy_returns_same_guid()
     {
         var registry = new ClientDelegateRegistry();
         Action handler = () => { };
@@ -55,6 +55,22 @@ public class ClientDelegateRegistryTests
         var key2 = registry.RegisterClientDelegate(handler, proxy);
 
         Assert.Equal(key1, key2);
+    }
+
+    [Fact]
+    public void Register_same_delegate_for_different_proxies_returns_different_guids()
+    {
+        // The same delegate subscribed to events of two different proxies
+        // must be tracked as two independent registrations.
+        var registry = new ClientDelegateRegistry();
+        Action handler = () => { };
+        var proxy1 = new FakeProxy();
+        var proxy2 = new FakeProxy();
+
+        var key1 = registry.RegisterClientDelegate(handler, proxy1);
+        var key2 = registry.RegisterClientDelegate(handler, proxy2);
+
+        Assert.NotEqual(key1, key2);
     }
 
     [Fact]
@@ -87,40 +103,6 @@ public class ClientDelegateRegistryTests
     }
 
     [Fact]
-    public void FindDelegate_returns_registered_guid()
-    {
-        var registry = new ClientDelegateRegistry();
-        Action handler = () => { };
-        var proxy = new FakeProxy();
-
-        var key = registry.RegisterClientDelegate(handler, proxy);
-        var found = registry.FindDelegate(handler);
-
-        Assert.Equal(key, found);
-    }
-
-    [Fact]
-    public void FindDelegate_returns_empty_for_unregistered_delegate()
-    {
-        var registry = new ClientDelegateRegistry();
-        Action handler = () => { };
-
-        var found = registry.FindDelegate(handler);
-
-        Assert.Equal(Guid.Empty, found);
-    }
-
-    [Fact]
-    public void FindDelegate_returns_empty_for_null()
-    {
-        var registry = new ClientDelegateRegistry();
-
-        var found = registry.FindDelegate(null);
-
-        Assert.Equal(Guid.Empty, found);
-    }
-
-    [Fact]
     public void GetDelegateByHandlerKey_returns_registered_delegate()
     {
         var registry = new ClientDelegateRegistry();
@@ -144,102 +126,6 @@ public class ClientDelegateRegistryTests
     }
 
     [Fact]
-    public void GetInfoByHandlerKey_returns_registration_info()
-    {
-        var registry = new ClientDelegateRegistry();
-        Action handler = () => { };
-        var proxy = new FakeProxy();
-
-        var key = registry.RegisterClientDelegate(handler, proxy);
-        var info = registry.GetDelegateInfoByHandlerKey(key);
-
-        Assert.NotNull(info);
-        Assert.Equal(key, info.HandlerKey);
-        Assert.Same(handler, info.ClientDelegate);
-        Assert.Same(proxy, info.ServiceProxy);
-    }
-
-    [Fact]
-    public void GetInfoByHandlerKey_returns_null_for_unknown_key()
-    {
-        var registry = new ClientDelegateRegistry();
-
-        var info = registry.GetDelegateInfoByHandlerKey(Guid.NewGuid());
-
-        Assert.Null(info);
-    }
-
-    [Fact]
-    public void Unregister_by_handler_key_removes_registration()
-    {
-        var registry = new ClientDelegateRegistry();
-        Action handler = () => { };
-        var proxy = new FakeProxy();
-
-        var key = registry.RegisterClientDelegate(handler, proxy);
-        registry.UnregisterClientDelegate(key);
-
-        Assert.Null(registry.GetDelegateByHandlerKey(key));
-        Assert.Equal(Guid.Empty, registry.FindDelegate(handler));
-    }
-
-    [Fact]
-    public void Unregister_by_handler_key_is_noop_for_unknown_key()
-    {
-        var registry = new ClientDelegateRegistry();
-
-        registry.UnregisterClientDelegate(Guid.NewGuid());
-        // no exception expected
-    }
-
-    [Fact]
-    public void Unregister_by_delegate_removes_registration()
-    {
-        var registry = new ClientDelegateRegistry();
-        Action handler = () => { };
-        var proxy = new FakeProxy();
-
-        var key = registry.RegisterClientDelegate(handler, proxy);
-        registry.UnregisterClientDelegate(handler);
-
-        Assert.Null(registry.GetDelegateByHandlerKey(key));
-        Assert.Equal(Guid.Empty, registry.FindDelegate(handler));
-    }
-
-    [Fact]
-    public void Unregister_by_null_delegate_is_noop()
-    {
-        var registry = new ClientDelegateRegistry();
-
-        registry.UnregisterClientDelegate(null);
-        // no exception expected
-    }
-
-    [Fact]
-    public void Unregister_by_unregistered_delegate_is_noop()
-    {
-        var registry = new ClientDelegateRegistry();
-        Action handler = () => { };
-
-        registry.UnregisterClientDelegate(handler);
-        // no exception expected
-    }
-
-    [Fact]
-    public void Unregister_after_removal_allows_reregistration_with_new_guid()
-    {
-        var registry = new ClientDelegateRegistry();
-        Action handler = () => { };
-        var proxy = new FakeProxy();
-
-        var key1 = registry.RegisterClientDelegate(handler, proxy);
-        registry.UnregisterClientDelegate(handler);
-        var key2 = registry.RegisterClientDelegate(handler, proxy);
-
-        Assert.NotEqual(key1, key2);
-    }
-
-    [Fact]
     public void UnregisterClientDelegatesOfServiceProxy_removes_only_matching_ones()
     {
         var registry = new ClientDelegateRegistry();
@@ -259,10 +145,26 @@ public class ClientDelegateRegistryTests
         Assert.Null(registry.GetDelegateByHandlerKey(key1));
         Assert.Null(registry.GetDelegateByHandlerKey(key2));
         Assert.Same(handler3, registry.GetDelegateByHandlerKey(key3));
+    }
 
-        Assert.Equal(Guid.Empty, registry.FindDelegate(handler1));
-        Assert.Equal(Guid.Empty, registry.FindDelegate(handler2));
-        Assert.Equal(key3, registry.FindDelegate(handler3));
+    [Fact]
+    public void UnregisterClientDelegatesOfServiceProxy_keeps_same_delegate_on_other_proxy()
+    {
+        // Regression test: the same delegate subscribed to two proxies must
+        // survive the shutdown of one of them.
+        var registry = new ClientDelegateRegistry();
+        var proxy1 = new FakeProxy();
+        var proxy2 = new FakeProxy();
+
+        Action handler = () => { };
+
+        var key1 = registry.RegisterClientDelegate(handler, proxy1);
+        var key2 = registry.RegisterClientDelegate(handler, proxy2);
+
+        registry.UnregisterClientDelegatesOfServiceProxy(proxy1);
+
+        Assert.Null(registry.GetDelegateByHandlerKey(key1));
+        Assert.Same(handler, registry.GetDelegateByHandlerKey(key2));
     }
 
     [Fact]
@@ -307,8 +209,6 @@ public class ClientDelegateRegistryTests
 
         Assert.Null(registry.GetDelegateByHandlerKey(key1));
         Assert.Null(registry.GetDelegateByHandlerKey(key2));
-        Assert.Equal(Guid.Empty, registry.FindDelegate(handler1));
-        Assert.Equal(Guid.Empty, registry.FindDelegate(handler2));
     }
 
     [Fact]
@@ -327,32 +227,23 @@ public class ClientDelegateRegistryTests
     }
 
     [Fact]
-    public async Task Register_and_unregister_concurrently_doesnt_corrupt_registry()
+    public async Task Register_same_delegate_concurrently_for_two_proxies_returns_two_guids()
     {
         var registry = new ClientDelegateRegistry();
-        var proxy = new FakeProxy();
-
-        var handlers = Enumerable.Range(0, 50)
-            .Select(_ => (Action)(() => { }))
-            .ToArray();
+        Action handler = () => { };
+        var proxy1 = new FakeProxy();
+        var proxy2 = new FakeProxy();
+        var keys = new ConcurrentBag<Guid>();
 
         await Task.WhenAll(
-            handlers.SelectMany(handler => new[]
+            Enumerable.Range(0, 50).SelectMany(_ => new[]
             {
-                Task.Run(() => registry.RegisterClientDelegate(handler, proxy)),
-                Task.Run(() => registry.UnregisterClientDelegate(handler)),
+                Task.Run(() => keys.Add(registry.RegisterClientDelegate(handler, proxy1))),
+                Task.Run(() => keys.Add(registry.RegisterClientDelegate(handler, proxy2))),
             }));
 
-        // Regardless of ordering, the registry must be consistent:
-        // every remaining key resolves to a delegate, and reverse lookups agree.
-        foreach (var handler in handlers)
-        {
-            var key = registry.FindDelegate(handler);
-            if (key != Guid.Empty)
-            {
-                Assert.Same(handler, registry.GetDelegateByHandlerKey(key));
-            }
-        }
+        // Two distinct guids, 50 occurrences each.
+        Assert.Equal(2, keys.Distinct().Count());
     }
 
     private sealed class CallbackTarget
