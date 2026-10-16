@@ -442,6 +442,55 @@ public class RpcTests : RpcTests_Base
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Shutting_down_one_proxy_doesnt_break_subscription_on_another()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            Channel = ClientChannel,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        client.Connect();
+
+        var proxy1 = client.CreateProxy<ITestService>("TestService_Singleton_Service");
+        var proxy2 = client.CreateProxy<ITestService>("TestService_Singleton_Factory");
+
+        var fired = new AsyncCounter();
+        Action handler = () => { fired++; };
+
+        // Same delegate subscribed to events of two different proxies.
+        proxy1.ServiceEvent += handler;
+        proxy2.ServiceEvent += handler;
+
+        // Both subscriptions are live.
+        proxy1.FireServiceEvent();
+        await fired.WaitForValue(1).Timeout(1).ConfigureAwait(false);
+        Assert.Equal(1, fired.Value);
+
+        proxy2.FireServiceEvent();
+        await fired.WaitForValue(2).Timeout(1).ConfigureAwait(false);
+        Assert.Equal(2, fired.Value);
+
+        // Shut down the first proxy. Only its own subscription must be
+        // unregistered. The subscription made through the second proxy
+        // must survive.
+        client.ShutdownProxy(proxy1);
+
+        proxy2.FireServiceEvent();
+        await fired.WaitForValue(3).Timeout(1).ConfigureAwait(false);
+        Assert.Equal(3, fired.Value);
+
+        CheckServerErrorCount();
+    }
+
+    [Fact]
     public void External_types_should_work_as_remote_service_parameters()
     {
         // Reset server error state to ensure this test only verifies errors produced within its own scope.

@@ -128,7 +128,7 @@ public sealed class ClientDelegateRegistry
     /// Unregisters a specified client delegate.
     /// </summary>
     /// <param name="clientDelegate">Client delegate</param>
-    public void UnregisterClientDelegate(Delegate clientDelegate)
+    internal void UnregisterClientDelegate(Delegate clientDelegate)
     {
         if (clientDelegate == null)
             return;
