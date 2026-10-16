@@ -24,6 +24,7 @@
     <!-- .NET 8.0 only: include BinaryFormatter and a small bunch of other tests -->
     <ItemGroup Condition=" '$(TargetFramework)' == 'net8.0' ">
         <Compile Remove="*.cs" />
+        <Compile Remove="RemoteDelegates/EventDispatcherTests*.cs" />
         <Compile Include="BinarySerializationTests.cs" />
         <Compile Include="SourceGeneratorTests.cs" />
     </ItemGroup>

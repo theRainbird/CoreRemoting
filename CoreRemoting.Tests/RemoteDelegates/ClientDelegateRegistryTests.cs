@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using CoreRemoting.RemoteDelegates;
 using Xunit;
 
-namespace CoreRemoting.Tests;
+namespace CoreRemoting.Tests.RemoteDelegates;
 
 public class ClientDelegateRegistryTests
 {
@@ -80,8 +80,8 @@ public class ClientDelegateRegistryTests
         var proxy = new FakeProxy();
 
         // Same method name, different targets -> different delegates.
-        var key1 = registry.RegisterClientDelegate((Action)target1.OnEvent, proxy);
-        var key2 = registry.RegisterClientDelegate((Action)target2.OnEvent, proxy);
+        var key1 = registry.RegisterClientDelegate(target1.OnEvent, proxy);
+        var key2 = registry.RegisterClientDelegate(target2.OnEvent, proxy);
 
         Assert.NotEqual(key1, key2);
     }
@@ -211,7 +211,7 @@ public class ClientDelegateRegistryTests
     {
         var registry = new ClientDelegateRegistry();
 
-        registry.UnregisterClientDelegate((Delegate)null);
+        registry.UnregisterClientDelegate(null);
         // no exception expected
     }
 

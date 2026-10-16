@@ -118,7 +118,7 @@ public sealed class ClientDelegateRegistry
     /// Unregisters a specified client delegate by its handler key.
     /// </summary>
     /// <param name="handlerKey">Unique handler key</param>
-    public void UnregisterClientDelegate(Guid handlerKey)
+    internal void UnregisterClientDelegate(Guid handlerKey)
     {
         if (_registry.TryRemove(handlerKey, out var info))
             _reverseIndex.TryRemove(info.ClientDelegate, out _);

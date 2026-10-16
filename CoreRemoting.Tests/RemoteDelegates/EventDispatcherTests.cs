@@ -11,7 +11,7 @@ using CoreRemoting.Toolbox;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace CoreRemoting.Tests;
+namespace CoreRemoting.Tests.RemoteDelegates;
 
 public partial class EventDispatcherTests : RpcTests_Base
 {

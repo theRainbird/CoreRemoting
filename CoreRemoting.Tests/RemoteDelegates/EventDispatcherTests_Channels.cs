@@ -4,7 +4,7 @@ using CoreRemoting.Channels.Tcp;
 using CoreRemoting.Channels.Websocket;
 using Xunit.Abstractions;
 
-namespace CoreRemoting.Tests;
+namespace CoreRemoting.Tests.RemoteDelegates;
 
 public partial class EventDispatcherTests_WebSockets(ServerFixture serverFixture, ITestOutputHelper testOutputHelper)
     : EventDispatcherTests(serverFixture, testOutputHelper)

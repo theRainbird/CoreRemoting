@@ -8,7 +8,7 @@ using CoreRemoting.Toolbox;
 using Xunit;
 using static CoreRemoting.RemoteDelegates.EventStub;
 
-namespace CoreRemoting.Tests;
+namespace CoreRemoting.Tests.RemoteDelegates;
 
 public class EventStubTests
 {
@@ -81,7 +81,7 @@ public class EventStubTests
 
         public int SimpleEventHandlerCount
         {
-            get { return EventStub.GetHandlerCount(SimpleEvent); }
+            get { return GetHandlerCount(SimpleEvent); }
         }
     }
 
@@ -419,12 +419,12 @@ public class EventStubTests
         store.AddHandler(nameof(ISampleInterface.SimpleEvent), handler);
 
         var combined = eventStub[nameof(ISampleInterface.SimpleEvent)];
-        Assert.Equal(1, EventStub.GetHandlerCount(combined));
+        Assert.Equal(1, GetHandlerCount(combined));
 
         // removing via original stub is visible via store
         eventStub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), handler);
         combined = store[nameof(ISampleInterface.SimpleEvent)];
-        Assert.Equal(0, EventStub.GetHandlerCount(combined));
+        Assert.Equal(0, GetHandlerCount(combined));
     }
 
     [Fact]
