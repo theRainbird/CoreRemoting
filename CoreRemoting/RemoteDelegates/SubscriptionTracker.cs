@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
+using CoreRemoting.RpcMessaging;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.RemoteDelegates;
 
@@ -144,5 +147,32 @@ public sealed class SubscriptionTracker
     {
         var bytes = handlerKey.ToByteArray();
         return (BitConverter.ToInt64(bytes, 0), BitConverter.ToInt64(bytes, 8));
+    }
+
+    /// <summary>
+    /// Extracts the handler key from the arguments of an event accessor call.
+    /// </summary>
+    /// <param name="args">Mapped method arguments from <see cref="MethodCallMessage"/>.</param>
+    /// <returns>Handler key, or <see cref="Guid.Empty"/> if not applicable.</returns>
+    public static Guid ExtractHandlerKey(object[] args) =>
+        args is { Length: 1 } && args[0] is RemoteDelegateInfo info
+            ? info.HandlerKey
+            : Guid.Empty;
+
+    /// <summary>
+    /// Applies an add or remove operation for an event accessor call.
+    /// </summary>
+    public void Track(MethodInfo method, Guid handlerKey)
+    {
+        if (handlerKey == Guid.Empty)
+            return;
+
+        if (!method.IsEventAccessor(out _, out var isSubscription))
+            return;
+
+        if (isSubscription)
+            Add(handlerKey);
+        else
+            Remove(handlerKey);
     }
 }

@@ -95,6 +95,9 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
 
         var arguments = MapArguments(invocation.Arguments);
 
+        _client.SubscriptionTracker.Track(method,
+            SubscriptionTracker.ExtractHandlerKey(arguments));
+
         var remoteMethodCallMessage =
             _client.MethodCallMessageBuilder.BuildMethodCallMessage(
                 serializer: _client.Serializer,
@@ -102,9 +105,7 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
                 targetMethod: method,
                 args: arguments);
 
-        var sendTask =
-            _client.InvokeRemoteMethod(remoteMethodCallMessage, oneWay);
-        sendTask.ConfigureAwait(false);
+        var sendTask = _client.InvokeRemoteMethod(remoteMethodCallMessage, oneWay);
 
         if (!sendTask.Wait(
                 _client.Config.SendTimeout == 0

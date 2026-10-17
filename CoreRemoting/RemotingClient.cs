@@ -35,6 +35,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     private IRawMessageTransport _rawMessageTransport;
     private readonly ISessionKeyPair _keyPair;
     private readonly ClientDelegateRegistry _delegateRegistry;
+    private readonly SubscriptionTracker _subscriptionTracker;
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly ClientConfig _config;
     private readonly AsyncLock _channelLock;
@@ -86,6 +87,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         _currentlyPendingMessagesCounter = new(initialCount: 1);
         _cancellationTokenSource = new();
         _delegateRegistry = new();
+        _subscriptionTracker = new();
         _handshakeCompletedTaskSource = new();
         _authenticationResponseTaskSource = new();
         _authenticationCompletedTaskSource = new();
@@ -201,6 +203,11 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// Gets the local client delegate registry.
     /// </summary>
     internal ClientDelegateRegistry ClientDelegateRegistry => _delegateRegistry;
+
+    /// <summary>
+    /// Gets the client-side subscription tracker.
+    /// </summary>
+    internal SubscriptionTracker SubscriptionTracker => _subscriptionTracker;
 
     /// <summary>
     /// Gets or sets the invocation timeout in milliseconds.

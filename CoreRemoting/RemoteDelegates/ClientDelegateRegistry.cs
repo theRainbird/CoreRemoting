@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Concurrent;
-using System.Linq;
 
 namespace CoreRemoting.RemoteDelegates;
 
@@ -16,7 +15,7 @@ namespace CoreRemoting.RemoteDelegates;
 public sealed class ClientDelegateRegistry
 {
     private readonly ConcurrentDictionary<Guid, ClientDelegateInfo> _registry;
-    private readonly ConcurrentDictionary<(Delegate Delegate, object Proxy), Guid> _reverseIndex;
+    private readonly ConcurrentDictionary<(Delegate, object), Guid> _reverseIndex;
 
     /// <summary>
     /// Creates a new instance of the ClientDelegateRegistry class.
@@ -89,14 +88,15 @@ public sealed class ClientDelegateRegistry
         if (serviceProxy == null)
             return;
 
-        var keysToRemove = _registry
-            .Where(pair => pair.Value.ServiceProxy == serviceProxy)
-            .Select(pair => pair.Key)
-            .ToArray();
-
-        foreach (var key in keysToRemove)
+        // Linear scan over all registrations, runs once per proxy shutdown.
+        // The enumerator returned from the dictionary is safe to use
+        // concurrently with reads and writes to the dictionary.
+        foreach (var pair in _registry)
         {
-            if (_registry.TryRemove(key, out var info))
+            if (pair.Value.ServiceProxy != serviceProxy)
+                continue;
+
+            if (_registry.TryRemove(pair.Key, out var info))
                 _reverseIndex.TryRemove((info.ClientDelegate, info.ServiceProxy), out _);
         }
     }

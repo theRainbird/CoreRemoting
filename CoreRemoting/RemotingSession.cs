@@ -52,6 +52,7 @@ public sealed class RemotingSession : IAsyncDisposable
     private int _lifecycleState;
 
     private readonly ConcurrentDictionary<string, object> _sessionVariables = new();
+    private readonly SubscriptionTracker _subscriptionTracker = new();
 
     private static readonly AsyncLocal<RemotingSession> CurrentSession = new();
 
@@ -336,6 +337,11 @@ public sealed class RemotingSession : IAsyncDisposable
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
     internal RemoteDelegateInvocationEventAggregator RemoteDelegateInvocation =>
         _remoteDelegateInvocationEventAggregator;
+
+    /// <summary>
+    /// Gets the subscription tracker of this session.
+    /// </summary>
+    internal SubscriptionTracker SubscriptionTracker => _subscriptionTracker;
 
     /// <summary>
     /// Gets component that does the raw message transport (send and receive).
@@ -646,6 +652,7 @@ public sealed class RemotingSession : IAsyncDisposable
         var method = default(MethodInfo);
         var oneWay = false;
         var registration = default(ServiceRegistration);
+        var eventHandlerKey = default(Guid);
 
         try
         {
@@ -660,6 +667,8 @@ public sealed class RemotingSession : IAsyncDisposable
             callMessage.UnwrapParametersFromDeserializedMethodCallMessage(
                 out var parameterValues,
                 out var parameterTypes);
+
+            eventHandlerKey = SubscriptionTracker.ExtractHandlerKey(parameterValues);
 
             parameterValues = MapArguments(parameterValues, parameterTypes);
             serverRpcContext.MethodCallParameterValues = parameterValues;
@@ -720,6 +729,8 @@ public sealed class RemotingSession : IAsyncDisposable
 
                 if (method.IsEventAccessor(out var eventName, out var subscription))
                 {
+                    _subscriptionTracker.Track(method, eventHandlerKey);
+
                     // event accessor is called
                     HandleEventSubscription(serverRpcContext.EventStub,
                         eventName, subscription, serverRpcContext.MethodCallParameterValues);

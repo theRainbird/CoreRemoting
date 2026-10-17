@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Tests.Tools;
 using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
@@ -11,6 +12,14 @@ namespace CoreRemoting.Tests;
 
 public partial class RpcTests
 {
+    private async Task<SubscriptionTracker> GetServerTrackerAsync(RemotingClient client)
+    {
+        var sessionId = client.SessionId ?? throw new InvalidOperationException("Client has no active session.");
+        var sessionRepository = _serverFixture.Server.SessionRepository as SessionRepository;
+        var session = await sessionRepository.GetSession(sessionId).ConfigureAwait(false);
+        return session.SubscriptionTracker;
+    }
+
     [Fact]
     public async Task Delegate_invoked_on_server_should_callback_client()
     {
@@ -141,6 +150,7 @@ public partial class RpcTests
 
         client.Connect();
 
+        var serverTracker = await GetServerTrackerAsync(client);
         var proxy = client.CreateProxy<ITestService>(serviceName);
         var fired = new AsyncCounter();
 
@@ -155,24 +165,36 @@ public partial class RpcTests
         proxy.ServiceEvent += handler1;
         proxy.ServiceEvent += handler2;
         proxy.ServiceEvent += handler3;
+        Assert.Equal(3, client.SubscriptionTracker.Count);
+        Assert.Equal(client.SubscriptionTracker.Checksum, serverTracker.Checksum);
+
         proxy.FireServiceEvent();
         await fired.WaitForValue(3).Timeout(1).ConfigureAwait(false);
         Assert.Equal(3, fired.Value);
 
         // Remove one subscription -> two invocations per fire.
         proxy.ServiceEvent -= handler1;
+        Assert.Equal(2, client.SubscriptionTracker.Count);
+        Assert.Equal(client.SubscriptionTracker.Checksum, serverTracker.Checksum);
+
         proxy.FireServiceEvent();
         await fired.WaitForValue(5).Timeout(1).ConfigureAwait(false);
         Assert.Equal(5, fired.Value);
 
         // Remove one more -> one invocation per fire.
         proxy.ServiceEvent -= handler2;
+        Assert.Equal(1, client.SubscriptionTracker.Count);
+        Assert.Equal(client.SubscriptionTracker.Checksum, serverTracker.Checksum);
+
         proxy.FireServiceEvent();
         await fired.WaitForValue(6).Timeout(1).ConfigureAwait(false);
         Assert.Equal(6, fired.Value);
 
         // Remove the last one -> no invocations.
         proxy.ServiceEvent -= handler3;
+        Assert.Equal(0, client.SubscriptionTracker.Count);
+        Assert.Equal(client.SubscriptionTracker.Checksum, serverTracker.Checksum);
+
         proxy.FireServiceEvent();
         Assert.False(await fired.WaitForValue(7).Expire(0.5).ConfigureAwait(false));
         Assert.Equal(6, fired.Value);
@@ -198,6 +220,7 @@ public partial class RpcTests
 
         client.Connect();
 
+        var serverTracker = await GetServerTrackerAsync(client);
         var proxy1 = client.CreateProxy<ITestService>("TestService_Singleton_Service");
         var proxy2 = client.CreateProxy<ITestService>("TestService_Singleton_Factory");
 
@@ -207,6 +230,9 @@ public partial class RpcTests
         // Same delegate subscribed to events of two different proxies.
         proxy1.ServiceEvent += handler;
         proxy2.ServiceEvent += handler;
+
+        Assert.Equal(2, client.SubscriptionTracker.Count);
+        Assert.Equal(client.SubscriptionTracker.Checksum, serverTracker.Checksum);
 
         // Both subscriptions are live.
         proxy1.FireServiceEvent();
@@ -221,6 +247,11 @@ public partial class RpcTests
         // unregistered. The subscription made through the second proxy
         // must survive.
         client.ShutdownProxy(proxy1);
+
+        // ShutdownProxy does not notify the server (yet), so both trackers
+        // remain unchanged and stay in sync. See the dedicated issue for
+        // the server-side cleanup.
+        Assert.Equal(client.SubscriptionTracker.Checksum, serverTracker.Checksum);
 
         proxy2.FireServiceEvent();
         await fired.WaitForValue(3).Timeout(1).ConfigureAwait(false);
@@ -280,5 +311,132 @@ public partial class RpcTests
             // Reset the error counter for other tests.
             _serverFixture.ServerErrorCount = 0;
         }
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Subscription_trackers_stay_in_sync()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            Channel = ClientChannel,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        client.Connect();
+
+        var serverTracker = await GetServerTrackerAsync(client);
+
+        Assert.Equal(client.SubscriptionTracker.Checksum, serverTracker.Checksum);
+
+        var proxy1 = client.CreateProxy<ITestService>("TestService_Singleton_Service");
+        var proxy2 = client.CreateProxy<ITestService>("TestService_Singleton_Factory");
+
+        Action handler = () => { };
+
+        proxy1.ServiceEvent += handler;
+        Assert.Equal(client.SubscriptionTracker.Checksum, serverTracker.Checksum);
+
+        // Same delegate on a different proxy counts as a second operation.
+        proxy2.ServiceEvent += handler;
+        Assert.Equal(client.SubscriptionTracker.Checksum, serverTracker.Checksum);
+        Assert.Equal(2, client.SubscriptionTracker.Count);
+
+        proxy1.ServiceEvent -= handler;
+        Assert.Equal(client.SubscriptionTracker.Checksum, serverTracker.Checksum);
+
+        proxy2.ServiceEvent -= handler;
+        Assert.Equal(client.SubscriptionTracker.Checksum, serverTracker.Checksum);
+        Assert.Equal(0, client.SubscriptionTracker.Count);
+
+        CheckServerErrorCount();
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Subscription_tracker_is_isolated_per_client()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client1 = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            Channel = ClientChannel,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        using var client2 = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            Channel = ClientChannel,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        client1.Connect();
+        client2.Connect();
+
+        var serverTracker1 = await GetServerTrackerAsync(client1);
+        var serverTracker2 = await GetServerTrackerAsync(client2);
+
+        var proxy1 = client1.CreateProxy<ITestService>();
+        var proxy2 = client2.CreateProxy<ITestService>();
+
+        Action handler = () => { };
+
+        proxy1.ServiceEvent += handler;
+        proxy1.ServiceEvent += handler;
+        proxy2.ServiceEvent += handler;
+
+        Assert.Equal(2, client1.SubscriptionTracker.Count);
+        Assert.Equal(1, client2.SubscriptionTracker.Count);
+
+        Assert.Equal(client1.SubscriptionTracker.Checksum, serverTracker1.Checksum);
+        Assert.Equal(client2.SubscriptionTracker.Checksum, serverTracker2.Checksum);
+        Assert.NotEqual(serverTracker1.Checksum, serverTracker2.Checksum);
+
+        CheckServerErrorCount();
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Subscription_trackers_ignore_non_event_delegate_arguments()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            Channel = ClientChannel,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        client.Connect();
+
+        var serverTracker = await GetServerTrackerAsync(client);
+        var proxy = client.CreateProxy<ITestService>();
+
+        // Regular method that takes a delegate, not an event accessor.
+        proxy.TestMethodWithDelegateArg(_ => { });
+
+        Assert.Equal(0, client.SubscriptionTracker.Count);
+        Assert.Equal(0, serverTracker.Count);
+        Assert.Equal(client.SubscriptionTracker.Checksum, serverTracker.Checksum);
+
+        CheckServerErrorCount();
     }
 }
