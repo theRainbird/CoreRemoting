@@ -439,4 +439,94 @@ public partial class RpcTests
 
         CheckServerErrorCount();
     }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Shutting_down_proxy_unsubscribes_from_server_side_event()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            Channel = ClientChannel,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        client.Connect();
+
+        var proxy = client.CreateProxy<ITestService>("TestService_Singleton_Service");
+        var fired = new AsyncCounter();
+        Action handler = () => { fired++; };
+
+        proxy.ServiceEvent += handler;
+
+        // The subscription is live.
+        proxy.FireServiceEvent();
+        await fired.WaitForValue(1).Timeout(1).ConfigureAwait(false);
+        Assert.Equal(1, fired.Value);
+
+        // Shutting down the proxy must unsubscribe from the server side as well.
+        client.ShutdownProxy(proxy);
+
+        // Fire the event again. The server must not invoke the dead subscription,
+        // so the client-side handler must not be called.
+        var serverProxy = client.CreateProxy<ITestService>("TestService_Singleton_Service");
+        serverProxy.FireServiceEvent();
+
+        // the handler is not invoked because the proxy was shut down.
+        Assert.False(await fired.WaitForValue(2).Expire(0.5).ConfigureAwait(false));
+        Assert.Equal(1, fired.Value);
+
+        CheckServerErrorCount();
+    }
+
+    [Fact(Skip = "https://github.com/theRainbird/CoreRemoting/issues/245")]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Shutting_down_proxy_unsubscribes_from_server_side_event_really()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            Channel = ClientChannel,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        client.Connect();
+
+        const string serviceName = "TestService_Singleton_Service";
+        var proxy = client.CreateProxy<ITestService>(serviceName);
+        var fired = new AsyncCounter();
+        Action handler = () => { fired++; };
+
+        proxy.ServiceEvent += handler;
+
+        proxy.FireServiceEvent();
+        await fired.WaitForValue(1).Timeout(1).ConfigureAwait(false);
+        Assert.Equal(1, fired.Value);
+
+        // Server side holds one subscription.
+        var registration = _serverFixture.Server.ServiceRegistry.GetServiceRegistration(serviceName);
+        var stub = registration.EventStub;
+
+        var countBefore = EventStub.GetHandlerCount(stub[nameof(ITestService.ServiceEvent)]);
+        Assert.Equal(1, countBefore);
+
+        // Shutting down the proxy must unsubscribe from the server side as well.
+        client.ShutdownProxy(proxy);
+
+        // FAILS HERE: the server still holds the dead subscription.
+        var countAfter = EventStub.GetHandlerCount(stub[nameof(ITestService.ServiceEvent)]);
+        Assert.Equal(0, countAfter);
+
+        CheckServerErrorCount();
+    }
 }
