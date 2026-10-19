@@ -571,20 +571,20 @@ public sealed class RemotingSession : IAsyncDisposable
         // auth response to let it derive the very same new shared secret. A server in legacy key
         // derivation mode (or without message encryption) cannot re-key the session, so the negotiated
         // shared key is nulled here to keep both endpoints consistent.
-        var canRekey = 
-            MessageEncryption && 
+        var canRekey =
+            MessageEncryption &&
             !_server.Config.UseLegacySessionKeyDerivation;
 
-        var negotiatedSharedKey = 
-            canRekey 
+        var negotiatedSharedKey =
+            canRekey
                 ? authResponseMessage.NegotiatedSharedKey
                 : null;
 
         // the negotiated shared key travels encrypted inside the auth response, so it does not leak
         // over the wire in plaintext. Keep it in the response when the server re-keys the session,
         // so the client can derive the very same new shared secret; null it otherwise.
-        authResponseMessage.NegotiatedSharedKey = 
-            canRekey 
+        authResponseMessage.NegotiatedSharedKey =
+            canRekey
                 ? negotiatedSharedKey?.GetSerializableCopy()
                 : null;
 

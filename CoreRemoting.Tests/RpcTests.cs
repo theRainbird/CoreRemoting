@@ -862,6 +862,109 @@ public partial class RpcTests : RpcTests_Base
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "Not applicable")]
+    public async Task BeforeCall_event_handler_can_cancel_method_call()
+    {
+        var beforeCallFired = new AsyncCounter();
+        var afterCallFired = new AsyncCounter();
+        var remoteServiceCalled = false;
+
+        void BeforeCall(object sender, ServerRpcContext e)
+        {
+            beforeCallFired++;
+
+            if (e.MethodCallMessage.MethodName == "TestMethod")
+                e.Cancel = true;
+        }
+
+        void AfterCall(object sender, ServerRpcContext e) =>
+            afterCallFired++;
+
+        using var ctx = ValidationSyncContext.Install();
+        _serverFixture.Server.BeforeCall += BeforeCall;
+        _serverFixture.Server.AfterCall += AfterCall;
+
+        try
+        {
+            _serverFixture.TestService.TestMethodFake = arg =>
+            {
+                remoteServiceCalled = true;
+                return arg;
+            };
+
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            client.Connect();
+
+            var proxy = client.CreateProxy<ITestService>();
+            var ex = Assert.Throws<RemoteInvocationException>(() =>
+                proxy.TestMethod("Hello"));
+
+            Assert.Contains("cancel", ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(remoteServiceCalled);
+
+            await beforeCallFired[1].Timeout(1).ConfigureAwait(false);
+            await afterCallFired[1].Timeout(1).ConfigureAwait(false);
+        }
+        finally
+        {
+            _serverFixture.ServerErrorCount = 0;
+            _serverFixture.Server.AfterCall -= AfterCall;
+            _serverFixture.Server.BeforeCall -= BeforeCall;
+        }
+    }
+
+    [Fact]
+    public void BeforeCall_event_handler_can_cancel_with_custom_exception()
+    {
+        void BeforeCall(object sender, ServerRpcContext e)
+        {
+            if (e.MethodCallMessage.MethodName == "TestMethod")
+            {
+                e.Cancel = true;
+                e.Exception = new InvalidOperationException("Custom reason");
+            }
+        }
+
+        using var ctx = ValidationSyncContext.Install();
+        _serverFixture.Server.BeforeCall += BeforeCall;
+
+        try
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            client.Connect();
+
+            var proxy = client.CreateProxy<ITestService>();
+            var ex = Assert.Throws<RemoteInvocationException>(() =>
+                proxy.TestMethod("Hello"));
+
+            Assert.Contains("Custom reason", ex.ToString());
+        }
+        finally
+        {
+            _serverFixture.ServerErrorCount = 0;
+            _serverFixture.Server.BeforeCall -= BeforeCall;
+        }
+    }
+
+    [Fact]
     public void BeginCall_event_handler_can_intercept_and_cancel_method_calls()
     {
         var counter = 0;
