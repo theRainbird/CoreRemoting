@@ -442,6 +442,56 @@ public partial class RpcTests
 
     [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Subscription_trackers_can_detect_when_client_and_server_subscriptions_are_out_of_sync()
+    {
+        void BeforeCall(object sender, ServerRpcContext e)
+        {
+            if (e.MethodCallMessage.MethodName == "add_ServiceEvent")
+                e.Cancel = true;
+        }
+
+        using var ctx = ValidationSyncContext.Install();
+        _serverFixture.Server.BeforeCall += BeforeCall;
+
+        try
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            client.Connect();
+
+            var serverTracker = await GetServerTrackerAsync(client);
+            var proxy = client.CreateProxy<ITestService>("TestService_Singleton_Service");
+
+            Action handler = () => { };
+
+            // Client tracker is updated before the RPC is sent.
+            // Server tracker is updated only after BeforeCall, which is rejected.
+            // The client sees an error, but its tracker has already counted the add.
+            Assert.Throws<RemoteInvocationException>(() => { proxy.ServiceEvent += handler; });
+
+            Assert.Equal(1, client.SubscriptionTracker.Count);
+            Assert.Equal(0, serverTracker.Count);
+            Assert.NotEqual(client.SubscriptionTracker.Checksum, serverTracker.Checksum);
+
+            CheckServerErrorCount();
+        }
+        finally
+        {
+            _serverFixture.ServerErrorCount = 0;
+            _serverFixture.Server.BeforeCall -= BeforeCall;
+        }
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
     public async Task Shutting_down_proxy_unsubscribes_from_server_side_event()
     {
         using var ctx = ValidationSyncContext.Install();
