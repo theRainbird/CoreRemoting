@@ -719,10 +719,10 @@ public sealed class RemotingSession : IAsyncDisposable
                 _server.Serializer.Serialize(serverRpcContext.Exception);
         }
 
-        object result = null;
-
         if (serverRpcContext.Exception == null)
         {
+            object result = null;
+
             try
             {
                 ((RemotingServer)_server).OnBeforeCall(serverRpcContext);
@@ -743,43 +743,24 @@ public sealed class RemotingSession : IAsyncDisposable
                         serverRpcContext.MethodCallParameterValues);
                 }
 
-                var returnType = method.ReturnType;
+                // expose the raw (pre-transform) result to the AfterCall handler
+                serverRpcContext.ReturnValue = result;
 
-                if (result != null)
+                // transform once and pre-build the message so the handler sees both forms
+                var transformedResult =
+                    await TransformReturnValueAsync(method.ReturnType, result);
+
+                if (!oneWay)
                 {
-                    // Wait for result value if result is a Task
-                    var task = await TryAwaitReturnValue(returnType, result);
-                    if (task.isAwaited)
-                    {
-                        result = task.result;
-                    }
-
-                    // After potential await, perform post-processing based on the actual value/type.
-                    // This fixes cases when async methods return LINQ expressions (Task<Expression<...>>),
-                    // which previously weren't converted to ExpressionNode and caused serialization issues.
-                    if (result is Expression expression)
-                    {
-                        result = expression.ToExpressionNode();
-                    }
-                    else if (returnType.GetCustomAttribute<ReturnAsProxyAttribute>() != null)
-                    {
-                        var isRegisteredService =
-                            returnType.IsInterface &&
-                            _server.ServiceRegistry
-                                .GetAllRegisteredTypes().Any(s =>
-                                    returnType.AssemblyQualifiedName != null &&
-                                    returnType.AssemblyQualifiedName.Equals(s.AssemblyQualifiedName));
-
-                        if (!isRegisteredService)
-                        {
-                            throw new InvalidOperationException(
-                                $"Type '{returnType.AssemblyQualifiedName}' is not a registered service.");
-                        }
-
-                        result = new ServiceReference(
-                            serviceInterfaceTypeName: returnType.FullName + ", " + returnType.Assembly.GetName().Name,
-                            serviceName: returnType.FullName);
-                    }
+                    serverRpcContext.MethodCallResultMessage =
+                        _server
+                            .MethodCallMessageBuilder
+                            .BuildMethodCallResultMessage(
+                                serializer: _server.Serializer,
+                                uniqueCallKey: serverRpcContext.UniqueCallKey,
+                                method: method,
+                                args: serverRpcContext.MethodCallParameterValues,
+                                returnValue: transformedResult);
                 }
             }
             catch (Exception ex)
@@ -800,21 +781,39 @@ public sealed class RemotingSession : IAsyncDisposable
                     _server.Serializer.Serialize(serverRpcContext.Exception);
             }
 
-            if (!oneWay && serverRpcContext.Exception == null)
-            {
-                serverRpcContext.MethodCallResultMessage =
-                    _server
-                        .MethodCallMessageBuilder
-                        .BuildMethodCallResultMessage(
-                            serializer: _server.Serializer,
-                            uniqueCallKey: serverRpcContext.UniqueCallKey,
-                            method: method,
-                            args: serverRpcContext.MethodCallParameterValues,
-                            returnValue: result);
-            }
-
             if (serverRpcContext.Exception == null)
+            {
                 ((RemotingServer)_server).OnAfterCall(serverRpcContext);
+
+                // rebuild the message only if the handler actually changed ReturnValue
+                if (!oneWay && !Equals(serverRpcContext.ReturnValue, result))
+                {
+                    try
+                    {
+                        var retransformedResult =
+                            await TransformReturnValueAsync(method.ReturnType, serverRpcContext.ReturnValue);
+
+                        serverRpcContext.MethodCallResultMessage =
+                            _server
+                                .MethodCallMessageBuilder
+                                .BuildMethodCallResultMessage(
+                                    serializer: _server.Serializer,
+                                    uniqueCallKey: serverRpcContext.UniqueCallKey,
+                                    method: method,
+                                    args: serverRpcContext.MethodCallParameterValues,
+                                    returnValue: retransformedResult);
+                    }
+                    catch (Exception ex)
+                    {
+                        serverRpcContext.Exception =
+                            new RemoteInvocationException(
+                                message: $"Failed to rebuild result after AfterCall: {ex.GetBaseException()?.Message ?? ex.Message}",
+                                innerEx: ex.ToSerializable());
+
+                        serializedResult = _server.Serializer.Serialize(serverRpcContext.Exception);
+                    }
+                }
+            }
 
             if (oneWay)
                 return;
@@ -895,6 +894,50 @@ public sealed class RemotingSession : IAsyncDisposable
 
         // It's neither Task, nor ValueTask
         return (false, null);
+    }
+
+    /// <summary>
+    /// Transforms a raw method return value into the form expected by
+    /// <see cref="MethodCallMessageBuilder.BuildMethodCallResultMessage"/>:
+    /// awaits Task/ValueTask, converts LINQ expressions to ExpressionNode,
+    /// and replaces ReturnAsProxy results with ServiceReference.
+    /// </summary>
+    /// <param name="returnType">Declared return type of the invoked method.</param>
+    /// <param name="returnValue">Raw return value (pre-transform).</param>
+    /// <returns>Transformed return value, or <c>null</c>.</returns>
+    private async Task<object> TransformReturnValueAsync(Type returnType, object returnValue)
+    {
+        if (returnValue == null)
+            return null;
+
+        var (isAwaited, awaited) = await TryAwaitReturnValue(returnType, returnValue);
+        if (isAwaited)
+            returnValue = awaited;
+
+        if (returnValue is Expression expression)
+            return expression.ToExpressionNode();
+
+        if (returnType.GetCustomAttribute<ReturnAsProxyAttribute>() != null)
+        {
+            var isRegisteredService =
+                returnType.IsInterface &&
+                _server.ServiceRegistry
+                    .GetAllRegisteredTypes().Any(s =>
+                        returnType.AssemblyQualifiedName != null &&
+                        returnType.AssemblyQualifiedName.Equals(s.AssemblyQualifiedName));
+
+            if (!isRegisteredService)
+            {
+                throw new InvalidOperationException(
+                    $"Type '{returnType.AssemblyQualifiedName}' is not a registered service.");
+            }
+
+            return new ServiceReference(
+                serviceInterfaceTypeName: returnType.FullName + ", " + returnType.Assembly.GetName().Name,
+                serviceName: returnType.FullName);
+        }
+
+        return returnValue;
     }
 
     private void HandleEventSubscription(EventStub eventStub, string eventName, bool subscription, object[] parameters)

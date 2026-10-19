@@ -21,6 +21,11 @@ public class ServerRpcContext
     public Exception Exception { get; set; }
 
     /// <summary>
+    /// Gets or sets the raw return value of the invoked method.
+    /// </summary>
+    public object ReturnValue { get; set; }
+
+    /// <summary>
     /// Gets or sets a value whether the authentication is required.
     /// </summary>
     public bool AuthenticationRequired { get; set; }

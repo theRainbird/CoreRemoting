@@ -663,6 +663,49 @@ public partial class RpcTests : RpcTests_Base
     }
 
     [Fact]
+    public void AfterCall_event_handler_can_substitute_result()
+    {
+        void AfterCall(object sender, ServerRpcContext ctx)
+        {
+            if (ctx.Exception != null)
+                return;
+
+            if (ctx.MethodCallMessage.MethodName != "Echo")
+                return;
+
+            ctx.ReturnValue = "[substituted]";
+        }
+
+        using var ctx = ValidationSyncContext.Install();
+        _serverFixture.Server.AfterCall += AfterCall;
+
+        try
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            client.Connect();
+
+            var proxy = client.CreateProxy<ITestService>();
+            var result = proxy.Echo("Hello");
+
+            Assert.Equal("[substituted]", result);
+        }
+        finally
+        {
+            _serverFixture.ServerErrorCount = 0;
+            _serverFixture.Server.AfterCall -= AfterCall;
+        }
+    }
+
+    [Fact]
     public void Failing_component_constructor_throws_RemoteInvocationException()
     {
         using var ctx = ValidationSyncContext.Install();
