@@ -78,6 +78,14 @@ public interface IRemotingClient : IAsyncDisposable, IDisposable
     object CreateProxy(Type serviceInterfaceType, string serviceName = "");
 
     /// <summary>
+    /// Creates a service invoker that provides access to a remote service without generating a proxy.
+    /// </summary>
+    /// <typeparam name="TService">Type of the remote service contract (interface or class)</typeparam>
+    /// <param name="serviceName">Unique name of the remote service</param>
+    /// <returns>Service invoker object</returns>
+    IServiceInvoker<TService> CreateInvoker<TService>(string serviceName = "") where TService : class;
+
+    /// <summary>
     /// Shuts a specified service proxy down and frees resources.
     /// </summary>
     /// <param name="serviceProxy"></param>

@@ -1037,6 +1037,16 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     }
 
     /// <summary>
+    /// Creates a service invoker that provides access to a remote service without generating a proxy.
+    /// </summary>
+    /// <typeparam name="TService">Type of the remote service contract (interface or class)</typeparam>
+    /// <param name="serviceName">Unique name of the remote service</param>
+    /// <returns>Service invoker object</returns>
+    public IServiceInvoker<TService> CreateInvoker<TService>(string serviceName = "")
+        where TService : class =>
+        new ServiceInvoker<TService>(this, serviceName);
+
+    /// <summary>
     /// Shuts a specified service proxy down and frees resources.
     /// </summary>
     /// <param name="serviceProxy">Proxy object that should be shut down</param>

@@ -108,6 +108,15 @@ public class TestService : ITestService
         Error(text);
     }
 
+    public Task<string> EchoAsync(string text) =>
+        Task.FromResult(text);
+
+    public ValueTask<string> EchoValueTaskAsync(string text) =>
+        new(text);
+
+    public Task NoopAsync() =>
+        Task.CompletedTask;
+
     private class NonSerializable : Exception
     {
         public NonSerializable(string message)
@@ -130,7 +139,7 @@ public class TestService : ITestService
     {
         // This field contains a delegate, which NeoBinary cannot serialize by default
         private readonly Func<string> _throwingDelegate = () => throw new Exception(text);
-        
+
         public string Text => throw new Exception(text);
     }
 
