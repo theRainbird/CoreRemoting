@@ -32,7 +32,7 @@ public abstract class RpcTests_Base : IClassFixture<ServerFixture>
 
         _serverFixture.Start(ServerChannel);
 
-        EventStub.DelegateInvoker = DelegateInvoker;
+        ServiceEventHub.DelegateInvoker = DelegateInvoker;
     }
 
     /// <summary>

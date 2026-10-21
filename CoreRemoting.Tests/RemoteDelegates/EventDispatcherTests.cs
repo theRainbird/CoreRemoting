@@ -61,7 +61,7 @@ public partial class EventDispatcherTests : RpcTests_Base
         var fired = new AsyncCounter();
         proxy.ServiceEvent += () => fired++;
 
-        // Ensure the service and its event stub are materialized on the server.
+        // Ensure the service and its event hub are materialized on the server.
         proxy.Echo("warmup");
 
         GetDispatcher().Invoke<ITestService>(s => nameof(s.ServiceEvent));
@@ -155,7 +155,7 @@ public partial class EventDispatcherTests : RpcTests_Base
         using var client = CreateConnectedClient();
         var proxy = client.CreateProxy<ITestService>();
 
-        // No subscribers. Warmup materializes the service and its stub.
+        // No subscribers. Warmup materializes the service and its event hub.
         proxy.Echo("warmup");
 
         GetDispatcher().Invoke<ITestService>(s => nameof(s.ServiceEvent));
@@ -187,7 +187,7 @@ public partial class EventDispatcherTests : RpcTests_Base
         using var client = CreateConnectedClient();
         var proxy = client.CreateProxy<ITestService>();
 
-        // Subscribe and warmup so the event stub definitely exists on the server.
+        // Subscribe and warmup so the event hub definitely exists on the server.
         proxy.ServiceEvent += () => { };
         proxy.Echo("warmup");
 

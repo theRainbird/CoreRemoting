@@ -57,9 +57,9 @@ public class ServerRpcContext
     public MethodCallResultMessage MethodCallResultMessage { get; set; }
 
     /// <summary>
-    /// Gets or sets service event stub.
+    /// Gets or sets service event hub.
     /// </summary>
-    public EventStub EventStub { get; set; }
+    public ServiceEventHub EventHub { get; set; }
 
     /// <summary>
     /// Gets or sets the instance of the service, on which the method is called.

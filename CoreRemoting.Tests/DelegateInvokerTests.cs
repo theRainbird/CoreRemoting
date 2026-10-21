@@ -15,14 +15,14 @@ using Xunit.Abstractions;
 namespace CoreRemoting.Tests;
 
 [Collection("CoreRemoting")]
-public class InvokerTests : IClassFixture<ServerFixture>, IDisposable
+public class DelegateInvokerTests : IClassFixture<ServerFixture>, IDisposable
 {
     private readonly ServerFixture _serverFixture;
     private readonly ITestOutputHelper _testOutputHelper;
 
-    public InvokerTests(ServerFixture serverFixture, ITestOutputHelper testOutputHelper)
+    public DelegateInvokerTests(ServerFixture serverFixture, ITestOutputHelper testOutputHelper)
     {
-        EventStub.DelegateInvoker = DelegateInvoker;
+        ServiceEventHub.DelegateInvoker = DelegateInvoker;
 
         _serverFixture = serverFixture;
         _testOutputHelper = testOutputHelper;
@@ -102,6 +102,6 @@ public class InvokerTests : IClassFixture<ServerFixture>, IDisposable
     public void Dispose()
     {
         // reset the invoker to default
-        EventStub.DelegateInvoker = null;
+        ServiceEventHub.DelegateInvoker = null;
     }
 }

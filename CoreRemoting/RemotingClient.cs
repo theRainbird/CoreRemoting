@@ -836,7 +836,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             _delegateRegistry.GetDelegateByHandlerKey(delegateInvocationMessage.HandlerKey);
 
         // Invoke local delegate with arguments from remote caller
-        EventStub.DelegateInvoker.Invoke(localDelegate, delegateInvocationMessage.DelegateArguments);
+        ServiceEventHub.DelegateInvoker.Invoke(localDelegate, delegateInvocationMessage.DelegateArguments);
     }
 
     /// <summary>

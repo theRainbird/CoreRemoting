@@ -23,8 +23,8 @@ public class EventDispatcher(IDependencyInjectionContainer container) : IEventDi
     {
         var serviceName = typeof(TServiceInterface).FullName;
         var reg = container.GetServiceRegistration(serviceName);
-        var store = reg.EventStub?.CreateStore<TServiceInterface>();
-        store?.Invoke(getName, arguments);
+        var hub = reg.EventHub?.CreateTyped<TServiceInterface>();
+        hub?.Invoke(getName, arguments);
     }
 
     /// <summary>
@@ -36,6 +36,6 @@ public class EventDispatcher(IDependencyInjectionContainer container) : IEventDi
     public void Invoke(string serviceName, string eventName, params object[] arguments)
     {
         var reg = container.GetServiceRegistration(serviceName);
-        reg.EventStub?.Invoke(eventName, arguments);
+        reg.EventHub?.Invoke(eventName, arguments);
     }
 }

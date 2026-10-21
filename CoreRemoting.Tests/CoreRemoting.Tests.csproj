@@ -11,8 +11,6 @@
     <!-- WatsonTcp is the default channel, WebSocketSharp is optional, BinaryFormatter is .net8 only, Quic is .net9 only -->
     <ItemGroup>
         <Compile Remove="BinarySerializationTests.cs" />
-        <Compile Remove="InvokerTests.cs" />
-        <Compile Remove="InvokerTestsSafe.cs" />
         <Compile Remove="RpcTests_Quic.cs" />
         <Compile Remove="RpcTests_WatsonTcp.cs" />
         <Compile Remove="RpcTests_WebsocketSharp.cs" />

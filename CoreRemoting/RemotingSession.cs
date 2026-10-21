@@ -687,7 +687,7 @@ public sealed class RemotingSession : IAsyncDisposable
             var serviceInterfaceType = registration.InterfaceType;
 
             serverRpcContext.ServiceInstance = service;
-            serverRpcContext.EventStub = registration.EventStub;
+            serverRpcContext.EventHub = registration.EventHub;
 
             method = GetMethodInfo(callMessage, serviceInterfaceType, parameterTypes);
             if (method == null)
@@ -732,7 +732,7 @@ public sealed class RemotingSession : IAsyncDisposable
                     _subscriptionTracker.Track(method, eventHandlerKey);
 
                     // event accessor is called
-                    HandleEventSubscription(serverRpcContext.EventStub,
+                    HandleEventSubscription(serverRpcContext.EventHub,
                         eventName, subscription, serverRpcContext.MethodCallParameterValues);
                     result = null;
                 }
@@ -940,7 +940,7 @@ public sealed class RemotingSession : IAsyncDisposable
         return returnValue;
     }
 
-    private void HandleEventSubscription(EventStub eventStub, string eventName, bool subscription, object[] parameters)
+    private void HandleEventSubscription(ServiceEventHub eventHub, string eventName, bool subscription, object[] parameters)
     {
         if (parameters == null || parameters.Length != 1)
         {
@@ -954,8 +954,8 @@ public sealed class RemotingSession : IAsyncDisposable
         }
 
         Action<string, Delegate> eventAccessor = subscription ?
-            eventStub.AddHandler :
-            eventStub.RemoveHandler;
+            eventHub.AddHandler :
+            eventHub.RemoveHandler;
 
         eventAccessor(eventName, eventHandler);
     }

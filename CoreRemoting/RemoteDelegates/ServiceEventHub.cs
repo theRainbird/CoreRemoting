@@ -9,15 +9,15 @@ using CoreRemoting.Toolbox;
 namespace CoreRemoting.RemoteDelegates;
 
 /// <summary>
-/// Event stub caches all event handlers for the single-call or scoped components.
+/// Event hub caches all event handlers for the single-call or scoped components.
 /// </summary>
-public class EventStub
+public class ServiceEventHub
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="EventStub" /> class.
+    /// Initializes a new instance of the <see cref="ServiceEventHub" /> class.
     /// </summary>
     /// <param name="interfaceType">Type of the interface.</param>
-    public EventStub(Type interfaceType)
+    public ServiceEventHub(Type interfaceType)
     {
         InterfaceType = interfaceType ?? throw new ArgumentNullException(nameof(interfaceType));
         CreateDelegateHolders();
@@ -465,50 +465,50 @@ public class EventStub
         DelegateInvoker.Invoke(this[eventName], arguments);
 
     /// <summary>
-    /// Creates a strong-typed <see cref="EventStore{TInterface}"/> wrapping this stub.
+    /// Creates a strong-typed <see cref="TypedEventHub{TInterface}"/> wrapping this hub.
     /// </summary>
     /// <typeparam name="TInterface">Interface type.</typeparam>
-    public EventStore<TInterface> CreateStore<TInterface>() where TInterface : class =>
-        new EventStore<TInterface>(this);
+    public TypedEventHub<TInterface> CreateTyped<TInterface>() where TInterface : class =>
+        new TypedEventHub<TInterface>(this);
 
     /// <summary>
-    /// Strong-typed wrapper around <see cref="EventStub"/>, for unit tests.
-    /// Does not own the stub — all calls are delegated to <see cref="Stub"/>.
+    /// Strong-typed wrapper around <see cref="ServiceEventHub"/>, for unit tests.
+    /// Does not own the hub — all calls are delegated to <see cref="Hub"/>.
     /// </summary>
     /// <typeparam name="TInterface">Interface.</typeparam>
-    public sealed class EventStore<TInterface> where TInterface : class
+    public sealed class TypedEventHub<TInterface> where TInterface : class
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="EventStore{TInterface}"/>.
-        /// Wraps the given <paramref name="stub"/>, or creates a fresh
-        /// <see cref="EventStub"/> when <paramref name="stub"/> is <c>null</c>.
+        /// Initializes a new instance of the <see cref="TypedEventHub{TInterface}"/>.
+        /// Wraps the given <paramref name="hub"/>, or creates a fresh
+        /// <see cref="ServiceEventHub"/> when <paramref name="hub"/> is <c>null</c>.
         /// </summary>
-        /// <param name="stub">The event stub to wrap, or <c>null</c> to create a new one.</param>
-        public EventStore(EventStub stub = null)
+        /// <param name="hub">The event hub to wrap, or <c>null</c> to create a new one.</param>
+        public TypedEventHub(ServiceEventHub hub = null)
         {
-            Stub = stub ?? new EventStub(typeof(TInterface));
+            Hub = hub ?? new ServiceEventHub(typeof(TInterface));
 
             var expected = typeof(TInterface);
-            var actual = Stub.InterfaceType;
+            var actual = Hub.InterfaceType;
 
             if (!expected.IsAssignableFrom(actual) && !actual.IsAssignableFrom(expected))
             {
                 throw new ArgumentException(
-                    $"Event stub for '{actual}' is not compatible with '{expected}'.",
-                    nameof(stub));
+                    $"Event hub for '{actual}' is not compatible with '{expected}'.",
+                    nameof(hub));
             }
         }
 
         /// <summary>
-        /// Gets the wrapped event stub.
+        /// Gets the wrapped event hub.
         /// </summary>
-        public EventStub Stub { get; }
+        public ServiceEventHub Hub { get; }
 
         /// <summary>
         /// Gets the <see cref="Delegate" /> with the specified event or delegate property name.
         /// </summary>
         /// <param name="name">Name of the event or delegate property.</param>
-        public Delegate this[string name] => Stub[name];
+        public Delegate this[string name] => Hub[name];
 
         /// <summary>
         /// Invokes the specified event with provided arguments.
@@ -519,7 +519,7 @@ public class EventStub
         /// </param>
         /// <param name="arguments">Event arguments.</param>
         public void Invoke(Func<TInterface, string> getName, params object[] arguments) =>
-            Stub.Invoke(getName(null), arguments);
+            Hub.Invoke(getName(null), arguments);
 
         /// <summary>
         /// Invokes the specified event with provided arguments.
@@ -527,7 +527,7 @@ public class EventStub
         /// <param name="eventName">The event name.</param>
         /// <param name="arguments">Event arguments.</param>
         public void Invoke(string eventName, params object[] arguments) =>
-            Stub.Invoke(eventName, arguments);
+            Hub.Invoke(eventName, arguments);
 
         /// <summary>
         /// Adds the handler for the given event or delegate property.
@@ -538,7 +538,7 @@ public class EventStub
         /// </param>
         /// <param name="handler">Event handler to add.</param>
         public void AddHandler(Func<TInterface, string> getName, Delegate handler) =>
-            Stub.AddHandler(getName(null), handler);
+            Hub.AddHandler(getName(null), handler);
 
         /// <summary>
         /// Adds the handler for the given event or delegate property.
@@ -546,7 +546,7 @@ public class EventStub
         /// <param name="name">The event name.</param>
         /// <param name="handler">Event handler to add.</param>
         public void AddHandler(string name, Delegate handler) =>
-            Stub.AddHandler(name, handler);
+            Hub.AddHandler(name, handler);
 
         /// <summary>
         /// Removes the handler for the given event or delegate property.
@@ -557,7 +557,7 @@ public class EventStub
         /// </param>
         /// <param name="handler">Event handler to remove.</param>
         public void RemoveHandler(Func<TInterface, string> getName, Delegate handler) =>
-            Stub.RemoveHandler(getName(null), handler);
+            Hub.RemoveHandler(getName(null), handler);
 
         /// <summary>
         /// Removes the handler for the given event or delegate property.
@@ -565,6 +565,6 @@ public class EventStub
         /// <param name="name">The event name.</param>
         /// <param name="handler">Event handler to remove.</param>
         public void RemoveHandler(string name, Delegate handler) =>
-            Stub.RemoveHandler(name, handler);
+            Hub.RemoveHandler(name, handler);
     }
 }
