@@ -124,7 +124,7 @@ public class ServiceEventHubTests
         // add the first handler
         var eventHub = new ServiceEventHub(typeof(ISampleInterface));
         var fired = new AsyncCounter();
-        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), new EventHandler((sender, args) => fired++));
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid(), Guid.Empty, new EventHandler((sender, args) => fired++));
 
         // check if it is called
         var handler = (EventHandler)eventHub[nameof(ISampleInterface.SimpleEvent)];
@@ -133,8 +133,9 @@ public class ServiceEventHubTests
 
         // add the second handler
         var firedAgain = new AsyncCounter();
+        var secondKey = Guid.NewGuid();
         var tempHandler = new EventHandler((sender, args) => firedAgain++);
-        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), tempHandler);
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), secondKey, Guid.Empty, tempHandler);
 
         // check if it is called
         handler(this, EventArgs.Empty);
@@ -142,7 +143,7 @@ public class ServiceEventHubTests
         Assert.Equal(1, await firedAgain.WaitForValue(1).Timeout(1));
 
         // remove the second handler
-        eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), tempHandler);
+        eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), secondKey);
 
         // check if it is not called
         handler(this, EventArgs.Empty);
@@ -156,7 +157,7 @@ public class ServiceEventHubTests
         // add the first handler
         var eventHub = new ServiceEventHub(typeof(ISampleInterface));
         var fired = new AsyncCounter();
-        eventHub.AddHandler(nameof(ISampleInterface.CancelEvent), new EventHandler<CancelEventArgs>((sender, args) => fired++));
+        eventHub.AddHandler(nameof(ISampleInterface.CancelEvent), Guid.NewGuid(), Guid.Empty, new EventHandler<CancelEventArgs>((sender, args) => fired++));
 
         // check if it is called
         var handler = (EventHandler<CancelEventArgs>)eventHub[nameof(ISampleInterface.CancelEvent)];
@@ -165,8 +166,9 @@ public class ServiceEventHubTests
 
         // add the second handler
         var firedAgain = new AsyncCounter();
+        var secondKey = Guid.NewGuid();
         var tempHandler = new EventHandler<CancelEventArgs>((sender, args) => firedAgain++);
-        eventHub.AddHandler(nameof(ISampleInterface.CancelEvent), tempHandler);
+        eventHub.AddHandler(nameof(ISampleInterface.CancelEvent), secondKey, Guid.Empty, tempHandler);
 
         // check if it is called
         handler(this, new CancelEventArgs());
@@ -174,7 +176,7 @@ public class ServiceEventHubTests
         Assert.Equal(1, await firedAgain.WaitForValue(1).Timeout(1));
 
         // remove the second handler
-        eventHub.RemoveHandler(nameof(ISampleInterface.CancelEvent), tempHandler);
+        eventHub.RemoveHandler(nameof(ISampleInterface.CancelEvent), secondKey);
 
         // check if it is not called
         handler(this, new CancelEventArgs());
@@ -188,7 +190,7 @@ public class ServiceEventHubTests
         // add the first handler
         var eventHub = new ServiceEventHub(typeof(ISampleInterface));
         var fired = new AsyncCounter();
-        eventHub.AddHandler(nameof(ISampleInterface.ActionDelegate), new Action(() => fired++));
+        eventHub.AddHandler(nameof(ISampleInterface.ActionDelegate), Guid.NewGuid(), Guid.Empty, new Action(() => fired++));
 
         // check if it is called
         var handler = (Action)eventHub[nameof(ISampleInterface.ActionDelegate)];
@@ -197,8 +199,9 @@ public class ServiceEventHubTests
 
         // add the second handler
         var firedAgain = new AsyncCounter();
+        var secondKey = Guid.NewGuid();
         var tempHandler = new Action(() => firedAgain++);
-        eventHub.AddHandler(nameof(ISampleInterface.ActionDelegate), tempHandler);
+        eventHub.AddHandler(nameof(ISampleInterface.ActionDelegate), secondKey, Guid.Empty, tempHandler);
 
         // check if it is called
         handler();
@@ -206,7 +209,7 @@ public class ServiceEventHubTests
         Assert.Equal(1, await firedAgain.WaitForValue(1).Timeout(1));
 
         // remove the second handler
-        eventHub.RemoveHandler(nameof(ISampleInterface.ActionDelegate), tempHandler);
+        eventHub.RemoveHandler(nameof(ISampleInterface.ActionDelegate), secondKey);
 
         // check if it is not called
         handler();
@@ -220,7 +223,7 @@ public class ServiceEventHubTests
         // add the first handler
         var eventHub = new ServiceEventHub(typeof(ISampleInterface));
         var fired = new AsyncCounter();
-        eventHub.AddHandler(nameof(ISampleInterface.FuncDelegate), new Func<int, string>(a =>
+        eventHub.AddHandler(nameof(ISampleInterface.FuncDelegate), Guid.NewGuid(), Guid.Empty, new Func<int, string>(a =>
         {
             fired++;
             return a.ToString(); // discarded
@@ -234,13 +237,14 @@ public class ServiceEventHubTests
 
         // add the second handler
         var firedAgain = new AsyncCounter();
+        var secondKey = Guid.NewGuid();
         var tempHandler = new Func<int, string>(a =>
         {
             firedAgain++;
             return a.ToString(); // discarded
         });
 
-        eventHub.AddHandler(nameof(ISampleInterface.FuncDelegate), tempHandler);
+        eventHub.AddHandler(nameof(ISampleInterface.FuncDelegate), secondKey, Guid.Empty, tempHandler);
 
         // check if it is called
         result = handler(321);
@@ -249,7 +253,7 @@ public class ServiceEventHubTests
         Assert.Null(result); // Assert.Equal("123", result);
 
         // remove the second handler
-        eventHub.RemoveHandler(nameof(ISampleInterface.FuncDelegate), tempHandler);
+        eventHub.RemoveHandler(nameof(ISampleInterface.FuncDelegate), secondKey);
 
         // check if it is not called
         result = handler(0);
@@ -268,11 +272,11 @@ public class ServiceEventHubTests
         var funcFired = new AsyncCounter();
 
         // add event handlers
-        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), new EventHandler((sender, args) => simpleEventFired++));
-        eventHub.AddHandler(nameof(ISampleInterface.CancelEvent), new EventHandler<CancelEventArgs>((sender, args) => cancelEventFired++));
-        eventHub.AddHandler(nameof(ISampleInterface.ActionDelegate), new Action(() => actionFired++));
-        eventHub.AddHandler(nameof(ISampleInterface.FuncDelegate), new Func<int, string>(a => { funcFired++; return a.ToString(); }));
-        eventHub.AddHandler(nameof(ISampleInterface.FuncDelegate), new Func<int, string>(a => { funcFired++; return (a * 2).ToString(); }));
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid(), Guid.Empty, new EventHandler((sender, args) => simpleEventFired++));
+        eventHub.AddHandler(nameof(ISampleInterface.CancelEvent), Guid.NewGuid(), Guid.Empty, new EventHandler<CancelEventArgs>((sender, args) => cancelEventFired++));
+        eventHub.AddHandler(nameof(ISampleInterface.ActionDelegate), Guid.NewGuid(), Guid.Empty, new Action(() => actionFired++));
+        eventHub.AddHandler(nameof(ISampleInterface.FuncDelegate), Guid.NewGuid(), Guid.Empty, new Func<int, string>(a => { funcFired++; return a.ToString(); }));
+        eventHub.AddHandler(nameof(ISampleInterface.FuncDelegate), Guid.NewGuid(), Guid.Empty, new Func<int, string>(a => { funcFired++; return (a * 2).ToString(); }));
 
         // wire up events
         var component = new SampleService();
@@ -314,15 +318,16 @@ public class ServiceEventHubTests
         eventHub.WireTo(sampleService);
         Assert.Equal(0, sampleService.SimpleEventHandlerCount);
 
-        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), new EventHandler((s, e) => { }));
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid(), Guid.Empty, new EventHandler((s, e) => { }));
         Assert.Equal(1, sampleService.SimpleEventHandlerCount);
 
+        var secondKey = Guid.NewGuid();
         var handler = new EventHandler((s, e) => { });
 
-        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), handler);
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), secondKey, Guid.Empty, handler);
         Assert.Equal(2, sampleService.SimpleEventHandlerCount);
 
-        eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), handler);
+        eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), secondKey);
         Assert.Equal(1, sampleService.SimpleEventHandlerCount);
     }
 
@@ -333,6 +338,75 @@ public class ServiceEventHubTests
         var sampleService = new SampleService();
         eventHub.WireTo(sampleService);
         sampleService.FireHandlers(1);
+    }
+
+    [Fact]
+    public void ServiceEventHub_RemoveHandler_returns_false_for_unknown_key()
+    {
+        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
+
+        Assert.False(eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid()));
+    }
+
+    [Fact]
+    public async Task ServiceEventHub_supports_multiple_occurrences_of_same_key()
+    {
+        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
+        var key = Guid.NewGuid();
+        var session = Guid.NewGuid();
+        var fired = new AsyncCounter();
+
+        var handler = new EventHandler((s, e) => fired++);
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), key, session, handler);
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), key, session, handler);
+
+        var combined = (EventHandler)eventHub[nameof(ISampleInterface.SimpleEvent)];
+        combined(this, EventArgs.Empty);
+        Assert.Equal(2, await fired.WaitForValue(2).Timeout(1));
+
+        Assert.True(eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), key));
+        combined(this, EventArgs.Empty);
+        Assert.Equal(3, await fired.WaitForValue(3).Timeout(1));
+
+        Assert.True(eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), key));
+        Assert.False(eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), key));
+    }
+
+    [Fact]
+    public void ServiceEventHub_RemoveAllForSession_removes_only_matching_entries()
+    {
+        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
+        var session1 = Guid.NewGuid();
+        var session2 = Guid.NewGuid();
+
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid(), session1, new EventHandler((s, e) => { }));
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid(), session1, new EventHandler((s, e) => { }));
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid(), session2, new EventHandler((s, e) => { }));
+
+        var removed = eventHub.RemoveAllForSession(session1);
+
+        Assert.Equal(2, removed);
+        Assert.Equal(1, GetHandlerCount(eventHub[nameof(ISampleInterface.SimpleEvent)]));
+    }
+
+    [Fact]
+    public async Task ServiceEventHub_RemoveAllForSession_updates_combined_delegate()
+    {
+        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
+        var session = Guid.NewGuid();
+        var fired = new AsyncCounter();
+
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid(), session, new EventHandler((s, e) => fired++));
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid(), session, new EventHandler((s, e) => fired++));
+
+        var combined = (EventHandler)eventHub[nameof(ISampleInterface.SimpleEvent)];
+        combined(this, EventArgs.Empty);
+        Assert.Equal(2, await fired.WaitForValue(2).Timeout(1));
+
+        eventHub.RemoveAllForSession(session);
+
+        combined(this, EventArgs.Empty);
+        Assert.False(await fired.WaitForValue(3).Expire(0.1));
     }
 
     [Fact]
@@ -367,7 +441,8 @@ public class ServiceEventHubTests
 
         // add event handler
         var typedHub = new TypedEventHub<ISampleInterface>();
-        typedHub.AddHandler(s => nameof(s.SimpleEvent), simpleEventHandler);
+        var key = Guid.NewGuid();
+        typedHub.AddHandler(s => nameof(s.SimpleEvent), key, Guid.Empty, simpleEventHandler);
 
         // invoke event handler
         typedHub.Invoke(s => nameof(s.SimpleEvent), this, EventArgs.Empty);
@@ -378,7 +453,7 @@ public class ServiceEventHubTests
         await simpleEventFired.WaitForValue(2).Timeout(1);
 
         // remove event handler
-        typedHub.RemoveHandler(s => nameof(s.SimpleEvent), simpleEventHandler);
+        typedHub.RemoveHandler(s => nameof(s.SimpleEvent), key);
         await Assert.ThrowsAsync<TimeoutException>(async () =>
             await simpleEventFired.WaitForValue(3).Timeout(1));
     }
@@ -415,14 +490,15 @@ public class ServiceEventHubTests
         Assert.Same(eventHub, typedHub.Hub);
 
         // adding via the typed hub is visible via the original hub
+        var key = Guid.NewGuid();
         var handler = new EventHandler((s, e) => { });
-        typedHub.AddHandler(nameof(ISampleInterface.SimpleEvent), handler);
+        typedHub.AddHandler(nameof(ISampleInterface.SimpleEvent), key, Guid.Empty, handler);
 
         var combined = eventHub[nameof(ISampleInterface.SimpleEvent)];
         Assert.Equal(1, GetHandlerCount(combined));
 
         // removing via the original hub is visible via the typed hub
-        eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), handler);
+        eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), key);
         combined = typedHub[nameof(ISampleInterface.SimpleEvent)];
         Assert.Equal(0, GetHandlerCount(combined));
     }
@@ -436,6 +512,8 @@ public class ServiceEventHubTests
         var fired = new AsyncCounter();
         typedHub.AddHandler(
             nameof(ISampleInterface.SimpleEvent),
+            Guid.NewGuid(),
+            Guid.Empty,
             new EventHandler((s, e) => fired++));
 
         typedHub.Invoke(nameof(ISampleInterface.SimpleEvent), this, EventArgs.Empty);

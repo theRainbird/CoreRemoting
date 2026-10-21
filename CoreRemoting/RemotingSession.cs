@@ -733,7 +733,7 @@ public sealed class RemotingSession : IAsyncDisposable
 
                     // event accessor is called
                     HandleEventSubscription(serverRpcContext.EventHub,
-                        eventName, subscription, serverRpcContext.MethodCallParameterValues);
+                        eventName, subscription, eventHandlerKey, serverRpcContext.MethodCallParameterValues);
                     result = null;
                 }
                 else
@@ -940,24 +940,19 @@ public sealed class RemotingSession : IAsyncDisposable
         return returnValue;
     }
 
-    private void HandleEventSubscription(ServiceEventHub eventHub, string eventName, bool subscription, object[] parameters)
+    private void HandleEventSubscription(ServiceEventHub eventHub, string eventName, bool subscription, Guid eventHandlerKey, object[] parameters)
     {
         if (parameters == null || parameters.Length != 1)
-        {
             return;
-        }
 
         var eventHandler = parameters[0] as Delegate;
         if (eventHandler == null)
-        {
             return;
-        }
 
-        Action<string, Delegate> eventAccessor = subscription ?
-            eventHub.AddHandler :
-            eventHub.RemoveHandler;
-
-        eventAccessor(eventName, eventHandler);
+        if (subscription)
+            eventHub.AddHandler(eventName, eventHandlerKey, _sessionId, eventHandler);
+        else
+            eventHub.RemoveHandler(eventName, eventHandlerKey);
     }
 
     private MethodInfo GetMethodInfo(MethodCallMessage callMessage, Type serviceInterfaceType, Type[] parameterTypes)

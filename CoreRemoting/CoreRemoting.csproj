@@ -36,6 +36,10 @@
       <DocumentationFile>bin\Release\CoreRemoting.xml</DocumentationFile>
     </PropertyGroup>
 
+    <ItemGroup Condition="'$(TargetFramework)' != 'netstandard2.0'">
+      <Compile Remove="Toolbox\IsExternalInit.cs" />
+    </ItemGroup>
+
     <ItemGroup>
       <PackageReference Include="Castle.Windsor" Version="6.0.0" />
       <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.10" />
