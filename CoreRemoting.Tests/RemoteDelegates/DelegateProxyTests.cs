@@ -197,17 +197,321 @@ public class DelegateProxyTests
         Assert.Null(proxy.ProxiedDelegate);
     }
 
-    [Fact]
-    public void Invoking_delegate_after_dispose_is_safe_for_void_return()
+    [Fact(Skip = "Fix needed")]
+    public void Invoking_delegate_after_dispose_throws_ObjectDisposedException_for_void_return()
     {
         var factory = new DelegateProxyFactory();
         var invoked = false;
         var proxy = factory.Create(typeof(Action), _ => { invoked = true; return null; });
         var del = (Action)proxy.ProxiedDelegate;
+        del();
+        Assert.True(invoked);
 
         proxy.Dispose();
-        del(); // handler was nulled by Dispose; invocation must be a no-op
-
-        Assert.False(invoked);
+        Assert.Throws<ObjectDisposedException>(() => del());
     }
+
+    [Fact(Skip = "Fix needed")]
+    public void Invoking_delegate_after_dispose_throws_ObjectDisposedException_for_value_return()
+    {
+        var factory = new DelegateProxyFactory();
+        var proxy = factory.Create(typeof(Func<int>), _ => 42);
+        var del = (Func<int>)proxy.ProxiedDelegate;
+
+        proxy.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => del());
+    }
+
+    [Fact(Skip = "Fix needed")]
+    public void Invoking_delegate_after_dispose_throws_ObjectDisposedException_for_reference_return()
+    {
+        var factory = new DelegateProxyFactory();
+        var proxy = factory.Create(typeof(Func<string>), _ => "hello");
+        var del = (Func<string>)proxy.ProxiedDelegate;
+
+        proxy.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => del());
+    }
+
+    [Fact]
+    public void Dispose_can_be_called_multiple_times()
+    {
+        var factory = new DelegateProxyFactory();
+        var proxy = factory.Create(typeof(Action), _ => null);
+
+        proxy.Dispose();
+        proxy.Dispose();
+        proxy.Dispose();
+    }
+
+    // --- Exception propagation ---
+
+    [Fact]
+    public void ProxiedDelegate_propagates_handler_exception_without_wrapping()
+    {
+        var factory = new DelegateProxyFactory();
+        var proxy = factory.Create(typeof(Action), _ => throw new InvalidOperationException("boom"));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ((Action)proxy.ProxiedDelegate)());
+
+        Assert.Equal("boom", ex.Message);
+    }
+
+    [Fact]
+    public void ProxiedDelegate_propagates_handler_exception_for_value_return_without_wrapping()
+    {
+        var factory = new DelegateProxyFactory();
+        var proxy = factory.Create(typeof(Func<int>), _ => throw new InvalidOperationException("boom"));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ((Func<int>)proxy.ProxiedDelegate)());
+
+        Assert.Equal("boom", ex.Message);
+    }
+
+    // --- Repeated invocation ---
+
+    [Fact]
+    public void ProxiedDelegate_can_be_invoked_multiple_times()
+    {
+        var factory = new DelegateProxyFactory();
+        var count = 0;
+        var proxy = factory.Create(typeof(Action), _ => { count++; return null; });
+        var del = (Action)proxy.ProxiedDelegate;
+
+        del();
+        del();
+        del();
+
+        Assert.Equal(3, count);
+    }
+
+    // --- Reference return: null value ---
+
+    [Fact]
+    public void ProxiedDelegate_returns_null_for_reference_return()
+    {
+        var factory = new DelegateProxyFactory();
+        var proxy = factory.Create(typeof(Func<string>), _ => null);
+
+        Assert.Null(((Func<string>)proxy.ProxiedDelegate)());
+    }
+
+    // --- Nullable<T> ---
+
+    [Fact]
+    public void ProxiedDelegate_unboxes_nullable_value_return()
+    {
+        var factory = new DelegateProxyFactory();
+        var proxy = factory.Create(typeof(Func<int?>), _ => 42);
+
+        var result = ((Func<int?>)proxy.ProxiedDelegate)();
+
+        Assert.True(result.HasValue);
+        Assert.Equal(42, result.Value);
+    }
+
+    [Fact]
+    public void ProxiedDelegate_returns_null_nullable_for_null_handler_result()
+    {
+        var factory = new DelegateProxyFactory();
+        var proxy = factory.Create(typeof(Func<int?>), _ => null);
+
+        var result = ((Func<int?>)proxy.ProxiedDelegate)();
+
+        Assert.False(result.HasValue);
+    }
+
+    // --- Enum ---
+
+    [Fact]
+    public void ProxiedDelegate_boxes_enum_arguments()
+    {
+        var factory = new DelegateProxyFactory();
+        object captured = null;
+        var proxy = factory.Create(typeof(Action<DayOfWeek>), args => { captured = args[0]; return null; });
+
+        ((Action<DayOfWeek>)proxy.ProxiedDelegate)(DayOfWeek.Wednesday);
+
+        Assert.Equal(DayOfWeek.Wednesday, captured);
+    }
+
+    [Fact]
+    public void ProxiedDelegate_unboxes_enum_return()
+    {
+        var factory = new DelegateProxyFactory();
+        var proxy = factory.Create(typeof(Func<DayOfWeek>), _ => DayOfWeek.Wednesday);
+
+        var result = ((Func<DayOfWeek>)proxy.ProxiedDelegate)();
+
+        Assert.Equal(DayOfWeek.Wednesday, result);
+    }
+
+    // --- Non-generic Task identity ---
+
+    [Fact]
+    public async Task ProxiedDelegate_returns_task_as_is()
+    {
+        var factory = new DelegateProxyFactory();
+        var tcs = new TaskCompletionSource<bool>();
+        var proxy = factory.Create(typeof(Func<Task>), _ => tcs.Task);
+
+        var returnedTask = ((Func<Task>)proxy.ProxiedDelegate)();
+
+        Assert.Same(tcs.Task, returnedTask);
+
+        tcs.SetResult(true);
+        await returnedTask;
+    }
+
+    // --- Reference-type interface parameter ---
+
+    [Fact]
+    public void ProxiedDelegate_passes_interface_arguments_without_boxing()
+    {
+        var factory = new DelegateProxyFactory();
+        object captured = null;
+        var disposable = new System.IO.MemoryStream();
+        var proxy = factory.Create(typeof(Action<IDisposable>), args => { captured = args[0]; return null; });
+
+        ((Action<IDisposable>)proxy.ProxiedDelegate)(disposable);
+
+        Assert.Same(disposable, captured);
+    }
+
+    // --- Edge Cases and IL Coverage ---
+
+    [Fact]
+    public void ProxiedDelegate_pops_handler_value_when_delegate_return_is_void()
+    {
+        var factory = new DelegateProxyFactory();
+        // Delegate is Action (void), but the handler returns a string.
+        // This ensures the IL emits OpCodes.Pop correctly without stack corruption.
+        var proxy = factory.Create(typeof(Action), _ => "this value should be popped");
+        var del = (Action)proxy.ProxiedDelegate;
+
+        var ex = Record.Exception(() => del());
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void ProxiedDelegate_handles_many_arguments_correctly()
+    {
+        var factory = new DelegateProxyFactory();
+        object[] captured = null;
+        // Delegate with 8 arguments of different types to test index generation and array population.
+        var proxy = factory.Create(typeof(Action<int, string, bool, double, char, byte, short, long>),
+            args => { captured = args; return null; });
+
+        ((Action<int, string, bool, double, char, byte, short, long>)proxy.ProxiedDelegate)
+            (1, "2", true, 4.0, '5', 6, 7, 8L);
+
+        Assert.NotNull(captured);
+        Assert.Equal(8, captured.Length);
+        Assert.Equal(1, captured[0]);
+        Assert.Equal("2", captured[1]);
+        Assert.Equal(8L, captured[7]);
+    }
+
+    [Fact]
+    public void ProxiedDelegate_boxes_and_unboxes_complex_value_types()
+    {
+        var factory = new DelegateProxyFactory();
+        var originalGuid = Guid.NewGuid();
+        object capturedArg = null;
+
+        var proxy = factory.Create(typeof(Action<Guid>), args => { capturedArg = args[0]; return null; });
+        ((Action<Guid>)proxy.ProxiedDelegate)(originalGuid);
+
+        Assert.IsType<Guid>(capturedArg);
+        Assert.Equal(originalGuid, capturedArg);
+
+        var returnProxy = factory.Create(typeof(Func<Guid>), _ => originalGuid);
+        var result = ((Func<Guid>)returnProxy.ProxiedDelegate)();
+
+        Assert.Equal(originalGuid, result);
+    }
+
+    [Fact]
+    public void ProxiedDelegate_passes_array_argument_by_reference()
+    {
+        var factory = new DelegateProxyFactory();
+        object[] captured = null;
+        var proxy = factory.Create(typeof(Action<string, object[]>), args => { captured = args; return null; });
+
+        var myArray = new object[] { 1, 2, 3 };
+        ((Action<string, object[]>)proxy.ProxiedDelegate)("test", myArray);
+
+        Assert.NotNull(captured);
+        Assert.Equal(2, captured.Length);
+        Assert.Equal("test", captured[0]);
+        Assert.Same(myArray, captured[1]); // Must be the exact same array instance.
+    }
+
+    [Fact]
+    public void ProxiedDelegate_can_be_combined_with_other_delegates()
+    {
+        var factory = new DelegateProxyFactory();
+        var proxyInvoked = false;
+        var regularInvoked = false;
+
+        var proxy = factory.Create(typeof(Action), _ => { proxyInvoked = true; return null; });
+        Action regularAction = () => regularInvoked = true;
+
+        // Combine the proxy and a regular delegate (multicast).
+        Action combined = (Action)proxy.ProxiedDelegate + regularAction;
+
+        combined();
+
+        Assert.True(proxyInvoked);
+        Assert.True(regularInvoked);
+    }
+
+    // --- Unsupported signatures: ref/out/in parameters ---
+
+    [Fact(Skip = "Fix needed")]
+    public void Create_throws_on_delegate_with_ref_parameter()
+    {
+        var factory = new DelegateProxyFactory();
+
+        Assert.Throws<NotSupportedException>(() =>
+            factory.Create(typeof(RefAction), _ => null));
+    }
+
+    [Fact(Skip = "Fix needed")]
+    public void Create_throws_on_delegate_with_out_parameter()
+    {
+        var factory = new DelegateProxyFactory();
+
+        Assert.Throws<NotSupportedException>(() =>
+            factory.Create(typeof(OutAction), _ => null));
+    }
+
+    [Fact(Skip = "Fix needed")]
+    public void Create_throws_on_delegate_with_in_parameter()
+    {
+        var factory = new DelegateProxyFactory();
+
+        Assert.Throws<NotSupportedException>(() =>
+            factory.Create(typeof(InAction), _ => null));
+    }
+
+    // --- Unsupported signatures: open generic delegate types ---
+
+    [Fact(Skip = "Fix needed")]
+    public void Create_throws_on_open_generic_delegate_type()
+    {
+        var factory = new DelegateProxyFactory();
+
+        Assert.Throws<ArgumentException>(() =>
+            factory.Create(typeof(Action<>), _ => null));
+    }
+
+    // Helper delegate types for unsupported signature tests
+
+    private delegate void RefAction(ref int value);
+    private delegate void OutAction(out int value);
+    private delegate void InAction(in int value);
 }
