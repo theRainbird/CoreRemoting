@@ -14,7 +14,7 @@ public class DelegateProxyTests
     {
         var factory = new DelegateProxyFactory();
 
-        Assert.Throws<ArgumentException>(() => factory.Create(null, _ => null));
+        Assert.Throws<ArgumentNullException>(() => factory.Create(null, _ => null));
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public class DelegateProxyTests
         Assert.Null(proxy.ProxiedDelegate);
     }
 
-    [Fact(Skip = "Fix needed")]
+    [Fact]
     public void Invoking_delegate_after_dispose_throws_ObjectDisposedException_for_void_return()
     {
         var factory = new DelegateProxyFactory();
@@ -211,7 +211,7 @@ public class DelegateProxyTests
         Assert.Throws<ObjectDisposedException>(() => del());
     }
 
-    [Fact(Skip = "Fix needed")]
+    [Fact]
     public void Invoking_delegate_after_dispose_throws_ObjectDisposedException_for_value_return()
     {
         var factory = new DelegateProxyFactory();
@@ -223,7 +223,7 @@ public class DelegateProxyTests
         Assert.Throws<ObjectDisposedException>(() => del());
     }
 
-    [Fact(Skip = "Fix needed")]
+    [Fact]
     public void Invoking_delegate_after_dispose_throws_ObjectDisposedException_for_reference_return()
     {
         var factory = new DelegateProxyFactory();
@@ -435,7 +435,7 @@ public class DelegateProxyTests
     }
 
     [Fact]
-    public void ProxiedDelegate_passes_array_argument_by_reference()
+    public void ProxiedDelegate_preserves_array_instance_argument()
     {
         var factory = new DelegateProxyFactory();
         object[] captured = null;
@@ -471,7 +471,7 @@ public class DelegateProxyTests
 
     // --- Unsupported signatures: ref/out/in parameters ---
 
-    [Fact(Skip = "Fix needed")]
+    [Fact]
     public void Create_throws_on_delegate_with_ref_parameter()
     {
         var factory = new DelegateProxyFactory();
@@ -480,7 +480,7 @@ public class DelegateProxyTests
             factory.Create(typeof(RefAction), _ => null));
     }
 
-    [Fact(Skip = "Fix needed")]
+    [Fact]
     public void Create_throws_on_delegate_with_out_parameter()
     {
         var factory = new DelegateProxyFactory();
@@ -489,7 +489,7 @@ public class DelegateProxyTests
             factory.Create(typeof(OutAction), _ => null));
     }
 
-    [Fact(Skip = "Fix needed")]
+    [Fact]
     public void Create_throws_on_delegate_with_in_parameter()
     {
         var factory = new DelegateProxyFactory();
@@ -500,7 +500,7 @@ public class DelegateProxyTests
 
     // --- Unsupported signatures: open generic delegate types ---
 
-    [Fact(Skip = "Fix needed")]
+    [Fact]
     public void Create_throws_on_open_generic_delegate_type()
     {
         var factory = new DelegateProxyFactory();

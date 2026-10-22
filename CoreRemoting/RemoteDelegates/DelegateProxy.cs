@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Threading;
 
 namespace CoreRemoting.RemoteDelegates;
 
@@ -27,7 +28,7 @@ public sealed class DelegateProxy : IDelegateProxy
             GetType()
                 .GetMethod(
                     name: nameof(Intercept),
-                    bindingAttr: BindingFlags.NonPublic | BindingFlags.InvokeMethod | BindingFlags.Instance);
+                    bindingAttr: BindingFlags.NonPublic | BindingFlags.Instance);
 
         ProxiedDelegate =
             CreateProxiedDelegate(
@@ -46,10 +47,15 @@ public sealed class DelegateProxy : IDelegateProxy
     /// </summary>
     /// <param name="args">Arguments passed to the proxied delegate by caller</param>
     /// <returns>Return value provided by call interception handler</returns>
-    private object Intercept(params object[] args)
+    /// <exception cref="ObjectDisposedException">Thrown if the proxy has been disposed</exception>
+    private object Intercept(object[] args)
     {
-        // Redirect call to interception handler
-        return _callInterceptionHandler?.Invoke(args);
+        var handler = Volatile.Read(ref _callInterceptionHandler);
+
+        if (handler == null)
+            throw new ObjectDisposedException(nameof(DelegateProxy));
+
+        return handler(args);
     }
 
     /// <summary>
@@ -60,10 +66,13 @@ public sealed class DelegateProxy : IDelegateProxy
     /// <param name="interceptor">Object on which the intercept method is called</param>
     /// <returns>Proxied delegate</returns>
     /// <exception cref="ArgumentNullException">Thrown if any argument is null</exception>
-    /// <exception cref="NotSupportedException">Thrown if delegate type has no 'Invoke' method</exception>
-    /// <exception cref="ArgumentException">Thrown if argument 'delegateType' is not a delegate</exception>
+    /// <exception cref="ArgumentException">Thrown if argument 'delegateType' is not a delegate or is an open generic</exception>
+    /// <exception cref="NotSupportedException">Thrown if the delegate type is not supported</exception>
     private Delegate CreateProxiedDelegate(Type delegateType, MethodInfo interceptMethod, object interceptor)
     {
+        if (delegateType == null)
+            throw new ArgumentNullException(nameof(delegateType));
+
         if (interceptMethod == null)
             throw new ArgumentNullException(nameof(interceptMethod));
 
@@ -71,13 +80,19 @@ public sealed class DelegateProxy : IDelegateProxy
             throw new ArgumentNullException(nameof(interceptor));
 
         if (!typeof(Delegate).IsAssignableFrom(delegateType))
-            throw new ArgumentException($"Specified type ({delegateType?.FullName}) must be a delegate type.", nameof(delegateType));
+            throw new ArgumentException($"Specified type ({delegateType.FullName}) must be a delegate type.", nameof(delegateType));
+
+        if (delegateType.IsGenericTypeDefinition)
+            throw new ArgumentException($"Open generic delegate type '{delegateType}' is not supported.", nameof(delegateType));
 
         var interceptorObjectType = interceptor.GetType();
         var invokeMethod = delegateType.GetMethod("Invoke");
 
         if (invokeMethod == null)
             throw new NotSupportedException("Provided delegate type has no 'Invoke' method.");
+
+        if (invokeMethod.GetParameters().Any(p => p.ParameterType.IsByRef))
+            throw new NotSupportedException("Delegates with ref/out/in parameters are not supported.");
 
         var parameterTypeList =
             invokeMethod
@@ -153,6 +168,6 @@ public sealed class DelegateProxy : IDelegateProxy
     public void Dispose()
     {
         ProxiedDelegate = null;
-        _callInterceptionHandler = null;
+        Interlocked.Exchange(ref _callInterceptionHandler, null);
     }
 }
