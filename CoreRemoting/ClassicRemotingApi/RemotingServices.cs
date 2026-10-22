@@ -40,18 +40,18 @@ namespace CoreRemoting.ClassicRemotingApi
         /// <param name="uniqueServerInstanceName">Unique server instance name</param>
         /// <returns>Service name</returns>
         public static string Marshal(
-            object serviceInstance, 
+            object serviceInstance,
             string serviceName,
-            Type interfaceType, 
+            Type interfaceType,
             string uniqueServerInstanceName = "")
         {
-            var server = 
-                string.IsNullOrWhiteSpace(uniqueServerInstanceName) 
+            var server =
+                string.IsNullOrWhiteSpace(uniqueServerInstanceName)
                     ? RemotingServer.DefaultRemotingServer
                     : RemotingConfiguration.GetRegisteredServer(uniqueServerInstanceName);
-            
+
             var container = server.ServiceRegistry;
-            
+
             var registerServiceMethod =
                 container.GetRegisterServiceMethodForServiceInstance(interfaceType);
 
@@ -60,16 +60,17 @@ namespace CoreRemoting.ClassicRemotingApi
 
             var genericFunc = typeof(Func<>);
             var factoryFunc = genericFunc.MakeGenericType(interfaceType);
-            var factoryFuncProxy =
-                new DelegateProxy(factoryFunc, _ => serviceInstance);
-            
-            registerServiceMethod.Invoke(container, new object[]
-            {
+
+            var delegateProxyFactory = container.GetService<IDelegateProxyFactory>();
+            var factoryFuncProxy = delegateProxyFactory.Create(factoryFunc, _ => serviceInstance);
+
+            registerServiceMethod.Invoke(container,
+            [
                 factoryFuncProxy.ProxiedDelegate,
-                ServiceLifetime.Singleton, 
+                ServiceLifetime.Singleton,
                 serviceName,
                 false
-            });
+            ]);
 
             return serviceName;
         }

@@ -517,7 +517,7 @@ public class DelegateProxyTests
 
     // --- Dynamic method caching ---
 
-    [Fact(Skip = "Not implemented")]
+    [Fact]
     public void Factory_reuses_dynamic_method_for_same_delegate_type()
     {
         var factory = new DelegateProxyFactory();
@@ -528,7 +528,7 @@ public class DelegateProxyTests
         Assert.Same(proxy1.DynamicMethod, proxy2.DynamicMethod);
     }
 
-    [Fact(Skip = "Not implemented")]
+    [Fact]
     public void Factory_caches_dynamic_method_even_when_handlers_differ()
     {
         var factory = new DelegateProxyFactory();
