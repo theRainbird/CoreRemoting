@@ -534,7 +534,7 @@ public class DelegateProxyTests
         var factory = new DelegateProxyFactory();
 
         var proxy1 = (DelegateProxy)factory.Create(typeof(Action), _ => null);
-        var proxy2 = (DelegateProxy)factory.Create(typeof(Action), _ => { throw new InvalidOperationException(); return null; });
+        var proxy2 = (DelegateProxy)factory.Create(typeof(Action), _ => { throw new InvalidOperationException(); });
 
         Assert.Same(proxy1.DynamicMethod, proxy2.DynamicMethod);
         Assert.NotSame(proxy1, proxy2);

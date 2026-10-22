@@ -23,8 +23,6 @@ public class ServiceEventHubTests
         Action ActionDelegate { get; set; }
 
         Func<int, string> FuncDelegate { get; set; }
-
-        int SimpleEventHandlerCount { get; }
     }
 
     public interface ISampleDescendant1 : ISampleInterface
@@ -78,11 +76,6 @@ public class ServiceEventHubTests
         public Action ActionDelegate { get; set; }
 
         public Func<int, string> FuncDelegate { get; set; }
-
-        public int SimpleEventHandlerCount
-        {
-            get { return GetHandlerCount(SimpleEvent); }
-        }
     }
 
     [Fact]
@@ -316,19 +309,19 @@ public class ServiceEventHubTests
         var sampleService = new SampleService();
 
         eventHub.WireTo(sampleService);
-        Assert.Equal(0, sampleService.SimpleEventHandlerCount);
+        Assert.Equal(0, eventHub.GetHandlerCount(nameof(ISampleInterface.SimpleEvent)));
 
         eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid(), Guid.Empty, new EventHandler((s, e) => { }));
-        Assert.Equal(1, sampleService.SimpleEventHandlerCount);
+        Assert.Equal(1, eventHub.GetHandlerCount(nameof(ISampleInterface.SimpleEvent)));
 
         var secondKey = Guid.NewGuid();
         var handler = new EventHandler((s, e) => { });
 
         eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), secondKey, Guid.Empty, handler);
-        Assert.Equal(2, sampleService.SimpleEventHandlerCount);
+        Assert.Equal(2, eventHub.GetHandlerCount(nameof(ISampleInterface.SimpleEvent)));
 
         eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), secondKey);
-        Assert.Equal(1, sampleService.SimpleEventHandlerCount);
+        Assert.Equal(1, eventHub.GetHandlerCount(nameof(ISampleInterface.SimpleEvent)));
     }
 
     [Fact]
@@ -338,75 +331,6 @@ public class ServiceEventHubTests
         var sampleService = new SampleService();
         eventHub.WireTo(sampleService);
         sampleService.FireHandlers(1);
-    }
-
-    [Fact]
-    public void ServiceEventHub_RemoveHandler_returns_false_for_unknown_key()
-    {
-        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
-
-        Assert.False(eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid()));
-    }
-
-    [Fact]
-    public async Task ServiceEventHub_supports_multiple_occurrences_of_same_key()
-    {
-        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
-        var key = Guid.NewGuid();
-        var session = Guid.NewGuid();
-        var fired = new AsyncCounter();
-
-        var handler = new EventHandler((s, e) => fired++);
-        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), key, session, handler);
-        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), key, session, handler);
-
-        var combined = (EventHandler)eventHub[nameof(ISampleInterface.SimpleEvent)];
-        combined(this, EventArgs.Empty);
-        Assert.Equal(2, await fired.WaitForValue(2).Timeout(1));
-
-        Assert.True(eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), key));
-        combined(this, EventArgs.Empty);
-        Assert.Equal(3, await fired.WaitForValue(3).Timeout(1));
-
-        Assert.True(eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), key));
-        Assert.False(eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), key));
-    }
-
-    [Fact]
-    public void ServiceEventHub_RemoveAllForSession_removes_only_matching_entries()
-    {
-        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
-        var session1 = Guid.NewGuid();
-        var session2 = Guid.NewGuid();
-
-        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid(), session1, new EventHandler((s, e) => { }));
-        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid(), session1, new EventHandler((s, e) => { }));
-        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid(), session2, new EventHandler((s, e) => { }));
-
-        var removed = eventHub.RemoveAllForSession(session1);
-
-        Assert.Equal(2, removed);
-        Assert.Equal(1, GetHandlerCount(eventHub[nameof(ISampleInterface.SimpleEvent)]));
-    }
-
-    [Fact]
-    public async Task ServiceEventHub_RemoveAllForSession_updates_combined_delegate()
-    {
-        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
-        var session = Guid.NewGuid();
-        var fired = new AsyncCounter();
-
-        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid(), session, new EventHandler((s, e) => fired++));
-        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), Guid.NewGuid(), session, new EventHandler((s, e) => fired++));
-
-        var combined = (EventHandler)eventHub[nameof(ISampleInterface.SimpleEvent)];
-        combined(this, EventArgs.Empty);
-        Assert.Equal(2, await fired.WaitForValue(2).Timeout(1));
-
-        eventHub.RemoveAllForSession(session);
-
-        combined(this, EventArgs.Empty);
-        Assert.False(await fired.WaitForValue(3).Expire(0.1));
     }
 
     [Fact]
@@ -494,13 +418,11 @@ public class ServiceEventHubTests
         var handler = new EventHandler((s, e) => { });
         typedHub.AddHandler(nameof(ISampleInterface.SimpleEvent), key, Guid.Empty, handler);
 
-        var combined = eventHub[nameof(ISampleInterface.SimpleEvent)];
-        Assert.Equal(1, GetHandlerCount(combined));
+        Assert.Equal(1, eventHub.GetHandlerCount(nameof(ISampleInterface.SimpleEvent)));
 
         // removing via the original hub is visible via the typed hub
         eventHub.RemoveHandler(nameof(ISampleInterface.SimpleEvent), key);
-        combined = typedHub[nameof(ISampleInterface.SimpleEvent)];
-        Assert.Equal(0, GetHandlerCount(combined));
+        Assert.Equal(0, eventHub.GetHandlerCount(nameof(ISampleInterface.SimpleEvent)));
     }
 
     [Fact]

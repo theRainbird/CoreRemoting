@@ -567,14 +567,14 @@ public partial class RpcTests
         var registration = _serverFixture.Server.ServiceRegistry.GetServiceRegistration(serviceName);
         var hub = registration.EventHub;
 
-        var countBefore = ServiceEventHub.GetHandlerCount(hub[nameof(ITestService.ServiceEvent)]);
+        var countBefore = hub.GetHandlerCount(nameof(ITestService.ServiceEvent));
         Assert.Equal(1, countBefore);
 
         // Shutting down the proxy must unsubscribe from the server side as well.
         client.ShutdownProxy(proxy);
 
         // FAILS HERE: the server still holds the dead subscription.
-        var countAfter = ServiceEventHub.GetHandlerCount(hub[nameof(ITestService.ServiceEvent)]);
+        var countAfter = hub.GetHandlerCount(nameof(ITestService.ServiceEvent));
         Assert.Equal(0, countAfter);
 
         CheckServerErrorCount();

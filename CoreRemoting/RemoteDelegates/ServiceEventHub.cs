@@ -294,9 +294,9 @@ public class ServiceEventHub
             // so no snapshot is taken and no lock is required here.
             foreach (var entry in _entries)
             {
-                // an entry may represent multiple occurrences of the same handler key,
+                // an entry may represent multiple subscriptions of the same handler key,
                 // which must be fired separately to preserve multicast semantics
-                for (var i = 0; i < entry.Value.Occurrences; i++)
+                for (var i = 0; i < entry.Value.Count; i++)
                     DelegateInvoker.Invoke(entry.Value.Handler, arguments);
             }
 
@@ -319,7 +319,7 @@ public class ServiceEventHub
                             $"Handler key {handlerKey} is already registered with a different delegate.");
                     }
 
-                    _entries[handlerKey] = existing with { Occurrences = existing.Occurrences + 1 };
+                    _entries[handlerKey] = existing with { Count = existing.Count + 1 };
                 }
                 else
                 {
@@ -335,10 +335,10 @@ public class ServiceEventHub
                 if (!_entries.TryGetValue(handlerKey, out var existing))
                     return false;
 
-                if (existing.Occurrences <= 1)
+                if (existing.Count <= 1)
                     _entries.TryRemove(handlerKey, out _);
                 else
-                    _entries[handlerKey] = existing with { Occurrences = existing.Occurrences - 1 };
+                    _entries[handlerKey] = existing with { Count = existing.Count - 1 };
 
                 return true;
             }
@@ -357,7 +357,7 @@ public class ServiceEventHub
                         continue;
 
                     keysToRemove.Add(pair.Key);
-                    removed += pair.Value.Occurrences;
+                    removed += pair.Value.Count;
                 }
 
                 foreach (var key in keysToRemove)
@@ -374,13 +374,13 @@ public class ServiceEventHub
                 var count = 0;
 
                 foreach (var entry in _entries)
-                    count += entry.Value.Occurrences;
+                    count += entry.Value.Count;
 
                 return count;
             }
         }
 
-        private sealed record SubscriptionEntry(Guid SessionId, Delegate Handler, int Occurrences);
+        private sealed record SubscriptionEntry(Guid SessionId, Delegate Handler, int Count);
     }
 
     private bool GetWiredTo(object instance) =>
@@ -510,30 +510,9 @@ public class ServiceEventHub
     /// <summary>
     /// Gets the count of event handlers for the given event or delegate property.
     /// </summary>
-    /// <param name="handler">The event handler.</param>
-    public static int GetHandlerCount(Delegate handler)
-    {
-        if (handler == null)
-        {
-            return 0;
-        }
-
-        var count = 0;
-        foreach (var d in handler.GetInvocationList())
-        {
-            // check if it's a delegate holder
-            if (d.Target is IDelegateHolder holder)
-            {
-                count += holder.HandlerCount;
-                continue;
-            }
-
-            // it's an ordinary subscriber
-            count++;
-        }
-
-        return count;
-    }
+    /// <param name="name">Name of the event or delegate property.</param>
+    public int GetHandlerCount(string name) =>
+        DelegateHolders[name].HandlerCount;
 
     /// <summary>
     /// Invokes the specified event with provided arguments.
