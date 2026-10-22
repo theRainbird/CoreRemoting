@@ -471,6 +471,7 @@ public sealed class RemotingSession : IAsyncDisposable
         _currentlyProcessedMessagesCounter.AddCount(1);
 
         CurrentSession.Value = this;
+        var stopped = false;
 
         try
         {
@@ -485,7 +486,7 @@ public sealed class RemotingSession : IAsyncDisposable
                     await ProcessRpcMessage(message).ConfigureAwait(false);
                     break;
                 case "goodbye":
-                    await ProcessGoodbyeMessage(message).ConfigureAwait(false);
+                    stopped = await ProcessGoodbyeMessage(message).ConfigureAwait(false);
                     break;
                 default:
                     OnErrorOccured("Invalid message type " + message.MessageType + ".", ex: null);
@@ -502,13 +503,18 @@ public sealed class RemotingSession : IAsyncDisposable
 
             CurrentSession.Value = null;
         }
+
+        if (stopped)
+            await RemoveCurrentSession()
+                .ConfigureAwait(false);
+
     }).ConfigureAwait(false);
 
     /// <summary>
     /// Processes a wire message that contains a goodbye message, which is sent from a client to close the session.
     /// </summary>
     /// <param name="request">Wire message from client</param>
-    private async Task ProcessGoodbyeMessage(WireMessage request)
+    private async Task<bool> ProcessGoodbyeMessage(WireMessage request)
     {
         var goodbyeMessage =
             _server.Serializer
@@ -520,7 +526,7 @@ public sealed class RemotingSession : IAsyncDisposable
                         sendersPublicKeyBlob: _clientPublicKeyBlob));
 
         if (goodbyeMessage.SessionId != _sessionId)
-            return;
+            return false;
 
         var resultMessage =
             _server.MessageEncryptionManager.CreateWireMessage(
@@ -537,8 +543,7 @@ public sealed class RemotingSession : IAsyncDisposable
 
         ((RemotingServer)_server).OnLogoff();
 
-        await RemoveCurrentSession()
-            .ConfigureAwait(false);
+        return true;
     }
 
     /// <summary>
@@ -1110,17 +1115,22 @@ public sealed class RemotingSession : IAsyncDisposable
         if (_isDisposing)
             return;
 
-        // calling RemoveSession synchronously via RPC call produces a deadlock
-        // in Session.Dispose because the session would wait for the current
-        // RPC message processing to complete
+        // fire-and-forget: Close may be called from within an rpc handler,
+        // blocking here would deadlock on the in-flight message counter
         _ = RemoveCurrentSession();
     }
 
-    private Task RemoveCurrentSession() => Task.Run(async () =>
+    private async Task RemoveCurrentSession()
     {
-        // disposes the current session
-        await _server?.SessionRepository.RemoveSession(_sessionId);
-    });
+        try
+        {
+            await _server.SessionRepository.RemoveSession(_sessionId);
+        }
+        catch (Exception ex)
+        {
+            OnErrorOccured("Error removing the current session.", ex);
+        }
+    }
 
     #endregion
 
@@ -1139,14 +1149,14 @@ public sealed class RemotingSession : IAsyncDisposable
         _rawMessageTransport.ReceiveMessage -= OnReceiveMessage;
         _rawMessageTransport.ErrorOccured -= OnErrorOccured;
 
-        // clean up remote subscriptions for the current session
-        _server.ServiceRegistry.GetService<IServerSubscriptionService>()
-            .RemoveAllForSession(_sessionId);
-
         _currentlyProcessedMessagesCounter.Signal();
         await _currentlyProcessedMessagesCounter.WaitAsync()
             .ExpireMs(_server.Config.WaitTimeForCurrentlyProcessedMessagesOnDispose)
                 .ConfigureAwait(false);
+
+        // clean up remote subscriptions for the current session
+        _server.ServiceRegistry.GetService<IServerSubscriptionService>()
+            .RemoveAllForSession(_sessionId);
 
         var wireMessage =
             _server.MessageEncryptionManager.CreateWireMessage(

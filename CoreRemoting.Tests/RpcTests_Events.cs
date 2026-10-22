@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.RemoteDelegates;
@@ -511,6 +512,49 @@ public partial class RpcTests
         await WaitUntilAsync(
             () => hub.GetHandlerCount(nameof(ITestService.ServiceEvent)) == 0,
             timeout: TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Disconnect_does_not_block_on_in_flight_goodbye_counter()
+    {
+        const int largeDisposeTimeout = 5000;
+        const int expectedDisposeWindow = 1;
+
+        var config = _serverFixture.Server.Config;
+        var oldTimeout = config.WaitTimeForCurrentlyProcessedMessagesOnDispose;
+        config.WaitTimeForCurrentlyProcessedMessagesOnDispose = largeDisposeTimeout;
+
+        try
+        {
+            using var ctx = ValidationSyncContext.Install();
+            using var client = CreateConnectedClient();
+
+            var sessionId = client.SessionId!.Value;
+            var sessionRepo = (SessionRepository)_serverFixture.Server.SessionRepository;
+
+            // the client can return from Connect before the server registers the session
+            // in the repository; wait for it to appear
+            await WaitUntilAsync(
+                () => sessionRepo.Sessions.Any(s => s.SessionId == sessionId),
+                timeout: TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+
+            var session = sessionRepo.Sessions.First(s => s.SessionId == sessionId);
+
+            var beforeDisposeFired = new TaskCompletionSource<bool>();
+            session.BeforeDispose += () => beforeDisposeFired.TrySetResult(true);
+
+            client.Disconnect();
+
+            // if goodbye is still counted as in-flight when dispose starts,
+            // dispose waits the whole WaitTimeForCurrentlyProcessedMessagesOnDispose
+            // and BeforeDispose fires only after that timeout expires
+            await beforeDisposeFired.Task.Timeout(expectedDisposeWindow).ConfigureAwait(false);
+        }
+        finally
+        {
+            config.WaitTimeForCurrentlyProcessedMessagesOnDispose = oldTimeout;
+        }
     }
 
     [Fact]
