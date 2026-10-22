@@ -533,13 +533,10 @@ public partial class RpcTests
             var sessionId = client.SessionId!.Value;
             var sessionRepo = (SessionRepository)_serverFixture.Server.SessionRepository;
 
-            // the client can return from Connect before the server registers the session
-            // in the repository; wait for it to appear
-            await WaitUntilAsync(
-                () => sessionRepo.Sessions.Any(s => s.SessionId == sessionId),
-                timeout: TimeSpan.FromSeconds(2)).ConfigureAwait(false);
-
-            var session = sessionRepo.Sessions.First(s => s.SessionId == sessionId);
+            // the server must register the session before sending the handshake,
+            // so a connected client always observes its session in the repository
+            var session = await sessionRepo.GetSession(sessionId).ConfigureAwait(false);
+            Assert.NotNull(session);
 
             var beforeDisposeFired = new TaskCompletionSource<bool>();
             session.BeforeDispose += () => beforeDisposeFired.TrySetResult(true);

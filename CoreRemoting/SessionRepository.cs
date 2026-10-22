@@ -105,10 +105,20 @@ public class SessionRepository : ISessionRepository
             server,
             rawMessageTransport);
 
-        await session.SendCompleteHandshakeMessageAsync()
-            .ConfigureAwait(false);
-
         _sessions.TryAdd(session.SessionId, session);
+
+        try
+        {
+            await session.SendCompleteHandshakeMessageAsync()
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            await RemoveSession(session.SessionId)
+                .ConfigureAwait(false);
+
+            throw;
+        }
 
         return session;
     }

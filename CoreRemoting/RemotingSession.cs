@@ -42,7 +42,7 @@ public sealed class RemotingSession : IAsyncDisposable
     private IDelegateProxyFactory _delegateProxyFactory;
     private ConcurrentDictionary<Guid, IDelegateProxy> _delegateProxyCache;
     private bool _isAuthenticated;
-    private bool _isDisposing;
+    private AtomicBool _isDisposing;
     private DateTime _lastActivityTimestamp;
     private readonly AsyncCountdownEvent _currentlyProcessedMessagesCounter;
 
@@ -79,7 +79,7 @@ public sealed class RemotingSession : IAsyncDisposable
         int sharedKeySize, byte[] clientPublicKey, string clientAddress,
         IRemotingServer server, IRawMessageTransport rawMessageTransport)
     {
-        _isDisposing = false;
+        _isDisposing.Reset();
         _currentlyProcessedMessagesCounter = new(initialCount: 1);
         _sessionId = Guid.NewGuid();
         _lastActivityTimestamp = DateTime.Now;
@@ -110,7 +110,7 @@ public sealed class RemotingSession : IAsyncDisposable
             async (_, uniqueCallKey, handlerKey, arguments) =>
             {
                 // handle graceful client disconnection
-                if (_isDisposing)
+                if (IsDisposing)
                     return;
 
                 var remoteDelegateInvocationMessage =
@@ -227,7 +227,7 @@ public sealed class RemotingSession : IAsyncDisposable
     /// <returns>True if the session has been parked (already parked or disposed, otherwise false).</returns>
     internal bool ParkSession()
     {
-        if (_isDisposing ||
+        if (IsDisposing ||
             Interlocked.CompareExchange(ref _lifecycleState, _stateParked, _stateActive) != _stateActive)
             return false;
 
@@ -251,7 +251,7 @@ public sealed class RemotingSession : IAsyncDisposable
         if (newTransport == null)
             throw new ArgumentNullException(nameof(newTransport));
 
-        if (_isDisposing ||
+        if (IsDisposing ||
             Interlocked.CompareExchange(ref _lifecycleState, _stateActive, _stateParked) != _stateParked)
             throw new RemotingException("The session can't be resumed because it is not in a parked state.");
 
@@ -317,6 +317,14 @@ public sealed class RemotingSession : IAsyncDisposable
     internal bool IsParked => Volatile.Read(ref _lifecycleState) == _stateParked;
 
     /// <summary>
+    /// Gets whether this session is currently being disposed.
+    /// Use <c>_isDisposing.TrySet()</c> to enter the dispose path.
+    /// </summary>
+    [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
+    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
+    internal bool IsDisposing => _isDisposing.Value;
+
+    /// <summary>
     /// Gets whether this session can be resumed by a client presenting the given public key.
     /// The key has to match exactly the public key of the original connection (hijack protection).
     /// </summary>
@@ -324,7 +332,7 @@ public sealed class RemotingSession : IAsyncDisposable
     /// <param name="sessionSignature">Client's session signature to prove its authenticity</param>
     internal bool CanBeResumedWith(byte[] clientPublicKeyBlob, byte[] sessionSignature) =>
         IsParked &&
-        !_isDisposing &&
+        !IsDisposing &&
         _clientPublicKeyBlob != null &&
         clientPublicKeyBlob != null &&
         _clientPublicKeyBlob.SequenceEqual(clientPublicKeyBlob) &&
@@ -465,7 +473,7 @@ public sealed class RemotingSession : IAsyncDisposable
     {
         _lastActivityTimestamp = DateTime.Now;
 
-        if (rawMessage == null || rawMessage.Length == 0 || _isDisposing)
+        if (rawMessage == null || rawMessage.Length == 0 || IsDisposing)
             return;
 
         _currentlyProcessedMessagesCounter.AddCount(1);
@@ -1112,7 +1120,7 @@ public sealed class RemotingSession : IAsyncDisposable
     /// </summary>
     public void Close()
     {
-        if (_isDisposing)
+        if (IsDisposing)
             return;
 
         // fire-and-forget: Close may be called from within an rpc handler,
@@ -1141,10 +1149,8 @@ public sealed class RemotingSession : IAsyncDisposable
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        if (_isDisposing)
+        if (!_isDisposing.TrySet())
             return;
-
-        _isDisposing = true;
 
         _rawMessageTransport.ReceiveMessage -= OnReceiveMessage;
         _rawMessageTransport.ErrorOccured -= OnErrorOccured;
