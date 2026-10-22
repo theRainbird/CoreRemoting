@@ -514,4 +514,43 @@ public class DelegateProxyTests
     private delegate void RefAction(ref int value);
     private delegate void OutAction(out int value);
     private delegate void InAction(in int value);
+
+    // --- Dynamic method caching ---
+
+    [Fact(Skip = "Not implemented")]
+    public void Factory_reuses_dynamic_method_for_same_delegate_type()
+    {
+        var factory = new DelegateProxyFactory();
+
+        var proxy1 = (DelegateProxy)factory.Create(typeof(Action), _ => null);
+        var proxy2 = (DelegateProxy)factory.Create(typeof(Action), _ => null);
+
+        Assert.Same(proxy1.DynamicMethod, proxy2.DynamicMethod);
+    }
+
+    [Fact(Skip = "Not implemented")]
+    public void Factory_caches_dynamic_method_even_when_handlers_differ()
+    {
+        var factory = new DelegateProxyFactory();
+
+        var proxy1 = (DelegateProxy)factory.Create(typeof(Action), _ => null);
+        var proxy2 = (DelegateProxy)factory.Create(typeof(Action), _ => { throw new InvalidOperationException(); return null; });
+
+        Assert.Same(proxy1.DynamicMethod, proxy2.DynamicMethod);
+        Assert.NotSame(proxy1, proxy2);
+    }
+
+    [Fact]
+    public void Factory_creates_separate_dynamic_methods_for_different_delegate_types()
+    {
+        var factory = new DelegateProxyFactory();
+
+        var action = (DelegateProxy)factory.Create(typeof(Action), _ => null);
+        var funcInt = (DelegateProxy)factory.Create(typeof(Func<int>), _ => null);
+        var eventHandler = (DelegateProxy)factory.Create(typeof(EventHandler), _ => null);
+
+        Assert.NotSame(action.DynamicMethod, funcInt.DynamicMethod);
+        Assert.NotSame(action.DynamicMethod, eventHandler.DynamicMethod);
+        Assert.NotSame(funcInt.DynamicMethod, eventHandler.DynamicMethod);
+    }
 }

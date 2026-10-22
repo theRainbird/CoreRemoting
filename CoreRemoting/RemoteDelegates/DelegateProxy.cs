@@ -43,6 +43,11 @@ public sealed class DelegateProxy : IDelegateProxy
     public Delegate ProxiedDelegate { get; private set; }
 
     /// <summary>
+    /// Generated dynamic method.
+    /// </summary>
+    internal DynamicMethod DynamicMethod { get; private set; }
+
+    /// <summary>
     /// Method called by delegate proxy, when the proxies delegate is called.
     /// </summary>
     /// <param name="args">Arguments passed to the proxied delegate by caller</param>
@@ -112,6 +117,9 @@ public sealed class DelegateProxy : IDelegateProxy
                 parameterTypes: parameterTypes,
                 owner: interceptorObjectType);
 
+        // Save it for the unit tests
+        DynamicMethod = delegateProxyMethod;
+
         // Create method body, declare local variable of type object[]
         var ilGenerator = delegateProxyMethod.GetILGenerator();
         var argumentsArray = ilGenerator.DeclareLocal(typeof(object[]));
@@ -133,7 +141,7 @@ public sealed class DelegateProxy : IDelegateProxy
             ilGenerator.Emit(OpCodes.Ldarg, index++); // Method parameter index
 
             // Box parameter value, if it is a value type
-            if (typeof(ValueType).IsAssignableFrom(paramType))
+            if (paramType.IsValueType)
                 ilGenerator.Emit(OpCodes.Box, paramType);
 
             // Store reference
@@ -148,7 +156,7 @@ public sealed class DelegateProxy : IDelegateProxy
         // Discard return value, if return type of proxied delegate is void
         if (invokeMethod.ReturnType == typeof(void))
             ilGenerator.Emit(OpCodes.Pop);
-        else if (typeof(ValueType).IsAssignableFrom(invokeMethod.ReturnType)) // Unbox return value, if it is a value type
+        else if (invokeMethod.ReturnType.IsValueType) // Unbox return value, if it is a value type
             ilGenerator.Emit(OpCodes.Unbox_Any, invokeMethod.ReturnType);
 
         // Return the return value
