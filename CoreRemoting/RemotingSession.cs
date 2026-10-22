@@ -1139,6 +1139,10 @@ public sealed class RemotingSession : IAsyncDisposable
         _rawMessageTransport.ReceiveMessage -= OnReceiveMessage;
         _rawMessageTransport.ErrorOccured -= OnErrorOccured;
 
+        // clean up remote subscriptions for the current session
+        _server.ServiceRegistry.GetService<IServerSubscriptionService>()
+            .RemoveAllForSession(_sessionId);
+
         _currentlyProcessedMessagesCounter.Signal();
         await _currentlyProcessedMessagesCounter.WaitAsync()
             .ExpireMs(_server.Config.WaitTimeForCurrentlyProcessedMessagesOnDispose)

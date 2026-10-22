@@ -492,6 +492,29 @@ public partial class RpcTests
 
     [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Disconnecting_client_removes_all_subscriptions_on_server()
+    {
+        using var ctx = ValidationSyncContext.Install();
+        using var client = CreateConnectedClient();
+
+        const string serviceName = "TestService_Singleton_Service";
+        var proxy = client.CreateProxy<ITestService>(serviceName);
+        proxy.ServiceEvent += () => { };
+
+        var registration = _serverFixture.Server.ServiceRegistry.GetServiceRegistration(serviceName);
+        var hub = registration.EventHub;
+
+        Assert.Equal(1, hub.GetHandlerCount(nameof(ITestService.ServiceEvent)));
+
+        await client.DisconnectAsync().ConfigureAwait(false);
+
+        await WaitUntilAsync(
+            () => hub.GetHandlerCount(nameof(ITestService.ServiceEvent)) == 0,
+            timeout: TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
     public async Task Shutting_down_proxy_unsubscribes_from_server_side_event()
     {
         using var ctx = ValidationSyncContext.Install();

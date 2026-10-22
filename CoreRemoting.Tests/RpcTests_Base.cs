@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.Threading.Tasks;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Channels;
 using Xunit;
@@ -62,6 +64,26 @@ public abstract class RpcTests_Base : IClassFixture<ServerFixture>
                 _testOutputHelper.WriteLine(msg);
                 Console.WriteLine(msg);
             }
+        }
+    }
+
+    /// <summary>
+    /// Waits until the given condition becomes true, or throws <see cref="TimeoutException"/>.
+    /// Intended for asserting asynchronous server-side effects that occur after
+    /// a client call has already returned.
+    /// </summary>
+    /// <param name="condition">Condition to poll.</param>
+    /// <param name="timeout">Maximum time to wait.</param>
+    protected static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var stopwatch = Stopwatch.StartNew();
+
+        while (!condition())
+        {
+            if (stopwatch.Elapsed > timeout)
+                throw new TimeoutException();
+
+            await Task.Delay(20).ConfigureAwait(false);
         }
     }
 }

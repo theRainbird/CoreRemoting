@@ -73,6 +73,9 @@ public sealed class RemotingServer : IRemotingServer
             lifetime: ServiceLifetime.Singleton,
             asHiddenSystemService: true);
 
+        _container.RegisterService<IServerSubscriptionService, ServerSubscriptionService>(
+            lifetime: ServiceLifetime.Singleton);
+
         _config.RegisterServicesAction?.Invoke(_container);
 
         Channel = _config.Channel ?? new TcpServerChannel();
