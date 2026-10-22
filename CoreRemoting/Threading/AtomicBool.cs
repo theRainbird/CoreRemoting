@@ -28,6 +28,12 @@ public struct AtomicBool
     public void Set() => Interlocked.Exchange(ref _value, 1);
 
     /// <summary>
+    /// Sets the flag to the given value.
+    /// </summary>
+    /// <param name="value">The value to set the flag to.</param>
+    public void Set(bool value) => Interlocked.Exchange(ref _value, value ? 1 : 0);
+
+    /// <summary>
     /// Sets the flag to <c>true</c> and returns <c>true</c>
     /// if it was <c>false</c> before, otherwise returns <c>false</c>.
     /// </summary>

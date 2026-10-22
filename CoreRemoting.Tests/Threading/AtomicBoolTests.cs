@@ -220,4 +220,71 @@ public class AtomicBoolTests
         Assert.Equal(1, winners);
         Assert.False(flag.Value);
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Set_with_bool_sets_expected_value(bool value)
+    {
+        var flag = new AtomicBool();
+
+        flag.Set(value);
+
+        Assert.Equal(value, flag.Value);
+    }
+
+    [Fact]
+    public void Set_with_bool_overrides_previous_value()
+    {
+        var flag = new AtomicBool();
+
+        flag.Set(true);
+        flag.Set(false);
+        Assert.False(flag.Value);
+
+        flag.Set(true);
+        Assert.True(flag.Value);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Set_with_bool_can_toggle(bool first, bool second)
+    {
+        var flag = new AtomicBool();
+
+        flag.Set(first);
+        flag.Set(second);
+
+        Assert.Equal(second, flag.Value);
+    }
+
+    [Fact]
+    public async Task Concurrent_Set_with_bool_does_not_throw()
+    {
+        var flag = new AtomicBool();
+        var stop = false;
+
+        var setter = Task.Run(() =>
+        {
+            while (!Volatile.Read(ref stop))
+                flag.Set(true);
+        });
+
+        var clearer = Task.Run(() =>
+        {
+            while (!Volatile.Read(ref stop))
+                flag.Set(false);
+        });
+
+        var reader = Task.Run(() =>
+        {
+            while (!Volatile.Read(ref stop))
+                _ = flag.Value;
+        });
+
+        await Task.Delay(100);
+        Volatile.Write(ref stop, true);
+        await Task.WhenAll(setter, clearer, reader);
+    }
 }
