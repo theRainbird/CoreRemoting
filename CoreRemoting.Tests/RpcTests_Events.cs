@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
@@ -642,5 +643,95 @@ public partial class RpcTests
         Assert.Equal(0, countAfter);
 
         CheckServerErrorCount();
+    }
+
+    // --- ScheduleServerUnsubscribe ---
+
+    [Fact]
+    public async Task ScheduleServerUnsubscribe_with_empty_input_is_noop()
+    {
+        using var client = CreateConnectedClient();
+
+        await client.ScheduleServerUnsubscribe([]).Timeout(1);
+        await client.ScheduleServerUnsubscribe(null).Timeout(1);
+
+        Assert.Equal(0, client.PendingUnsubscribeCount);
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task ScheduleServerUnsubscribe_removes_subscription_on_server()
+    {
+        using var ctx = ValidationSyncContext.Install();
+        using var client = CreateConnectedClient();
+
+        const string serviceName = "TestService_Singleton_Service";
+        var proxy = client.CreateProxy<ITestService>(serviceName);
+        Action handler = () => { };
+        proxy.ServiceEvent += handler;
+
+        var registration = _serverFixture.Server.ServiceRegistry
+            .GetServiceRegistration(serviceName);
+        var hub = registration.EventHub;
+
+        Assert.Equal(1, hub.GetHandlerCount(nameof(ITestService.ServiceEvent)));
+
+        // Unregister locally to capture keys WITHOUT notifying the server — the
+        // server still holds the subscription until ScheduleServerUnsubscribe runs.
+        // Use the interceptor (not the Castle proxy) — that is what the registry stores.
+        var interceptor = RemotingClient.FindServiceProxy(proxy);
+        Assert.NotNull(interceptor);
+
+        var keys = client.ClientDelegateRegistry
+            .UnregisterClientDelegatesOfServiceProxy(interceptor);
+        Assert.Single(keys);
+
+        await client.ScheduleServerUnsubscribe(keys).Timeout(5).ConfigureAwait(false);
+
+        await WaitUntilAsync(
+            () => hub.GetHandlerCount(nameof(ITestService.ServiceEvent)) == 0,
+            timeout: TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        CheckServerErrorCount();
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task ScheduleServerUnsubscribe_is_noop_when_disconnected()
+    {
+        var client = CreateConnectedClient();
+
+        try
+        {
+            client.Disconnect();
+
+            var errors = new List<Exception>();
+            client.ErrorHandler = ex => errors.Add(ex);
+
+            await client.ScheduleServerUnsubscribe([Guid.NewGuid()]).Timeout(1).ConfigureAwait(false);
+
+            Assert.Empty(errors);
+            Assert.Equal(0, client.PendingUnsubscribeCount);
+        }
+        finally
+        {
+            client.Dispose();
+        }
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task ScheduleServerUnsubscribe_cleans_pending_map_after_completion()
+    {
+        using var client = CreateConnectedClient();
+
+        // No real subscription needed: RemoveHandlers is idempotent on the server
+        // (unknown keys return 0), and this test only verifies the client-side
+        // pending-map cleanup.
+        var key = Guid.NewGuid();
+
+        await client.ScheduleServerUnsubscribe([key]).Timeout(5).ConfigureAwait(false);
+
+        Assert.Equal(0, client.PendingUnsubscribeCount);
     }
 }
