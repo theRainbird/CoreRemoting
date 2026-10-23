@@ -8,7 +8,8 @@ namespace CoreRemoting;
 /// A service invoker provides access to a remote service without generating a proxy.
 /// </summary>
 /// <typeparam name="TService">Type of the remote service contract (interface or class)</typeparam>
-public interface IServiceInvoker<TService> : IDisposable where TService : class
+public interface IServiceInvoker<TService> : IDisposable, IAsyncDisposable
+    where TService : class
 {
     /// <summary>
     /// Gets the name of the remote service.

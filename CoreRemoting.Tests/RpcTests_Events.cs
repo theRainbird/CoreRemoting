@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.RemoteDelegates;
@@ -245,16 +244,33 @@ public partial class RpcTests
         await fired.WaitForValue(2).Timeout(1).ConfigureAwait(false);
         Assert.Equal(2, fired.Value);
 
+        var hub1 = _serverFixture.Server.ServiceRegistry
+            .GetServiceRegistration("TestService_Singleton_Service").EventHub;
+        var hub2 = _serverFixture.Server.ServiceRegistry
+            .GetServiceRegistration("TestService_Singleton_Factory").EventHub;
+
+        Assert.Equal(1, hub1.GetHandlerCount(nameof(ITestService.ServiceEvent)));
+        Assert.Equal(1, hub2.GetHandlerCount(nameof(ITestService.ServiceEvent)));
+
         // Shut down the first proxy. Only its own subscription must be
         // unregistered. The subscription made through the second proxy
         // must survive.
         client.ShutdownProxy(proxy1);
 
-        // ShutdownProxy does not notify the server (yet), so both trackers
-        // remain unchanged and stay in sync. See the dedicated issue for
-        // the server-side cleanup.
+        // SubscriptionTracker is bypassed by ShutdownProxy on both sides,
+        // so both trackers remain stale and stay equal. This is intentional.
         Assert.Equal(client.SubscriptionTracker.Checksum, serverTracker.Checksum);
 
+        // The actual server-side hub for proxy1 must lose the handler
+        // (fire-and-forget, wait for it).
+        await WaitUntilAsync(
+            () => hub1.GetHandlerCount(nameof(ITestService.ServiceEvent)) == 0,
+            timeout: TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        // hub2 (proxy2) is untouched.
+        Assert.Equal(1, hub2.GetHandlerCount(nameof(ITestService.ServiceEvent)));
+
+        // And proxy2 still fires correctly.
         proxy2.FireServiceEvent();
         await fired.WaitForValue(3).Timeout(1).ConfigureAwait(false);
         Assert.Equal(3, fired.Value);
@@ -599,9 +615,9 @@ public partial class RpcTests
         CheckServerErrorCount();
     }
 
-    [Fact(Skip = "https://github.com/theRainbird/CoreRemoting/issues/245")]
+    [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
-    public async Task Shutting_down_proxy_unsubscribes_from_server_side_event_really()
+    public async Task Shutting_down_proxy_unsubscribes_from_server_side_event_sync()
     {
         using var ctx = ValidationSyncContext.Install();
 
@@ -632,15 +648,59 @@ public partial class RpcTests
         var registration = _serverFixture.Server.ServiceRegistry.GetServiceRegistration(serviceName);
         var hub = registration.EventHub;
 
-        var countBefore = hub.GetHandlerCount(nameof(ITestService.ServiceEvent));
-        Assert.Equal(1, countBefore);
+        Assert.Equal(1, hub.GetHandlerCount(nameof(ITestService.ServiceEvent)));
 
-        // Shutting down the proxy must unsubscribe from the server side as well.
+        // ShutdownProxy fires the server-side removal asynchronously: wait for it.
         client.ShutdownProxy(proxy);
 
-        // FAILS HERE: the server still holds the dead subscription.
-        var countAfter = hub.GetHandlerCount(nameof(ITestService.ServiceEvent));
-        Assert.Equal(0, countAfter);
+        await WaitUntilAsync(
+            () => hub.GetHandlerCount(nameof(ITestService.ServiceEvent)) == 0,
+            timeout: TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        CheckServerErrorCount();
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Shutting_down_proxy_unsubscribes_from_server_side_event_async()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            Channel = ClientChannel,
+            MessageEncryption = false,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        client.Connect();
+
+        const string serviceName = "TestService_Singleton_Service";
+        var proxy = client.CreateProxy<ITestService>(serviceName);
+        var fired = new AsyncCounter();
+        Action handler = () => { fired++; };
+
+        proxy.ServiceEvent += handler;
+
+        proxy.FireServiceEvent();
+        await fired.WaitForValue(1).Timeout(1).ConfigureAwait(false);
+        Assert.Equal(1, fired.Value);
+
+        // Server side holds one subscription.
+        var registration = _serverFixture.Server.ServiceRegistry.GetServiceRegistration(serviceName);
+        var hub = registration.EventHub;
+
+        Assert.Equal(1, hub.GetHandlerCount(nameof(ITestService.ServiceEvent)));
+
+        // ShutdownProxyAsync awaits the server-side removal: deterministic,
+        // no WaitUntilAsync needed.
+        await client.ShutdownProxyAsync(proxy).Timeout(5).ConfigureAwait(false);
+
+        Assert.Equal(0, hub.GetHandlerCount(nameof(ITestService.ServiceEvent)));
+        Assert.Equal(0, client.PendingUnsubscribeCount);
 
         CheckServerErrorCount();
     }
@@ -676,8 +736,8 @@ public partial class RpcTests
 
         Assert.Equal(1, hub.GetHandlerCount(nameof(ITestService.ServiceEvent)));
 
-        // Unregister locally to capture keys WITHOUT notifying the server — the
-        // server still holds the subscription until ScheduleServerUnsubscribe runs.
+        // Unregister locally to capture keys WITHOUT notifying the server —
+        // the server still holds the subscription until ScheduleServerUnsubscribe runs.
         // Use the interceptor (not the Castle proxy) — that is what the registry stores.
         var interceptor = RemotingClient.FindServiceProxy(proxy);
         Assert.NotNull(interceptor);
@@ -780,6 +840,37 @@ public partial class RpcTests
         // The dead handler was never invoked locally.
         Assert.Equal(0, fired.Value);
 
+        CheckServerErrorCount();
+    }
+
+    // --- ShutdownProxy idempotency ---
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task ShutdownProxy_is_idempotent()
+    {
+        using var ctx = ValidationSyncContext.Install();
+        using var client = CreateConnectedClient();
+
+        const string serviceName = "TestService_Singleton_Service";
+        var proxy = client.CreateProxy<ITestService>(serviceName);
+        Action handler = () => { };
+        proxy.ServiceEvent += handler;
+
+        var registration = _serverFixture.Server.ServiceRegistry
+            .GetServiceRegistration(serviceName);
+        var hub = registration.EventHub;
+
+        // First call unregisters and fires the RPC. Second call must be a
+        // no-op: registry already empty, Shutdown already invoked.
+        client.ShutdownProxy(proxy);
+        client.ShutdownProxy(proxy);
+
+        await WaitUntilAsync(
+            () => hub.GetHandlerCount(nameof(ITestService.ServiceEvent)) == 0,
+            timeout: TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        Assert.Equal(0, hub.GetHandlerCount(nameof(ITestService.ServiceEvent)));
         CheckServerErrorCount();
     }
 }

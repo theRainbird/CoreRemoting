@@ -44,7 +44,7 @@ public sealed class ServiceInvoker<TService> : IServiceInvoker<TService> where T
     /// </summary>
     ~ServiceInvoker()
     {
-        Shutdown();
+        ShutdownLocal();
     }
 
     /// <summary>
@@ -74,16 +74,45 @@ public sealed class ServiceInvoker<TService> : IServiceInvoker<TService> where T
     /// <inheritdoc/>
     public void Dispose()
     {
-        Shutdown();
+        ShutdownLocal();
         GC.SuppressFinalize(this);
     }
 
-    private void Shutdown()
+    /// <inheritdoc/>
+    public async ValueTask DisposeAsync()
     {
-        if (_client is { } client)
+        await ShutdownAsync()
+            .ConfigureAwait(false);
+
+        GC.SuppressFinalize(this);
+    }
+
+    private void ShutdownLocal()
+    {
+        var client = _client;
+        _client = null;
+
+        if (client != null)
         {
-            _ = client.ClientDelegateRegistry.UnregisterClientDelegatesOfServiceProxy(this);
-            _client = null;
+            var keys = client.ClientDelegateRegistry
+                .UnregisterClientDelegatesOfServiceProxy(this);
+
+            _ = client.ScheduleServerUnsubscribe(keys);
+        }
+    }
+
+    private async Task ShutdownAsync()
+    {
+        var client = _client;
+        _client = null;
+
+        if (client != null)
+        {
+            var keys = client.ClientDelegateRegistry
+                .UnregisterClientDelegatesOfServiceProxy(this);
+
+            await client.NotifyServerUnsubscribeAsync(keys)
+                .ConfigureAwait(false);
         }
     }
 

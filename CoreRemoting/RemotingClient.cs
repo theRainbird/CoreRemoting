@@ -1156,6 +1156,38 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         new ServiceInvoker<TService>(this, serviceName);
 
     /// <summary>
+    /// Shuts a specified service proxy down and frees resources.
+    /// </summary>
+    /// <remarks>
+    /// The server-side removal of subscriptions registered through this proxy
+    /// is scheduled asynchronously (fire-and-forget). Callers that need to await
+    /// the server-side cleanup should use <see cref="ShutdownProxyAsync"/>.
+    /// </remarks>
+    /// <param name="serviceProxy">Proxy object that should be shut down</param>
+    public void ShutdownProxy(object serviceProxy)
+    {
+        var keys = ShutdownLocal(serviceProxy);
+        _ = ScheduleServerUnsubscribe(keys);
+    }
+
+    /// <summary>
+    /// Shuts a specified service proxy down and frees resources, awaiting the
+    /// server-side removal of its subscriptions.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="ShutdownProxy"/>, this method awaits the RPC that tells
+    /// the server to drop the proxy's subscriptions. Use it when deterministic
+    /// cleanup is required (e.g. in tests or before returning a proxy to a pool).
+    /// </remarks>
+    /// <param name="serviceProxy">Proxy object that should be shut down</param>
+    public async Task ShutdownProxyAsync(object serviceProxy)
+    {
+        var keys = ShutdownLocal(serviceProxy);
+        await NotifyServerUnsubscribeAsync(keys)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Finds the CoreRemoting service proxy (interceptor) inside a Castle-generated
     /// proxy object. Returns <c>null</c> if the object is not a CoreRemoting proxy.
     /// </summary>
@@ -1177,15 +1209,24 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         return interceptors?
             .OfType<IServiceProxy>()
-            .FirstOrDefault();
+                .FirstOrDefault();
     }
 
     /// <summary>
-    /// Shuts a specified service proxy down and frees resources.
+    /// Performs local-only proxy shutdown: unregisters client delegates, calls
+    /// <see cref="IServiceProxy.Shutdown"/>, and returns the unregistered keys
+    /// so the caller can schedule/await the server-side removal.
     /// </summary>
-    /// <param name="serviceProxy">Proxy object that should be shut down</param>
-    public void ShutdownProxy(object serviceProxy) =>
-        FindServiceProxy(serviceProxy)?.Shutdown();
+    private Guid[] ShutdownLocal(object serviceProxy)
+    {
+        var proxy = FindServiceProxy(serviceProxy);
+        if (proxy == null)
+            return [];
+
+        var keys = _delegateRegistry.UnregisterClientDelegatesOfServiceProxy(proxy);
+        proxy.Shutdown();
+        return keys;
+    }
 
     #endregion
 

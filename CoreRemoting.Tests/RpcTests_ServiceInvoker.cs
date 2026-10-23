@@ -268,16 +268,44 @@ public partial class RpcTests
         CheckServerErrorCount();
     }
 
-    private RemotingClient CreateClient() =>
-        new(new ClientConfig()
-        {
-            ConnectionTimeout = 0,
-            InvocationTimeout = 0,
-            SendTimeout = 0,
-            Channel = ClientChannel,
-            MessageEncryption = false,
-            ServerPort = _serverFixture.Server.Config.NetworkPort,
-        });
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task ServiceInvoker_DisposeAsync_is_idempotent()
+    {
+        using var ctx = ValidationSyncContext.Install();
+        using var client = CreateConnectedClient();
+
+        var invoker = client.CreateInvoker<ITestService>();
+
+        // No subscriptions: DisposeAsync must be a no-op, not throw.
+        await invoker.DisposeAsync().AsTask().Timeout(1).ConfigureAwait(false);
+
+        // Second call: also no-op (via GC.SuppressFinalize + already-null _client).
+        await invoker.DisposeAsync().AsTask().Timeout(1).ConfigureAwait(false);
+
+        // Invoker is now disposed.
+        Assert.Throws<ObjectDisposedException>(() => invoker.Invoke(s => s.Echo("test")));
+    }
+
+    [Fact]
+    public void ServiceInvoker_implements_IAsyncDisposable()
+    {
+        using var client = CreateConnectedClient();
+        var invoker = client.CreateInvoker<ITestService>();
+
+        Assert.IsAssignableFrom<IAsyncDisposable>(invoker);
+        invoker.Dispose();
+    }
+
+    private RemotingClient CreateClient() => new(new()
+    {
+        ConnectionTimeout = 0,
+        InvocationTimeout = 0,
+        SendTimeout = 0,
+        Channel = ClientChannel,
+        MessageEncryption = false,
+        ServerPort = _serverFixture.Server.Config.NetworkPort,
+    });
 
     private RemotingClient CreateConnectedClient()
     {

@@ -50,10 +50,14 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
     /// </summary>
     void IServiceProxy.Shutdown()
     {
-        if (_client != null)
+        var client = _client;
+        _client = null;
+
+        if (client != null)
         {
-            _ = _client.ClientDelegateRegistry.UnregisterClientDelegatesOfServiceProxy(this);
-            _client = null;
+            var keys = client.ClientDelegateRegistry
+                .UnregisterClientDelegatesOfServiceProxy(this);
+            _ = client.ScheduleServerUnsubscribe(keys);
         }
 
         GC.SuppressFinalize(this);
