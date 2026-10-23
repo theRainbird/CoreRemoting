@@ -885,7 +885,8 @@ public partial class RpcTests
 
         _serverFixture.TestService.LastReceivedDelegate = null;
 
-        var proxy = client.CreateProxy<ITestService>("TestService_Singleton_Service");
+        // default registration resolves to _serverFixture.TestService
+        var proxy = client.CreateProxy<ITestService>();
         proxy.TestMethodWithDelegateArg(_ => { });
 
         var stored = _serverFixture.TestService.LastReceivedDelegate;
@@ -919,7 +920,7 @@ public partial class RpcTests
 
         _serverFixture.TestService.LastReceivedDelegate = null;
 
-        var proxy = client.CreateProxy<ITestService>("TestService_Singleton_Service");
+        var proxy = client.CreateProxy<ITestService>();
         proxy.TestMethodWithDelegateArg(_ => { });
 
         var stored = _serverFixture.TestService.LastReceivedDelegate;
@@ -944,7 +945,7 @@ public partial class RpcTests
         _serverFixture.TestService.LastReceivedDelegate = null;
 
         var client = CreateConnectedClient();
-        var proxy = client.CreateProxy<ITestService>("TestService_Singleton_Service");
+        var proxy = client.CreateProxy<ITestService>();
         proxy.TestMethodWithDelegateArg(_ => { });
 
         var stored = _serverFixture.TestService.LastReceivedDelegate;
@@ -963,19 +964,18 @@ public partial class RpcTests
     public async Task Event_unsubscribe_does_not_dispose_delegate_argument()
     {
         using var ctx = ValidationSyncContext.Install();
-        using var client = CreateClient();
-        await client.ConnectAsync().ConfigureAwait(false);
+        using var client = CreateConnectedClient();
 
         _serverFixture.TestService.LastReceivedDelegate = null;
 
-        var proxy = client.CreateProxy<ITestService>("TestService_Singleton_Service");
+        var proxy = client.CreateProxy<ITestService>();
 
         // subscribe + unsubscribe an event — must not touch delegate argument cache
         Action handler = () => { };
         proxy.ServiceEvent += handler;
         proxy.ServiceEvent -= handler;
 
-        // now pass a plain delegate argument, then dispose the proxy
+        // now pass a plain delegate argument
         proxy.TestMethodWithDelegateArg(_ => { });
         var stored = _serverFixture.TestService.LastReceivedDelegate;
         Assert.NotNull(stored);
@@ -997,12 +997,12 @@ public partial class RpcTests
         using var client1 = CreateConnectedClient();
         using var client2 = CreateConnectedClient();
 
-        var proxy1 = client1.CreateProxy<ITestService>("TestService_Singleton_Service");
+        var proxy1 = client1.CreateProxy<ITestService>();
         proxy1.TestMethodWithDelegateArg(_ => { });
         var stored1 = _serverFixture.TestService.LastReceivedDelegate;
         Assert.NotNull(stored1);
 
-        var proxy2 = client2.CreateProxy<ITestService>("TestService_Singleton_Service");
+        var proxy2 = client2.CreateProxy<ITestService>();
         proxy2.TestMethodWithDelegateArg(_ => { });
         var stored2 = _serverFixture.TestService.LastReceivedDelegate;
         Assert.NotNull(stored2);
@@ -1018,7 +1018,7 @@ public partial class RpcTests
 
     [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
-    public async Task Zyan_pattern_end_to_end()
+    public async Task Server_component_can_use_IsDisposed_method_to_filter_out_outdated_callbacks()
     {
         using var ctx = ValidationSyncContext.Install();
 
@@ -1027,13 +1027,13 @@ public partial class RpcTests
         using var client1 = CreateConnectedClient();
         var client2 = CreateConnectedClient();
 
-        var proxy1 = client1.CreateProxy<ITestService>("TestService_Singleton_Service");
+        var proxy1 = client1.CreateProxy<ITestService>();
         proxy1.TestMethodWithDelegateArg(_ => { });
 
         var stored1 = _serverFixture.TestService.LastReceivedDelegate;
         Assert.NotNull(stored1);
 
-        var proxy2 = client2.CreateProxy<ITestService>("TestService_Singleton_Service");
+        var proxy2 = client2.CreateProxy<ITestService>();
         proxy2.TestMethodWithDelegateArg(_ => { });
 
         var stored2 = _serverFixture.TestService.LastReceivedDelegate;
@@ -1044,8 +1044,9 @@ public partial class RpcTests
             await client1.DisposeAsync().ConfigureAwait(false);
 
             await WaitUntilAsync(
-                () => stored1.IsDisposed(),
-                timeout: TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+                stored1.IsDisposed,
+                timeout: TimeSpan.FromSeconds(20))
+                    .ConfigureAwait(false);
 
             // user code pattern: invoke + cleanup
             var callbacks = new List<Action<string>> { stored1, stored2 };
