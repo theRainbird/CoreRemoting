@@ -34,13 +34,16 @@ internal class ServerSubscriptionService : IServerSubscriptionService
     /// <inheritdoc/>
     public Task<int> RemoveHandlers(Guid[] handlerKeys)
     {
-        if (handlerKeys == null || handlerKeys.Length == 0)
+        if (handlerKeys is null or { Length: 0 })
             return Task.FromResult(0);
 
         var count = 0;
 
         foreach (var registration in _container.GetServiceRegistrations())
             count += registration.EventHub.RemoveHandlers(handlerKeys);
+
+        // also dispose this session's delegate argument proxies
+        RemotingSession.Current?.RemoveDelegateProxies(handlerKeys);
 
         return Task.FromResult(count);
     }

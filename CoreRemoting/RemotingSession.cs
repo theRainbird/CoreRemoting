@@ -40,7 +40,7 @@ public sealed class RemotingSession : IAsyncDisposable
     private readonly string _clientAddress;
     private readonly RemoteDelegateInvocationEventAggregator _remoteDelegateInvocationEventAggregator;
     private IDelegateProxyFactory _delegateProxyFactory;
-    private ConcurrentDictionary<Guid, IDelegateProxy> _delegateProxyCache;
+    internal ConcurrentDictionary<Guid, IDelegateProxy> _delegateProxyCache;
     private bool _isAuthenticated;
     private AtomicBool _isDisposing;
     private DateTime _lastActivityTimestamp;
@@ -1111,6 +1111,35 @@ public sealed class RemotingSession : IAsyncDisposable
         return true;
     }
 
+    /// <summary>
+    /// Removes and disposes delegate proxies for the given handler keys.
+    /// Invoking a stored reference to a disposed proxy becomes a no-op.
+    /// </summary>
+    /// <param name="handlerKeys">Handler keys to remove.</param>
+    /// <returns>Number of delegate proxies removed.</returns>
+    internal int RemoveDelegateProxies(Guid[] handlerKeys)
+    {
+        if (handlerKeys is null or { Length: 0 })
+            return 0;
+
+        var cache = _delegateProxyCache;
+        if (cache == null)
+            return 0;
+
+        var removed = 0;
+
+        foreach (var key in handlerKeys)
+        {
+            if (cache.TryRemove(key, out var proxy))
+            {
+                proxy.Dispose();
+                removed++;
+            }
+        }
+
+        return removed;
+    }
+
     #endregion
 
     #region Close session
@@ -1197,6 +1226,11 @@ public sealed class RemotingSession : IAsyncDisposable
 
         _keyPair?.Dispose();
         _delegateProxyFactory = null;
+
+        if (_delegateProxyCache != null)
+            foreach (var pair in _delegateProxyCache)
+                pair.Value.Dispose();
+
         _delegateProxyCache.Clear();
         _delegateProxyCache = null;
         _rawMessageTransport = null;

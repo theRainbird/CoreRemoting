@@ -873,4 +873,197 @@ public partial class RpcTests
         Assert.Equal(0, hub.GetHandlerCount(nameof(ITestService.ServiceEvent)));
         CheckServerErrorCount();
     }
+
+    // --- Delegate argument disposal ---
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task ShutdownProxyAsync_marks_delegate_argument_as_disposed()
+    {
+        using var ctx = ValidationSyncContext.Install();
+        using var client = CreateConnectedClient();
+
+        _serverFixture.TestService.LastReceivedDelegate = null;
+
+        var proxy = client.CreateProxy<ITestService>("TestService_Singleton_Service");
+        proxy.TestMethodWithDelegateArg(_ => { });
+
+        var stored = _serverFixture.TestService.LastReceivedDelegate;
+        Assert.NotNull(stored);
+        Assert.False(stored.IsDisposed());
+
+        var sessionId = client.SessionId!.Value;
+        var sessionRepo = (SessionRepository)_serverFixture.Server.SessionRepository;
+        var session = await sessionRepo.GetSession(sessionId).ConfigureAwait(false);
+
+        Assert.Equal(1, session._delegateProxyCache?.Count ?? 0);
+
+        await client.ShutdownProxyAsync(proxy).ConfigureAwait(false);
+
+        Assert.True(stored.IsDisposed());
+        Assert.Equal(0, session._delegateProxyCache?.Count ?? 0);
+
+        // invoking a disposed delegate is a silent no-op
+        var ex = Record.Exception(() => stored("x"));
+        Assert.Null(ex);
+
+        CheckServerErrorCount();
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task ShutdownProxy_marks_delegate_argument_as_disposed()
+    {
+        using var ctx = ValidationSyncContext.Install();
+        using var client = CreateConnectedClient();
+
+        _serverFixture.TestService.LastReceivedDelegate = null;
+
+        var proxy = client.CreateProxy<ITestService>("TestService_Singleton_Service");
+        proxy.TestMethodWithDelegateArg(_ => { });
+
+        var stored = _serverFixture.TestService.LastReceivedDelegate;
+        Assert.NotNull(stored);
+        Assert.False(stored.IsDisposed());
+
+        client.ShutdownProxy(proxy);
+
+        await WaitUntilAsync(
+            () => stored.IsDisposed(),
+            timeout: TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        CheckServerErrorCount();
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Dispose_of_client_marks_delegate_argument_as_disposed()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        _serverFixture.TestService.LastReceivedDelegate = null;
+
+        var client = CreateConnectedClient();
+        var proxy = client.CreateProxy<ITestService>("TestService_Singleton_Service");
+        proxy.TestMethodWithDelegateArg(_ => { });
+
+        var stored = _serverFixture.TestService.LastReceivedDelegate;
+        Assert.NotNull(stored);
+        Assert.False(stored.IsDisposed());
+
+        await client.DisposeAsync().ConfigureAwait(false);
+
+        await WaitUntilAsync(
+            () => stored.IsDisposed(),
+            timeout: TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Event_unsubscribe_does_not_dispose_delegate_argument()
+    {
+        using var ctx = ValidationSyncContext.Install();
+        using var client = CreateClient();
+        await client.ConnectAsync().ConfigureAwait(false);
+
+        _serverFixture.TestService.LastReceivedDelegate = null;
+
+        var proxy = client.CreateProxy<ITestService>("TestService_Singleton_Service");
+
+        // subscribe + unsubscribe an event — must not touch delegate argument cache
+        Action handler = () => { };
+        proxy.ServiceEvent += handler;
+        proxy.ServiceEvent -= handler;
+
+        // now pass a plain delegate argument, then dispose the proxy
+        proxy.TestMethodWithDelegateArg(_ => { });
+        var stored = _serverFixture.TestService.LastReceivedDelegate;
+        Assert.NotNull(stored);
+
+        // -= above must not have invalidated the plain delegate argument
+        Assert.False(stored.IsDisposed());
+
+        CheckServerErrorCount();
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task ShutdownProxy_does_not_affect_other_clients_delegate_arguments()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        _serverFixture.TestService.LastReceivedDelegate = null;
+
+        using var client1 = CreateConnectedClient();
+        using var client2 = CreateConnectedClient();
+
+        var proxy1 = client1.CreateProxy<ITestService>("TestService_Singleton_Service");
+        proxy1.TestMethodWithDelegateArg(_ => { });
+        var stored1 = _serverFixture.TestService.LastReceivedDelegate;
+        Assert.NotNull(stored1);
+
+        var proxy2 = client2.CreateProxy<ITestService>("TestService_Singleton_Service");
+        proxy2.TestMethodWithDelegateArg(_ => { });
+        var stored2 = _serverFixture.TestService.LastReceivedDelegate;
+        Assert.NotNull(stored2);
+        Assert.NotSame(stored1, stored2);
+
+        await client1.ShutdownProxyAsync(proxy1).ConfigureAwait(false);
+
+        Assert.True(stored1.IsDisposed());
+        Assert.False(stored2.IsDisposed());
+
+        CheckServerErrorCount();
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Zyan_pattern_end_to_end()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        _serverFixture.TestService.LastReceivedDelegate = null;
+
+        using var client1 = CreateConnectedClient();
+        var client2 = CreateConnectedClient();
+
+        var proxy1 = client1.CreateProxy<ITestService>("TestService_Singleton_Service");
+        proxy1.TestMethodWithDelegateArg(_ => { });
+
+        var stored1 = _serverFixture.TestService.LastReceivedDelegate;
+        Assert.NotNull(stored1);
+
+        var proxy2 = client2.CreateProxy<ITestService>("TestService_Singleton_Service");
+        proxy2.TestMethodWithDelegateArg(_ => { });
+
+        var stored2 = _serverFixture.TestService.LastReceivedDelegate;
+        Assert.NotNull(stored2);
+
+        try
+        {
+            await client1.DisposeAsync().ConfigureAwait(false);
+
+            await WaitUntilAsync(
+                () => stored1.IsDisposed(),
+                timeout: TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+
+            // user code pattern: invoke + cleanup
+            var callbacks = new List<Action<string>> { stored1, stored2 };
+
+            foreach (var cb in callbacks)
+                cb("hello"); // dead -> silent no-op
+
+            callbacks.RemoveAll(cb => cb.IsDisposed());
+
+            Assert.Single(callbacks);
+            Assert.Same(stored2, callbacks[0]);
+            Assert.False(stored2.IsDisposed());
+        }
+        finally
+        {
+            client2.Dispose();
+        }
+
+        CheckServerErrorCount();
+    }
 }

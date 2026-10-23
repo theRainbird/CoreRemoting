@@ -35,8 +35,11 @@ public class TestService : ITestService
         return TestMethodFake?.Invoke(timeout);
     }
 
+    public Action<string> LastReceivedDelegate { get; set; }
+
     public void TestMethodWithDelegateArg(Action<string> callback)
     {
+        LastReceivedDelegate = callback;
         callback("test");
     }
 

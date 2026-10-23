@@ -197,8 +197,10 @@ public class DelegateProxyTests
         Assert.Null(proxy.ProxiedDelegate);
     }
 
+    // --- Dispose: no-op behavior ---
+
     [Fact]
-    public void Invoking_delegate_after_dispose_throws_ObjectDisposedException_for_void_return()
+    public void Invoking_void_delegate_after_dispose_is_noop()
     {
         var factory = new DelegateProxyFactory();
         var invoked = false;
@@ -207,32 +209,74 @@ public class DelegateProxyTests
         del();
         Assert.True(invoked);
 
+        invoked = false;
         proxy.Dispose();
-        Assert.Throws<ObjectDisposedException>(() => del());
+
+        var ex = Record.Exception(() => del());
+
+        Assert.Null(ex);
+        Assert.False(invoked); // handler must not be called after dispose
     }
 
     [Fact]
-    public void Invoking_delegate_after_dispose_throws_ObjectDisposedException_for_value_return()
+    public void Invoking_value_returning_delegate_after_dispose_returns_default()
     {
         var factory = new DelegateProxyFactory();
         var proxy = factory.Create(typeof(Func<int>), _ => 42);
         var del = (Func<int>)proxy.ProxiedDelegate;
+        Assert.Equal(42, del());
 
         proxy.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => del());
+        Assert.Equal(0, del());
     }
 
     [Fact]
-    public void Invoking_delegate_after_dispose_throws_ObjectDisposedException_for_reference_return()
+    public void Invoking_reference_returning_delegate_after_dispose_returns_null()
     {
         var factory = new DelegateProxyFactory();
         var proxy = factory.Create(typeof(Func<string>), _ => "hello");
         var del = (Func<string>)proxy.ProxiedDelegate;
+        Assert.Equal("hello", del());
 
         proxy.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => del());
+        Assert.Null(del());
+    }
+
+    [Fact]
+    public void Invoking_nullable_returning_delegate_after_dispose_returns_null()
+    {
+        var factory = new DelegateProxyFactory();
+        var proxy = factory.Create(typeof(Func<int?>), _ => 42);
+        var del = (Func<int?>)proxy.ProxiedDelegate;
+        Assert.Equal(42, del());
+
+        proxy.Dispose();
+
+        Assert.False(del().HasValue);
+    }
+
+    // --- IsDisposed ---
+
+    [Fact]
+    public void IsDisposed_is_false_before_dispose()
+    {
+        var factory = new DelegateProxyFactory();
+        var proxy = factory.Create(typeof(Action), _ => null);
+
+        Assert.False(proxy.IsDisposed);
+    }
+
+    [Fact]
+    public void IsDisposed_is_true_after_dispose()
+    {
+        var factory = new DelegateProxyFactory();
+        var proxy = factory.Create(typeof(Action), _ => null);
+
+        proxy.Dispose();
+
+        Assert.True(proxy.IsDisposed);
     }
 
     [Fact]

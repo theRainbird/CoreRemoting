@@ -1,6 +1,7 @@
 using System;
 using System.Reflection.Emit;
 using System.Threading;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.RemoteDelegates;
 
@@ -10,6 +11,7 @@ namespace CoreRemoting.RemoteDelegates;
 public sealed class DelegateProxy : IDelegateProxy
 {
     private Func<object[], object> _callInterceptionHandler;
+    private readonly object _disposedReturnValue;
 
     /// <summary>
     /// Creates a new instance of the DelegateProxy class.
@@ -27,6 +29,11 @@ public sealed class DelegateProxy : IDelegateProxy
             dynamicMethod ??
                 throw new ArgumentNullException(nameof(dynamicMethod));
 
+        // precompute the value returned by a disposed proxy for the delegate's
+        // return type (null for void/reference types, boxed default for value types)
+        _disposedReturnValue =
+            delegateType.GetMethod("Invoke")?.ReturnType.GetDefaultValue();
+
         ProxiedDelegate = dynamicMethod.CreateDelegate(delegateType, this);
     }
 
@@ -40,20 +47,22 @@ public sealed class DelegateProxy : IDelegateProxy
     /// </summary>
     internal DynamicMethod DynamicMethod { get; }
 
+    /// <inheritdoc/>
+    public bool IsDisposed => _callInterceptionHandler == null;
+
     /// <summary>
     /// Method called by delegate proxy, when the proxies delegate is called.
+    /// Returns the default value of the delegate's return type when disposed.
     /// </summary>
     /// <param name="args">Arguments passed to the proxied delegate by caller</param>
     /// <returns>Return value provided by call interception handler</returns>
-    /// <exception cref="ObjectDisposedException">Thrown if the proxy has been disposed</exception>
     internal object Intercept(object[] args)
     {
-        var handler = Volatile.Read(ref _callInterceptionHandler);
+        var handler = _callInterceptionHandler;
 
-        if (handler == null)
-            throw new ObjectDisposedException(nameof(DelegateProxy));
-
-        return handler(args);
+        return handler == null
+            ? _disposedReturnValue
+            : handler(args);
     }
 
     /// <summary>
@@ -62,6 +71,6 @@ public sealed class DelegateProxy : IDelegateProxy
     public void Dispose()
     {
         ProxiedDelegate = null;
-        Interlocked.Exchange(ref _callInterceptionHandler, null);
+        _callInterceptionHandler = null;
     }
 }
