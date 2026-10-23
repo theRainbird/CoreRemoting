@@ -24,7 +24,7 @@ jobs:
           - os: ${{ !contains(github.event.head_commit.message, 'windows') && !github.event.pull_request && 'windows-latest' }}
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
     - name: Checkout source
@@ -38,6 +38,8 @@ jobs:
         dotnet-version: | 
           8.0.x
           9.0.x
+        cache: true
+        cache-dependency-path: '**/*.csproj'
 
     - name: Install libmsquic (Linux)
       if: runner.os == 'Linux'
@@ -53,7 +55,18 @@ jobs:
       run: dotnet build --no-restore
 
     - name: Test
-      run: dotnet test --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx" --blame-hang-timeout 180s
+      run: dotnet test --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx" --blame-hang-timeout 180s --blame-hang-dump-type mini
+
+    - name: Upload test artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.os }}
+        path: |
+          **/TestResults/**/*.trx
+          **/TestResults/**/*.dmp
+        retention-days: 3
+        if-no-files-found: warn
 
     - name: Update Pantry badge
       if: always() && github.event_name == 'push'
