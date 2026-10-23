@@ -21,6 +21,11 @@ public class ServerRpcContext
     public Exception Exception { get; set; }
 
     /// <summary>
+    /// Gets or sets the raw return value of the invoked method.
+    /// </summary>
+    public object ReturnValue { get; set; }
+
+    /// <summary>
     /// Gets or sets a value whether the authentication is required.
     /// </summary>
     public bool AuthenticationRequired { get; set; }
@@ -52,9 +57,9 @@ public class ServerRpcContext
     public MethodCallResultMessage MethodCallResultMessage { get; set; }
 
     /// <summary>
-    /// Gets or sets service event stub.
+    /// Gets or sets service event hub.
     /// </summary>
-    public EventStub EventStub { get; set; }
+    public ServiceEventHub EventHub { get; set; }
 
     /// <summary>
     /// Gets or sets the instance of the service, on which the method is called.

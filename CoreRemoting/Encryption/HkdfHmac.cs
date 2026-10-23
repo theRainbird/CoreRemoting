@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Security.Cryptography;
 
+namespace CoreRemoting.Encryption;
+
 /// <summary>
 /// HKDF (RFC 5869) implementation parameterized by HMAC type.
 /// </summary>

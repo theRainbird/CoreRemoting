@@ -69,6 +69,13 @@ public sealed class RemotingServer : IRemotingServer
             lifetime: ServiceLifetime.Singleton,
             asHiddenSystemService: true);
 
+        _container.RegisterService<IEventDispatcher, EventDispatcher>(
+            lifetime: ServiceLifetime.Singleton,
+            asHiddenSystemService: true);
+
+        _container.RegisterService<IServerSubscriptionService, ServerSubscriptionService>(
+            lifetime: ServiceLifetime.Singleton);
+
         _config.RegisterServicesAction?.Invoke(_container);
 
         Channel = _config.Channel ?? new TcpServerChannel();
@@ -162,6 +169,17 @@ public sealed class RemotingServer : IRemotingServer
     internal void OnBeforeCall(ServerRpcContext serverRpcContext)
     {
         BeforeCall?.Invoke(this, serverRpcContext);
+
+        if (serverRpcContext.Cancel)
+        {
+            var cancelEx = serverRpcContext.Exception ??
+                new RemoteInvocationException($"Invocation canceled: {
+                    serverRpcContext.MethodCallMessage.ServiceName}.{
+                    serverRpcContext.MethodCallMessage.MethodName}");
+
+            // rethrow the exception keeping the original stack trace
+            ExceptionDispatchInfo.Capture(cancelEx).Throw();
+        }
     }
 
     /// <summary>

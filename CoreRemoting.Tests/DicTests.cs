@@ -198,4 +198,52 @@ public class DicTests
         Console.WriteLine($"Registration threads: {t.Keys.Count}");
         Assert.True(t.Count > 1);
     }
+
+    [Fact]
+    public void Container_resolves_itself()
+    {
+        var c = Container;
+
+        var resolved = c.GetService<IDependencyInjectionContainer>();
+        Assert.NotNull(resolved);
+        Assert.Same(c, resolved);
+    }
+
+    [Fact]
+    public void Container_can_be_injected_into_service()
+    {
+        var c = Container;
+        c.RegisterService<IServiceWithContainer, ServiceWithContainer>(ServiceLifetime.SingleCall);
+
+        var svc = c.GetService<IServiceWithContainer>();
+        Assert.NotNull(svc);
+        Assert.Same(c, svc.Container);
+    }
+
+    [Fact]
+    public void Injected_container_exposes_service_registrations()
+    {
+        var c = Container;
+        c.RegisterService<ITestService, TestService>(ServiceLifetime.Singleton);
+        c.RegisterService<IServiceWithContainer, ServiceWithContainer>(ServiceLifetime.SingleCall);
+
+        Assert.True(c.IsRegistered<ITestService>());
+        Assert.True(c.IsRegistered<IServiceWithContainer>());
+
+        var svc = c.GetService<IServiceWithContainer>();
+        Assert.NotNull(svc);
+        Assert.Same(c, svc.Container);
+
+        // verify that injected container can resolve other service registration
+        Assert.True(svc.Container.IsRegistered<ITestService>());
+
+        var registration = svc.Container.GetServiceRegistration(typeof(ITestService).FullName);
+        Assert.NotNull(registration);
+
+        var ifaceType = svc.Container.GetServiceInterfaceType(typeof(ITestService).FullName);
+        Assert.Equal(typeof(ITestService), ifaceType);
+
+        var all = svc.Container.GetServiceRegistrations().ToList();
+        Assert.Contains(all, r => r.ServiceName == typeof(ITestService).FullName);
+    }
 }

@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Security;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 using Castle.DynamicProxy;
@@ -35,13 +35,14 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     private IRawMessageTransport _rawMessageTransport;
     private readonly ISessionKeyPair _keyPair;
     private readonly ClientDelegateRegistry _delegateRegistry;
+    private readonly SubscriptionTracker _subscriptionTracker;
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly ClientConfig _config;
     private readonly AsyncLock _channelLock;
     private Dictionary<Guid, ClientRpcContext> _activeCalls;
     private readonly AsyncLock _activeCallsLock;
     private Guid _sessionId;
-    private bool _authenticationRequired;
+    private AtomicBool _authenticationRequired;
     private byte[] _sharedSecret;
     private int _sharedSecretLength;
     private readonly object _sessionLock;
@@ -50,14 +51,14 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     private TaskCompletionSource<AuthenticationResponseMessage> _authenticationResponseTaskSource;
     private TaskCompletionSource<bool> _authenticationCompletedTaskSource;
     private readonly AsyncManualResetEvent _goodbyeCompletedEvent;
-    private bool _isAuthenticated;
-    private bool _isDisposing;
-    private int _isConnected;
-    private const int _true = 1;
-    private const int _false = 0;
+    private AtomicBool _isAuthenticated;
+    private AtomicBool _isDisposing;
+    private AtomicBool _isConnected;
     private Timer _keepSessionAliveTimer;
     private byte[] _serverPublicKeyBlob;
-    private bool _sessionClosedByServer;
+    private AtomicBool _sessionClosedByServer;
+    private readonly Lazy<IServiceInvoker<IServerSubscriptionService>> _subscriptionInvoker;
+    private readonly ConcurrentDictionary<Guid, Task> _pendingUnsubscribes = new();
 
     // ReSharper disable once InconsistentNaming
     private static readonly ConcurrentDictionary<string, IRemotingClient> _clientInstances = new();
@@ -77,7 +78,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     {
         MethodCallMessageBuilder = new MethodCallMessageBuilder();
         MessageEncryptionManager = new MessageEncryptionManager();
-        _authenticationRequired = false;
+        _authenticationRequired.Reset();
         _sharedSecret = null;
         _activeCalls = null;
         _activeCallsLock = new();
@@ -86,10 +87,12 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         _currentlyPendingMessagesCounter = new(initialCount: 1);
         _cancellationTokenSource = new();
         _delegateRegistry = new();
+        _subscriptionTracker = new();
         _handshakeCompletedTaskSource = new();
         _authenticationResponseTaskSource = new();
         _authenticationCompletedTaskSource = new();
         _goodbyeCompletedEvent = new();
+        _subscriptionInvoker = new(() => CreateInvoker<IServerSubscriptionService>());
     }
 
     /// <summary>
@@ -152,7 +155,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         foreach (var activeCall in activeCalls)
         {
-            if (_sessionClosedByServer)
+            if (_sessionClosedByServer.Value)
             {
                 // Session was closed gracefully by server.
                 // Complete all pending calls without error to allow graceful shutdown of in-flight calls
@@ -170,7 +173,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         }
 
         // Reset the flag after handling disconnect
-        _sessionClosedByServer = false;
+        _sessionClosedByServer.Reset();
     }
 
     #endregion
@@ -201,6 +204,48 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// Gets the local client delegate registry.
     /// </summary>
     internal ClientDelegateRegistry ClientDelegateRegistry => _delegateRegistry;
+
+    /// <summary>
+    /// Gets the client-side subscription tracker.
+    /// </summary>
+    internal SubscriptionTracker SubscriptionTracker => _subscriptionTracker;
+
+    /// <summary>
+    /// Gets whether this client instance is being disposed.
+    /// This is a point-in-time snapshot for guard checks only. To enter the
+    /// dispose path, use <c>_isDisposing.TrySet()</c>; combining this property
+    /// with <c>Set()</c> is racy.
+    /// </summary>
+    [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
+    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
+    internal bool IsDisposing => _isDisposing.Value;
+
+    /// <summary>
+    /// Gets whether authentication of this client instance succeeded.
+    /// </summary>
+    [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
+    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
+    internal bool IsAuthenticated => _isAuthenticated.Value;
+
+    /// <summary>
+    /// Gets whether the server requested authentication for this connection.
+    /// </summary>
+    [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
+    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
+    internal bool AuthenticationRequired => _authenticationRequired.Value;
+
+    /// <summary>
+    /// Internal hook for background-operation failures. By default writes
+    /// to <see cref="Trace"/>. Tests may replace it to assert failures.
+    /// </summary>
+    internal Action<Exception> ErrorHandler { get; set; } =
+        ex => Trace.TraceWarning($"CoreRemoting client error: {ex}");
+
+    /// <summary>
+    /// Gets the number of subscriptions whose server-side removal is still
+    /// in flight. Exposed for tests only.
+    /// </summary>
+    internal int PendingUnsubscribeCount => _pendingUnsubscribes.Count;
 
     /// <summary>
     /// Gets or sets the invocation timeout in milliseconds.
@@ -234,7 +279,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     {
         get
         {
-            if (_isDisposing)
+            if (IsDisposing)
                 return null;
 
             lock (_sessionLock)
@@ -250,7 +295,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     {
         get
         {
-            if (_isDisposing)
+            if (IsDisposing)
                 return null;
 
             lock (_sessionLock)
@@ -281,6 +326,10 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <summary>
     /// Gets whether the connection to the server is established or not.
     /// </summary>
+    /// <remarks>
+    /// Note: this is the transport state, not the client's logical state —
+    /// see the internal <see cref="_isConnected"/> flag for the latter.
+    /// </remarks>
     public bool IsConnected => _channel?.IsConnected ?? false;
 
     /// <summary>
@@ -290,7 +339,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     {
         get
         {
-            if (_isDisposing)
+            if (IsDisposing)
                 return false;
 
             lock (_sessionLock)
@@ -339,7 +388,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         if (_channel == null)
             throw new RemotingException("No client channel configured.");
 
-        _isConnected = _true;
+        _isConnected.Set();
         _goodbyeCompletedEvent.Reset();
 
         using (await _activeCallsLock)
@@ -349,7 +398,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         // where the previous cycle's task sources are already completed and authentication must run again
         _handshakeCompletedTaskSource = new();
         _authenticationCompletedTaskSource = new();
-        _isAuthenticated = false;
+        _isAuthenticated.Reset();
         Identity = null;
 
         await _channel.ConnectAsync()
@@ -390,7 +439,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <param name="quiet">When set to true, no goodbye message is sent to the server</param>
     public async Task DisconnectAsync(bool quiet = false)
     {
-        if (Interlocked.Exchange(ref _isConnected, _false) == _true)
+        if (_isConnected.TryReset())
             _currentlyPendingMessagesCounter.Signal();
 
         await _currentlyPendingMessagesCounter.WaitAsync()
@@ -580,7 +629,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         if (_config.Credentials is null or { Length: 0 } &&
             _config.Authenticator is null or DefaultAuthenticator)
         {
-            if (_authenticationRequired)
+            if (AuthenticationRequired)
                 throw new SecurityException("Authentication is required. Please check credentials.");
 
             return;
@@ -598,7 +647,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                 throw new SecurityException("Authentication timeout."))
                     .ConfigureAwait(false);
 
-        if (!_isAuthenticated)
+        if (!IsAuthenticated)
             throw new SecurityException("Authentication failed. Please check credentials.");
 
         // if the authentication protocol negotiated a new shared key, re-key the session.
@@ -631,7 +680,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         // the Disconnected event (which fires synchronously from
         // WatsonTcp after the Shutdown message is received).
         if (string.Equals(message.MessageType, "session_closed", StringComparison.OrdinalIgnoreCase))
-            _sessionClosedByServer = true;
+            _sessionClosedByServer.Set();
 
         Task.Run(async () =>
         {
@@ -732,7 +781,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             _sessionId = handshakeMessage.SessionId;
             _sharedSecret = MessageEncryption ? handshakeMessage.SharedSecret ?? _sessionId.ToByteArray() : null;
             _sharedSecretLength = _sharedSecret?.Length ?? 0;
-            _authenticationRequired = handshakeMessage.AuthenticationRequired;
+            _authenticationRequired.Set(handshakeMessage.AuthenticationRequired);
         }
 
         // server requires message encryption, but the client's connection is unencrypted
@@ -785,8 +834,8 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         if (authResponseMessage.IsCompleted)
         {
-            _isAuthenticated = authResponseMessage.IsAuthenticated;
-            Identity = _isAuthenticated ? authResponseMessage.AuthenticatedIdentity : null;
+            _isAuthenticated.Set(authResponseMessage.IsAuthenticated);
+            Identity = authResponseMessage.IsAuthenticated ? authResponseMessage.AuthenticatedIdentity : null;
             _authenticationCompletedTaskSource.TrySetResult(true);
         }
     }
@@ -803,9 +852,68 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     private Task ProcessSessionClosedMessage(WireMessage message)
     {
         // Mark that the session was closed by server to gracefully complete in-flight calls
-        _sessionClosedByServer = true;
+        _sessionClosedByServer.Set();
         return DisconnectAsync(quiet: true);
     }
+
+    /// <summary>
+    /// Reports a background-operation failure through <see cref="ErrorHandler"/>.
+    /// </summary>
+    private void OnError(Exception ex) => ErrorHandler?.Invoke(ex);
+
+    /// <summary>
+    /// Notifies the server that the given handlers should be removed.
+    /// Awaitable; propagates RPC failures to the caller.
+    /// </summary>
+    internal async Task NotifyServerUnsubscribeAsync(Guid[] handlerKeys)
+    {
+        if (handlerKeys is null or { Length: 0 })
+            return;
+
+        if (!_isConnected.Value)
+            return;
+
+        await _subscriptionInvoker.Value
+            .Invoke(s => s.RemoveHandlers(handlerKeys))
+                .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Schedules server-side removal of the given handlers.
+    /// Deduplicated on a best-effort basis: if a removal for the same key is
+    /// already in flight, the existing task is reused. Under a rare race two
+    /// RPCs may be issued for the same key — harmless, because
+    /// <c>IServerSubscriptionService.RemoveHandlers</c> is idempotent.
+    /// Errors are reported via <see cref="ErrorHandler"/>, not propagated.
+    /// </summary>
+    internal Task ScheduleServerUnsubscribe(Guid[] handlerKeys)
+    {
+        if (handlerKeys is null or { Length: 0 })
+            return Task.CompletedTask;
+
+        var tasks = new Task[handlerKeys.Length];
+
+        for (var i = 0; i < handlerKeys.Length; i++)
+            tasks[i] = _pendingUnsubscribes.GetOrAdd(handlerKeys[i], StartUnsubscribe);
+
+        return Task.WhenAll(tasks);
+    }
+
+    private Task StartUnsubscribe(Guid key) => Task.Run(async () =>
+    {
+        try
+        {
+            await NotifyServerUnsubscribeAsync([key]).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            OnError(ex);
+        }
+        finally
+        {
+            _pendingUnsubscribes.TryRemove(key, out _);
+        }
+    });
 
     /// <summary>
     /// Processes a remote delegate invocation message from server.
@@ -825,11 +933,19 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                         sharedSecret: _sharedSecret,
                         sendersPublicKeyBlob: _serverPublicKeyBlob));
 
-        var localDelegate =
-            _delegateRegistry.GetDelegateByHandlerKey(delegateInvocationMessage.HandlerKey);
+        var localDelegate = _delegateRegistry.GetDelegateByHandlerKey(
+            delegateInvocationMessage.HandlerKey);
 
-        // Invoke local delegate with arguments from remote caller
-        EventStub.DelegateInvoker.Invoke(localDelegate, delegateInvocationMessage.DelegateArguments);
+        if (localDelegate == null)
+        {
+            // handler was unregistered locally, tell the server to drop
+            // inactive subscription, so it stops sending invocations for this key
+            _ = ScheduleServerUnsubscribe([delegateInvocationMessage.HandlerKey]);
+            return;
+        }
+
+        // invoke local delegate with arguments from remote caller
+        ServiceEventHub.DelegateInvoker.Invoke(localDelegate, delegateInvocationMessage.DelegateArguments);
     }
 
     /// <summary>
@@ -937,7 +1053,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         var signalCount = oneWay ? 0 : 1;
         _currentlyPendingMessagesCounter.AddCount(signalCount);
 
-        if (_isConnected == _false)
+        if (!_isConnected.Value)
         {
             _currentlyPendingMessagesCounter.Signal(signalCount);
             throw new RemoteInvocationException("Client disconnected");
@@ -1030,13 +1146,55 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     }
 
     /// <summary>
+    /// Creates a service invoker that provides access to a remote service without generating a proxy.
+    /// </summary>
+    /// <typeparam name="TService">Type of the remote service contract (interface or class)</typeparam>
+    /// <param name="serviceName">Unique name of the remote service</param>
+    /// <returns>Service invoker object</returns>
+    public IServiceInvoker<TService> CreateInvoker<TService>(string serviceName = "")
+        where TService : class =>
+        new ServiceInvoker<TService>(this, serviceName);
+
+    /// <summary>
     /// Shuts a specified service proxy down and frees resources.
     /// </summary>
+    /// <remarks>
+    /// The server-side removal of subscriptions registered through this proxy
+    /// is scheduled asynchronously (fire-and-forget). Callers that need to await
+    /// the server-side cleanup should use <see cref="ShutdownProxyAsync"/>.
+    /// </remarks>
     /// <param name="serviceProxy">Proxy object that should be shut down</param>
     public void ShutdownProxy(object serviceProxy)
     {
+        var keys = ShutdownLocal(serviceProxy);
+        _ = ScheduleServerUnsubscribe(keys);
+    }
+
+    /// <summary>
+    /// Shuts a specified service proxy down and frees resources, awaiting the
+    /// server-side removal of its subscriptions.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="ShutdownProxy"/>, this method awaits the RPC that tells
+    /// the server to drop the proxy's subscriptions. Use it when deterministic
+    /// cleanup is required (e.g. in tests or before returning a proxy to a pool).
+    /// </remarks>
+    /// <param name="serviceProxy">Proxy object that should be shut down</param>
+    public async Task ShutdownProxyAsync(object serviceProxy)
+    {
+        var keys = ShutdownLocal(serviceProxy);
+        await NotifyServerUnsubscribeAsync(keys)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Finds the CoreRemoting service proxy (interceptor) inside a Castle-generated
+    /// proxy object. Returns <c>null</c> if the object is not a CoreRemoting proxy.
+    /// </summary>
+    internal static IServiceProxy FindServiceProxy(object serviceProxy)
+    {
         if (!ProxyUtil.IsProxy(serviceProxy))
-            return;
+            return null;
 
         var proxyType = serviceProxy.GetType();
 
@@ -1045,16 +1203,29 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                 BindingFlags.Instance | BindingFlags.NonPublic);
 
         if (hiddenInterceptorsField == null)
-            return;
+            return null;
 
-        var interceptors =  hiddenInterceptorsField.GetValue(serviceProxy) as IInterceptor[];
+        var interceptors = hiddenInterceptorsField.GetValue(serviceProxy) as IInterceptor[];
 
-        var coreRemotingInterceptor =
-            (from interceptor in interceptors
-                where interceptor is IServiceProxy
-                select interceptor).FirstOrDefault();
+        return interceptors?
+            .OfType<IServiceProxy>()
+                .FirstOrDefault();
+    }
 
-        ((IServiceProxy) coreRemotingInterceptor)?.Shutdown();
+    /// <summary>
+    /// Performs local-only proxy shutdown: unregisters client delegates, calls
+    /// <see cref="IServiceProxy.Shutdown"/>, and returns the unregistered keys
+    /// so the caller can schedule/await the server-side removal.
+    /// </summary>
+    private Guid[] ShutdownLocal(object serviceProxy)
+    {
+        var proxy = FindServiceProxy(serviceProxy);
+        if (proxy == null)
+            return [];
+
+        var keys = _delegateRegistry.UnregisterClientDelegatesOfServiceProxy(proxy);
+        proxy.Shutdown();
+        return keys;
     }
 
     #endregion
@@ -1069,7 +1240,8 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
-        _isDisposing = true;
+        if (!_isDisposing.TrySet())
+            return;
 
         if (DefaultRemotingClient == this)
             DefaultRemotingClient = null;
@@ -1086,6 +1258,11 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         }
 
         _delegateRegistry.Clear();
+
+        if (_subscriptionInvoker.IsValueCreated)
+        {
+            _subscriptionInvoker.Value.Dispose();
+        }
 
         if (_rawMessageTransport != null)
         {

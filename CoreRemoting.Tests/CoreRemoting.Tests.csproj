@@ -11,8 +11,6 @@
     <!-- WatsonTcp is the default channel, WebSocketSharp is optional, BinaryFormatter is .net8 only, Quic is .net9 only -->
     <ItemGroup>
         <Compile Remove="BinarySerializationTests.cs" />
-        <Compile Remove="InvokerTests.cs" />
-        <Compile Remove="InvokerTestsSafe.cs" />
         <Compile Remove="RpcTests_Quic.cs" />
         <Compile Remove="RpcTests_WatsonTcp.cs" />
         <Compile Remove="RpcTests_WebsocketSharp.cs" />
@@ -24,6 +22,7 @@
     <!-- .NET 8.0 only: include BinaryFormatter and a small bunch of other tests -->
     <ItemGroup Condition=" '$(TargetFramework)' == 'net8.0' ">
         <Compile Remove="*.cs" />
+        <Compile Remove="RemoteDelegates/EventDispatcherTests*.cs" />
         <Compile Include="BinarySerializationTests.cs" />
         <Compile Include="SourceGeneratorTests.cs" />
     </ItemGroup>
@@ -78,6 +77,9 @@
     <ItemGroup>
       <Compile Update="DicTests_*.cs">
         <DependentUpon>DicTests.cs</DependentUpon>
+      </Compile>
+      <Compile Update="EventDispatcherTests_*.cs">
+        <DependentUpon>EventDispatcherTests.cs</DependentUpon>
       </Compile>
       <Compile Update="RpcTests_*.cs">
         <DependentUpon>RpcTests.cs</DependentUpon>

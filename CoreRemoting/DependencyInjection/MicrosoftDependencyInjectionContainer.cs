@@ -43,7 +43,7 @@ public class MicrosoftDependencyInjectionContainer : DependencyInjectionContaine
     {
         ThrowExceptionIfCustomServiceName(registration.ServiceName, registration.InterfaceType);
         var service = _serviceProvider.GetRequiredService(registration.InterfaceType);
-        registration.EventStub.WireTo(service);
+        registration.EventHub.WireTo(service);
         return service;
     }
 
@@ -59,7 +59,7 @@ public class MicrosoftDependencyInjectionContainer : DependencyInjectionContaine
         ThrowExceptionIfCustomServiceName(registration.ServiceName, serviceInterfaceType);
 
         var service = _serviceProvider.GetRequiredService<TServiceInterface>();
-        registration.EventStub.WireTo(service);
+        registration.EventHub.WireTo(service);
         return service;
     }
 

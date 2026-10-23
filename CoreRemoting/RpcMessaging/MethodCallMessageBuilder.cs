@@ -31,14 +31,14 @@ namespace CoreRemoting.RpcMessaging
 
             if (serializer == null)
                 throw new ArgumentNullException(nameof(serializer));
-            
-            args ??= new object[0];
+
+            args ??= [];
 
             var genericArgumentTypeNames =
                 targetMethod.GetGenericArguments()
                     .Select(arg => arg.FullName + "," + arg.Assembly.GetName().Name)
                     .ToArray();
-            
+
             var message = new MethodCallMessage
             {
                 ServiceName = remoteServiceName,
@@ -47,7 +47,7 @@ namespace CoreRemoting.RpcMessaging
                 GenericArgumentTypeNames = genericArgumentTypeNames,
                 CallContextSnapshot = CallContext.GetSnapshot()
             };
-            
+
             return message;
         }
 
@@ -74,9 +74,9 @@ namespace CoreRemoting.RpcMessaging
                     args.Length > parameterInfos.Length &&
                     i == parameterInfos.Length -1 &&
                     parameterInfos[i].GetCustomAttribute<ParamArrayAttribute>() != null;
-                
+
                 var paramArrayValues = new List<object>();
-                
+
                 if (useParamArray)
                 {
                     for (var j = i; j < args.Length; j++)
@@ -96,7 +96,7 @@ namespace CoreRemoting.RpcMessaging
                         : serializer.EnvelopeNeededForParameterSerialization
                             ? new Envelope(arg)
                             : arg;
-                
+
                 var typeForName = parameterInfo.ParameterType.IsByRef ? parameterInfo.ParameterType.GetElementType() : parameterInfo.ParameterType;
                 yield return
                     new MethodCallParameterMessage
@@ -109,7 +109,7 @@ namespace CoreRemoting.RpcMessaging
                     };
             }
         }
-        
+
         /// <summary>
         /// Builds a new method call result message.
         /// </summary>
@@ -128,9 +128,9 @@ namespace CoreRemoting.RpcMessaging
         {
             if (serializer == null)
                 throw new ArgumentNullException(nameof(serializer));
-            
+
             var isReturnValueNull = returnValue == null;
-            
+
             var parameterInfos = method.GetParameters();
 
             var message = new MethodCallResultMessage
@@ -143,15 +143,15 @@ namespace CoreRemoting.RpcMessaging
             };
 
             var outParameters = new List<MethodCallOutParameterMessage>();
-            
+
             for (var i = 0; i < args.Length; i++)
             {
                 var arg = args[i];
                 var parameterInfo = parameterInfos[i];
-                
+
                 if (!parameterInfo.IsOut)
                     continue;
-                
+
                 var isArgNull = arg == null;
 
                 var typeToSerialize = parameterInfo.ParameterType.IsByRef ? parameterInfo.ParameterType.GetElementType() : parameterInfo.ParameterType;
@@ -159,7 +159,7 @@ namespace CoreRemoting.RpcMessaging
                     serializer.EnvelopeNeededForParameterSerialization && arg is not Envelope
                         ? serializer.Serialize(typeof(Envelope), new Envelope(arg))
                         : serializer.Serialize(typeToSerialize, arg);
-                
+
                 outParameters.Add(
                     new MethodCallOutParameterMessage
                     {
@@ -171,7 +171,7 @@ namespace CoreRemoting.RpcMessaging
 
             message.OutParameters = outParameters.ToArray();
             message.CallContextSnapshot = CallContext.GetSnapshot();
-            
+
             return message;
         }
     }

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
+using CoreRemoting.Encryption;
 using Xunit;
 
 namespace CoreRemoting.Tests.Encryption;

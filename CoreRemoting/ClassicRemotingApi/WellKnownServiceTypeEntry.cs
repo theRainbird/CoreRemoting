@@ -18,7 +18,7 @@ namespace CoreRemoting.ClassicRemotingApi
         /// <param name="serviceName">Unique service name (Full name of the interface type is used, when left blank)</param>
         /// <param name="uniqueServerInstanceName">Unique instance name of the host server (default server is used, if left blank)</param>
         public WellKnownServiceTypeEntry(
-            string interfaceAssemblyName, 
+            string interfaceAssemblyName,
             string interfaceTypeName,
             string implementationAssemblyName,
             string implementationTypeName,
@@ -34,37 +34,37 @@ namespace CoreRemoting.ClassicRemotingApi
             ServiceName = serviceName;
             UniqueServerInstanceName = uniqueServerInstanceName;
         }
-        
+
         /// <summary>
         /// Gets or sets the unique instance name of the host server.
         /// </summary>
         public string UniqueServerInstanceName { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the implementation assembly name.
         /// </summary>
         public string ImplementationAssemblyName { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the implementation type name.
         /// </summary>
         public string ImplementationTypeName { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the interface assembly name.
         /// </summary>
         public string InterfaceAssemblyName { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the interface type name.
         /// </summary>
         public string InterfaceTypeName { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the service's lifetime.
         /// </summary>
         public ServiceLifetime Lifetime { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the unique service name (Full name of interface type is used, if left blank).
         /// </summary>

@@ -17,7 +17,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (string)base["interfaceAssemblyName"];
             set => base["interfaceAssemblyName"] = value;
         }
-        
+
         /// <summary>
         /// Get or sets the type name of the service interface.
         /// </summary>
@@ -27,9 +27,9 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (string)base["interfaceTypeName"];
             set => base["interfaceTypeName"] = value;
         }
-        
+
         /// <summary>
-        /// Get or sets the assembly of the service's implementation assembly. 
+        /// Get or sets the assembly of the service's implementation assembly.
         /// </summary>
         [ConfigurationProperty("implementationAssemblyName", IsRequired = true)]
         public string ImplementationAssemblyName
@@ -37,7 +37,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (string)base["implementationAssemblyName"];
             set => base["implementationAssemblyName"] = value;
         }
-        
+
         /// <summary>
         /// Gets or sets the implementation type of the service.
         /// </summary>
@@ -47,7 +47,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (string)base["implementationTypeName"];
             set => base["implementationTypeName"] = value;
         }
-        
+
         /// <summary>
         /// Gets or sets the service's lifetime.
         /// </summary>
@@ -57,7 +57,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (ServiceLifetime)base["lifetime"];
             set => base["lifetime"] = value;
         }
-        
+
         /// <summary>
         /// Gets or sets the unique service name.
         /// </summary>
@@ -67,7 +67,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (string)base["serviceName"];
             set => base["serviceName"] = value;
         }
-        
+
         /// <summary>
         /// Gets or sets the unique name of the server hosting this service.
         /// </summary>

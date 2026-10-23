@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
+using CoreRemoting.Encryption;
 using CoreRemoting.Serialization;
 
 namespace CoreRemoting;

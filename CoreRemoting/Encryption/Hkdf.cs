@@ -2,6 +2,8 @@
 using System.Security.Cryptography;
 using System.Text;
 
+namespace CoreRemoting.Encryption;
+
 /// <summary>
 /// Provides ready-to-use <see cref="IHkdfProvider"/> instances for common HMAC algorithms,
 /// as well as extension methods for convenient key derivation.

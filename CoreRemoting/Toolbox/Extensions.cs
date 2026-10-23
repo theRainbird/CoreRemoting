@@ -2,10 +2,10 @@
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Linq.Expressions;
-using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
 using CoreRemoting.Authentication;
+using CoreRemoting.RemoteDelegates;
 
 namespace CoreRemoting.Toolbox;
 
@@ -57,6 +57,25 @@ public static class Extensions
 
         return typeof(Delegate)
             .IsAssignableFrom(parameters[0].ParameterType);
+    }
+
+    /// <summary>
+    /// Checks whether the given delegate is a disposed CoreRemoting delegate proxy.
+    /// </summary>
+    /// <remarks>
+    /// Returns <c>true</c> for <c>null</c>, <c>true</c> for a disposed CoreRemoting
+    /// proxy, and <c>false</c> for regular or multicast delegates. Proxy delegates
+    /// are not expected to participate in multicast delegates; for safety, a
+    /// multicast delegate is conservatively treated as not disposed.
+    /// </remarks>
+    /// <param name="delegate">The delegate to check.</param>
+    /// <returns><c>true</c> if the delegate is null or a disposed CoreRemoting proxy.</returns>
+    public static bool IsDisposed(this Delegate @delegate)
+    {
+        if (@delegate == null)
+            return true;
+
+        return @delegate.Target is IDelegateProxy proxy && proxy.IsDisposed;
     }
 
     private static ConcurrentDictionary<Type, object> DefaultValues = new();

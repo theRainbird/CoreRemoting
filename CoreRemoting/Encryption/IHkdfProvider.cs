@@ -1,4 +1,6 @@
-﻿/// <summary>
+﻿namespace CoreRemoting.Encryption;
+
+/// <summary>
 /// Interface for HKDF (RFC 5869) key derivation providers.
 /// </summary>
 public interface IHkdfProvider

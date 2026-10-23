@@ -3,12 +3,10 @@ using System.Data;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Authentication;
-using CoreRemoting.Channels;
 using CoreRemoting.Channels.NamedPipe;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.Serialization;
@@ -21,49 +19,12 @@ using Xunit.Abstractions;
 
 namespace CoreRemoting.Tests;
 
-[Collection("CoreRemoting")]
-public class RpcTests : IClassFixture<ServerFixture>
+public partial class RpcTests : RpcTests_Base
 {
-    protected readonly ServerFixture _serverFixture;
-    protected readonly ITestOutputHelper _testOutputHelper;
-    protected bool _remoteServiceCalled;
-
-    protected virtual IServerChannel ServerChannel => null;
-
-    protected virtual IClientChannel ClientChannel => null;
-
     public RpcTests(ServerFixture serverFixture, ITestOutputHelper testOutputHelper)
-    {
-        _serverFixture = serverFixture;
-        _testOutputHelper = testOutputHelper;
-
-        // Allow derived test classes to tweak server configuration before server start
-        ConfigureServer(_serverFixture.ServerConfig);
-
-        _serverFixture.TestService.TestMethodFake = arg =>
-        {
-            _remoteServiceCalled = true;
-            return arg;
-        };
-
-        _serverFixture.Start(ServerChannel);
-
-        // setup event handler invoker
-        EventStub.DelegateInvoker = DelegateInvoker;
-    }
-
-    /// <summary>
-    /// Gives derived tests a chance to configure the server before it starts.
-    /// </summary>
-    /// <param name="config">Server configuration object that will be used to create the server.</param>
-    protected virtual void ConfigureServer(ServerConfig config)
+        : base(serverFixture, testOutputHelper)
     {
     }
-
-    /// <summary>
-    /// Gets the delegate invoker to be used for event handler tests.
-    /// </summary>
-    protected virtual IDelegateInvoker DelegateInvoker => new SafeDynamicInvoker();
 
     [Fact]
     public void ValidationSyncContext_is_installed()
@@ -71,23 +32,6 @@ public class RpcTests : IClassFixture<ServerFixture>
         using var ctx = ValidationSyncContext.Install();
 
         Assert.IsType<ValidationSyncContext>(SynchronizationContext.Current);
-    }
-
-    private void CheckServerErrorCount()
-    {
-        try
-        {
-            Assert.Equal(0, _serverFixture.ServerErrorCount);
-        }
-        finally
-        {
-            if (_serverFixture.ServerErrorCount != 0)
-            {
-                var msg = $"LastServerError: {_serverFixture.LastServerError}";
-                _testOutputHelper.WriteLine(msg);
-                Console.WriteLine(msg);
-            }
-        }
     }
 
     [Fact]
@@ -246,52 +190,6 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
-    public async Task Delegate_invoked_on_server_should_callback_client()
-    {
-        string argumentFromServer = null;
-        var serverCalled = new TaskCompletionSource<bool>();
-
-        void ClientAction()
-        {
-            using var ctx = ValidationSyncContext.Install();
-
-            try
-            {
-                using var client = new RemotingClient(
-                    new ClientConfig()
-                    {
-                        ConnectionTimeout = 0,
-                        Channel = ClientChannel,
-                        MessageEncryption = false,
-                        ServerPort = _serverFixture.Server.Config.NetworkPort,
-                    });
-
-                client.Connect();
-
-                var proxy = client.CreateProxy<ITestService>();
-                proxy.TestMethodWithDelegateArg(arg =>
-                {
-                    argumentFromServer = arg;
-                    serverCalled.TrySetResult(true);
-                });
-            }
-            catch (Exception e)
-            {
-                _testOutputHelper.WriteLine(e.ToString());
-                throw;
-            }
-        }
-
-        var clientThread = new Thread(ClientAction);
-        clientThread.Start();
-        clientThread.Join();
-
-        await serverCalled.Task.Timeout(1);
-        Assert.Equal("test", argumentFromServer);
-        CheckServerErrorCount();
-    }
-
-    [Fact]
     public async Task Call_on_Proxy_should_be_executed_asynchronously()
     {
         var longRunnigMethodStarted = new AsyncCounter();
@@ -371,60 +269,6 @@ public class RpcTests : IClassFixture<ServerFixture>
         // singleton component should have the same instance
         var sameInstance = serviceName.Contains("Singleton");
         Assert.Equal(sameInstance, proxy.CheckLastSavedInstance());
-    }
-
-    [Theory]
-    [InlineData("TestService_Singleton_Service")]
-    [InlineData("TestService_Singleton_Factory")]
-    [InlineData("TestService_SingleCall_Service")]
-    [InlineData("TestService_SingleCall_Factory")]
-    [InlineData("TestService_Scoped_Service")]
-    [InlineData("TestService_Scoped_Factory")]
-    public virtual void Events_should_work_remotely(string serviceName)
-    {
-        using var ctx = ValidationSyncContext.Install();
-
-        var serviceEventCallCount = 0;
-        var customDelegateEventCallCount = 0;
-
-        using var client = new RemotingClient(
-            new ClientConfig()
-            {
-                ConnectionTimeout = 0,
-                SendTimeout = 0,
-                Channel = ClientChannel,
-                MessageEncryption = false,
-                ServerPort = _serverFixture.Server.Config.NetworkPort,
-            });
-
-        client.Connect();
-
-        var proxy = client.CreateProxy<ITestService>(serviceName);
-
-        var serviceEventResetEvent = new ManualResetEventSlim(initialState: false);
-        var customDelegateEventResetEvent = new ManualResetEventSlim(initialState: false);
-
-        proxy.ServiceEvent += () =>
-        {
-            Interlocked.Increment(ref serviceEventCallCount);
-            serviceEventResetEvent.Set();
-        };
-
-        proxy.CustomDelegateEvent += _ =>
-        {
-            Interlocked.Increment(ref customDelegateEventCallCount);
-            customDelegateEventResetEvent.Set();
-        };
-
-        proxy.FireServiceEvent();
-        proxy.FireCustomDelegateEvent();
-
-        serviceEventResetEvent.Wait(1000);
-        customDelegateEventResetEvent.Wait(1000);
-
-        Assert.Equal(1, serviceEventCallCount);
-        Assert.Equal(1, customDelegateEventCallCount);
-        CheckServerErrorCount();
     }
 
     [Fact]
@@ -670,9 +514,9 @@ public class RpcTests : IClassFixture<ServerFixture>
 
             var proxy = client.CreateProxy<ITestService>();
             var ex = (await Assert.ThrowsAsync<RemoteInvocationException>(async () =>
-                {
-                    await proxy.ErrorAsync(nameof(ErrorAsync_method_throws_Exception)).ConfigureAwait(false);
-                })
+            {
+                await proxy.ErrorAsync(nameof(ErrorAsync_method_throws_Exception)).ConfigureAwait(false);
+            })
                 .ConfigureAwait(false)).GetInnermostException();
 
             Assert.NotNull(ex);
@@ -819,6 +663,49 @@ public class RpcTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
+    public void AfterCall_event_handler_can_substitute_result()
+    {
+        void AfterCall(object sender, ServerRpcContext ctx)
+        {
+            if (ctx.Exception != null)
+                return;
+
+            if (ctx.MethodCallMessage.MethodName != "Echo")
+                return;
+
+            ctx.ReturnValue = "[substituted]";
+        }
+
+        using var ctx = ValidationSyncContext.Install();
+        _serverFixture.Server.AfterCall += AfterCall;
+
+        try
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            client.Connect();
+
+            var proxy = client.CreateProxy<ITestService>();
+            var result = proxy.Echo("Hello");
+
+            Assert.Equal("[substituted]", result);
+        }
+        finally
+        {
+            _serverFixture.ServerErrorCount = 0;
+            _serverFixture.Server.AfterCall -= AfterCall;
+        }
+    }
+
+    [Fact]
     public void Failing_component_constructor_throws_RemoteInvocationException()
     {
         using var ctx = ValidationSyncContext.Install();
@@ -840,70 +727,6 @@ public class RpcTests : IClassFixture<ServerFixture>
 
         Assert.NotNull(ex);
         Assert.Contains("FailingService", ex.Message);
-    }
-
-    // Fun fact:
-    // - ServerConfig.MessageEncryption setting doesn't affect anything!
-    // - RemotingServer accepts both encrypted and unencrypted connections.
-
-    [Fact]
-    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
-    public async Task Disposed_client_subscription_doesnt_break_other_clients()
-    {
-        using var ctx = ValidationSyncContext.Install();
-
-        async Task Roundtrip(bool encryption)
-        {
-            try
-            {
-                RemotingClient CreateClient() => new RemotingClient(new ClientConfig()
-                {
-                    Channel = ClientChannel,
-                    ServerPort = _serverFixture.Server.Config.NetworkPort,
-                    MessageEncryption = encryption,
-                    ConnectionTimeout = encryption ? 0 : 5,
-                    KeySize = 1024
-                });
-
-                using var client1 = CreateClient();
-                using var client2 = CreateClient();
-
-                client1.Connect();
-                client2.Connect();
-
-                var proxy1 = client1.CreateProxy<ITestService>();
-                var fired1 = new TaskCompletionSource<bool>();
-                proxy1.ServiceEvent += () => fired1.TrySetResult(true);
-
-                var proxy2 = client2.CreateProxy<ITestService>();
-                var fired2 = new TaskCompletionSource<bool>();
-                proxy2.ServiceEvent += () => fired2.TrySetResult(true);
-
-                // early disposal, proxy1 subscription isn't canceled
-                client1.Disconnect();
-
-                proxy2.FireServiceEvent();
-                Assert.True(await fired2.Task.ConfigureAwait(false));
-                Assert.True(fired2.Task.IsCompleted);
-                Assert.False(fired1.Task.IsCompleted);
-            }
-            finally
-            {
-                // reset the error counter for other tests
-                _serverFixture.ServerErrorCount = 0;
-            }
-        }
-
-        // works!
-        await Roundtrip(encryption: false).ConfigureAwait(false);
-
-        // For NamedPipe channel, skip encrypted roundtrip due to known hanging issue
-        var isNamedPipe = ClientChannel is NamedPipeClientChannel || ServerChannel is NamedPipeServerChannel;
-        if (!isNamedPipe)
-        {
-            // encrypted roundtrip validated for other channels
-            await Roundtrip(encryption: true).ConfigureAwait(false);
-        }
     }
 
     [Fact]
@@ -1077,6 +900,109 @@ public class RpcTests : IClassFixture<ServerFixture>
         finally
         {
             _serverFixture.Server.AfterCall -= AfterCall;
+            _serverFixture.Server.BeforeCall -= BeforeCall;
+        }
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "Not applicable")]
+    public async Task BeforeCall_event_handler_can_cancel_method_call()
+    {
+        var beforeCallFired = new AsyncCounter();
+        var afterCallFired = new AsyncCounter();
+        var remoteServiceCalled = false;
+
+        void BeforeCall(object sender, ServerRpcContext e)
+        {
+            beforeCallFired++;
+
+            if (e.MethodCallMessage.MethodName == "TestMethod")
+                e.Cancel = true;
+        }
+
+        void AfterCall(object sender, ServerRpcContext e) =>
+            afterCallFired++;
+
+        using var ctx = ValidationSyncContext.Install();
+        _serverFixture.Server.BeforeCall += BeforeCall;
+        _serverFixture.Server.AfterCall += AfterCall;
+
+        try
+        {
+            _serverFixture.TestService.TestMethodFake = arg =>
+            {
+                remoteServiceCalled = true;
+                return arg;
+            };
+
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            client.Connect();
+
+            var proxy = client.CreateProxy<ITestService>();
+            var ex = Assert.Throws<RemoteInvocationException>(() =>
+                proxy.TestMethod("Hello"));
+
+            Assert.Contains("cancel", ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(remoteServiceCalled);
+
+            await beforeCallFired[1].Timeout(1).ConfigureAwait(false);
+            await afterCallFired[1].Timeout(1).ConfigureAwait(false);
+        }
+        finally
+        {
+            _serverFixture.ServerErrorCount = 0;
+            _serverFixture.Server.AfterCall -= AfterCall;
+            _serverFixture.Server.BeforeCall -= BeforeCall;
+        }
+    }
+
+    [Fact]
+    public void BeforeCall_event_handler_can_cancel_with_custom_exception()
+    {
+        void BeforeCall(object sender, ServerRpcContext e)
+        {
+            if (e.MethodCallMessage.MethodName == "TestMethod")
+            {
+                e.Cancel = true;
+                e.Exception = new InvalidOperationException("Custom reason");
+            }
+        }
+
+        using var ctx = ValidationSyncContext.Install();
+        _serverFixture.Server.BeforeCall += BeforeCall;
+
+        try
+        {
+            using var client = new RemotingClient(new ClientConfig()
+            {
+                ConnectionTimeout = 0,
+                InvocationTimeout = 0,
+                SendTimeout = 0,
+                Channel = ClientChannel,
+                MessageEncryption = false,
+                ServerPort = _serverFixture.Server.Config.NetworkPort,
+            });
+
+            client.Connect();
+
+            var proxy = client.CreateProxy<ITestService>();
+            var ex = Assert.Throws<RemoteInvocationException>(() =>
+                proxy.TestMethod("Hello"));
+
+            Assert.Contains("Custom reason", ex.ToString());
+        }
+        finally
+        {
+            _serverFixture.ServerErrorCount = 0;
             _serverFixture.Server.BeforeCall -= BeforeCall;
         }
     }
@@ -1431,6 +1357,54 @@ public class RpcTests : IClassFixture<ServerFixture>
         // every remote call should produce a new ScopedService instance
         Assert.NotEqual(guid, proxy.ScopedServiceInstanceId);
         Assert.NotEqual(proxy.ScopedServiceInstanceId, proxy.ScopedServiceInstanceId);
+    }
+
+    [Fact]
+    public void Hidden_system_service_can_be_imported_on_server()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            MessageEncryption = false,
+            Channel = ClientChannel,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        client.Connect();
+
+        // service IDelegateProxyFactory is hidden and is only
+        // available on server as a dependency of a public service
+        var proxy = client.CreateProxy<IServiceWithHiddenDeps>();
+        Assert.True(proxy.IsImported);
+    }
+
+    [Fact]
+    public void Hidden_system_service_cannot_be_called_from_client()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            MessageEncryption = false,
+            Channel = ClientChannel,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        });
+
+        client.Connect();
+
+        // service IDelegateProxyFactory is hidden and cannot be called remotely
+        var proxy = client.CreateProxy<IDelegateProxyFactory>();
+        var ex = Assert.Throws<RemoteInvocationException>(() =>
+            proxy.Create(typeof(Action), null));
+
+        Assert.Contains("called remotely", ex.Message);
     }
 
     [Fact]
@@ -1916,6 +1890,4 @@ public class RpcTests : IClassFixture<ServerFixture>
             _serverFixture.ServerErrorCount = 0;
         }
     }
-
-
 }

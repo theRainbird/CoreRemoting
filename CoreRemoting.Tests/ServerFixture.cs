@@ -62,6 +62,7 @@ public class ServerFixture : IDisposable
                         factoryDelegate: () => new TestService(),
                         lifetime: ServiceLifetime.Scoped,
                         serviceName: "TestService_Scoped_Factory");
+                    container.RegisterService<IEventRelay, EventRelay>();
 
                     // Service for async tests
                     container.RegisterService<IAsyncService, AsyncService>(
@@ -96,6 +97,7 @@ public class ServerFixture : IDisposable
                         lifetime: ServiceLifetime.Scoped);
                     container.RegisterService<IServiceWithDeps, ServiceWithDeps>(
                         lifetime: ServiceLifetime.SingleCall);
+                    container.RegisterService<IServiceWithHiddenDeps, ServiceWithHiddenDeps>();
                 }
             };
 
@@ -119,7 +121,7 @@ public class ServerFixture : IDisposable
 
         try
         {
-            Server.Start();    
+            Server.Start();
         }
         catch (System.Net.Sockets.SocketException e) when (e.Message == "Address already in use")
         {

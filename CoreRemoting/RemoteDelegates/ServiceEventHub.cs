@@ -9,15 +9,15 @@ using CoreRemoting.Toolbox;
 namespace CoreRemoting.RemoteDelegates;
 
 /// <summary>
-/// Event stub caches all event handlers for the single-call or scoped components.
+/// Event hub caches all event handlers for the single-call or scoped components.
 /// </summary>
-public class EventStub
+public class ServiceEventHub
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="EventStub" /> class.
+    /// Initializes a new instance of the <see cref="ServiceEventHub" /> class.
     /// </summary>
     /// <param name="interfaceType">Type of the interface.</param>
-    public EventStub(Type interfaceType)
+    public ServiceEventHub(Type interfaceType)
     {
         InterfaceType = interfaceType ?? throw new ArgumentNullException(nameof(interfaceType));
         CreateDelegateHolders();
@@ -45,7 +45,7 @@ public class EventStub
     public Type InterfaceType { get; private set; }
 
     /// <summary>
-    /// Gets or sets the <see cref="Delegate" /> with the specified event property name.
+    /// Gets the <see cref="Delegate" /> with the specified event property name.
     /// </summary>
     /// <param name="propertyName">Name of the event or delegate property.</param>
     public Delegate this[string propertyName] => DelegateHolders[propertyName].InvocationDelegate;
@@ -140,14 +140,31 @@ public class EventStub
         /// <summary>
         /// Adds the handler.
         /// </summary>
+        /// <param name="handlerKey">Unique handler key of the client delegate.</param>
+        /// <param name="sessionId">Session identifier of the subscriber.</param>
         /// <param name="handler">The handler.</param>
-        void AddHandler(Delegate handler);
+        void AddHandler(Guid handlerKey, Guid sessionId, Delegate handler);
 
         /// <summary>
-        /// Removes the handler.
+        /// Removes a single occurrence of the handler with the specified key.
         /// </summary>
-        /// <param name="handler">The handler.</param>
-        void RemoveHandler(Delegate handler);
+        /// <param name="handlerKey">Unique handler key of the client delegate.</param>
+        /// <returns>True if an entry was removed, otherwise false.</returns>
+        bool RemoveHandler(Guid handlerKey);
+
+        /// <summary>
+        /// Removes all occurrences of the handler with the specified key.
+        /// </summary>
+        /// <param name="handlerKey">Unique handler key of the client delegate.</param>
+        /// <returns>Number of removed occurrences.</returns>
+        int RemoveAllForKey(Guid handlerKey);
+
+        /// <summary>
+        /// Removes all handlers registered by the specified session.
+        /// </summary>
+        /// <param name="sessionId">Session identifier.</param>
+        /// <returns>Number of removed occurrences.</returns>
+        int RemoveAllForSession(Guid sessionId);
 
         /// <summary>
         /// Gets the handler count.
@@ -160,6 +177,9 @@ public class EventStub
     /// </summary>
     private class DelegateHolder<T> : IDelegateHolder
     {
+        private readonly ConcurrentDictionary<Guid, SubscriptionEntry> _entries = new();
+        private readonly object _syncRoot = new();
+
         public DelegateHolder(IDelegateInvoker delegateInvoker)
         {
             // create default return value for the delegate
@@ -277,36 +297,91 @@ public class EventStub
 
         private object DynamicInvoke(object[] arguments)
         {
-            // run in non-blocking mode
-            DelegateInvoker.Invoke(Delegate, arguments);
+            // ConcurrentDictionary can be enumerated safely while it is modified,
+            // so no snapshot is taken and no lock is required here.
+            foreach (var entry in _entries)
+            {
+                // an entry may represent multiple subscriptions of the same handler key,
+                // which must be fired separately to preserve multicast semantics
+                for (var i = 0; i < entry.Value.Count; i++)
+                    DelegateInvoker.Invoke(entry.Value.Handler, arguments);
+            }
+
             return DefaultReturnValue;
         }
 
-        private T TypedDelegate { get; set; }
+        private object DefaultReturnValue { get; }
 
-        private object DefaultReturnValue { get; set; }
-
-        private Delegate Delegate
+        public void AddHandler(Guid handlerKey, Guid sessionId, Delegate handler)
         {
-            get { return (Delegate)(object)TypedDelegate; }
-            set { TypedDelegate = (T)(object)value; }
-        }
-
-        private object syncRoot = new();
-
-        public void AddHandler(Delegate handler)
-        {
-            lock (syncRoot)
+            lock (_syncRoot)
             {
-                Delegate = Delegate.Combine(Delegate, handler);
+                if (_entries.TryGetValue(handlerKey, out var existing))
+                {
+                    // the same handler key must always resolve to the same delegate
+                    // (handler keys come from ClientDelegateRegistry, which guarantees this)
+                    if (!ReferenceEquals(existing.Handler, handler))
+                    {
+                        throw new InvalidOperationException(
+                            $"Handler key {handlerKey} is already registered with a different delegate.");
+                    }
+
+                    _entries[handlerKey] = existing with { Count = existing.Count + 1 };
+                }
+                else
+                {
+                    _entries[handlerKey] = new SubscriptionEntry(sessionId, handler, 1);
+                }
             }
         }
 
-        public void RemoveHandler(Delegate handler)
+        public bool RemoveHandler(Guid handlerKey)
         {
-            lock (syncRoot)
+            lock (_syncRoot)
             {
-                Delegate = Delegate.Remove(Delegate, handler);
+                if (!_entries.TryGetValue(handlerKey, out var existing))
+                    return false;
+
+                if (existing.Count <= 1)
+                    _entries.TryRemove(handlerKey, out _);
+                else
+                    _entries[handlerKey] = existing with { Count = existing.Count - 1 };
+
+                return true;
+            }
+        }
+
+        public int RemoveAllForKey(Guid handlerKey)
+        {
+            lock (_syncRoot)
+            {
+                if (!_entries.TryRemove(handlerKey, out var existing))
+                    return 0;
+
+                return existing.Count;
+            }
+        }
+
+        public int RemoveAllForSession(Guid sessionId)
+        {
+            lock (_syncRoot)
+            {
+                var removed = 0;
+                var keysToRemove = new List<Guid>();
+
+                foreach (var pair in _entries)
+                {
+                    if (pair.Value.SessionId != sessionId)
+                        continue;
+
+                    keysToRemove.Add(pair.Key);
+                    removed += pair.Value.Count;
+                }
+
+                foreach (var key in keysToRemove)
+                    _entries.TryRemove(key, out _);
+
+                return removed;
             }
         }
 
@@ -314,14 +389,16 @@ public class EventStub
         {
             get
             {
-                if (Delegate == null)
-                {
-                    return 0;
-                }
+                var count = 0;
 
-                return Delegate.GetInvocationList().Length;
+                foreach (var entry in _entries)
+                    count += entry.Value.Count;
+
+                return count;
             }
         }
+
+        private sealed record SubscriptionEntry(Guid SessionId, Delegate Handler, int Count);
     }
 
     private bool GetWiredTo(object instance) =>
@@ -414,47 +491,181 @@ public class EventStub
     /// Adds the handler for the given event.
     /// </summary>
     /// <param name="name">The name of the event or delegate property.</param>
+    /// <param name="handlerKey">Unique handler key of the client delegate.</param>
+    /// <param name="sessionId">Session identifier of the subscriber.</param>
     /// <param name="handler">The handler.</param>
-    public void AddHandler(string name, Delegate handler)
+    public void AddHandler(string name, Guid handlerKey, Guid sessionId, Delegate handler)
     {
-        DelegateHolders[name].AddHandler(handler);
+        DelegateHolders[name].AddHandler(handlerKey, sessionId, handler);
     }
 
     /// <summary>
-    /// Removes the handler for the given event.
+    /// Removes a single occurrence of the handler with the specified key.
     /// </summary>
     /// <param name="name">The name of the event or delegate property.</param>
-    /// <param name="handler">The handler.</param>
-    public void RemoveHandler(string name, Delegate handler)
+    /// <param name="handlerKey">Unique handler key of the client delegate.</param>
+    /// <returns>True if an entry was removed, otherwise false.</returns>
+    public bool RemoveHandler(string name, Guid handlerKey)
     {
-        DelegateHolders[name].RemoveHandler(handler);
+        return DelegateHolders[name].RemoveHandler(handlerKey);
+    }
+
+    /// <summary>
+    /// Removes all handlers registered by the specified session.
+    /// </summary>
+    /// <param name="sessionId">Session identifier.</param>
+    /// <returns>Number of removed occurrences.</returns>
+    public int RemoveAllForSession(Guid sessionId)
+    {
+        var removed = 0;
+
+        foreach (var holder in DelegateHolders.Values)
+            removed += holder.RemoveAllForSession(sessionId);
+
+        return removed;
+    }
+
+    /// <summary>
+    /// Removes all occurrences of handlers with the given keys across all
+    /// events and delegate properties of this hub. Idempotent: unknown keys
+    /// are silently ignored.
+    /// </summary>
+    /// <param name="handlerKeys">Handler keys to remove.</param>
+    /// <returns>Number of removed occurrences.</returns>
+    public int RemoveHandlers(IEnumerable<Guid> handlerKeys)
+    {
+        if (handlerKeys == null)
+            return 0;
+
+        var count = 0;
+
+        foreach (var holder in DelegateHolders.Values)
+            foreach (var key in handlerKeys)
+                count += holder.RemoveAllForKey(key);
+
+        return count;
     }
 
     /// <summary>
     /// Gets the count of event handlers for the given event or delegate property.
     /// </summary>
-    /// <param name="handler">The event handler.</param>
-    public static int GetHandlerCount(Delegate handler)
+    /// <param name="name">Name of the event or delegate property.</param>
+    public int GetHandlerCount(string name) =>
+        DelegateHolders[name].HandlerCount;
+
+    /// <summary>
+    /// Invokes the specified event with provided arguments.
+    /// </summary>
+    public void Invoke(string eventName, params object[] arguments) =>
+        DelegateInvoker.Invoke(this[eventName], arguments);
+
+    /// <summary>
+    /// Creates a strong-typed <see cref="TypedEventHub{TInterface}"/> wrapping this hub.
+    /// </summary>
+    /// <typeparam name="TInterface">Interface type.</typeparam>
+    public TypedEventHub<TInterface> CreateTyped<TInterface>() where TInterface : class =>
+        new TypedEventHub<TInterface>(this);
+
+    /// <summary>
+    /// Strong-typed wrapper around <see cref="ServiceEventHub"/>, for unit tests.
+    /// Does not own the hub — all calls are delegated to <see cref="Hub"/>.
+    /// </summary>
+    /// <typeparam name="TInterface">Interface.</typeparam>
+    public sealed class TypedEventHub<TInterface> where TInterface : class
     {
-        if (handler == null)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TypedEventHub{TInterface}"/>.
+        /// Wraps the given <paramref name="hub"/>, or creates a fresh
+        /// <see cref="ServiceEventHub"/> when <paramref name="hub"/> is <c>null</c>.
+        /// </summary>
+        /// <param name="hub">The event hub to wrap, or <c>null</c> to create a new one.</param>
+        public TypedEventHub(ServiceEventHub hub = null)
         {
-            return 0;
-        }
+            Hub = hub ?? new ServiceEventHub(typeof(TInterface));
 
-        var count = 0;
-        foreach (var d in handler.GetInvocationList())
-        {
-            // check if it's a delegate holder
-            if (d.Target is IDelegateHolder holder)
+            var expected = typeof(TInterface);
+            var actual = Hub.InterfaceType;
+
+            if (!expected.IsAssignableFrom(actual) && !actual.IsAssignableFrom(expected))
             {
-                count += holder.HandlerCount;
-                continue;
+                throw new ArgumentException(
+                    $"Event hub for '{actual}' is not compatible with '{expected}'.",
+                    nameof(hub));
             }
-
-            // it's an ordinary subscriber
-            count++;
         }
 
-        return count;
+        /// <summary>
+        /// Gets the wrapped event hub.
+        /// </summary>
+        public ServiceEventHub Hub { get; }
+
+        /// <summary>
+        /// Gets the <see cref="Delegate" /> with the specified event or delegate property name.
+        /// </summary>
+        /// <param name="name">Name of the event or delegate property.</param>
+        public Delegate this[string name] => Hub[name];
+
+        /// <summary>
+        /// Invokes the specified event with provided arguments.
+        /// </summary>
+        /// <param name="getName">
+        /// A function that returns event name. Must not use its argument
+        /// (e.g. <c>s => nameof(s.SimpleEvent)</c>).
+        /// </param>
+        /// <param name="arguments">Event arguments.</param>
+        public void Invoke(Func<TInterface, string> getName, params object[] arguments) =>
+            Hub.Invoke(getName(null), arguments);
+
+        /// <summary>
+        /// Invokes the specified event with provided arguments.
+        /// </summary>
+        /// <param name="eventName">The event name.</param>
+        /// <param name="arguments">Event arguments.</param>
+        public void Invoke(string eventName, params object[] arguments) =>
+            Hub.Invoke(eventName, arguments);
+
+        /// <summary>
+        /// Adds the handler for the given event or delegate property.
+        /// </summary>
+        /// <param name="getName">
+        /// A function that returns event name. Must not use its argument
+        /// (e.g. <c>s => nameof(s.SimpleEvent)</c>).
+        /// </param>
+        /// <param name="handlerKey">Unique handler key of the client delegate.</param>
+        /// <param name="sessionId">Session identifier of the subscriber.</param>
+        /// <param name="handler">Event handler to add.</param>
+        public void AddHandler(Func<TInterface, string> getName, Guid handlerKey, Guid sessionId, Delegate handler) =>
+            Hub.AddHandler(getName(null), handlerKey, sessionId, handler);
+
+        /// <summary>
+        /// Adds the handler for the given event or delegate property.
+        /// </summary>
+        /// <param name="name">The event name.</param>
+        /// <param name="handlerKey">Unique handler key of the client delegate.</param>
+        /// <param name="sessionId">Session identifier of the subscriber.</param>
+        /// <param name="handler">Event handler to add.</param>
+        public void AddHandler(string name, Guid handlerKey, Guid sessionId, Delegate handler) =>
+            Hub.AddHandler(name, handlerKey, sessionId, handler);
+
+        /// <summary>
+        /// Removes a single occurrence of the handler with the specified key.
+        /// </summary>
+        /// <param name="getName">
+        /// A function that returns event name. Must not use its argument
+        /// (e.g. <c>s => nameof(s.SimpleEvent)</c>).
+        /// </param>
+        /// <param name="handlerKey">Unique handler key of the client delegate.</param>
+        /// <returns>True if an entry was removed, otherwise false.</returns>
+        public bool RemoveHandler(Func<TInterface, string> getName, Guid handlerKey) =>
+            Hub.RemoveHandler(getName(null), handlerKey);
+
+        /// <summary>
+        /// Removes a single occurrence of the handler with the specified key.
+        /// </summary>
+        /// <param name="name">The event name.</param>
+        /// <param name="handlerKey">Unique handler key of the client delegate.</param>
+        /// <returns>True if an entry was removed, otherwise false.</returns>
+        public bool RemoveHandler(string name, Guid handlerKey) =>
+            Hub.RemoveHandler(name, handlerKey);
     }
 }

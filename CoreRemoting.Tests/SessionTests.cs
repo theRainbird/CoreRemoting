@@ -171,6 +171,143 @@ public class SessionTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public async Task Concurrent_DisposeAsync_calls_should_enter_only_once()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        var capturedSession = default(RemotingSession);
+
+        _serverFixture.TestService.TestMethodFake = _ =>
+        {
+            capturedSession = RemotingSession.Current;
+            return null;
+        };
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            MessageEncryption = false,
+            SendTimeout = 0,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+            Channel = ClientChannel
+        });
+
+        await client.ConnectAsync().ConfigureAwait(false);
+        var proxy = client.CreateProxy<ITestService>();
+        proxy.TestMethod(null);
+
+        Assert.NotNull(capturedSession);
+
+        try
+        {
+            var enterCount = 0;
+            capturedSession.BeforeDispose += () =>
+                Interlocked.Increment(ref enterCount);
+
+            // without atomic TrySet, concurrent entries can run the dispose body more than once
+            using var startGate = new ManualResetEventSlim(false);
+
+            var disposeTasks = Enumerable.Range(0, 16)
+                .Select(_ => Task.Run(() =>
+                {
+                    startGate.Wait();
+                    return capturedSession.DisposeAsync().AsTask();
+                }))
+                .ToArray();
+
+            startGate.Set();
+
+            await Task.WhenAll(disposeTasks)
+                .ConfigureAwait(false);
+
+            Assert.Equal(1, enterCount);
+            Assert.True(capturedSession.IsDisposing);
+        }
+        finally
+        {
+            await TryRemoveSessionAsync(capturedSession)
+                .ConfigureAwait(false);
+        }
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public async Task Sequential_DisposeAsync_calls_should_be_idempotent()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        var capturedSession = default(RemotingSession);
+
+        _serverFixture.TestService.TestMethodFake = _ =>
+        {
+            capturedSession = RemotingSession.Current;
+            return null;
+        };
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            MessageEncryption = false,
+            SendTimeout = 0,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+            Channel = ClientChannel
+        });
+
+        await client.ConnectAsync().ConfigureAwait(false);
+        var proxy = client.CreateProxy<ITestService>();
+        proxy.TestMethod(null);
+
+        Assert.NotNull(capturedSession);
+        Assert.False(capturedSession.IsDisposing);
+
+        try
+        {
+            var enterCount = 0;
+            capturedSession.BeforeDispose += () =>
+                Interlocked.Increment(ref enterCount);
+
+            await capturedSession.DisposeAsync().ConfigureAwait(false);
+            await capturedSession.DisposeAsync().ConfigureAwait(false);
+            await capturedSession.DisposeAsync().ConfigureAwait(false);
+
+            Assert.Equal(1, enterCount);
+            Assert.True(capturedSession.IsDisposing);
+        }
+        finally
+        {
+            await TryRemoveSessionAsync(capturedSession)
+                .ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Best-effort removes the captured session from the repository so it doesn't
+    /// leak into other tests sharing the ServerFixture. Safe to call on an already
+    /// disposed session: RemoveSession's internal DisposeAsync call is a no-op
+    /// thanks to the AtomicBool.TrySet guard.
+    /// </summary>
+    private async Task TryRemoveSessionAsync(RemotingSession session)
+    {
+        if (session == null)
+            return;
+
+        try
+        {
+            await _serverFixture.Server.SessionRepository
+                .RemoveSession(session.SessionId)
+                    .ConfigureAwait(false);
+        }
+        catch
+        {
+            // session may already be gone
+        }
+
+        _serverFixture.ServerErrorCount = 0;
+        _serverFixture.LastServerError = null;
+    }
+
+    [Fact]
     public void RemotingSession_should_be_accessible_to_the_component_constructor()
     {
         using var ctx = ValidationSyncContext.Install();
