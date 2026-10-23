@@ -933,10 +933,18 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                         sharedSecret: _sharedSecret,
                         sendersPublicKeyBlob: _serverPublicKeyBlob));
 
-        var localDelegate =
-            _delegateRegistry.GetDelegateByHandlerKey(delegateInvocationMessage.HandlerKey);
+        var localDelegate = _delegateRegistry.GetDelegateByHandlerKey(
+            delegateInvocationMessage.HandlerKey);
 
-        // Invoke local delegate with arguments from remote caller
+        if (localDelegate == null)
+        {
+            // handler was unregistered locally, tell the server to drop
+            // inactive subscription, so it stops sending invocations for this key
+            _ = ScheduleServerUnsubscribe([delegateInvocationMessage.HandlerKey]);
+            return;
+        }
+
+        // invoke local delegate with arguments from remote caller
         ServiceEventHub.DelegateInvoker.Invoke(localDelegate, delegateInvocationMessage.DelegateArguments);
     }
 

@@ -734,4 +734,52 @@ public partial class RpcTests
 
         Assert.Equal(0, client.PendingUnsubscribeCount);
     }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait in test method", Justification = "<Pending>")]
+    public async Task Invoke_for_unknown_handler_triggers_server_side_removal()
+    {
+        using var ctx = ValidationSyncContext.Install();
+        using var client = CreateConnectedClient();
+
+        const string serviceName = "TestService_Singleton_Service";
+        var proxy = client.CreateProxy<ITestService>(serviceName);
+        var fired = new AsyncCounter();
+        Action handler = () => { fired++; };
+        proxy.ServiceEvent += handler;
+
+        var registration = _serverFixture.Server.ServiceRegistry
+            .GetServiceRegistration(serviceName);
+        var hub = registration.EventHub;
+
+        Assert.Equal(1, hub.GetHandlerCount(nameof(ITestService.ServiceEvent)));
+
+        // Drop the handler on the client only: the server still holds the
+        // subscription and doesn't know it's dead yet.
+        var interceptor = RemotingClient.FindServiceProxy(proxy);
+        Assert.NotNull(interceptor);
+
+        var keys = client.ClientDelegateRegistry
+            .UnregisterClientDelegatesOfServiceProxy(interceptor);
+        Assert.Single(keys);
+
+        // Sanity check: the server-side hub is still intact at this point.
+        Assert.Equal(1, hub.GetHandlerCount(nameof(ITestService.ServiceEvent)));
+
+        // Fire the event: the server sends an "invoke" for the dead handler,
+        // the client fails to resolve it locally, and schedules the nack.
+        var serverProxy = client.CreateProxy<ITestService>(serviceName);
+        serverProxy.FireServiceEvent();
+
+        // The nack is fire-and-forget, so the server-side cleanup is
+        // eventually consistent: wait for it.
+        await WaitUntilAsync(
+            () => hub.GetHandlerCount(nameof(ITestService.ServiceEvent)) == 0,
+            timeout: TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        // The dead handler was never invoked locally.
+        Assert.Equal(0, fired.Value);
+
+        CheckServerErrorCount();
+    }
 }
