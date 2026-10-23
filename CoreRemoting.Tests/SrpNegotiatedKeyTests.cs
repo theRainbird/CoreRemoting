@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using CoreRemoting.Authentication;
 using CoreRemoting.Authentication.SecureRemotePassword;
 using CoreRemoting.DependencyInjection;
+using CoreRemoting.Encryption;
 using CoreRemoting.Tests.Tools;
 using SecureRemotePassword;
 using Xunit;

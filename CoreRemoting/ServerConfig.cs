@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
 using CoreRemoting.DependencyInjection;
+using CoreRemoting.Encryption;
 using CoreRemoting.Serialization;
 
 namespace CoreRemoting;

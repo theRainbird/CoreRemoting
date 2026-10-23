@@ -964,7 +964,8 @@ public partial class RpcTests
     public async Task Event_unsubscribe_does_not_dispose_delegate_argument()
     {
         using var ctx = ValidationSyncContext.Install();
-        using var client = CreateConnectedClient();
+        using var client = CreateClient();
+        await client.ConnectAsync().ConfigureAwait(false);
 
         _serverFixture.TestService.LastReceivedDelegate = null;
 
