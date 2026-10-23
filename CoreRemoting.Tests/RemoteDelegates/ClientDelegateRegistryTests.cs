@@ -140,7 +140,12 @@ public class ClientDelegateRegistryTests
         var key2 = registry.RegisterClientDelegate(handler2, proxy1);
         var key3 = registry.RegisterClientDelegate(handler3, proxy2);
 
-        registry.UnregisterClientDelegatesOfServiceProxy(proxy1);
+        var removed = registry.UnregisterClientDelegatesOfServiceProxy(proxy1);
+
+        Assert.Equal(2, removed.Length);
+        Assert.Contains(key1, removed);
+        Assert.Contains(key2, removed);
+        Assert.DoesNotContain(key3, removed);
 
         Assert.Null(registry.GetDelegateByHandlerKey(key1));
         Assert.Null(registry.GetDelegateByHandlerKey(key2));
@@ -161,8 +166,9 @@ public class ClientDelegateRegistryTests
         var key1 = registry.RegisterClientDelegate(handler, proxy1);
         var key2 = registry.RegisterClientDelegate(handler, proxy2);
 
-        registry.UnregisterClientDelegatesOfServiceProxy(proxy1);
+        var removed = registry.UnregisterClientDelegatesOfServiceProxy(proxy1);
 
+        Assert.Equal([key1], removed);
         Assert.Null(registry.GetDelegateByHandlerKey(key1));
         Assert.Same(handler, registry.GetDelegateByHandlerKey(key2));
     }
@@ -175,8 +181,9 @@ public class ClientDelegateRegistryTests
         var proxy = new FakeProxy();
 
         var key = registry.RegisterClientDelegate(handler, proxy);
-        registry.UnregisterClientDelegatesOfServiceProxy(null);
+        var removed = registry.UnregisterClientDelegatesOfServiceProxy(null);
 
+        Assert.Empty(removed);
         Assert.Same(handler, registry.GetDelegateByHandlerKey(key));
     }
 
@@ -188,9 +195,94 @@ public class ClientDelegateRegistryTests
         var proxy = new FakeProxy();
 
         var key = registry.RegisterClientDelegate(handler, proxy);
-        registry.UnregisterClientDelegatesOfServiceProxy(new FakeProxy());
+        var removed = registry.UnregisterClientDelegatesOfServiceProxy(new FakeProxy());
 
+        Assert.Empty(removed);
         Assert.Same(handler, registry.GetDelegateByHandlerKey(key));
+    }
+
+    [Fact]
+    public void UnregisterClientDelegatesOfServiceProxy_returns_empty_for_empty_registry()
+    {
+        var registry = new ClientDelegateRegistry();
+
+        var removed = registry.UnregisterClientDelegatesOfServiceProxy(new FakeProxy());
+
+        Assert.Empty(removed);
+    }
+
+    [Fact]
+    public void UnregisterClientDelegatesOfServiceProxy_allows_reregistration_with_new_key()
+    {
+        // After unregistering, the reverse index entry must be cleared too,
+        // so the same delegate + proxy pair produces a fresh handler key.
+        var registry = new ClientDelegateRegistry();
+        Action handler = () => { };
+        var proxy = new FakeProxy();
+
+        var key1 = registry.RegisterClientDelegate(handler, proxy);
+
+        var removed = registry.UnregisterClientDelegatesOfServiceProxy(proxy);
+        Assert.Equal([key1], removed);
+
+        var key2 = registry.RegisterClientDelegate(handler, proxy);
+
+        Assert.NotEqual(key1, key2);
+        Assert.Same(handler, registry.GetDelegateByHandlerKey(key2));
+    }
+
+    [Fact]
+    public void UnregisterClientDelegatesOfServiceProxy_returns_all_keys_for_multicast_subscriptions()
+    {
+        // Same proxy, many distinct delegates (multicast-style setup): all keys
+        // must be returned, so the caller can send them to the server in one batch.
+        var registry = new ClientDelegateRegistry();
+        var proxy = new FakeProxy();
+
+        Action handler1 = () => { };
+        Action handler2 = () => { };
+        Action handler3 = () => { };
+
+        var key1 = registry.RegisterClientDelegate(handler1, proxy);
+        var key2 = registry.RegisterClientDelegate(handler2, proxy);
+        var key3 = registry.RegisterClientDelegate(handler3, proxy);
+
+        var removed = registry.UnregisterClientDelegatesOfServiceProxy(proxy);
+
+        Assert.Equal(3, removed.Length);
+        Assert.Contains(key1, removed);
+        Assert.Contains(key2, removed);
+        Assert.Contains(key3, removed);
+    }
+
+    [Fact]
+    public async Task UnregisterClientDelegatesOfServiceProxy_concurrent_with_register_does_not_throw()
+    {
+        // Regression smoke test: a shutdown racing with a fresh subscription must
+        // not corrupt either dictionary. The exact outcome (how many survive) is
+        // unspecified — this test only asserts that neither side crashes and
+        // that after everything settles, the removed keys are no longer resolvable.
+        var registry = new ClientDelegateRegistry();
+        var proxy = new FakeProxy();
+
+        var unregistered = new ConcurrentBag<Guid>();
+
+        var registers = Enumerable.Range(0, 50).Select(_ => Task.Run(() =>
+        {
+            Action handler = () => { };
+            registry.RegisterClientDelegate(handler, proxy);
+        }));
+
+        var unregisters = Enumerable.Range(0, 50).Select(_ => Task.Run(() =>
+        {
+            foreach (var key in registry.UnregisterClientDelegatesOfServiceProxy(proxy))
+                unregistered.Add(key);
+        }));
+
+        await Task.WhenAll(registers.Concat(unregisters));
+
+        foreach (var key in unregistered)
+            Assert.Null(registry.GetDelegateByHandlerKey(key));
     }
 
     [Fact]

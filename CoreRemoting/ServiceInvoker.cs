@@ -82,7 +82,7 @@ public sealed class ServiceInvoker<TService> : IServiceInvoker<TService> where T
     {
         if (_client is { } client)
         {
-            client.ClientDelegateRegistry.UnregisterClientDelegatesOfServiceProxy(this);
+            _ = client.ClientDelegateRegistry.UnregisterClientDelegatesOfServiceProxy(this);
             _client = null;
         }
     }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace CoreRemoting.RemoteDelegates;
 
@@ -83,22 +84,30 @@ public sealed class ClientDelegateRegistry
     /// the same delegate instance.
     /// </summary>
     /// <param name="serviceProxy">Service proxy</param>
-    public void UnregisterClientDelegatesOfServiceProxy(object serviceProxy)
+    /// <returns>Handler keys that were unregistered. Empty array if none matched.</returns>
+    public Guid[] UnregisterClientDelegatesOfServiceProxy(object serviceProxy)
     {
         if (serviceProxy == null)
-            return;
+            return [];
 
         // Linear scan over all registrations, runs once per proxy shutdown.
         // The enumerator returned from the dictionary is safe to use
         // concurrently with reads and writes to the dictionary.
+        var removed = new List<Guid>();
+
         foreach (var pair in _registry)
         {
             if (pair.Value.ServiceProxy != serviceProxy)
                 continue;
 
             if (_registry.TryRemove(pair.Key, out var info))
+            {
                 _reverseIndex.TryRemove((info.ClientDelegate, info.ServiceProxy), out _);
+                removed.Add(pair.Key);
+            }
         }
+
+        return removed.ToArray();
     }
 
     /// <summary>

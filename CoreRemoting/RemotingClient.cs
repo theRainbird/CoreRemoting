@@ -310,7 +310,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// Gets whether the connection to the server is established or not.
     /// </summary>
     /// <remarks>
-    /// Note: this is the transport state, not the client's logical state —
+    /// Note: this is the transport state, not the client's logical state â€”
     /// see the internal <see cref="_isConnected"/> flag for the latter.
     /// </remarks>
     public bool IsConnected => _channel?.IsConnected ?? false;

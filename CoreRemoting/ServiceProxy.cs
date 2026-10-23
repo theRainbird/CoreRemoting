@@ -52,7 +52,7 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
     {
         if (_client != null)
         {
-            _client.ClientDelegateRegistry.UnregisterClientDelegatesOfServiceProxy(this);
+            _ = _client.ClientDelegateRegistry.UnregisterClientDelegatesOfServiceProxy(this);
             _client = null;
         }
 
