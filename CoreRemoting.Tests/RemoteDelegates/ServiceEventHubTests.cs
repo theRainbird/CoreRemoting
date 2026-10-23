@@ -333,6 +333,109 @@ public class ServiceEventHubTests
         sampleService.FireHandlers(1);
     }
 
+    // --- RemoveHandlers tests ---
+
+    [Fact]
+    public void RemoveHandlers_removes_known_key()
+    {
+        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
+        var key = Guid.NewGuid();
+
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), key, Guid.Empty, new EventHandler((s, e) => { }));
+        Assert.Equal(1, eventHub.GetHandlerCount(nameof(ISampleInterface.SimpleEvent)));
+
+        Assert.Equal(1, eventHub.RemoveHandlers([key]));
+        Assert.Equal(0, eventHub.GetHandlerCount(nameof(ISampleInterface.SimpleEvent)));
+    }
+
+    [Fact]
+    public void RemoveHandlers_is_idempotent()
+    {
+        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
+        var key = Guid.NewGuid();
+
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), key, Guid.Empty, new EventHandler((s, e) => { }));
+
+        Assert.Equal(1, eventHub.RemoveHandlers([key]));
+        Assert.Equal(0, eventHub.RemoveHandlers([key]));
+        Assert.Equal(0, eventHub.RemoveHandlers([key]));
+        Assert.Equal(0, eventHub.GetHandlerCount(nameof(ISampleInterface.SimpleEvent)));
+    }
+
+    [Fact]
+    public void RemoveHandlers_ignores_unknown_key()
+    {
+        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
+
+        Assert.Equal(0, eventHub.RemoveHandlers([Guid.NewGuid()]));
+    }
+
+    [Fact]
+    public void RemoveHandlers_handles_empty_input()
+    {
+        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
+
+        Assert.Equal(0, eventHub.RemoveHandlers([]));
+        Assert.Equal(0, eventHub.RemoveHandlers(null));
+    }
+
+    [Fact]
+    public void RemoveHandlers_removes_all_occurrences_of_multicast_key()
+    {
+        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
+        var key = Guid.NewGuid();
+        var handler = new EventHandler((s, e) => { });
+
+        // multicast: the same key and the same delegate added three times
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), key, Guid.Empty, handler);
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), key, Guid.Empty, handler);
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), key, Guid.Empty, handler);
+
+        Assert.Equal(3, eventHub.GetHandlerCount(nameof(ISampleInterface.SimpleEvent)));
+
+        // RemoveHandlers is used for proxy shutdown / nack and must remove
+        // ALL handlers registered under the key, not just one (unlike RemoveHandler)
+        Assert.Equal(3, eventHub.RemoveHandlers([key]));
+        Assert.Equal(0, eventHub.GetHandlerCount(nameof(ISampleInterface.SimpleEvent)));
+    }
+
+    [Fact]
+    public void RemoveHandlers_searches_across_multiple_events()
+    {
+        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
+        var key1 = Guid.NewGuid();
+        var key2 = Guid.NewGuid();
+
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), key1, Guid.Empty, new EventHandler((s, e) => { }));
+        eventHub.AddHandler(nameof(ISampleInterface.ActionDelegate), key2, Guid.Empty, new Action(() => { }));
+
+        Assert.Equal(2, eventHub.RemoveHandlers([key1, key2]));
+        Assert.Equal(0, eventHub.GetHandlerCount(nameof(ISampleInterface.SimpleEvent)));
+        Assert.Equal(0, eventHub.GetHandlerCount(nameof(ISampleInterface.ActionDelegate)));
+    }
+
+    [Fact]
+    public void RemoveHandlers_removes_only_matching_keys()
+    {
+        var eventHub = new ServiceEventHub(typeof(ISampleInterface));
+        var kept = Guid.NewGuid();
+        var removed = Guid.NewGuid();
+
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), kept, Guid.Empty, new EventHandler((s, e) => { }));
+        eventHub.AddHandler(nameof(ISampleInterface.SimpleEvent), removed, Guid.Empty, new EventHandler((s, e) => { }));
+
+        // only the matching key is removed; the unrelated guid in the same
+        // call is ignored
+        Assert.Equal(1, eventHub.RemoveHandlers([removed, Guid.NewGuid()]));
+        Assert.Equal(1, eventHub.GetHandlerCount(nameof(ISampleInterface.SimpleEvent)));
+
+        // the kept key is still removable
+        Assert.Equal(1, eventHub.RemoveHandlers([kept]));
+        Assert.Equal(0, eventHub.GetHandlerCount(nameof(ISampleInterface.SimpleEvent)));
+    }
+
+    // --- MethodInfo / TypedEventHub tests ---
+
     [Fact]
     public void MethodInfo_can_represent_subscription_or_unsubscription()
     {

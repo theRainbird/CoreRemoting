@@ -1161,8 +1161,9 @@ public sealed class RemotingSession : IAsyncDisposable
                 .ConfigureAwait(false);
 
         // clean up remote subscriptions for the current session
-        _server.ServiceRegistry.GetService<IServerSubscriptionService>()
-            .RemoveAllForSession(_sessionId);
+        await _server.ServiceRegistry.GetService<IServerSubscriptionService>()
+            .RemoveAllForSession(_sessionId)
+                .ConfigureAwait(false);
 
         var wireMessage =
             _server.MessageEncryptionManager.CreateWireMessage(

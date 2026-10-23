@@ -24,7 +24,7 @@ jobs:
           - os: ${{ !contains(github.event.head_commit.message, 'windows') && !github.event.pull_request && 'windows-latest' }}
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
     - name: Checkout source

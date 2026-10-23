@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using CoreRemoting.DependencyInjection;
 
 namespace CoreRemoting.RemoteDelegates;
@@ -20,13 +21,27 @@ internal class ServerSubscriptionService : IServerSubscriptionService
     }
 
     /// <inheritdoc/>
-    public int RemoveAllForSession(Guid sessionId)
+    public Task<int> RemoveAllForSession(Guid sessionId)
     {
         var count = 0;
 
         foreach (var registration in _container.GetServiceRegistrations())
             count += registration.EventHub.RemoveAllForSession(sessionId);
 
-        return count;
+        return Task.FromResult(count);
+    }
+
+    /// <inheritdoc/>
+    public Task<int> RemoveHandlers(Guid[] handlerKeys)
+    {
+        if (handlerKeys == null || handlerKeys.Length == 0)
+            return Task.FromResult(0);
+
+        var count = 0;
+
+        foreach (var registration in _container.GetServiceRegistrations())
+            count += registration.EventHub.RemoveHandlers(handlerKeys);
+
+        return Task.FromResult(count);
     }
 }

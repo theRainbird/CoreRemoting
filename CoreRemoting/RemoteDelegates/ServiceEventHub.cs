@@ -153,6 +153,13 @@ public class ServiceEventHub
         bool RemoveHandler(Guid handlerKey);
 
         /// <summary>
+        /// Removes all occurrences of the handler with the specified key.
+        /// </summary>
+        /// <param name="handlerKey">Unique handler key of the client delegate.</param>
+        /// <returns>Number of removed occurrences.</returns>
+        int RemoveAllForKey(Guid handlerKey);
+
+        /// <summary>
         /// Removes all handlers registered by the specified session.
         /// </summary>
         /// <param name="sessionId">Session identifier.</param>
@@ -344,6 +351,17 @@ public class ServiceEventHub
             }
         }
 
+        public int RemoveAllForKey(Guid handlerKey)
+        {
+            lock (_syncRoot)
+            {
+                if (!_entries.TryRemove(handlerKey, out var existing))
+                    return 0;
+
+                return existing.Count;
+            }
+        }
+
         public int RemoveAllForSession(Guid sessionId)
         {
             lock (_syncRoot)
@@ -505,6 +523,27 @@ public class ServiceEventHub
             removed += holder.RemoveAllForSession(sessionId);
 
         return removed;
+    }
+
+    /// <summary>
+    /// Removes all occurrences of handlers with the given keys across all
+    /// events and delegate properties of this hub. Idempotent: unknown keys
+    /// are silently ignored.
+    /// </summary>
+    /// <param name="handlerKeys">Handler keys to remove.</param>
+    /// <returns>Number of removed occurrences.</returns>
+    public int RemoveHandlers(IEnumerable<Guid> handlerKeys)
+    {
+        if (handlerKeys == null)
+            return 0;
+
+        var count = 0;
+
+        foreach (var holder in DelegateHolders.Values)
+            foreach (var key in handlerKeys)
+                count += holder.RemoveAllForKey(key);
+
+        return count;
     }
 
     /// <summary>
