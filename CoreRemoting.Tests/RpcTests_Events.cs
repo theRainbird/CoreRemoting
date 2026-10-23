@@ -766,7 +766,7 @@ public partial class RpcTests
             client.Disconnect();
 
             var errors = new List<Exception>();
-            client.ErrorHandler = ex => errors.Add(ex);
+            client.ErrorHandler = errors.Add;
 
             await client.ScheduleServerUnsubscribe([Guid.NewGuid()]).Timeout(1).ConfigureAwait(false);
 
@@ -930,7 +930,7 @@ public partial class RpcTests
         client.ShutdownProxy(proxy);
 
         await WaitUntilAsync(
-            () => stored.IsDisposed(),
+            stored.IsDisposed,
             timeout: TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
         CheckServerErrorCount();
@@ -955,7 +955,7 @@ public partial class RpcTests
         await client.DisposeAsync().ConfigureAwait(false);
 
         await WaitUntilAsync(
-            () => stored.IsDisposed(),
+            stored.IsDisposed,
             timeout: TimeSpan.FromSeconds(20)).ConfigureAwait(false);
     }
 
