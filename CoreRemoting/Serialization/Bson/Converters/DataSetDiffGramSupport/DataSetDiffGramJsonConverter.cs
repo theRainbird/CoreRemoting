@@ -84,6 +84,6 @@ public class DataSetDiffGramJsonConverter : JsonConverter
     {
         var wrapper = serializer.Deserialize<SerializedDiffGram>(reader);
 
-        return wrapper.Restore(objectType);
+        return wrapper?.Restore(objectType);
     }
 }
