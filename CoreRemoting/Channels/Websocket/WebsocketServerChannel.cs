@@ -76,7 +76,7 @@ public class WebsocketServerChannel : IServerChannel
         Connections[sessionId] = connection;
         connection.Disconnected += async () =>
         {
-            Connections.TryRemove(sessionId, out connection);
+            Connections.TryRemove(sessionId, out _);
             await connection.DisposeAsync();
         };
     }
