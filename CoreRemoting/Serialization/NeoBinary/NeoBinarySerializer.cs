@@ -34,43 +34,8 @@ public partial class NeoBinarySerializer
     private readonly IlTypeSerializer _ilSerializer = new();
     private readonly SerializerCache _serializerCache = new();
 
-    // Static constructor to ensure test assemblies are loaded for type resolution
-    static NeoBinarySerializer()
-    {
-        // Pre-load test assemblies to ensure type availability in concurrent scenarios
-        try
-        {
-            var currentAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-            var testAssemblyLoaded = currentAssemblies.Any(a =>
-                a.GetName().Name.Contains("CoreRemoting.Tests"));
-
-            if (!testAssemblyLoaded)
-            {
-                // Try to load test assembly by name pattern
-                var assemblyPaths = new[]
-                {
-                    "CoreRemoting.Tests.dll",
-                    "CoreRemoting.Tests.ExternalTypes.dll"
-                };
-
-                foreach (var path in assemblyPaths)
-                {
-                    try
-                    {
-                        Assembly.LoadFrom(path);
-                    }
-                    catch
-                    {
-                        // Ignore loading failures
-                    }
-                }
-            }
-        }
-        catch
-        {
-            // Ignore any errors during assembly preloading
-        }
-    }
+    // No static constructor: test assemblies are loaded by the test host/runner and resolved
+    // via FindTypeInLoadedAssemblies. The serializer must not reference or load test assemblies.
 
     // Legacy caches for backward compatibility
     private readonly ConcurrentDictionary<Type, string> _typeNameCache = new();
@@ -110,20 +75,20 @@ public partial class NeoBinarySerializer
     // --- Thread-local context storage for per-operation isolation ---
     [ThreadStatic] private static TypeReferenceContext _currentContext;
 
-    // --- NEW: Assembly type index cache (shared across all instances) ---
+    // --- Assembly type index cache (shared across all instances) ---
     private static readonly ConcurrentDictionary<Assembly, Dictionary<string, Type>> _assemblyTypeIndex = new();
 
-    // --- NEW: Validated types cache ---
+    // --- Validated types cache ---
     private readonly ConcurrentDictionary<Type, bool> _validatedTypes = new();
 
-    // --- NEW: Object pools for performance optimization ---
+    // --- Object pools for performance optimization ---
     private readonly ObjectPool<HashSet<object>> _hashSetPool =
-        new(() => new HashSet<object>(ReferenceEqualityComparer.Instance),
+        new(() => new HashSet<object>(IdentityEqualityComparer.Instance),
             set => set.Clear());
 
     private readonly ObjectPool<Dictionary<object, int>> _objectMapPool =
         new(
-            () => new Dictionary<object, int>(ReferenceEqualityComparer.Instance), dict => dict.Clear());
+            () => new Dictionary<object, int>(IdentityEqualityComparer.Instance), dict => dict.Clear());
     
     /// <summary>
     /// Gets or sets the serializer configuration.
@@ -234,32 +199,41 @@ public partial class NeoBinarySerializer
             _currentContext = null;
         }
 
-        // Read and validate header
-        ReadHeader(reader);
-        ValidateStreamState(reader, "After header read");
-
-        // Peek at the first byte to determine if it's a simple type
-        var firstByte = reader.ReadByte();
-        if (firstByte == 0) return null;
-
-        // Fast path for primitive types - avoid overhead of reference tracking
-        if (firstByte == 3) // Simple object marker
+        try
         {
-            var type = ReadTypeInfo(reader);
-            return DeserializePrimitive(type, reader);
+            // Read and validate header
+            ReadHeader(reader);
+            ValidateStreamState(reader, "After header read");
+
+            // Peek at the first byte to determine if it's a simple type
+            var firstByte = reader.ReadByte();
+            if (firstByte == 0) return null;
+
+            // Fast path for primitive types - avoid overhead of reference tracking
+            if (firstByte == 3) // Simple object marker
+            {
+                var type = ReadTypeInfo(reader);
+                return DeserializePrimitive(type, reader);
+            }
+
+            // Complex marker (object, reference, custom, compact): deserialize directly using
+            // the already-read byte. This avoids seeking the stream back, so it also works for
+            // non-seekable streams.
+            var deserializedObjects = new Dictionary<int, object>();
+            var result = DeserializeObjectByMarker(firstByte, reader, deserializedObjects, -1);
+
+            // After the full graph is constructed, resolve any remaining forward references
+            // that couldn't be set during nested deserialization (e.g., back-references).
+            ResolvePendingForwardReferences(deserializedObjects);
+
+            return result;
         }
-
-        // Put the byte back for complex object processing
-        serializationStream.Position = serializationStream.Position - 1;
-        var deserializedObjects = new Dictionary<int, object>();
-        var result = DeserializeObject(reader, deserializedObjects);
-
-        // After the full graph is constructed, resolve any remaining forward references
-        // that couldn't be set during nested deserialization (e.g., back-references).
-        ResolvePendingForwardReferences(deserializedObjects);
-
-        _currentContext = null;
-        return result;
+        finally
+        {
+            // Reset the thread-local context even if an exception occurred, so it never
+            // leaks into a subsequent operation on the same thread.
+            _currentContext = null;
+        }
     }
 
     private void WriteHeader(BinaryWriter writer)
@@ -325,6 +299,72 @@ public partial class NeoBinarySerializer
                 $"This indicates incompatible CoreRemoting versions.");
     }
 
+    private enum NeoTypeKind
+    {
+        CustomHandler,
+        CustomSerializable,
+        Enum,
+        Array,
+        Simple,
+        List,
+        Expando,
+        Dictionary,
+        DataSet,
+        DataTable,
+        Exception,
+        Expression,
+        Type,
+        MemberInfo,
+        ParameterInfo,
+        Module,
+        Assembly,
+        Complex
+    }
+
+    /// <summary>
+    /// Single source of truth for the type-dispatch order shared by SerializeObject and
+    /// DeserializeObject. Returns only a classification; each direction maps the kind to its
+    /// own (de)serialization call so the two directions cannot drift apart.
+    /// </summary>
+    private NeoTypeKind GetNeoTypeKind(Type type)
+    {
+        if (Config.CustomSerializationHandlers.ContainsKey(type) && Config.EnableCustomSerialization)
+            return NeoTypeKind.CustomHandler;
+        if (typeof(ICustomSerialization).IsAssignableFrom(type) && Config.EnableCustomSerialization)
+            return NeoTypeKind.CustomSerializable;
+        if (type.IsEnum)
+            return NeoTypeKind.Enum;
+        if (type.IsArray)
+            return NeoTypeKind.Array;
+        if (IsSimpleType(type))
+            return NeoTypeKind.Simple;
+        if (typeof(IList).IsAssignableFrom(type))
+            return NeoTypeKind.List;
+        if (type == typeof(ExpandoObject))
+            return NeoTypeKind.Expando;
+        if (typeof(IDictionary).IsAssignableFrom(type))
+            return NeoTypeKind.Dictionary;
+        if (typeof(DataSet).IsAssignableFrom(type))
+            return NeoTypeKind.DataSet;
+        if (typeof(DataTable).IsAssignableFrom(type))
+            return NeoTypeKind.DataTable;
+        if (typeof(Exception).IsAssignableFrom(type))
+            return NeoTypeKind.Exception;
+        if (typeof(Expression).IsAssignableFrom(type))
+            return NeoTypeKind.Expression;
+        if (typeof(Type).IsAssignableFrom(type))
+            return NeoTypeKind.Type;
+        if (typeof(MemberInfo).IsAssignableFrom(type))
+            return NeoTypeKind.MemberInfo;
+        if (typeof(ParameterInfo).IsAssignableFrom(type))
+            return NeoTypeKind.ParameterInfo;
+        if (typeof(Module).IsAssignableFrom(type))
+            return NeoTypeKind.Module;
+        if (typeof(Assembly).IsAssignableFrom(type))
+            return NeoTypeKind.Assembly;
+        return NeoTypeKind.Complex;
+    }
+
     private void SerializeObject(object obj, BinaryWriter writer, HashSet<object> serializedObjects,
         Dictionary<object, int> objectMap)
     {
@@ -387,47 +427,65 @@ public partial class NeoBinarySerializer
         // Write type information
         WriteTypeInfo(writer, type);
 
-        // Serialize based on type
-        if (Config.CustomSerializationHandlers.ContainsKey(type) && Config.EnableCustomSerialization)
-            SerializeWithHandler(obj, writer, serializedObjects, objectMap);
-        else if (typeof(ICustomSerialization).IsAssignableFrom(type) && Config.EnableCustomSerialization)
-            SerializeCustomSerializableObject(obj, writer, serializedObjects, objectMap);
-        else if (type.IsEnum)
-            SerializeEnum(obj, writer);
-        else if (type.IsArray)
-            SerializeArray((Array)obj, writer, serializedObjects, objectMap);
-        else if (typeof(IList).IsAssignableFrom(type))
-            SerializeList((IList)obj, writer, serializedObjects, objectMap);
-        else if (obj is ExpandoObject expando)
-            SerializeExpandoObject(expando, writer, serializedObjects, objectMap);
-        else if (typeof(IDictionary).IsAssignableFrom(type))
-            SerializeDictionary((IDictionary)obj, writer, serializedObjects, objectMap);
-        else if (typeof(DataSet).IsAssignableFrom(type))
-            SerializeDataSet((DataSet)obj, writer, serializedObjects, objectMap);
-        else if (typeof(DataTable).IsAssignableFrom(type))
-            SerializeDataTable((DataTable)obj, writer, serializedObjects, objectMap);
-        else if (typeof(Exception).IsAssignableFrom(type))
-            SerializeException((Exception)obj, writer, serializedObjects, objectMap);
-        else if (typeof(Expression).IsAssignableFrom(type))
-            SerializeExpression((Expression)obj, writer, serializedObjects, objectMap);
-        else if (typeof(Type).IsAssignableFrom(type))
-            // Serialize Type objects specially to avoid MemberInfo handling
-            WriteTypeInfo(writer, (Type)obj);
-        else if (typeof(MemberInfo).IsAssignableFrom(type))
-            // Serialize MemberInfo with custom approach
-            SerializeMemberInfo(obj, writer, serializedObjects, objectMap);
-        else if (typeof(ParameterInfo).IsAssignableFrom(type))
-            // Serialize ParameterInfo with custom approach
-            SerializeParameterInfo(obj, writer, serializedObjects, objectMap);
-        else if (typeof(Module).IsAssignableFrom(type))
-            // Serialize Module with custom approach
-            SerializeModule(obj, writer, serializedObjects, objectMap);
-        else if (typeof(Assembly).IsAssignableFrom(type))
-            // Serialize Assembly with custom approach
-            SerializeAssembly(obj, writer, serializedObjects, objectMap);
-        else
-            // Serialize any complex object regardless of [Serializable] attribute
-            SerializeComplexObject(obj, writer, serializedObjects, objectMap);
+        // Dispatch on the type using the single shared classification (GetNeoTypeKind).
+        switch (GetNeoTypeKind(type))
+        {
+            case NeoTypeKind.CustomHandler:
+                SerializeWithHandler(obj, writer, serializedObjects, objectMap);
+                break;
+            case NeoTypeKind.CustomSerializable:
+                SerializeCustomSerializableObject(obj, writer, serializedObjects, objectMap);
+                break;
+            case NeoTypeKind.Enum:
+                SerializeEnum(obj, writer);
+                break;
+            case NeoTypeKind.Array:
+                SerializeArray((Array)obj, writer, serializedObjects, objectMap);
+                break;
+            case NeoTypeKind.Simple:
+                SerializePrimitive(obj, writer);
+                break;
+            case NeoTypeKind.List:
+                SerializeList((IList)obj, writer, serializedObjects, objectMap);
+                break;
+            case NeoTypeKind.Expando:
+                SerializeExpandoObject((ExpandoObject)obj, writer, serializedObjects, objectMap);
+                break;
+            case NeoTypeKind.Dictionary:
+                SerializeDictionary((IDictionary)obj, writer, serializedObjects, objectMap);
+                break;
+            case NeoTypeKind.DataSet:
+                SerializeDataSet((DataSet)obj, writer, serializedObjects, objectMap);
+                break;
+            case NeoTypeKind.DataTable:
+                SerializeDataTable((DataTable)obj, writer, serializedObjects, objectMap);
+                break;
+            case NeoTypeKind.Exception:
+                SerializeException((Exception)obj, writer, serializedObjects, objectMap);
+                break;
+            case NeoTypeKind.Expression:
+                SerializeExpression((Expression)obj, writer, serializedObjects, objectMap);
+                break;
+            case NeoTypeKind.Type:
+                WriteTypeInfo(writer, (Type)obj);
+                break;
+            case NeoTypeKind.MemberInfo:
+                SerializeMemberInfo(obj, writer, serializedObjects, objectMap);
+                break;
+            case NeoTypeKind.ParameterInfo:
+                SerializeParameterInfo(obj, writer, serializedObjects, objectMap);
+                break;
+            case NeoTypeKind.Module:
+                SerializeModule(obj, writer, serializedObjects, objectMap);
+                break;
+            case NeoTypeKind.Assembly:
+                SerializeAssembly(obj, writer, serializedObjects, objectMap);
+                break;
+            case NeoTypeKind.Complex:
+            default:
+                SerializeComplexObject(obj, writer, serializedObjects, objectMap);
+                break;
+        }
     }
 
     /// <summary>
@@ -454,21 +512,6 @@ public partial class NeoBinarySerializer
                 $"Insufficient bytes remaining ({remainingBytes}) for marker reading in {context}");
     }
 
-    /// <summary>
-    /// Creates a stream checkpoint for rollback operations.
-    /// </summary>
-    /// <param name="reader">The binary reader</param>
-    /// <param name="context">Context description for debugging</param>
-    /// <returns>Stream position for rollback</returns>
-    private long CreateStreamCheckpoint(BinaryReader reader, string context)
-    {
-        if (!reader.BaseStream.CanSeek)
-            return -1; // Cannot checkpoint non-seekable streams
-
-        var position = reader.BaseStream.Position;
-
-        return position;
-    }
 
     /// <summary>
     /// Analyzes stream state for debugging and error reporting.
@@ -539,7 +582,6 @@ public partial class NeoBinarySerializer
         ValidateStreamState(reader, "DeserializeObject start");
         ValidateStreamIntegrity(reader, "DeserializeObject start");
         var streamPosition = reader.BaseStream.CanSeek ? reader.BaseStream.Position : -1;
-        var checkpoint = CreateStreamCheckpoint(reader, "Read marker");
         var marker = reader.ReadByte();
 
         // Enhanced marker validation
@@ -556,6 +598,11 @@ public partial class NeoBinarySerializer
                 $"Stream diagnosis: {streamDiagnosis}");
         }
 
+        return DeserializeObjectByMarker(marker, reader, deserializedObjects, streamPosition);
+    }
+
+    private object DeserializeObjectByMarker(byte marker, BinaryReader reader, Dictionary<int, object> deserializedObjects, long streamPosition)
+    {
         switch (marker)
         {
             // Null marker
@@ -603,40 +650,65 @@ public partial class NeoBinarySerializer
 
                 object obj;
 
-                if (Config.CustomSerializationHandlers.ContainsKey(type) && Config.EnableCustomSerialization)
-                    obj = DeserializeWithHandler(type, reader, deserializedObjects, objectId);
-                else if (typeof(ICustomSerialization).IsAssignableFrom(type) && Config.EnableCustomSerialization)
-                    obj = DeserializeCustomSerializableObject(type, reader, deserializedObjects, objectId);
-                else if (type.IsArray)
-                    obj = DeserializeArray(type, reader, deserializedObjects, objectId);
-                else if (IsSimpleType(type))
-                    obj = DeserializePrimitive(type, reader);
-                else if (type.IsEnum)
-                    obj = DeserializeEnum(type, reader);
-                else if (typeof(IList).IsAssignableFrom(type))
-                    obj = DeserializeList(type, reader, deserializedObjects, objectId);
-                else if (type == typeof(ExpandoObject))
-                    obj = DeserializeDictionary(type, reader, deserializedObjects, objectId);
-                else if (typeof(IDictionary).IsAssignableFrom(type))
-                    obj = DeserializeDictionary(type, reader, deserializedObjects, objectId);
-                else if (typeof(DataSet).IsAssignableFrom(type))
-                    obj = DeserializeDataSet(type, reader, deserializedObjects, objectId);
-                else if (typeof(DataTable).IsAssignableFrom(type))
-                    obj = DeserializeDataTable(type, reader, deserializedObjects, objectId);
-                else if (typeof(Exception).IsAssignableFrom(type))
-                    obj = DeserializeException(type, reader, deserializedObjects, objectId);
-                else if (typeof(Expression).IsAssignableFrom(type))
-                    obj = DeserializeExpression(reader, deserializedObjects);
-                else if (typeof(MemberInfo).IsAssignableFrom(type))
-                    obj = DeserializeMemberInfo(type, reader, deserializedObjects, objectId);
-                else if (typeof(ParameterInfo).IsAssignableFrom(type))
-                    obj = DeserializeParameterInfo(type, reader, deserializedObjects, objectId);
-                else if (typeof(Module).IsAssignableFrom(type))
-                    obj = DeserializeModule(type, reader, deserializedObjects, objectId);
-                else if (typeof(Assembly).IsAssignableFrom(type))
-                    obj = DeserializeAssembly(type, reader, deserializedObjects, objectId);
-                else
-                    obj = DeserializeComplexObject(type, reader, deserializedObjects, objectId);
+                // Dispatch on the type using the single shared classification (GetNeoTypeKind).
+                // A Type resolves to NeoTypeKind.Type but is a MemberInfo subclass, so it is
+                // deserialized through the MemberInfo path, exactly as before.
+                switch (GetNeoTypeKind(type))
+                {
+                    case NeoTypeKind.CustomHandler:
+                        obj = DeserializeWithHandler(type, reader, deserializedObjects, objectId);
+                        break;
+                    case NeoTypeKind.CustomSerializable:
+                        obj = DeserializeCustomSerializableObject(type, reader, deserializedObjects, objectId);
+                        break;
+                    case NeoTypeKind.Enum:
+                        obj = DeserializeEnum(type, reader);
+                        break;
+                    case NeoTypeKind.Array:
+                        obj = DeserializeArray(type, reader, deserializedObjects, objectId);
+                        break;
+                    case NeoTypeKind.Simple:
+                        obj = DeserializePrimitive(type, reader);
+                        break;
+                    case NeoTypeKind.List:
+                        obj = DeserializeList(type, reader, deserializedObjects, objectId);
+                        break;
+                    case NeoTypeKind.Expando:
+                        obj = DeserializeDictionary(type, reader, deserializedObjects, objectId);
+                        break;
+                    case NeoTypeKind.Dictionary:
+                        obj = DeserializeDictionary(type, reader, deserializedObjects, objectId);
+                        break;
+                    case NeoTypeKind.DataSet:
+                        obj = DeserializeDataSet(type, reader, deserializedObjects, objectId);
+                        break;
+                    case NeoTypeKind.DataTable:
+                        obj = DeserializeDataTable(type, reader, deserializedObjects, objectId);
+                        break;
+                    case NeoTypeKind.Exception:
+                        obj = DeserializeException(type, reader, deserializedObjects, objectId);
+                        break;
+                    case NeoTypeKind.Expression:
+                        obj = DeserializeExpression(reader, deserializedObjects);
+                        break;
+                    case NeoTypeKind.Type:
+                    case NeoTypeKind.MemberInfo:
+                        obj = DeserializeMemberInfo(type, reader, deserializedObjects, objectId);
+                        break;
+                    case NeoTypeKind.ParameterInfo:
+                        obj = DeserializeParameterInfo(type, reader, deserializedObjects, objectId);
+                        break;
+                    case NeoTypeKind.Module:
+                        obj = DeserializeModule(type, reader, deserializedObjects, objectId);
+                        break;
+                    case NeoTypeKind.Assembly:
+                        obj = DeserializeAssembly(type, reader, deserializedObjects, objectId);
+                        break;
+                    case NeoTypeKind.Complex:
+                    default:
+                        obj = DeserializeComplexObject(type, reader, deserializedObjects, objectId);
+                        break;
+                }
 
                 RegisterObjectWithReverseMapping(deserializedObjects, objectId, obj);
                 return obj;
@@ -869,25 +941,28 @@ public partial class NeoBinarySerializer
             if (string.IsNullOrEmpty(typeNameNew) && string.IsNullOrEmpty(assemblyNameNew) &&
                 string.IsNullOrEmpty(assemblyVersionNew))
                 tResolved = typeof(object);
-            else
+            else if (!string.IsNullOrEmpty(typeNameNew) && typeNameNew.Contains("[[") &&
+                     typeNameNew.Contains("PublicKeyToken="))
             {
-                // Check if typeNameNew already contains assembly information (complex generic types)
-                if (!string.IsNullOrEmpty(typeNameNew) && typeNameNew.Contains("[[") && 
-                    typeNameNew.Contains("PublicKeyToken="))
+                // Complex generic type with assembly-qualified generic arguments (e.g.
+                // Expression<Func<int,int>>). ResolveAssemblyNeutralType correctly parses the
+                // assembly-qualified generic argument descriptors that ResolveTypeCore cannot.
+                // Validate the resolved result through the centralized security gate so that no
+                // type-resolution path bypasses TypeValidator.ValidateType().
+                var candidate = ResolveAssemblyNeutralType(typeNameNew);
+                if (candidate != null)
                 {
-                    // This is a complex generic type with embedded assembly info
-                    // Try to resolve it directly first
-                    tResolved = ResolveAssemblyNeutralType(typeNameNew);
-                    if (tResolved == null)
-                    {
-                        // Fallback to normal resolution
-                        tResolved = ResolveTypeCore(typeNameNew, assemblyNameNew, assemblyVersionNew);
-                    }
+                    TypeValidator.ValidateType(candidate);
+                    tResolved = candidate;
                 }
                 else
                 {
                     tResolved = ResolveTypeCore(typeNameNew, assemblyNameNew, assemblyVersionNew);
                 }
+            }
+            else
+            {
+                tResolved = ResolveTypeCore(typeNameNew, assemblyNameNew, assemblyVersionNew);
             }
 
             // ensure table size/order correctness
@@ -1124,7 +1199,7 @@ public partial class NeoBinarySerializer
     }
 
     /// <summary>
-    /// Enhanced type resolution with multiple fallback strategies for test types.
+    /// Type resolution with multiple fallback strategies.
     /// </summary>
     /// <param name="typeName">The type name to resolve</param>
     /// <returns>Resolved type or null</returns>
@@ -1135,29 +1210,7 @@ public partial class NeoBinarySerializer
         if (type != null) return type;
 
         // Strategy 2: Direct Type.GetType for system types
-        type = Type.GetType(typeName);
-        if (type != null) return type;
-
-        // Strategy 3: Force test assembly loading for custom types
-        if (typeName.Contains("TestComplexObject") || typeName.Contains("Concurrency"))
-        {
-            try
-            {
-                // Try to explicitly load the test assembly
-                var testAssembly = Assembly.LoadFrom("CoreRemoting.Tests.dll");
-                if (testAssembly != null)
-                {
-                    type = testAssembly.GetType(typeName);
-                    if (type != null) return type;
-                }
-            }
-            catch
-            {
-                // Ignore loading errors
-            }
-        }
-
-        return null;
+        return Type.GetType(typeName);
     }
 
     /// <summary>
@@ -1412,7 +1465,6 @@ public partial class NeoBinarySerializer
                 Serializer = this
             };
 
-            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 var serializer = _ilSerializer.CreateCompactSerializer(type);
@@ -1420,7 +1472,6 @@ public partial class NeoBinarySerializer
             }
             finally
             {
-                stopwatch.Stop();
                 // We don't have per-type stats here; still record global count
                 _serializerCache.RecordSerialization();
             }
@@ -1599,24 +1650,6 @@ public partial class NeoBinarySerializer
         // For value types, we can use default(T) and box it
         if (type.IsValueType) return Activator.CreateInstance(type)!;
 
-        // Try using System.Runtime.Serialization.ObjectManager for .NET Core/5+
-        try
-        {
-            // For .NET Core 3.0+ and .NET 5+, we can use reflection to access internal methods
-            var runtimeType = typeof(Type).Assembly.GetType("System.RuntimeType");
-            if (runtimeType != null)
-            {
-                var getUninitializedObjectMethod = runtimeType.GetMethod("GetUninitializedObject",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-                if (getUninitializedObjectMethod != null)
-                    return getUninitializedObjectMethod.Invoke(null, [type])!;
-            }
-        }
-        catch
-        {
-            // Internal method not available or failed
-        }
-
         // Last resort: try to create using the most accessible constructor with default parameters
         var constructors =
             type.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
@@ -1676,9 +1709,9 @@ public partial class NeoBinarySerializer
             $"Cannot create instance of type '{type.FullName}' without a parameterless constructor. Consider adding a parameterless constructor or marking the type with [Serializable].");
     }
 
-    private class ReferenceEqualityComparer : IEqualityComparer<object>
+    private class IdentityEqualityComparer : IEqualityComparer<object>
     {
-        public static readonly ReferenceEqualityComparer Instance = new();
+        public static readonly IdentityEqualityComparer Instance = new();
 
         public new bool Equals(object x, object y)
         {

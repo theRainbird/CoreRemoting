@@ -51,26 +51,33 @@ public class WindowsAuthProvider : IAuthenticationProvider
             identityName = domain + "\\" + userName;
         }
 
-        var isAuthenticated = principalContext.ValidateCredentials(userName ?? string.Empty, password ?? string.Empty);
-
-        if (isAuthenticated)
+        try
         {
-            var principal = UserPrincipal.FindByIdentity(principalContext, identityName ?? string.Empty);
-            var userIsMemberOf = 
-                principal == null
-                    ? Array.Empty<string>()
-                    : principal.GetAuthorizationGroups().Select(group => group.Name);
+            var isAuthenticated = principalContext.ValidateCredentials(userName ?? string.Empty, password ?? string.Empty);
 
-            return Task.FromResult(new AuthenticationResponseMessage
+            if (isAuthenticated)
             {
-                IsAuthenticated = true,
-                AuthenticatedIdentity = new RemotingIdentity()
+                var principal = UserPrincipal.FindByIdentity(principalContext, identityName ?? string.Empty);
+                var userIsMemberOf =
+                    principal == null
+                        ? Array.Empty<string>()
+                        : principal.GetAuthorizationGroups().Select(group => group.Name);
+
+                return Task.FromResult(new AuthenticationResponseMessage
                 {
-                    Name = identityName,
                     IsAuthenticated = true,
-                    Roles = userIsMemberOf.ToArray()
-                }
-            });
+                    AuthenticatedIdentity = new RemotingIdentity()
+                    {
+                        Name = identityName,
+                        IsAuthenticated = true,
+                        Roles = userIsMemberOf.ToArray()
+                    }
+                });
+            }
+        }
+        finally
+        {
+            principalContext.Dispose();
         }
 
         return Task.FromResult(failed);

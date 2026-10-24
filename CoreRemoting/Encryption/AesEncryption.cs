@@ -16,7 +16,8 @@ public static class AesEncryption
     /// <returns>SHA-256 hash</returns>
     public static byte[] CreateHash(byte[] value)
     {
-        return SHA256.Create().ComputeHash(value);
+        using var sha = SHA256.Create();
+        return sha.ComputeHash(value);
     }
 
     /// <summary>
