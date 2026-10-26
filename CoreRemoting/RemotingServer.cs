@@ -319,6 +319,34 @@ public sealed class RemotingServer : IRemotingServer
         }
     }
 
+    /// <summary>
+    /// Kills the server without sending a goodbye message (simulates server process crash).
+    /// </summary>
+    /// <param name="delayMs">Delay, in milliseconds.</param>
+    /// <remarks>
+    /// This method is used for unit testing only.
+    /// </remarks>
+    internal async Task HardKill(int delayMs = 200)
+    {
+        foreach (var session in SessionRepository.Sessions)
+        {
+            if (!session.IsParked && !session.IsDisposing)
+                session.ParkSession();
+        }
+
+        if (Channel != null)
+        {
+            Channel.StopListening();
+            await Channel.DisposeAsync()
+                .ConfigureAwait(false);
+
+            Channel = null;
+        }
+
+        await Task.Delay(delayMs)
+            .ConfigureAwait(false);
+    }
+
     #region Managing server instances
 
     /// <summary>

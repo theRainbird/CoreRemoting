@@ -39,6 +39,7 @@ public static class SessionRepositoryExtensions
                 .TryResumeSession(sessionId.Value,
                     handshake.SessionSignature,
                     handshake.ClientPublicKey,
+                    server,
                     rawMessageTransport)
                 .ConfigureAwait(false);
 

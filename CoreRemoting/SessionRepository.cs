@@ -35,6 +35,30 @@ public class SessionRepository : ISessionRepository
     }
 
     /// <summary>
+    /// Creates a new instance of the SessionRepository class copying all sessions from the source repository.
+    /// </summary>
+    /// <param name="source">Source session repository.</param>
+    /// <param name="keySize">Key size for asymmetric encryption. Should be 3072 or better in 2021 (Please use steps of 1024).</param>
+    /// <param name="inactiveSessionSweepInterval">Sweep interval for inactive sessions in seconds (No session sweeping, if set to 0)</param>
+    /// <param name="maximumSessionInactivityTime">Maximum session inactivity time in minutes</param>
+    internal SessionRepository(
+        SessionRepository source,
+        int keySize,
+        int inactiveSessionSweepInterval,
+        int maximumSessionInactivityTime)
+        : this(keySize, inactiveSessionSweepInterval, maximumSessionInactivityTime)
+    {
+        if (source == null)
+            throw new ArgumentNullException(nameof(source));
+
+        foreach (var pair in source._sessions)
+        {
+            if (source._sessions.TryRemove(pair.Key, out var session))
+                _sessions.TryAdd(pair.Key, session);
+        }
+    }
+
+    /// <summary>
     /// Starts the inactive session sweep timer.
     /// </summary>
     /// <param name="inactiveSessionSweepInterval">Sweep interval for inactive sessions in seconds</param>
@@ -153,9 +177,10 @@ public class SessionRepository : ISessionRepository
     /// <param name="sessionId">Session ID of the session to be resumed</param>
     /// <param name="sessionSignature">Client's session signature to prove its authenticity.</param>
     /// <param name="clientPublicKey">Client's public key, as presented by the reconnecting client</param>
+    /// <param name="server">Server instance</param>
     /// <param name="rawMessageTransport">Component that does the raw message transport of the reconnected client</param>
     /// <returns>The resumed session (a new complete handshake message is sent to the client), or null if the session doesn't exist or can't be resumed</returns>
-    public async Task<RemotingSession> TryResumeSession(Guid sessionId, byte[] sessionSignature, byte[] clientPublicKey, IRawMessageTransport rawMessageTransport)
+    public async Task<RemotingSession> TryResumeSession(Guid sessionId, byte[] sessionSignature, byte[] clientPublicKey, IRemotingServer server, IRawMessageTransport rawMessageTransport)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
             return null;
@@ -165,7 +190,7 @@ public class SessionRepository : ISessionRepository
 
         try
         {
-            session.AttachTransport(rawMessageTransport);
+            session.AttachTransport(rawMessageTransport, server);
 
             await session.SendCompleteHandshakeMessageAsync()
                 .ConfigureAwait(false);

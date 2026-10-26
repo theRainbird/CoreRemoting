@@ -29,7 +29,7 @@ public sealed class RemotingSession : IAsyncDisposable
 {
     #region Fields
 
-    private readonly IRemotingServer _server;
+    private IRemotingServer _server;
     private IRawMessageTransport _rawMessageTransport;
     private readonly int _keySize;
     private readonly int _sharedKeySize;
@@ -241,12 +241,17 @@ public sealed class RemotingSession : IAsyncDisposable
     }
 
     /// <summary>
+    /// Gets the <see cref="RemotingServer"/> owning this session.
+    /// </summary>
+    internal IRemotingServer Server => _server;
+
+    /// <summary>
     /// Attaches a new transport to this parked session (session resume).
     /// The authenticated state is reset, so the client has to authenticate again.
     /// </summary>
     /// <param name="newTransport">Raw message transport component of the reconnected client</param>
     /// <exception cref="RemotingException">Thrown if the session can't be resumed (not parked or disposed)</exception>
-    internal void AttachTransport(IRawMessageTransport newTransport)
+    internal void AttachTransport(IRawMessageTransport newTransport, IRemotingServer server = null)
     {
         if (newTransport == null)
             throw new ArgumentNullException(nameof(newTransport));
@@ -255,15 +260,16 @@ public sealed class RemotingSession : IAsyncDisposable
             Interlocked.CompareExchange(ref _lifecycleState, _stateActive, _stateParked) != _stateParked)
             throw new RemotingException("The session can't be resumed because it is not in a parked state.");
 
+        // rebind to the server that resumes the session
+        _server = server ?? _server;
+
         _rawMessageTransport = newTransport;
         newTransport.ReceiveMessage += OnReceiveMessage;
         newTransport.ErrorOccured += OnErrorOccured;
         newTransport.Disconnected += OnRawMessageTransportDisconnected;
 
-        // re-authentication is required, because state may have changed in the meantime
         _isAuthenticated = false;
         Identity = null;
-
         _lastActivityTimestamp = DateTime.Now;
     }
 
