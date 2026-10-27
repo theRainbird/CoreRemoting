@@ -39,6 +39,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly ClientConfig _config;
     private readonly AsyncLock _channelLock;
+    private readonly AsyncLock _connectLock;
     private Dictionary<Guid, ClientRpcContext> _activeCalls;
     private readonly AsyncLock _activeCallsLock;
     private Guid _sessionId;
@@ -83,6 +84,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         _activeCalls = null;
         _activeCallsLock = new();
         _channelLock = new();
+        _connectLock = new();
         _sessionLock = new();
         _currentlyPendingMessagesCounter = new(initialCount: 1);
         _cancellationTokenSource = new();
@@ -248,6 +250,11 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     internal int PendingUnsubscribeCount => _pendingUnsubscribes.Count;
 
     /// <summary>
+    /// Gets the number of currently pending messages. Exposed for tests only.
+    /// </summary>
+    internal int PendingMessageCount => (int)_currentlyPendingMessagesCounter.CurrentCount;
+
+    /// <summary>
     /// Gets or sets the invocation timeout in milliseconds.
     /// </summary>
     public int? InvocationTimeout { get; set; }
@@ -385,45 +392,54 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <exception cref="NetworkException">Thrown, if handshake with server failed.</exception>
     public async Task ConnectAsync()
     {
-        if (_channel == null)
-            throw new RemotingException("No client channel configured.");
+        if (IsConnected && HasSession)
+            return;
 
-        _isConnected.Set();
-        _goodbyeCompletedEvent.Reset();
-
-        using (await _activeCallsLock)
-            _activeCalls = new();
-
-        // prepare a fresh handshake/authentication cycle. This is also required for session resume,
-        // where the previous cycle's task sources are already completed and authentication must run again
-        _handshakeCompletedTaskSource = new();
-        _authenticationCompletedTaskSource = new();
-        _isAuthenticated.Reset();
-        Identity = null;
-
-        await _channel.ConnectAsync()
-            .ConfigureAwait(false);
-
-        if (_channel.RawMessageTransport.LastException != null)
-            throw _channel.RawMessageTransport.LastException;
-
-        await _handshakeCompletedTaskSource.Task.Timeout(
-            _config.ConnectionTimeout, () =>
-                throw new NetworkException("Handshake with server failed."))
-            .ConfigureAwait(false);
-
-        try
+        using (await _connectLock)
         {
-            await AuthenticateAsync()
+            if (IsConnected && HasSession)
+                return;
+
+            if (_channel == null)
+                throw new RemotingException("No client channel configured.");
+
+            _isConnected.Set();
+            _goodbyeCompletedEvent.Reset();
+
+            using (await _activeCallsLock)
+                _activeCalls = new();
+
+            // prepare a fresh handshake/authentication cycle. This is also required for session resume,
+            // where the previous cycle's task sources are already completed and authentication must run again
+            _handshakeCompletedTaskSource = new();
+            _authenticationCompletedTaskSource = new();
+            _isAuthenticated.Reset();
+            Identity = null;
+
+            await _channel.ConnectAsync()
                 .ConfigureAwait(false);
-        }
-        catch (Exception)
-        {
-            await DisconnectAsync(quiet: true);
-            throw;
-        }
 
-        StartKeepSessionAliveTimer();
+            if (_channel.RawMessageTransport.LastException != null)
+                throw _channel.RawMessageTransport.LastException;
+
+            await _handshakeCompletedTaskSource.Task.Timeout(
+                _config.ConnectionTimeout, () =>
+                    throw new NetworkException("Handshake with server failed."))
+                .ConfigureAwait(false);
+
+            try
+            {
+                await AuthenticateAsync()
+                    .ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                await DisconnectAsync(quiet: true);
+                throw;
+            }
+
+            StartKeepSessionAliveTimer();
+        }
     }
 
     /// <summary>
@@ -540,6 +556,11 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         await Task.Delay(delayMs)
             .ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Simulates server disconnect race, exposed for unit tests only.
+    /// </summary>
+    internal void SimulateDisconnectRace() => _activeCalls = null;
 
     /// <summary>
     /// Starts the keep session alive timer.
@@ -1050,6 +1071,10 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <returns>Results of the remote method invocation</returns>
     internal async Task<ClientRpcContext> InvokeRemoteMethod(MethodCallMessage methodCallMessage, bool oneWay = false)
     {
+        if (!IsConnected)
+            await ConnectAsync()
+                .ConfigureAwait(false);
+
         var signalCount = oneWay ? 0 : 1;
         _currentlyPendingMessagesCounter.AddCount(signalCount);
 
@@ -1062,7 +1087,10 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         using (await _activeCallsLock)
         {
             if (_activeCalls == null)
+            {
+                _currentlyPendingMessagesCounter.Signal(signalCount);
                 throw new RemoteInvocationException("Server disconnected");
+            }
         }
 
         var clientRpcContext = new ClientRpcContext();

@@ -193,4 +193,16 @@ public abstract class SessionResumeTests_Base
             public string Verifier { get; init; }
         }
     }
+
+    protected static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!condition())
+        {
+            if (DateTime.UtcNow > deadline)
+                throw new TimeoutException("Condition was not met within the timeout.");
+
+            await Task.Delay(50).ConfigureAwait(false);
+        }
+    }
 }
