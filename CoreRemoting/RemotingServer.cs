@@ -337,8 +337,15 @@ public sealed class RemotingServer : IRemotingServer
         if (Channel != null)
         {
             Channel.StopListening();
-            await Channel.DisposeAsync()
-                .ConfigureAwait(false);
+            try
+            {
+                await Channel.DisposeAsync()
+                    .ConfigureAwait(false);
+            }
+            catch
+            {
+                // silently ignore channel disposal issues
+            }
 
             Channel = null;
         }

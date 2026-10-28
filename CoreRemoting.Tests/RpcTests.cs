@@ -1308,6 +1308,38 @@ public partial class RpcTests : RpcTests_Base
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public async Task Rpc_after_reconnect_does_not_throw_server_disconnected()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        var clientConfig = new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            MessageEncryption = false,
+            Channel = ClientChannel,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+        };
+
+        using var client = new RemotingClient(clientConfig);
+        var proxy = client.CreateProxy<ITestService>();
+
+        await client.ConnectAsync().ConfigureAwait(false);
+        Assert.Equal("test", proxy.TestMethod("test"));
+
+        // rapid disconnect/connect cycles leave the previous read loop alive
+        // while the next connect is already in progress
+        for (var i = 0; i < 10; i++)
+        {
+            await client.DisconnectAsync().ConfigureAwait(false);
+            await client.ConnectAsync().ConfigureAwait(false);
+            Assert.Equal("test", proxy.TestMethod("test"));
+        }
+    }
+
+    [Fact]
     public void ServerComponent_can_track_client_network_address()
     {
         using var ctx = ValidationSyncContext.Install();
