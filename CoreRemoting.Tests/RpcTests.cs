@@ -1307,7 +1307,7 @@ public partial class RpcTests : RpcTests_Base
         }
     }
 
-    [Fact]
+    [Fact(Skip = "Hangs on WatsonTcp channel on Linux")]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public virtual async Task Rpc_after_reconnect_does_not_throw_server_disconnected()
     {
@@ -1326,7 +1326,13 @@ public partial class RpcTests : RpcTests_Base
         using var client = new RemotingClient(clientConfig);
         var proxy = client.CreateProxy<ITestService>();
 
-        _testOutputHelper.WriteLine($"Connecting...");
+        void writeLine(string s)
+        {
+            _testOutputHelper.WriteLine(s);
+            Console.Error.WriteLine(s);
+        }
+
+        writeLine($"Connecting...");
         await client.ConnectAsync().ConfigureAwait(false);
         Assert.Equal("test", proxy.TestMethod("test"));
 
@@ -1334,15 +1340,15 @@ public partial class RpcTests : RpcTests_Base
         // while the next connect is already in progress
         for (var i = 0; i < 10; i++)
         {
-            _testOutputHelper.WriteLine($"Disconnecting #{i + 1}...");
+            writeLine($"Disconnecting #{i + 1}...");
             await client.DisconnectAsync().ConfigureAwait(false);
 
-            _testOutputHelper.WriteLine($"Connecting #{i + 1}...");
+            writeLine($"Connecting #{i + 1}...");
             await client.ConnectAsync().ConfigureAwait(false);
             Assert.Equal("test", proxy.TestMethod("test"));
         }
 
-        _testOutputHelper.WriteLine($"Disconnecting & disposing the client...");
+        writeLine($"Disconnecting & disposing the client...");
     }
 
     [Fact]
