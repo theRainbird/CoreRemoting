@@ -250,6 +250,7 @@ public sealed class RemotingSession : IAsyncDisposable
     /// The authenticated state is reset, so the client has to authenticate again.
     /// </summary>
     /// <param name="newTransport">Raw message transport component of the reconnected client</param>
+    /// <param name="server">New server, if session is awakened by the new server.</param>
     /// <exception cref="RemotingException">Thrown if the session can't be resumed (not parked or disposed)</exception>
     internal void AttachTransport(IRawMessageTransport newTransport, IRemotingServer server = null)
     {

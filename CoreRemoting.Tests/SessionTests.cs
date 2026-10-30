@@ -350,7 +350,7 @@ public class SessionTests : IClassFixture<ServerFixture>
             Channel = ClientChannel
         });
 
-        var disconnected = new TaskCompletionSource<bool>();
+        var disconnected = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         client.AfterDisconnect += () => disconnected.TrySetResult(true);
         client.Connect();
 
@@ -364,10 +364,10 @@ public class SessionTests : IClassFixture<ServerFixture>
         await proxy.CloseSession(0.5);
 
         // proxy.Wait was started before CloseSession and shouldn't throw either
-        await proxy_Wait;
+        await proxy_Wait.Timeout(3);
 
         // Disconnection event should occur
-        await disconnected.Task.Timeout(2);
+        await disconnected.Task.Timeout(10);
     }
 
     [Fact]

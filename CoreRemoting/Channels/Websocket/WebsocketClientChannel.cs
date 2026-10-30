@@ -12,7 +12,7 @@ namespace CoreRemoting.Channels.Websocket;
 public class WebsocketClientChannel : WebsocketTransport, IClientChannel
 {
     private WeakReference<IRemotingClient> _weakClientRef;
-    
+
     /// <summary>
     /// Gets or sets the URL this channel is connected to.
     /// </summary>
@@ -35,7 +35,7 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
     public void Init(IRemotingClient client)
     {
         _weakClientRef = new WeakReference<IRemotingClient>(client);
-        
+
         Url =
             "ws://" +
             client.Config.ServerHostName + ":" +
@@ -63,12 +63,24 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
     /// <inheritdoc />
     public async Task ConnectAsync()
     {
+        if (ClientWebSocket.State != WebSocketState.None &&
+            _weakClientRef.TryGetTarget(out var client))
+        {
+            try { ClientWebSocket.Dispose(); } catch { }
+            Init(client);
+        }
+
+        // reset stale error from a previous connection
+        LastException = null;
+
         await ClientWebSocket.ConnectAsync(
             new Uri(Url), CancellationToken.None)
                 .ConfigureAwait(false);
 
         IsConnected = true;
-        _ = StartListening();
+
+        await StartListening()
+            .ConfigureAwait(false);
 
         await SendMessageAsync([])
             .ConfigureAwait(false);
@@ -77,30 +89,31 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
     }
 
     /// <inheritdoc />
-    public async Task DisconnectAsync()
+    public override async Task DisconnectAsync()
     {
         if (!IsConnected)
             return;
 
         IsConnected = false;
-        _listening = false;
 
+        // send a close frame, but do not touch the receive side: the read loop
+        // is already blocked on ReceiveAsync, sending a second ReceiveAsync races
         try
         {
-            await ClientWebSocket.CloseAsync(
-                WebSocketCloseStatus.NormalClosure, "Ok", CancellationToken.None)
-                    .ConfigureAwait(false);
+            if (ClientWebSocket.State == WebSocketState.Open)
+                await ClientWebSocket.CloseOutputAsync(
+                    WebSocketCloseStatus.NormalClosure, "Ok", CancellationToken.None)
+                        .ConfigureAwait(false);
         }
         catch // (ObjectDisposedException)
         {
-            // web socket already closed?
+            // socket may already be closed
         }
 
-        // Try to create a new socket instance to allow a new connection attempt
-        if (_weakClientRef.TryGetTarget(out var client))
-            Init(client);
-        
-        OnDisconnected();
+        // the read loop receives the server's close reply, sends ours back,
+        // and exits on its own; await it for deterministic teardown
+        await base.DisconnectAsync()
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />

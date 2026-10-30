@@ -40,9 +40,28 @@ public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
     /// </summary>
     public override async Task<Guid> StartListening()
     {
-        var sessionId = await CreateRemotingSession().ConfigureAwait(false);
-        await base.StartListening().ConfigureAwait(false);
-        return sessionId;
+        try
+        {
+            var sessionId = await CreateRemotingSession().ConfigureAwait(false);
+            await base.StartListening().ConfigureAwait(false);
+            return sessionId;
+        }
+        catch
+        {
+            try
+            {
+                WebSocket.Dispose();
+            }
+            catch (Exception disposeEx)
+            {
+                LastException = disposeEx as NetworkException ??
+                    new NetworkException(disposeEx.Message, disposeEx);
+
+                OnErrorOccured(disposeEx.Message, LastException);
+            }
+
+            throw;
+        }
     }
 
     /// <summary>
@@ -67,8 +86,8 @@ public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
     /// <inheritdoc />
     public override async ValueTask DisposeAsync()
     {
-        WebSocket.Dispose();
-
+        // await the read loop; its finally closes the underlying WebSocket
+        // after the close handshake completes, so no extra WebSocket.Dispose here
         await base.DisposeAsync()
             .ConfigureAwait(false);
     }

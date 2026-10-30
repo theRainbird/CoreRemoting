@@ -43,7 +43,18 @@ public class WebsocketServerChannel : IServerChannel
         _ = Task.Run(async () =>
         {
             while (IsListening)
-                await ReceiveConnection();
+            {
+                try
+                {
+                    await ReceiveConnection()
+                        .ConfigureAwait(false);
+                }
+                catch
+                {
+                    // a single failed connection
+                    // must not stop the accept loop
+                }
+            }
         });
     }
 
@@ -74,10 +85,26 @@ public class WebsocketServerChannel : IServerChannel
             .ConfigureAwait(false);
 
         Connections[sessionId] = connection;
-        connection.Disconnected += async () =>
+
+        // don't await DisposeAsync from the loop's finally, that would deadlock;
+        // dispose off the loop's thread, after it has fully completed
+        connection.Disconnected += () =>
         {
-            Connections.TryRemove(sessionId, out _);
-            await connection.DisposeAsync();
+            if (Connections.TryRemove(sessionId, out var conn))
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await conn.DisposeAsync()
+                            .ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // async void event handler should never throw
+                    }
+                });
+            }
         };
     }
 

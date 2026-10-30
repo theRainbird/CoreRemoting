@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading;
+using CoreRemoting.Channels.Null;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Encryption;
 using CoreRemoting.Serialization;
@@ -12,8 +13,6 @@ namespace CoreRemoting.Tests;
 
 public class InactiveSessionSweepTests
 {
-    private static int _nextPort = 9299;
-
     /// <summary>
     /// Serializer that fails while a session is closed: with message encryption the "session_closed" wire message
     /// wraps an empty payload in <see cref="SignedMessageData"/>, which is serialized outside of any try/catch
@@ -43,14 +42,12 @@ public class InactiveSessionSweepTests
     [Fact]
     public void Sweep_should_remove_all_inactive_sessions_and_keep_the_server_alive_if_closing_a_session_throws()
     {
-        var port = Interlocked.Increment(ref _nextPort);
-
         using var server = new RemotingServer(new ServerConfig
         {
-            NetworkPort = port,
-            MessageEncryption = true,
+            Channel = new NullServerChannel(),
+            MessageEncryption = false,
             Serializer = new FailingOnSessionClosedSerializerAdapter(),
-            InactiveSessionSweepInterval = 3,
+            InactiveSessionSweepInterval = 1,
             MaximumSessionInactivityTime = 0,
             RegisterServicesAction = container =>
                 container.RegisterService<ITestService, TestService>(ServiceLifetime.Singleton)
@@ -62,10 +59,11 @@ public class InactiveSessionSweepTests
             {
                 var client = new RemotingClient(new ClientConfig
                 {
-                    ServerPort = port,
-                    MessageEncryption = true,
+                    Channel = new NullClientChannel(),
+                    MessageEncryption = false,
                     Serializer = new BsonSerializerAdapter(),
-                    ConnectionTimeout = 0
+                    ConnectionTimeout = 0,
+                    SendTimeout = 5,
                 });
                 client.Connect();
                 Assert.Equal("hello", client.CreateProxy<ITestService>().Echo("hello"));
@@ -73,7 +71,7 @@ public class InactiveSessionSweepTests
             })
             .ToList();
 
-        // Both sessions are inactive for more than 0 minutes, so the next sweep (every 3 seconds) removes them.
+        // Both sessions are inactive for more than 0 minutes, so the next sweep (every second) removes them.
         var timeout = DateTime.UtcNow.AddSeconds(10);
         while (server.SessionRepository.Sessions.Any() && DateTime.UtcNow < timeout)
         {

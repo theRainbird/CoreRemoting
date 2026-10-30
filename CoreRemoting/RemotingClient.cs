@@ -19,7 +19,6 @@ using CoreRemoting.Serialization;
 using CoreRemoting.Serialization.Bson;
 using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
-using CancellationTokenSource = System.Threading.CancellationTokenSource;
 using Timer = System.Timers.Timer;
 
 namespace CoreRemoting;
@@ -36,7 +35,6 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     private readonly ISessionKeyPair _keyPair;
     private readonly ClientDelegateRegistry _delegateRegistry;
     private readonly SubscriptionTracker _subscriptionTracker;
-    private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly ClientConfig _config;
     private readonly AsyncLock _channelLock;
     private readonly AsyncLock _connectLock;
@@ -87,7 +85,6 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         _connectLock = new();
         _sessionLock = new();
         _currentlyPendingMessagesCounter = new(initialCount: 1);
-        _cancellationTokenSource = new();
         _delegateRegistry = new();
         _subscriptionTracker = new();
         _handshakeCompletedTaskSource = new();
@@ -434,7 +431,9 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             }
             catch (Exception)
             {
-                await DisconnectAsync(quiet: true);
+                await DisconnectCoreAsync(quiet: true)
+                    .ConfigureAwait(false);
+
                 throw;
             }
 
@@ -454,6 +453,15 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// </summary>
     /// <param name="quiet">When set to true, no goodbye message is sent to the server</param>
     public async Task DisconnectAsync(bool quiet = false)
+    {
+        using (await _connectLock)
+            await DisconnectCoreAsync(quiet)
+                .ConfigureAwait(false);
+
+        AfterDisconnect?.Invoke();
+    }
+
+    private async Task DisconnectCoreAsync(bool quiet = false)
     {
         if (_isConnected.TryReset())
             _currentlyPendingMessagesCounter.Signal();
@@ -486,8 +494,8 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         var sharedSecret =
             MessageEncryption
-                 ? sessionKey ?? sessionId.ToByteArray()
-                 : null;
+				? sessionKey ?? sessionId.ToByteArray()
+				: null;
 
         if (!quiet && _channel.IsConnected)
         {
@@ -535,8 +543,6 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         _handshakeCompletedTaskSource = new();
         _authenticationCompletedTaskSource = new();
         Identity = null;
-
-        AfterDisconnect?.Invoke();
     }
 
     /// <summary>
@@ -872,6 +878,10 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// </summary>
     private Task ProcessSessionClosedMessage(WireMessage message)
     {
+        // ignore a stale close notification for a connection that is already torn down
+        if (!IsConnected || !_isConnected.Value)
+            return Task.CompletedTask;
+
         // Mark that the session was closed by server to gracefully complete in-flight calls
         _sessionClosedByServer.Set();
         return DisconnectAsync(quiet: true);
@@ -1279,11 +1289,12 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         await DisconnectAsync()
             .ConfigureAwait(false);
 
-        if (!_cancellationTokenSource.IsCancellationRequested)
-        {
-            _cancellationTokenSource.Cancel();
-            _cancellationTokenSource.Dispose();
-        }
+        _handshakeCompletedTaskSource.TrySetCanceled();
+        _authenticationResponseTaskSource.TrySetCanceled();
+        _authenticationCompletedTaskSource.TrySetCanceled();
+
+        await Task.WhenAll(_pendingUnsubscribes.Values)
+            .ConfigureAwait(false);
 
         _delegateRegistry.Clear();
 
@@ -1311,6 +1322,8 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         _keyPair?.Dispose();
         _activeCallsLock.Dispose();
+        _connectLock.Dispose();
+        _channelLock.Dispose();
     }
 
     #endregion
