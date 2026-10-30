@@ -149,12 +149,15 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         _goodbyeCompletedEvent.Set();
 
+        var graceful = _sessionClosedByServer.Value;
+        _sessionClosedByServer.Reset();
+
         if (activeCalls == null)
             return;
 
         foreach (var activeCall in activeCalls)
         {
-            if (_sessionClosedByServer.Value)
+            if (graceful)
             {
                 // Session was closed gracefully by server.
                 // Complete all pending calls without error to allow graceful shutdown of in-flight calls
@@ -170,9 +173,6 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                 activeCall.Value.TaskSource.TrySetResult(null);
             }
         }
-
-        // Reset the flag after handling disconnect
-        _sessionClosedByServer.Reset();
     }
 
     #endregion
@@ -463,8 +463,10 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
     private async Task DisconnectCoreAsync(bool quiet = false)
     {
-        if (_isConnected.TryReset())
-            _currentlyPendingMessagesCounter.Signal();
+        if (!_isConnected.TryReset())
+            return;
+
+        _currentlyPendingMessagesCounter.Signal();
 
         await _currentlyPendingMessagesCounter.WaitAsync()
             .ExpireMs(_config.WaitTimeForCurrentlyProcessedMessagesOnDispose)
@@ -878,11 +880,13 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// </summary>
     private Task ProcessSessionClosedMessage(WireMessage message)
     {
-        // ignore a stale close notification for a connection that is already torn down
-        if (!IsConnected || !_isConnected.Value)
+        // ignore a stale close notification:
+        // - transport already down, or
+        // - no active session (mid-disconnect or handshake in progress)
+        if (!IsConnected || !_isConnected.Value || !HasSession)
             return Task.CompletedTask;
 
-        // Mark that the session was closed by server to gracefully complete in-flight calls
+        // mark that the session was closed by server to gracefully complete in-flight calls
         _sessionClosedByServer.Set();
         return DisconnectAsync(quiet: true);
     }

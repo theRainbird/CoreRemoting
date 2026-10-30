@@ -133,10 +133,4 @@ public class RpcTests_NamedPipe : RpcTests
 
         Assert.Equal(0, _serverFixture.ServerErrorCount);
     }
-
-    [Fact(Skip = "Fails on NamedPipes channel")]
-    public override Task Rpc_after_reconnect_does_not_throw_server_disconnected()
-    {
-        return Task.CompletedTask;
-    }
 }

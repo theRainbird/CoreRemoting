@@ -1262,7 +1262,7 @@ public partial class RpcTests : RpcTests_Base
     }
 
     [Fact]
-    public void RemotingClient_can_disconnect_and_connect_again()
+    public virtual void RemotingClient_can_disconnect_and_connect_again()
     {
         using var ctx = ValidationSyncContext.Install();
 
@@ -1274,26 +1274,9 @@ public partial class RpcTests : RpcTests_Base
             MessageEncryption = false,
             Channel = ClientChannel,
             ServerPort = _serverFixture.Server.Config.NetworkPort,
+            ChannelConnectionName = _serverFixture.Server
+                .Config.ChannelConnectionName ?? "CoreRemoting",
         };
-
-        // NamedPipe requires a connection name; provide the server's configured name
-        if (ClientChannel is NamedPipeClientChannel || ServerChannel is NamedPipeServerChannel)
-        {
-            clientConfig.ChannelConnectionName = _serverFixture.Server.Config.ChannelConnectionName ?? "CoreRemoting";
-        }
-
-        var isNamedPipe = ClientChannel is NamedPipeClientChannel || ServerChannel is NamedPipeServerChannel;
-
-        if (isNamedPipe)
-        {
-            // NamedPipe: run a simple connect/disconnect once due to known reconnect instability
-            using var client = new RemotingClient(clientConfig);
-            client.Connect();
-            var proxy = client.CreateProxy<ISessionAwareService>();
-            Assert.NotNull(proxy.ClientAddress);
-            client.Disconnect();
-            return;
-        }
 
         using (var client = new RemotingClient(clientConfig))
         {
