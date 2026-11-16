@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.IO;
-using System.Text;
 
 namespace CoreRemoting.Serialization.NeoBinary;
 
@@ -20,24 +20,26 @@ partial class NeoBinarySerializer
 		{
 			// XML serialization (default)
 			writer.Write((byte)0); // XML marker
-			var schemaBytes = System.Buffers.ArrayPool<byte>.Shared.Rent(4096);
-			try
-			{
-				using var ms = new MemoryStream(schemaBytes);
-				dataSet.WriteXmlSchema(ms);
-				var schemaXml = Encoding.UTF8.GetString(schemaBytes, 0, (int)ms.Position);
-				writer.Write(schemaXml);
-
-				ms.SetLength(0);
-				dataSet.WriteXml(ms, XmlWriteMode.DiffGram);
-				var diffGramXml = Encoding.UTF8.GetString(schemaBytes, 0, (int)ms.Position);
-				writer.Write(diffGramXml);
-			}
-			finally
-			{
-				System.Buffers.ArrayPool<byte>.Shared.Return(schemaBytes);
-			}
+			WriteXmlSchemaAndDiffGram(writer,
+				schemaWriter => dataSet.WriteXmlSchema(schemaWriter),
+				diffGramWriter => dataSet.WriteXml(diffGramWriter, XmlWriteMode.DiffGram));
 		}
+	}
+
+	/// <summary>
+	/// Writes the XML schema and the DiffGram of a DataSet or DataTable as two strings.
+	/// The XML is written into growing <see cref="StringWriter"/> instances, so the size of the data is not limited.
+	/// </summary>
+	private static void WriteXmlSchemaAndDiffGram(BinaryWriter writer, Action<TextWriter> writeXmlSchema,
+		Action<TextWriter> writeDiffGram)
+	{
+		using var schemaWriter = new StringWriter(CultureInfo.InvariantCulture);
+		writeXmlSchema(schemaWriter);
+		writer.Write(schemaWriter.ToString());
+
+		using var diffGramWriter = new StringWriter(CultureInfo.InvariantCulture);
+		writeDiffGram(diffGramWriter);
+		writer.Write(diffGramWriter.ToString());
 	}
 
 	private void SerializeDataSetBinary(DataSet dataSet, BinaryWriter writer, HashSet<object> serializedObjects,
@@ -107,23 +109,9 @@ partial class NeoBinarySerializer
 			// Do not add the DataTable to a temporary DataSet, as it may already belong to another DataSet
 			// and would throw "DataTable already belongs to another DataSet.". Instead, write schema and data
 			// directly from the DataTable itself.
-			var schemaBytes = System.Buffers.ArrayPool<byte>.Shared.Rent(4096);
-			try
-			{
-				using var ms = new MemoryStream(schemaBytes);
-				dataTable.WriteXmlSchema(ms);
-				var schemaXml = Encoding.UTF8.GetString(schemaBytes, 0, (int)ms.Position);
-				writer.Write(schemaXml);
-
-				ms.SetLength(0);
-				dataTable.WriteXml(ms, XmlWriteMode.DiffGram);
-				var diffGramXml = Encoding.UTF8.GetString(schemaBytes, 0, (int)ms.Position);
-				writer.Write(diffGramXml);
-			}
-			finally
-			{
-				System.Buffers.ArrayPool<byte>.Shared.Return(schemaBytes);
-			}
+			WriteXmlSchemaAndDiffGram(writer,
+				schemaWriter => dataTable.WriteXmlSchema(schemaWriter),
+				diffGramWriter => dataTable.WriteXml(diffGramWriter, XmlWriteMode.DiffGram));
 		}
 	}
 
