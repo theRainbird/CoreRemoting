@@ -13,13 +13,30 @@ public class TcpServerChannel : IServerChannel
     private IRemotingServer _remotingServer;
     private WatsonTcpServer _tcpServer;
     private readonly ConcurrentDictionary<Guid, TcpConnection> _connections;
+    private readonly string _listenerIpAddress;
 
     /// <summary>
-    /// Creates a new instance of the TcpServerChannel class.
+    /// Creates a new instance of the TcpServerChannel class that listens on all network interfaces.
     /// </summary>
-    public TcpServerChannel()
+    public TcpServerChannel() : this(listenerIpAddress: null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a new instance of the TcpServerChannel class that listens on the specified IP address.
+    /// </summary>
+    /// <param name="listenerIpAddress">
+    /// IP address to listen on, e.g. "127.0.0.1" to accept only local connections.
+    /// Null, empty, "*", "+" or "0.0.0.0" listen on all network interfaces.
+    /// </param>
+    /// <remarks>
+    /// <see cref="ServerConfig.HostName"/> is deliberately not used here: it defaults to "localhost",
+    /// so using it would restrict all existing TCP servers to local connections.
+    /// </remarks>
+    public TcpServerChannel(string listenerIpAddress)
     {
         _connections = new ConcurrentDictionary<Guid, TcpConnection>();
+        _listenerIpAddress = listenerIpAddress;
     }
 
     /// <summary>
@@ -30,7 +47,7 @@ public class TcpServerChannel : IServerChannel
     {
         _remotingServer = server ?? throw new ArgumentNullException(nameof(server));
 
-        _tcpServer = new WatsonTcpServer(null, _remotingServer.Config.NetworkPort);
+        _tcpServer = new WatsonTcpServer(_listenerIpAddress, _remotingServer.Config.NetworkPort);
         _tcpServer.Settings.NoDelay = true;
         _tcpServer.Events.ClientConnected += OnClientConnected;
         _tcpServer.Events.ClientDisconnected += OnClientDisconnected;
