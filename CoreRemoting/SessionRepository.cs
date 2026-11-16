@@ -67,8 +67,17 @@ public class SessionRepository : ISessionRepository
 
         foreach (var inactiveSessionId in inactiveSessionIdList)
         {
-            await RemoveSession(inactiveSessionId)
-                .ConfigureAwait(false);
+            try
+            {
+                await RemoveSession(inactiveSessionId)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // ignored: an exception escaping this async void timer callback would terminate the process,
+                // and the remaining inactive sessions must still be swept
+                // TODO: dispatch the exception
+            }
         }
     }
 
