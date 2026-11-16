@@ -369,6 +369,14 @@ partial class NeoBinarySerializer
 			else
 				element = DeserializeObject(reader, deserializedObjects);
 
+			if (element is ForwardReferencePlaceholder placeholder)
+			{
+				// The referenced object is still under construction: assign it when the object graph is complete.
+				DeferElementAssignment(deserializedObjects, placeholder,
+					referencedObject => array.SetValue(referencedObject, indices));
+				continue;
+			}
+
 			array.SetValue(element, indices);
 		}
 
@@ -396,12 +404,19 @@ partial class NeoBinarySerializer
 		{
 			var item = DeserializeObject(reader, deserializedObjects);
 
-			// If item is a forward reference placeholder, add null for now
-			// It will be resolved later
-			if (item is ForwardReferencePlaceholder)
+			// If item is a forward reference placeholder (object still under construction), add null for now
+			// and assign the finished object when the object graph is complete.
+			if (item is ForwardReferencePlaceholder placeholder)
+			{
+				var itemIndex = i;
 				list.Add(null);
+				DeferElementAssignment(deserializedObjects, placeholder,
+					referencedObject => list[itemIndex] = referencedObject);
+			}
 			else
+			{
 				list.Add(item);
+			}
 		}
 
 		return list;
@@ -436,6 +451,14 @@ partial class NeoBinarySerializer
 			{
 				var key = (string)DeserializeObject(reader, deserializedObjects);
 				var value = DeserializeObject(reader, deserializedObjects);
+
+				if (value is ForwardReferencePlaceholder expandoPlaceholder)
+				{
+					DeferElementAssignment(deserializedObjects, expandoPlaceholder,
+						referencedObject => dict[key] = referencedObject);
+					continue;
+				}
+
 				dict[key] = value;
 			}
 
@@ -452,6 +475,15 @@ partial class NeoBinarySerializer
 		{
 			var key = DeserializeObject(reader, deserializedObjects);
 			var value = DeserializeObject(reader, deserializedObjects);
+
+			if (value is ForwardReferencePlaceholder placeholder)
+			{
+				// The referenced object is still under construction: add the entry when the object graph is complete.
+				DeferElementAssignment(deserializedObjects, placeholder,
+					referencedObject => dictionary[key] = referencedObject);
+				continue;
+			}
+
 			dictionary[key] = value;
 		}
 

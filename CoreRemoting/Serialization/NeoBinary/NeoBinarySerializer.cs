@@ -219,12 +219,16 @@ public partial class NeoBinarySerializer
             // Complex marker (object, reference, custom, compact): deserialize directly using
             // the already-read byte. This avoids seeking the stream back, so it also works for
             // non-seekable streams.
-            var deserializedObjects = new Dictionary<int, object>();
+            var deserializedObjects = new DeserializedObjectTable();
             var result = DeserializeObjectByMarker(firstByte, reader, deserializedObjects, -1);
 
             // After the full graph is constructed, resolve any remaining forward references
             // that couldn't be set during nested deserialization (e.g., back-references).
             ResolvePendingForwardReferences(deserializedObjects);
+
+            // Assign collection elements (list items, array elements, dictionary values) that referred to
+            // objects which were still under construction when the element was read.
+            ResolveDeferredElementAssignments(deserializedObjects);
 
             return result;
         }
