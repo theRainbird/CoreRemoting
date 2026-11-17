@@ -39,7 +39,7 @@ public class ServiceRegistration
         ServiceLifetime = serviceLifetime;
         Factory = factory;
         IsHiddenSystemService = isHiddenSystemService;
-        EventStub = new EventStub(interfaceType);
+        EventHub = new ServiceEventHub(interfaceType);
     }
 
     /// <summary>
@@ -80,5 +80,5 @@ public class ServiceRegistration
     /// <summary>
     /// Holds all remote event handlers for the component.
     /// </summary>
-    public EventStub EventStub { get; }
+    public ServiceEventHub EventHub { get; }
 }

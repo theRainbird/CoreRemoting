@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace CoreRemoting.Channels.Null;
@@ -34,28 +35,15 @@ public class NullClientChannel : NullTransport, IClientChannel
     /// <inheritdoc />
     public Task ConnectAsync()
     {
-        var metadata = Array.Empty<string>();
-        if (RemotingClient?.MessageEncryption ?? false)
-        {
-            metadata = [nameof(RemotingClient.PublicKey),
-                Convert.ToBase64String(RemotingClient.PublicKey)];
-        }
+        var metadata = RemotingClient?.HandshakeMessage?.Metadata;
 
         ThisEndpoint = NullMessageQueue.Connect(Url, metadata);
         RemoteEndpoint = Url;
 
-        StartListening();
+        _ = StartListening();
         OnConnected();
 
         return Task.CompletedTask;
-    }
-
-    /// <inheritdoc />
-    public override async Task DisconnectAsync()
-    {
-        await base.DisconnectAsync().ConfigureAwait(false);
-        IsConnected = false;
-        OnDisconnected();
     }
 
     /// <inheritdoc />

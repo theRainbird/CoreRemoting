@@ -16,7 +16,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (string)base["uniqueInstanceName"];
             set => base["uniqueInstanceName"] = value;
         }
-        
+
         /// <summary>
         /// Gets or sets the server hostname.
         /// </summary>
@@ -26,7 +26,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (string)base["serverHostName"];
             set => base["serverHostName"] = value;
         }
-        
+
         /// <summary>
         /// Gets or sets the server network port.
         /// </summary>
@@ -37,7 +37,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (int)base["serverPort"];
             set => base["serverPort"] = value;
         }
-        
+
         /// <summary>
         /// Gets or sets the RSA key size for message encryption.
         /// </summary>
@@ -47,7 +47,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (int)base["keySize"];
             set => base["keySize"] = value;
         }
-        
+
         /// <summary>
         /// Gets or sets the name of the serializer which should be used by the client instance.
         /// </summary>
@@ -57,7 +57,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (string)base["serializer"];
             set => base["serializer"] = value;
         }
-        
+
         /// <summary>
         /// Gets or sets the type of the client channel which should be used for communication.
         /// </summary>
@@ -67,7 +67,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (string)base["channel"];
             set => base["channel"] = value;
         }
-        
+
         /// <summary>
         /// Gets or set whether messages should be encrypted or not.
         /// </summary>
@@ -77,7 +77,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (bool)base["messageEncryption"];
             set => base["messageEncryption"] = value;
         }
-        
+
         /// <summary>
         /// Gets or set whether this is the default client.
         /// </summary>
@@ -87,7 +87,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (bool)base["isDefault"];
             set => base["isDefault"] = value;
         }
-        
+
         /// <summary>
         /// Gets or sets the connection timeout in seconds (0 means infinite).
         /// </summary>
@@ -97,7 +97,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             get => (int)base["connectionTimeout"];
             set => base["connectionTimeout"] = value;
         }
-        
+
         /// <summary>
         /// Gets or sets the authentication timeout in seconds (0 means infinite).
         /// </summary>

@@ -100,7 +100,7 @@ public class QuicServerChannel : IServerChannel
             Connections[sessionId] = session;
             session.Disconnected += async () =>
             {
-                Connections.TryRemove(sessionId, out session);
+                Connections.TryRemove(sessionId, out _);
                 await session.DisposeAsync();
             };
         }

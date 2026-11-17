@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security;
 using System.Threading.Tasks;
 using System.Timers;
 using CoreRemoting.Channels;
@@ -84,17 +85,19 @@ public class SessionRepository : ISessionRepository
     /// <summary>
     /// Gets the key size for asymmetric encryption. Should be 3072 or better in 2021 ;)
     /// </summary>
-    public int KeySize { get; }
+    private int KeySize { get; }
 
     /// <summary>
     /// Creates a new session.
     /// </summary>
+    /// <param name="messageEncryption">Whether message encryption is enabled on client</param>
+    /// <param name="sharedKeySize">Shared key size requested by the client.</param>
     /// <param name="clientPublicKey">Client's public key</param>
     /// <param name="clientAddress">Client's network address</param>
     /// <param name="server">Server instance</param>
     /// <param name="rawMessageTransport">Component that does the raw message transport</param>
     /// <returns>The newly created session</returns>
-    public RemotingSession CreateSession(byte[] clientPublicKey, string clientAddress, IRemotingServer server, IRawMessageTransport rawMessageTransport)
+    public async Task<RemotingSession> CreateSession(bool messageEncryption, int sharedKeySize, byte[] clientPublicKey, string clientAddress, IRemotingServer server, IRawMessageTransport rawMessageTransport)
     {
         if (server == null)
             throw new ArgumentException(nameof(server));
@@ -103,13 +106,28 @@ public class SessionRepository : ISessionRepository
             throw new ArgumentNullException(nameof(rawMessageTransport));
 
         var session = new RemotingSession(
+            messageEncryption,
             KeySize,
+            sharedKeySize,
             clientPublicKey,
             clientAddress,
             server,
             rawMessageTransport);
 
         _sessions.TryAdd(session.SessionId, session);
+
+        try
+        {
+            await session.SendCompleteHandshakeMessageAsync()
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            await RemoveSession(session.SessionId)
+                .ConfigureAwait(false);
+
+            throw;
+        }
 
         return session;
     }
@@ -120,12 +138,45 @@ public class SessionRepository : ISessionRepository
     /// <param name="sessionId">Session ID</param>
     /// <returns>The session correlating to the specified session ID</returns>
     /// <exception cref="KeyNotFoundException">Thrown, if no session with the specified session ID is found</exception>
-    public RemotingSession GetSession(Guid sessionId)
+    public Task<RemotingSession> GetSession(Guid sessionId)
     {
         if (_sessions.TryGetValue(sessionId, out var session))
-            return session;
+            return Task.FromResult(session);
 
         throw new KeyNotFoundException($"Session '{sessionId}' not found.");
+    }
+
+    /// <summary>
+    /// Tries to resume a specified parked session on the given raw message transport.
+    /// The presented public key has to match the public key of the original connection (hijack protection).
+    /// </summary>
+    /// <param name="sessionId">Session ID of the session to be resumed</param>
+    /// <param name="sessionSignature">Client's session signature to prove its authenticity.</param>
+    /// <param name="clientPublicKey">Client's public key, as presented by the reconnecting client</param>
+    /// <param name="rawMessageTransport">Component that does the raw message transport of the reconnected client</param>
+    /// <returns>The resumed session (a new complete handshake message is sent to the client), or null if the session doesn't exist or can't be resumed</returns>
+    public async Task<RemotingSession> TryResumeSession(Guid sessionId, byte[] sessionSignature, byte[] clientPublicKey, IRawMessageTransport rawMessageTransport)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session))
+            return null;
+
+        if (!session.CanBeResumedWith(clientPublicKey, sessionSignature))
+            return null;
+
+        try
+        {
+            session.AttachTransport(rawMessageTransport);
+
+            await session.SendCompleteHandshakeMessageAsync()
+                .ConfigureAwait(false);
+
+            return session;
+        }
+        catch (RemotingException)
+        // lost the park race against a concurrent resume request, caller falls back to creating a new session
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -140,7 +191,7 @@ public class SessionRepository : ISessionRepository
     }
 
     /// <summary>
-    /// Gets a list of all sessions.
+    /// Gets a list of all sessions (should be used only by unit tests).
     /// </summary>
     public IEnumerable<RemotingSession> Sessions => _sessions.Values.ToArray();
 

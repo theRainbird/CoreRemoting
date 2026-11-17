@@ -2,6 +2,8 @@
 using System.Net.Quic;
 using System.Text;
 using System.Threading.Tasks;
+using CoreRemoting.RpcMessaging;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Quic;
 
@@ -47,16 +49,17 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
     private async Task<Guid> CreateRemotingSession()
     {
         // read handshake message
-        var clientPublicKey = await ReadIncomingMessage()
+        var handshakeBytes = await ReadIncomingMessage()
             .ConfigureAwait(false);
 
-        // disable message encryption if handshake is empty
-        if (clientPublicKey != null && clientPublicKey.Length == 0)
-            clientPublicKey = null;
+        // deserialize handshake and add client address
+        var serializer = RemotingServer.Serializer;
+        var handshakeMessage = serializer.Deserialize<ClientHandshakeMessage>(handshakeBytes);
+        handshakeMessage.ClientAddress = Connection.RemoteEndPoint.ToString();
 
-        Session = RemotingServer.SessionRepository.CreateSession(
-            clientPublicKey, Connection.RemoteEndPoint.ToString(),
-                RemotingServer, this);
+        Session = await RemotingServer.SessionRepository
+            .ResumeOrCreateSession(handshakeMessage, RemotingServer, this)
+                .ConfigureAwait(false);
 
         return Session.SessionId;
     }

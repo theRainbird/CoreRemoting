@@ -54,7 +54,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
             {
                 Channel = CreateServerChannelFromConfigName(configElement.Channel),
                 Serializer = CreateSerializerAdapterFromConfigName(configElement.Serializer),
-                AuthenticationProvider = 
+                AuthenticationProvider =
                     string.IsNullOrWhiteSpace(configElement.AuthenticationProvider)
                         ? null
                         : (IAuthenticationProvider)Activator.CreateInstance(GetTypeFromConfigString(configElement.AuthenticationProvider)),
@@ -98,7 +98,7 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
 
             return clientConfig;
         }
-        
+
         /// <summary>
         /// Gets a type from a string that contains type name and assembly name.
         /// </summary>
@@ -126,10 +126,10 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         /// <returns>Server channel</returns>
         private static IServerChannel CreateServerChannelFromConfigName(string channelTypeName)
         {
-            var websocketServerChannelShortcuts = 
+            var websocketServerChannelShortcuts =
                 new[] {"ws", "websocket"};
 
-            var tcpServerChannelShortcuts = 
+            var tcpServerChannelShortcuts =
                 new[] {"tcp"};
 
             if (websocketServerChannelShortcuts.Contains(channelTypeName.ToLower()))
@@ -139,10 +139,10 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
                 return new TcpServerChannel();
 
             var channelType = GetTypeFromConfigString(channelTypeName);
-            
+
             return (IServerChannel) Activator.CreateInstance(channelType);
         }
-        
+
         /// <summary>
         /// Creates a client channel from a type string.
         /// </summary>
@@ -150,23 +150,23 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         /// <returns>Client channel</returns>
         private static IClientChannel CreateClientChannelFromConfigName(string channelTypeName)
         {
-            var websocketClientChannelShortcuts = 
+            var websocketClientChannelShortcuts =
                 new[] {"ws", "websocket"};
 
-            var tcpClientChannelShortcuts = 
+            var tcpClientChannelShortcuts =
                 new[] {"tcp"};
 
             if (websocketClientChannelShortcuts.Contains(channelTypeName.ToLower()))
                 return new WebsocketClientChannel();
-            
+
             if (tcpClientChannelShortcuts.Contains(channelTypeName.ToLower()))
                 return new TcpClientChannel();
 
             var channelType = GetTypeFromConfigString(channelTypeName);
-            
+
             return (IClientChannel) Activator.CreateInstance(channelType);
         }
-        
+
         /// <summary>
         /// Creates a serializer adapter from a type string.
         /// </summary>
@@ -174,10 +174,10 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         /// <returns></returns>
         private static ISerializerAdapter CreateSerializerAdapterFromConfigName(string serializerName)
         {
-            var binarySerializerShortcuts = 
+            var binarySerializerShortcuts =
                 new[]
                 {
-                    "binary", 
+                    "binary",
                     "binaryformatter",
                     "binaryserializer"
                 };
@@ -188,15 +188,15 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
                     "neobinary",
                     "neobinaryserializer"
                 };
-            
+
             var bsonSerializerShortcuts =
                 new[]
                 {
-                    "bson", 
-                    "bsonformatter", 
-                    "bsonserializer", 
+                    "bson",
+                    "bsonformatter",
+                    "bsonserializer",
                 };
-            
+
             if (binarySerializerShortcuts.Contains(serializerName.ToLower()))
             {
                 // Load BinarySerializerAdapter from separate assembly
@@ -210,9 +210,9 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
 
             if (neoBinarySerializerShortcuts.Contains(serializerName.ToLower()))
                 return new NeoBinarySerializerAdapter();
-            
+
             var serializerAdapterType = GetTypeFromConfigString(serializerName);
-            
+
             return (ISerializerAdapter) Activator.CreateInstance(serializerAdapterType);
         }
     }

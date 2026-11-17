@@ -27,7 +27,7 @@ namespace CoreRemoting.ClassicRemotingApi
         /// Gets a list of currently registered CoreRemoting client instances.
         /// </summary>
         public static IRemotingClient[] RegisteredClientInstances => RemotingClient.ActiveClientInstances.ToArray();
-        
+
         /// <summary>
         /// Gets a registered server instance by its unique name.
         /// </summary>
@@ -44,7 +44,7 @@ namespace CoreRemoting.ClassicRemotingApi
                     .FirstOrDefault(instance =>
                         instance.Config.UniqueServerInstanceName.Equals(uniqueServerInstanceName));
         }
-        
+
         /// <summary>
         /// Gets a registered client instance by its unique name.
         /// </summary>
@@ -72,7 +72,7 @@ namespace CoreRemoting.ClassicRemotingApi
             var server = new RemotingServer(config);
             return server.Config.UniqueServerInstanceName;
         }
-        
+
         /// <summary>
         /// Registers a new CoreRemoting client instance and returns it's unique instance name.
         /// </summary>
@@ -131,15 +131,15 @@ namespace CoreRemoting.ClassicRemotingApi
 
             var interfaceAssembly = Assembly.Load(entry.InterfaceAssemblyName);
             var interfaceType = interfaceAssembly.GetType(entry.InterfaceTypeName);
-            
+
             var implementationAssembly = Assembly.Load(entry.ImplementationAssemblyName);
             var implementationType = implementationAssembly.GetType(entry.ImplementationTypeName);
 
             RegisterWellKnownServiceType(
-                interfaceType, 
-                implementationType, 
-                entry.Lifetime, 
-                entry.ServiceName, 
+                interfaceType,
+                implementationType,
+                entry.Lifetime,
+                entry.ServiceName,
                 entry.UniqueServerInstanceName);
         }
 
@@ -158,11 +158,11 @@ namespace CoreRemoting.ClassicRemotingApi
             string serviceName = "",
             string uniqueServerInstanceName = "")
         {
-            var server = 
-                string.IsNullOrWhiteSpace(uniqueServerInstanceName) 
+            var server =
+                string.IsNullOrWhiteSpace(uniqueServerInstanceName)
                     ? RemotingServer.DefaultRemotingServer
                     : GetRegisteredServer(uniqueServerInstanceName);
-            
+
             var container = server.ServiceRegistry;
 
             var registerServiceMethod =
@@ -172,7 +172,7 @@ namespace CoreRemoting.ClassicRemotingApi
         }
 
         /// <summary>
-        /// Applies CoreRemoting server configuration from config file. 
+        /// Applies CoreRemoting server configuration from config file.
         /// </summary>
         /// <param name="fileName">Path to XML configuration file (Default EXE configuration file will be used, if empty)</param>
         /// <param name="credentials">Optional credentials for authentication</param>
@@ -186,7 +186,7 @@ namespace CoreRemoting.ClassicRemotingApi
                         fileMap: new ExeConfigurationFileMap {ExeConfigFilename = fileName},
                         userLevel: ConfigurationUserLevel.None);
 
-            var configSection = (CoreRemotingConfigSection) 
+            var configSection = (CoreRemotingConfigSection)
                 configuration.Sections["coreRemoting"];
 
             foreach (ServerInstanceConfigElement serverInstanceConfig in configSection.ServerInstances)
@@ -195,13 +195,13 @@ namespace CoreRemoting.ClassicRemotingApi
                 var server = new RemotingServer(serverConfig);
                 server.Start();
             }
-            
+
             foreach (WellKnownServiceConfigElement serviceConfigElement in configSection.Services)
             {
                 var entry = serviceConfigElement.ToWellKnownServiceTypeEntry();
                 RegisterWellKnownServiceType(entry);
             }
-            
+
             foreach (ClientInstanceConfigElement clientInstanceConfig in configSection.ClientInstances)
             {
                 var clientConfig = clientInstanceConfig.ToClientConfig();

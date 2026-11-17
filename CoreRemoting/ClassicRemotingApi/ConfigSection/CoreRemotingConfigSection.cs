@@ -13,23 +13,23 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         /// </summary>
         [ConfigurationProperty("serverInstances", IsRequired = false)]
         [ConfigurationCollection(typeof(ServerInstanceConfigElementCollection))]
-        public ServerInstanceConfigElementCollection ServerInstances => 
+        public ServerInstanceConfigElementCollection ServerInstances =>
             (ServerInstanceConfigElementCollection)this["serverInstances"];
-        
+
         /// <summary>
         /// Gets a collection of configured CoreRemoting services.
         /// </summary>
         [ConfigurationProperty("services", IsRequired = false)]
         [ConfigurationCollection(typeof(WellKnownServiceConfigElementCollection))]
-        public WellKnownServiceConfigElementCollection Services => 
+        public WellKnownServiceConfigElementCollection Services =>
             (WellKnownServiceConfigElementCollection)this["services"];
-        
+
         /// <summary>
         /// Gets a collection of configured CoreRemoting client instances.
         /// </summary>
         [ConfigurationProperty("clientInstances", IsRequired = false)]
         [ConfigurationCollection(typeof(ClientInstanceConfigElementCollection))]
-        public ClientInstanceConfigElementCollection ClientInstances => 
+        public ClientInstanceConfigElementCollection ClientInstances =>
             (ClientInstanceConfigElementCollection)this["clientInstances"];
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using CoreRemoting.Threading;
 using WatsonTcp;
@@ -11,6 +12,7 @@ namespace CoreRemoting.Channels.Tcp;
 /// </summary>
 public class TcpClientChannel : IClientChannel, IRawMessageTransport
 {
+    private IRemotingClient _client;
     private WatsonTcpClient _tcpClient;
     private Dictionary<string, object> _handshakeMetadata;
 
@@ -35,16 +37,22 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <param name="client">CoreRemoting client</param>
     public void Init(IRemotingClient client)
     {
+        _client = client;
         _tcpClient = new WatsonTcpClient(client.Config.ServerHostName, client.Config.ServerPort);
         _tcpClient.Settings.NoDelay = true;
 
-        _handshakeMetadata = new()
-        {
-            { "MessageEncryption", client.MessageEncryption }
-        };
+        ApplyHandshakeMetadata(client);
+    }
 
-        if (client.MessageEncryption)
-            _handshakeMetadata.Add("ShakeHands", Convert.ToBase64String(client.PublicKey));
+    /// <summary>
+    /// Updates the handshake metadata with the encryption settings, 
+    /// the ID of a session that should be resumed, and so on.
+    /// </summary>
+    /// <param name="client">CoreRemoting client</param>
+    private void ApplyHandshakeMetadata(IRemotingClient client)
+    {
+        _handshakeMetadata = client.HandshakeMessage.Metadata
+            .ToDictionary(kv => kv.Key, kv => kv.Value as object);
     }
 
     /// <summary>
@@ -57,6 +65,8 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
 
         if (_tcpClient.Connected)
             return;
+
+        ApplyHandshakeMetadata(_client);
 
         _tcpClient.Events.ExceptionEncountered += OnError;
         _tcpClient.Events.MessageReceived += OnMessage;

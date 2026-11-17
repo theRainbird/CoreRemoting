@@ -76,6 +76,7 @@ public class RemotingServicesTests
         {
             NetworkPort = 9199,
             IsDefault = false,
+            MessageEncryption = false,
             UniqueServerInstanceName = $"RS_Server_{Guid.NewGuid()}"
         };
 

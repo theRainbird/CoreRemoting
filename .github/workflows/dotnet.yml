@@ -9,6 +9,8 @@ on:
     branches:
     - master
     - release/*
+    - issue*
+    - auth-refactor
 
 jobs:
   build:
@@ -22,22 +24,82 @@ jobs:
           - os: ${{ !contains(github.event.head_commit.message, 'windows') && !github.event.pull_request && 'windows-latest' }}
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
     - name: Checkout source
       uses: actions/checkout@v7
       with:
         fetch-depth: 0
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v6
       with:
         dotnet-version: | 
           8.0.x
           9.0.x
+        cache: true
+        cache-dependency-path: '**/*.csproj'
+
+    - name: Install libmsquic (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libmsquic
+        ldconfig -p | grep libmsquic || echo "libmsquic not found in ldconfig"
+
     - name: Restore dependencies
       run: dotnet restore
+
     - name: Build
       run: dotnet build --no-restore
+
     - name: Test
-      run: dotnet test --no-build --verbosity normal
+      run: dotnet test --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx" --blame-hang-timeout 180s --blame-hang-dump-type mini
+
+    - name: Upload test artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.os }}
+        path: |
+          **/TestResults/**/*.trx
+          **/TestResults/**/*.dmp
+        retention-days: 3
+        if-no-files-found: warn
+
+    - name: Update Pantry badge
+      if: always() && github.event_name == 'push'
+      shell: bash
+      env:
+        PANTRY_ID: c8c30959-454c-468f-9df1-13957368300e
+      run: |
+        if [ "${{ runner.os }}" == "Linux" ]; then
+          BASKET=core-remoting-test-counters
+          LABEL=linux
+        else
+          BASKET=core-remoting-wintest-counters
+          LABEL=windows
+        fi
+
+        TRX=$(find . -name 'test-results.trx' | head -n1)
+        if [ -z "$TRX" ]; then
+          echo "No TRX file found; skipping badge update."
+          exit 0
+        fi
+
+        PASSED=$(grep -o 'passed="[0-9][0-9]*"' "$TRX" | head -n1 | tr -dc '0-9')
+        FAILED=$(grep -o 'failed="[0-9][0-9]*"' "$TRX" | head -n1 | tr -dc '0-9')
+        PASSED=${PASSED:-0}
+        FAILED=${FAILED:-0}
+        TOTAL=$((PASSED + FAILED))
+
+        [ "$FAILED" -eq 0 ] && COLOR=brightgreen || COLOR=critical
+
+        curl -sS -X POST "https://getpantry.cloud/apiv1/pantry/$PANTRY_ID/basket/$BASKET" \
+          -H "Content-Type: application/json" \
+          -d "{\"schemaVersion\":1,\"label\":\"$LABEL\",\"message\":\"$PASSED/$TOTAL passed\",\"color\":\"$COLOR\"}"
+
+    - name: Purge image cache for badges
+      if: always() && github.event_name == 'push'
+      uses: kevincobain2000/action-camo-purge@v1

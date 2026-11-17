@@ -3,6 +3,9 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Security.Cryptography;
+using CoreRemoting.Authentication;
+using CoreRemoting.RemoteDelegates;
 
 namespace CoreRemoting.Toolbox;
 
@@ -56,6 +59,25 @@ public static class Extensions
             .IsAssignableFrom(parameters[0].ParameterType);
     }
 
+    /// <summary>
+    /// Checks whether the given delegate is a disposed CoreRemoting delegate proxy.
+    /// </summary>
+    /// <remarks>
+    /// Returns <c>true</c> for <c>null</c>, <c>true</c> for a disposed CoreRemoting
+    /// proxy, and <c>false</c> for regular or multicast delegates. Proxy delegates
+    /// are not expected to participate in multicast delegates; for safety, a
+    /// multicast delegate is conservatively treated as not disposed.
+    /// </remarks>
+    /// <param name="delegate">The delegate to check.</param>
+    /// <returns><c>true</c> if the delegate is null or a disposed CoreRemoting proxy.</returns>
+    public static bool IsDisposed(this Delegate @delegate)
+    {
+        if (@delegate == null)
+            return true;
+
+        return @delegate.Target is IDelegateProxy proxy && proxy.IsDisposed;
+    }
+
     private static ConcurrentDictionary<Type, object> DefaultValues = new();
 
     /// <summary>
@@ -99,4 +121,66 @@ public static class Extensions
     public static string HexDump(this byte[] bytes) => bytes == null ? "" :
         string.Join("\n", Enumerable.Range(0, (bytes.Length + 15) / 16)
             .Select(i => string.Join(" ", bytes.Skip(i * 16).Take(16).Select(b => b.ToString("X2")))));
+
+    /// <summary>
+    /// Finds the credential value by name, case-insensitive.
+    /// </summary>
+    /// <param name="credentials">Credentials array.</param>
+    /// <param name="name">Credential name.</param>
+    public static string FindByName(this Credential[] credentials, string name) =>
+        credentials?.FirstOrDefault(c =>
+            string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase))?.Value;
+
+    /// <summary>
+    /// Finds the parameter value by name, case-insensitive.
+    /// </summary>
+    /// <param name="parameters">Parameters array.</param>
+    /// <param name="name">Credential name.</param>
+    public static string FindByName(this AuthenticationResponseParameter[] parameters, string name) =>
+        parameters?.FirstOrDefault(c =>
+            string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase))?.Value;
+
+    /// <summary>
+    /// Appends the given values to the array.
+    /// </summary>
+    /// <typeparam name="T">The type of the element.</typeparam>
+    /// <param name="array">Array to append values to.</param>
+    /// <param name="values">Values to append.</param>
+    public static T[] Append<T>(this T[] array, params T[] values) =>
+        (array ?? []).Concat(values ?? []).ToArray();
+
+    /// <summary>
+    /// Appends the given credentials to the array.
+    /// </summary>
+    /// <param name="array">Array to append values to.</param>
+    /// <param name="anonymous">Append all properties of the anonymous object.</param>
+    public static Credential[] Append(this Credential[] array, object anonymous) =>
+        array.Append(anonymous is null ? [] : anonymous.GetType()
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(p => new { p, value = p.GetValue(anonymous) })
+            .Where(x => x.value != null)
+            .Select(x => new Credential { Name = x.p.Name, Value = x.value.ToString() })
+            .ToArray());
+
+    /// <summary>
+    /// Generates strong shared key for symmetric encryption according to the server settings.
+    /// Note: if legacy mode is enabled, sessionId is used as a shared key (not recommended).
+    /// </summary>
+    /// <param name="config">Configuration data for the remoting server.</param>
+    /// <param name="sessionId">Session identity, used in legacy mode.</param>
+    /// <param name="sharedKeySize">Shared key size, specified by the client.</param>
+    public static byte[] GenerateSharedKey(this ServerConfig config, Guid sessionId, int sharedKeySize)
+    {
+        if (config.UseLegacySessionKeyDerivation)
+            return sessionId.ToByteArray();
+
+        // server configuration specifies the minimal shared key size
+        if (sharedKeySize < config.SharedKeySize)
+            sharedKeySize = config.SharedKeySize;
+
+        using var rng = RandomNumberGenerator.Create();
+        var sharedKey = new byte[sharedKeySize / 8];
+        rng.GetBytes(sharedKey);
+        return sharedKey;
+    }
 }

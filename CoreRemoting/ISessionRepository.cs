@@ -11,30 +11,37 @@ namespace CoreRemoting;
 public interface ISessionRepository : IAsyncDisposable
 {
     /// <summary>
-    /// Gets the key size for asymmetric encryption. Should be 3072 or better in 2021 ;)
-    /// </summary>
-    int KeySize { get; }
-
-    /// <summary>
     /// Creates a new session.
     /// </summary>
+    /// <param name="messageEncryption">Whether message encryption is enabled on client</param>
+    /// <param name="sharedKeySize">Shared key size requested by the client.</param>
     /// <param name="clientPublicKey">Client's public key</param>
     /// <param name="clientAddress">Client's network address</param>
     /// <param name="server">Server instance</param>
     /// <param name="rawMessageTransport">Component that does the raw message transport</param>
     /// <returns>The newly created session</returns>
-    RemotingSession CreateSession(
+    Task<RemotingSession> CreateSession(
+        bool messageEncryption,
+        int sharedKeySize,
         byte[] clientPublicKey,
         string clientAddress,
         IRemotingServer server,
         IRawMessageTransport rawMessageTransport);
 
     /// <summary>
-    /// Gets a specified session by its ID.
+    /// Tries to resume a specified session on the given raw message transport.
+    /// The presented public key has to match the public key of the original connection (hijack protection).
     /// </summary>
-    /// <param name="sessionId">Session ID</param>
-    /// <returns>The session correlating to the specified session ID</returns>
-    RemotingSession GetSession(Guid sessionId);
+    /// <param name="sessionId">Session ID of the session to be resumed</param>
+    /// <param name="sessionSignature">Client's session signature to prove its authenticity.</param>
+    /// <param name="clientPublicKey">Client's public key, as presented by the reconnecting client</param>
+    /// <param name="rawMessageTransport">Component that does the raw message transport of the reconnected client</param>
+    /// <returns>The resumed session, or null if the session doesn't exist or can't be resumed (callers then have to fall back to creating a new session)</returns>
+    Task<RemotingSession> TryResumeSession(
+        Guid sessionId,
+        byte[] sessionSignature,
+        byte[] clientPublicKey,
+        IRawMessageTransport rawMessageTransport);
 
     /// <summary>
     /// Gets a list of all sessions.

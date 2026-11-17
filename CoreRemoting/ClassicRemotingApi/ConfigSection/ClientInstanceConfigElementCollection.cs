@@ -56,6 +56,6 @@ namespace CoreRemoting.ClassicRemotingApi.ConfigSection
         protected override object GetElementKey(ConfigurationElement element)
         {
             return ((ClientInstanceConfigElement) element).UniqueInstanceName;
-        } 
+        }
     }
 }

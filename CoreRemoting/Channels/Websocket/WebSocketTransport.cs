@@ -16,16 +16,6 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     /// True when listening to incoming messages.
     /// </summary>
     protected bool _listening;
-    
-    /// <summary>
-    /// Handshake cookies: message encryption flag.
-    /// </summary>
-    protected const string MessageEncryptionCookie = "MessageEncryption";
-
-    /// <summary>
-    /// Handshake cookies: client public key.
-    /// </summary>
-    protected const string ClientPublicKeyCookie = "ShakeHands";
 
     /// <summary>
     /// Buffer size to read incoming messages.
@@ -70,10 +60,10 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     /// <summary>
     /// Starts listening for the incoming messages.
     /// </summary>
-    public virtual Guid StartListening()
+    public virtual Task<Guid> StartListening()
     {
         _ = ReadIncomingMessages();
-        return Guid.Empty;
+        return Task.FromResult(Guid.Empty);
     }
 
     private AsyncLock ReceiveLock { get; } = new();

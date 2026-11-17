@@ -50,6 +50,7 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
             ClientAuthenticationOptions = new()
             {
                 // accept self-signed certificates generated on-the-fly
+                TargetHost = Uri.Host,
                 RemoteCertificateValidationCallback = (sender, certificate, chain, errors) => true,
                 ApplicationProtocols =
                 [
@@ -71,19 +72,26 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
         ClientWriter = new(ClientStream, Encoding.UTF8, leaveOpen: true);
 
         // prepare handshake message
-        var handshakeMessage = Array.Empty<byte>();
-        if (Client.MessageEncryption)
+        var handshakeMessage = Client.HandshakeMessage;
+        var handshakeBytes = Client.Serializer.Serialize(handshakeMessage);
+
+        try
         {
-            handshakeMessage = Client.PublicKey;
+            // start listening for incoming messages
+            IsConnected = true;
+            await StartListening();
+
+            // send handshake message
+            await SendMessageAsync(handshakeBytes)
+                .ConfigureAwait(false);
+
+            OnConnected();
         }
-
-        // start listening for incoming messages
-        IsConnected = true;
-        await StartListening();
-
-        // send handshake message
-        await SendMessageAsync(handshakeMessage).ConfigureAwait(false);
-        OnConnected();
+        catch
+        {
+            IsConnected = false;
+            throw;
+        }
     }
 
     /// <inheritdoc />
@@ -105,6 +113,9 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
         ClientReader = null;
         ClientWriter.Dispose();
         ClientWriter = null;
+
+        await ClientStream.DisposeAsync()
+            .ConfigureAwait(false);
 
         await base.DisposeAsync()
             .ConfigureAwait(false);

@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
 using CoreRemoting.DependencyInjection;
+using CoreRemoting.Encryption;
 using CoreRemoting.Serialization;
 
 namespace CoreRemoting;
@@ -39,10 +40,31 @@ public class ServerConfig
     public int KeySize { get; set; } = 4096;
 
     /// <summary>
+    /// Gets or sets the shared key size for the symmetric encryption (only relevant, if message encryption is enabled).
+    /// </summary>
+    /// <remarks>
+    /// Supported values: 128, 192 and 256 bits.
+    /// </remarks>
+    [SuppressMessage("ReSharper", "AutoPropertyCanBeMadeGetOnly.Global")]
+    public int SharedKeySize { get; set; } = 256;
+
+    /// <summary>
     /// Gets or sets whether messages should be encrypted or not.
     /// </summary>
+    /// <remarks>
+    /// When ServerConfig.MessageEncryption is enabled, ClientConfig.MessageEncryption is required.
+    /// When disabled, the server will accept both encrypted and unencrypted client connections.
+    /// </remarks>
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
     public bool MessageEncryption { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets whether message encryption should use the legacy session key derivation,
+    /// where the symmetric shared secret is derived from the session ID (for compatibility with old clients).
+    /// This setting is valid for this server instance as a whole. When set to false (default), a cryptographically
+    /// random session key is generated per session and exchanged during the handshake in addition to the session ID.
+    /// </summary>
+    public bool UseLegacySessionKeyDerivation { get; set; } = false;
 
     /// <summary>
     /// Gets or sets the serializer to be used (Bson serializer is used, if set to null).
@@ -113,4 +135,21 @@ public class ServerConfig
     /// Set -1 to wait forever (default).
     /// </summary>
     public int WaitTimeForCurrentlyProcessedMessagesOnDispose { get; set; } = -1;
+
+    /// <summary>
+    /// Validates the config and throws error on invalid settings.
+    /// </summary>
+    public ServerConfig Validate()
+    {
+        if (AuthenticationRequired && AuthenticationProvider == null)
+            throw new InvalidOperationException("ServerConfig.AuthenticationRequired " +
+                "is set, but AuthenticationProvider is not set.");
+
+        return this;
+    }
+
+    /// <summary>
+    /// Gets or sets HKDF algorithm provider for negotiated shared key.
+    /// </summary>
+    public IHkdfProvider HkdfProvider { get; set; }
 }

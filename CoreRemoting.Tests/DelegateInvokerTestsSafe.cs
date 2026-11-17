@@ -1,12 +1,11 @@
 using CoreRemoting.RemoteDelegates;
-using CoreRemoting.Threading;
 using Xunit.Abstractions;
 
 namespace CoreRemoting.Tests;
 
-public class InvokerTestsSafe : InvokerTests
+public class DelegateInvokerTestsSafe : DelegateInvokerTests
 {
-    public InvokerTestsSafe(ServerFixture serverFixture, ITestOutputHelper testOutputHelper) : base(serverFixture, testOutputHelper)
+    public DelegateInvokerTestsSafe(ServerFixture serverFixture, ITestOutputHelper testOutputHelper) : base(serverFixture, testOutputHelper)
     {
     }
 

@@ -43,6 +43,12 @@ public interface ITestService : IBaseService
 
     Task ErrorAsync(string text);
 
+    Task<string> EchoAsync(string text);
+
+    ValueTask<string> EchoValueTaskAsync(string text);
+
+    Task NoopAsync();
+
     void NonSerializableError(string text, params object[] data);
 
     object NonSerializableReturnValue(string text);

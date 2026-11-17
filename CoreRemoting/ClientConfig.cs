@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
+using CoreRemoting.Encryption;
 using CoreRemoting.Serialization;
 
 namespace CoreRemoting;
@@ -65,6 +66,15 @@ public class ClientConfig
     public int KeySize { get; set; } = 4096;
 
     /// <summary>
+    /// Gets or sets the shared key size for the symmetric encryption (only relevant, if message encryption is enabled).
+    /// </summary>
+    /// <remarks>
+    /// Supported values: 128, 192 and 256 bits.
+    /// </remarks>
+    [SuppressMessage("ReSharper", "AutoPropertyCanBeMadeGetOnly.Global")]
+    public int SharedKeySize { get; set; } = 256;
+
+    /// <summary>
     /// Gets or sets whether messages should be encrypted or not.
     /// </summary>
     public bool MessageEncryption { get; set; } = true;
@@ -85,6 +95,11 @@ public class ClientConfig
     /// Gets or sets an array of credentials for authentication (depends on the authentication provider used on server side).
     /// </summary>
     public Credential[] Credentials { get; set; }
+
+    /// <summary>
+    /// Gets or sets the authenticator implementing the client-side authentication protocol.
+    /// </summary>
+    public IAuthenticator Authenticator { get; set; }
 
     /// <summary>
     /// Gets or sets an interval in seconds to keep session alive, even on idle (session is not kept alive if set to 0).
@@ -112,4 +127,23 @@ public class ClientConfig
     /// Set -1 to wait forever (default is 10000 milliseconds).
     /// </summary>
     public int WaitTimeForGoodbyeOnDisconnect { get; set; } = 10000;
+
+    /// <summary>
+    /// Gets or sets the private key blob of the client session key pair used for message encryption or signing.
+    /// If specified, this key pair will be used instead of a new one. This allows resuming a session after a
+    /// process restart in combination with ResumableSessionId (the key size must match KeySize).
+    /// </summary>
+    public byte[] PrivateKeyBlob { get; set; }
+
+    /// <summary>
+    /// Gets or sets the ID of an existing server side session that should be resumed when connecting.
+    /// Both the client and the server must support session resume and the client must present the same RSA key
+    /// as the original session used. If the configured session cannot be resumed, the connection will fail.
+    /// </summary>
+    public Guid? ResumableSessionId { get; set; }
+
+    /// <summary>
+    /// Gets or sets HKDF algorithm provider for negotiated shared key.
+    /// </summary>
+    public IHkdfProvider HkdfProvider { get; set; }
 }

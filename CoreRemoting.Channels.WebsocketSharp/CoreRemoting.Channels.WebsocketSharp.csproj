@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <RootNamespace>CoreRemoting.Channels.WebsocketSharp</RootNamespace>
     <AssemblyName>CoreRemoting.Channels.WebsocketSharp</AssemblyName>
-    <PackageVersion>1.2.1</PackageVersion>
+    <PackageVersion>1.4.0.0</PackageVersion>
     <Authors>Hagen Siegel</Authors>
     <Description>WebSocketSharp channels for CoreRemoting</Description>
     <Copyright>2024 Hagen Siegel</Copyright>
@@ -14,7 +14,7 @@
     <Title>CoreRemoting.Channels.WebsocketSharp</Title>
     <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <AssemblyVersion>1.2.1</AssemblyVersion>
+    <AssemblyVersion>1.4.0.0</AssemblyVersion>
     <LangVersion>10</LangVersion>
   </PropertyGroup>
 

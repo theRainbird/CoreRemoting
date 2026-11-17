@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using CoreRemoting.RpcMessaging;
+using CoreRemoting.Serialization;
 
 namespace CoreRemoting;
 
@@ -18,9 +21,35 @@ public interface IRemotingClient : IAsyncDisposable, IDisposable
     ClientConfig Config { get; }
 
     /// <summary>
+    /// Gets the configured serializer.
+    /// </summary>
+    ISerializerAdapter Serializer { get; }
+
+    /// <summary>
     /// Gets the public key of this CoreRemoting client instance.
     /// </summary>
     byte[] PublicKey { get; }
+
+    /// <summary>
+    /// Gets the private key of this CoreRemoting client instance (for persisting the key between process restarts to enable session resume).
+    /// </summary>
+    byte[] PrivateKey { get; }
+
+    /// <summary>
+    /// Gets the ID of the current session (null, if no session has been established).
+    /// </summary>
+    Guid? SessionId { get; }
+
+    /// <summary>
+    /// Gets the ID of a session that should be resumed on connection
+    /// (the ID of the current session, or ClientConfig.ResumableSessionId, if no session is active).
+    /// </summary>
+    Guid? ResumableSessionId { get; }
+
+    /// <summary>
+    /// Gets the resumable session signature to verify client authenticity.
+    /// </summary>
+    byte[] SessionSignature { get; }
 
     /// <summary>
     /// Gets or sets the invocation timeout in milliseconds.
@@ -49,6 +78,14 @@ public interface IRemotingClient : IAsyncDisposable, IDisposable
     object CreateProxy(Type serviceInterfaceType, string serviceName = "");
 
     /// <summary>
+    /// Creates a service invoker that provides access to a remote service without generating a proxy.
+    /// </summary>
+    /// <typeparam name="TService">Type of the remote service contract (interface or class)</typeparam>
+    /// <param name="serviceName">Unique name of the remote service</param>
+    /// <returns>Service invoker object</returns>
+    IServiceInvoker<TService> CreateInvoker<TService>(string serviceName = "") where TService : class;
+
+    /// <summary>
     /// Shuts a specified service proxy down and frees resources.
     /// </summary>
     /// <param name="serviceProxy"></param>
@@ -74,4 +111,9 @@ public interface IRemotingClient : IAsyncDisposable, IDisposable
     /// Gets whether this CoreRemoting client instance has a session or not.
     /// </summary>
     bool HasSession { get; }
+
+    /// <summary>
+    /// Gets the handshake metadata for the communication channel.
+    /// </summary>
+    ClientHandshakeMessage HandshakeMessage { get; }
 }

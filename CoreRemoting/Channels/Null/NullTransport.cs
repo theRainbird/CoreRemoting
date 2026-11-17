@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using static CoreRemoting.Channels.Null.NullMessageQueue;
 
@@ -72,11 +73,11 @@ public class NullTransport : IRawMessageTransport, IAsyncDisposable
     /// <summary>
     /// Starts listening for the incoming messages.
     /// </summary>
-    public virtual Guid StartListening()
+    public virtual Task<Guid> StartListening()
     {
         IsConnected = true;
         _ = ReadIncomingMessages();
-        return Guid.Empty;
+        return Task.FromResult(Guid.Empty);
     }
 
     /// <inheritdoc/>
@@ -87,7 +88,9 @@ public class NullTransport : IRawMessageTransport, IAsyncDisposable
     /// </summary>
     public virtual Task DisconnectAsync()
     {
+        SendMessage(ThisEndpoint, RemoteEndpoint, null, []);
         IsConnected = false;
+        OnDisconnected();
         return Task.CompletedTask;
     }
 
@@ -106,8 +109,13 @@ public class NullTransport : IRawMessageTransport, IAsyncDisposable
                         .ConfigureAwait(false))
                 {
                     OnReceiveMessage(message.Message ?? []);
+
+                    if (message.IsStopSignal)
+                        IsConnected = false;
                 }
             }
+
+            OnDisconnected();
         }
         catch (Exception ex)
         {

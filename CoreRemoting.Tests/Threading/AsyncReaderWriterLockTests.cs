@@ -128,7 +128,8 @@ public class AsyncReaderWriterLockTests
         var readTasks = Enumerable.Range(minDelay, count).Select(SimulateRead);
         var writeTasks = Enumerable.Range(minDelay, count).Select(SimulateWrite);
 
-        await Task.WhenAll(readTasks.Concat(writeTasks)).Timeout(seconds * 2 + 1);
+        // make timeout less likely on CI virtual machine
+        await Task.WhenAll(readTasks.Concat(writeTasks)).Timeout(seconds * 2 + 10);
 
         // check if it was actually parallelized
         Assert.True(readerThreads.Count > 0);

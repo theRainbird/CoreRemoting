@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -16,17 +17,28 @@ internal class CertificateHelper
     {
         // generate a new certificate
         var now = DateTimeOffset.UtcNow;
-        SubjectAlternativeNameBuilder sanBuilder = new();
+        var sanBuilder = new SubjectAlternativeNameBuilder();
         sanBuilder.AddDnsName(hostName);
+
+        // TODO: add related IP addresses explicitly
+        if ("localhost".Equals(hostName, StringComparison.OrdinalIgnoreCase))
+        {
+            sanBuilder.AddIpAddress(IPAddress.Loopback);
+            sanBuilder.AddIpAddress(IPAddress.IPv6Loopback);
+        }
 
         using var ec = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         CertificateRequest req = new($"CN={hostName}", ec, HashAlgorithmName.SHA256);
 
+        // RSA should also work but slower
+        // using var rsa = RSA.Create(2048);
+        // CertificateRequest req = new($"CN={hostName}", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+
         // Adds purpose
-        req.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection
-        {
-            new("1.3.6.1.5.5.7.3.1") // serverAuth
-		},
+        req.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([
+            new("1.3.6.1.5.5.7.3.1"), // serverAuth
+            new("1.3.6.1.5.5.7.3.2")  // clientAuth (optional)
+        ],
         false));
 
         // Adds usage
@@ -38,9 +50,9 @@ internal class CertificateHelper
         // Sign
         using var crt = req.CreateSelfSigned(now, now.AddDays(14)); // 14 days is the max duration of a certificate for this type
 
-        var password = Guid.NewGuid().ToString();
-        var pfx = crt.Export(X509ContentType.Pfx, password);
-        var cert = X509CertificateLoader.LoadPkcs12(pfx, password);
+        // Export without password
+        var pfx = crt.Export(X509ContentType.Pfx);
+        var cert = X509CertificateLoader.LoadPkcs12(pfx, password: null);
         return cert;
     }
 }

@@ -48,17 +48,13 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
         // https://github.com/dotnet/runtime/discussions/81175
         ClientWebSocket = new ClientWebSocket();
         ClientWebSocket.Options.Cookies = new CookieContainer();
-        ClientWebSocket.Options.Cookies.Add(new Cookie(
-            name: MessageEncryptionCookie,
-            value: client.MessageEncryption ? "1" : "0",
-            path: Uri.LocalPath,
-            domain: Uri.Host));
 
-        if (client.MessageEncryption)
+        // send handshake metadata items as cookies
+        foreach (var kv in client.HandshakeMessage.Metadata)
         {
             ClientWebSocket.Options.Cookies.Add(new Cookie(
-                name: ClientPublicKeyCookie,
-                value: Convert.ToBase64String(client.PublicKey),
+                name: kv.Key,
+                value: kv.Value,
                 path: Uri.LocalPath,
                 domain: Uri.Host));
         }
@@ -72,7 +68,7 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
                 .ConfigureAwait(false);
 
         IsConnected = true;
-        StartListening();
+        _ = StartListening();
 
         await SendMessageAsync([])
             .ConfigureAwait(false);

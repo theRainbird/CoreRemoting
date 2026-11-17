@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Linq;
 using System.Net;
+using System.Threading.Tasks;
 using CoreRemoting.Channels.Null;
+using CoreRemoting.RpcMessaging;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
 
@@ -33,33 +36,29 @@ public class NullServerConnection : NullTransport, IAsyncDisposable
     /// <summary>
     /// Starts listening to the incoming messages.
     /// </summary>
-    public override Guid StartListening()
+    public override async Task<Guid> StartListening()
     {
-        var sessionId = CreateRemotingSession();
-        base.StartListening();
+        var sessionId = await CreateRemotingSession().ConfigureAwait(false);
+        await base.StartListening().ConfigureAwait(false);
         return sessionId;
     }
 
     /// <summary>
     /// Creates <see cref="RemotingSession"/> for the incoming websocket connection.
     /// </summary>
-    private Guid CreateRemotingSession()
+    private async Task<Guid> CreateRemotingSession()
     {
-        byte[] clientPublicKey = null;
-
-        // get encryption metadata from NullMessage
-        if (ConnectionMessage.Metadata != null &&
-            ConnectionMessage.Metadata.Length == 2 &&
-            ConnectionMessage.Metadata.First() == nameof(RemotingClient.PublicKey))
+        var handshake = new ClientHandshakeMessage
         {
-            clientPublicKey = Convert.FromBase64String(
-                ConnectionMessage.Metadata.Last());
-        }
+            Metadata = ConnectionMessage?.Metadata,
+            ClientAddress = ClientAddress,
+        };
 
         if (RemotingServer != null)
         {
-            Session = RemotingServer.SessionRepository.CreateSession(
-                clientPublicKey, ClientAddress, RemotingServer, this);
+            Session = await RemotingServer.SessionRepository
+                .ResumeOrCreateSession(handshake, RemotingServer, this)
+                    .ConfigureAwait(false);
 
             return Session.SessionId;
         }

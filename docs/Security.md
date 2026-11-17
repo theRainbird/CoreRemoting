@@ -15,6 +15,13 @@ No certificate files are needed. CoreRemoting uses the BCL Cryto APIs directly.
 
 Message encryption configuration must be set the same on server and client _(e.g. if server has message encryption on and client has not, the client will not be able to establish a connection)_. The same goes for key size. Both client and server create their own key public/private key pair. The keys must have the same key size _(default is 4096)_.
 
+## Session Key Derivation
+The symmetric shared secret used for AES message encryption is derived during the handshake.
+
+By default a cryptographically random session key is generated per session and exchanged securely with the client during the handshake. This is the recommended and most secure approach.
+
+Setting `ServerConfig.UseLegacySessionKeyDerivation` to `true` switches to legacy behavior, where the shared secret is derived directly from the session ID. This is only intended to keep older clients, that cannot negotiate a random session key, working with a newer server. Legacy derivation is less secure and should be avoided whenever possible.
+
 ## Authentication
 CoreRemoting has a built in extensible authentication system. Implement [IAuthenticationProvider](Security.md) interface to add authentication support to your CoreRemoting server. It has only one method, that takes an [Credential](https://github.com/theRainbird/CoreRemoting/wiki/API-Reference#credential) array, which contains the credentials provided by the calling client, and provides an [RemotingIdentity](https://github.com/theRainbird/CoreRemoting/wiki/API-Reference#remotingidentity) object, if authentication was successful.
 

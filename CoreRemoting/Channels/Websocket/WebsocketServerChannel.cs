@@ -70,11 +70,13 @@ public class WebsocketServerChannel : IServerChannel
             websocketContext, websocket, Server);
 
         // handle incoming websocket messages
-        var sessionId = connection.StartListening();
+        var sessionId = await connection.StartListening()
+            .ConfigureAwait(false);
+
         Connections[sessionId] = connection;
         connection.Disconnected += async () =>
         {
-            Connections.TryRemove(sessionId, out connection);
+            Connections.TryRemove(sessionId, out _);
             await connection.DisposeAsync();
         };
     }

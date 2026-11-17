@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
@@ -8,13 +9,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Authentication;
 using CoreRemoting.Channels;
+using CoreRemoting.DependencyInjection;
 using CoreRemoting.Encryption;
 using CoreRemoting.RemoteDelegates;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Serialization;
 using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
-using CoreRemoting.DependencyInjection;
 using Serialize.Linq.Extensions;
 using Serialize.Linq.Nodes;
 
@@ -30,17 +31,29 @@ public sealed class RemotingSession : IAsyncDisposable
 
     private readonly IRemotingServer _server;
     private IRawMessageTransport _rawMessageTransport;
-    private readonly RsaKeyPair _keyPair;
+    private readonly int _keySize;
+    private readonly int _sharedKeySize;
+    private readonly ISessionKeyPair _keyPair;
     private readonly Guid _sessionId;
+    private byte[] _sharedSecret;
     private readonly byte[] _clientPublicKeyBlob;
     private readonly string _clientAddress;
     private readonly RemoteDelegateInvocationEventAggregator _remoteDelegateInvocationEventAggregator;
     private IDelegateProxyFactory _delegateProxyFactory;
-    private ConcurrentDictionary<Guid, IDelegateProxy> _delegateProxyCache;
+    internal ConcurrentDictionary<Guid, IDelegateProxy> _delegateProxyCache;
     private bool _isAuthenticated;
-    private bool _isDisposing;
+    private AtomicBool _isDisposing;
     private DateTime _lastActivityTimestamp;
     private readonly AsyncCountdownEvent _currentlyProcessedMessagesCounter;
+
+    // session lifecycle state: 0 = active, 1 = parked (transport lost abruptly, can be resumed)
+    private const int _stateActive = 0;
+    private const int _stateParked = 1;
+    private int _lifecycleState;
+
+    private readonly ConcurrentDictionary<string, object> _sessionVariables = new();
+    private readonly SubscriptionTracker _subscriptionTracker = new();
+
     private static readonly AsyncLocal<RemotingSession> CurrentSession = new();
 
     /// <summary>
@@ -55,21 +68,28 @@ public sealed class RemotingSession : IAsyncDisposable
     /// <summary>
     /// Creates a new instance of the RemotingSession class.
     /// </summary>
+    /// <param name="messageEncryption">Indicates whether message encryption is enabled</param>
     /// <param name="keySize">Key size of the RSA keys for asymmetric encryption</param>
+    /// <param name="sharedKeySize">Shared key size for symmetric encryption</param>
     /// <param name="clientPublicKey">Public key of this session's client</param>
     /// <param name="clientAddress">Client's network address</param>
     /// <param name="server">Server instance, that hosts this session</param>
     /// <param name="rawMessageTransport">Component, that does the raw message transport (send and receive)</param>
-    internal RemotingSession(int keySize, byte[] clientPublicKey, string clientAddress,
+    internal RemotingSession(bool messageEncryption, int keySize,
+        int sharedKeySize, byte[] clientPublicKey, string clientAddress,
         IRemotingServer server, IRawMessageTransport rawMessageTransport)
     {
-        _isDisposing = false;
+        _isDisposing.Reset();
         _currentlyProcessedMessagesCounter = new(initialCount: 1);
         _sessionId = Guid.NewGuid();
         _lastActivityTimestamp = DateTime.Now;
         _isAuthenticated = false;
-        _keyPair = new RsaKeyPair(keySize);
         CreatedOn = DateTime.Now;
+        MessageEncryption = messageEncryption;
+
+        _keySize = keySize;
+        _keyPair = SessionKeyPairFactory.Generate(messageEncryption, _keySize);
+        _sharedKeySize = sharedKeySize;
         _remoteDelegateInvocationEventAggregator = new RemoteDelegateInvocationEventAggregator();
         _server = server ?? throw new ArgumentNullException(nameof(server));
         _delegateProxyFactory = _server.ServiceRegistry.GetService<IDelegateProxyFactory>();
@@ -80,63 +100,18 @@ public sealed class RemotingSession : IAsyncDisposable
 
         _rawMessageTransport.ReceiveMessage += OnReceiveMessage;
         _rawMessageTransport.ErrorOccured += OnErrorOccured;
+        _rawMessageTransport.Disconnected += OnRawMessageTransportDisconnected;
 
-        MessageEncryption = clientPublicKey != null;
-
-        WireMessage completeHandshakeMessage;
-
-        if (MessageEncryption)
-        {
-            var encryptedSessionId =
-                RsaKeyExchange.EncryptSecret(
-                    keySize: _server.SessionRepository.KeySize,
-                    receiversPublicKeyBlob: clientPublicKey,
-                    secretToEncrypt: _sessionId.ToByteArray(),
-                    sendersPublicKeyBlob: _keyPair.PublicKey);
-
-            var rawContent = _server.Serializer.Serialize(encryptedSessionId);
-
-            var signedMessageData =
-                new SignedMessageData
-                {
-                    MessageRawData = rawContent,
-                    Signature =
-                        RsaSignature.CreateSignature(
-                            keySize: keySize,
-                            sendersPrivateKeyBlob: _keyPair.PrivateKey,
-                            rawData: rawContent)
-                };
-
-            var rawData = _server.Serializer.Serialize(typeof(SignedMessageData), signedMessageData);
-
-            completeHandshakeMessage =
-                new WireMessage
-                {
-                    MessageType = "complete_handshake",
-                    Data = rawData
-                };
-        }
-        else
-        {
-            completeHandshakeMessage =
-                new WireMessage
-                {
-                    MessageType = "complete_handshake",
-                    Data = _sessionId.ToByteArray()
-                };
-        }
+        _sharedSecret = MessageEncryption
+            ? _server.Config.GenerateSharedKey(_sessionId, _sharedKeySize)
+            : null;
 
         _remoteDelegateInvocationEventAggregator.RemoteDelegateInvocationNeeded +=
             async (_, uniqueCallKey, handlerKey, arguments) =>
             {
                 // handle graceful client disconnection
-                if (_isDisposing)
+                if (IsDisposing)
                     return;
-
-                var sharedSecret =
-                    MessageEncryption
-                        ? _sessionId.ToByteArray()
-                        : null;
 
                 var remoteDelegateInvocationMessage =
                     new RemoteDelegateInvocationMessage
@@ -151,7 +126,7 @@ public sealed class RemotingSession : IAsyncDisposable
                         .CreateWireMessage(
                             serializedMessage: _server.Serializer.Serialize(remoteDelegateInvocationMessage),
                             serializer: _server.Serializer,
-                            sharedSecret: sharedSecret,
+                            sharedSecret: _sharedSecret,
                             keyPair: _keyPair,
                             messageType: "invoke");
 
@@ -170,10 +145,60 @@ public sealed class RemotingSession : IAsyncDisposable
                         $"Handler key: {handlerKey}", ex);
                 }
             };
+    }
 
-        _rawMessageTransport?.SendMessageAsync(
-            _server.Serializer.Serialize(completeHandshakeMessage))
-                .JustWait();
+    internal async Task SendCompleteHandshakeMessageAsync()
+    {
+        var wireMessage = new WireMessage
+        {
+            MessageType = "complete_handshake",
+            Data = BuildCompleteHandshakeMessage(),
+        };
+
+        if (MessageEncryption)
+        {
+            var encryptedHandshakeMessage =
+                RsaKeyExchange.EncryptSecret(
+                    keySize: _keySize,
+                    receiversPublicKeyBlob: _clientPublicKeyBlob,
+                    secretToEncrypt: wireMessage.Data,
+                    sendersPublicKeyBlob: _keyPair.PublicKey);
+
+            var rawContent = _server.Serializer.Serialize(encryptedHandshakeMessage);
+
+            var signedMessageData =
+                new SignedMessageData
+                {
+                    MessageRawData = rawContent,
+                    Signature = _keyPair.CreateSignature(rawContent),
+                };
+
+            wireMessage.Data = _server.Serializer.Serialize(signedMessageData);
+        }
+
+        await (_rawMessageTransport?.SendMessageAsync(
+            _server.Serializer.Serialize(wireMessage)))
+                .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds the secret which is exchanged with the client during the handshake.
+    /// The secret contains (a) the session ID and, unless legacy session key derivation is enabled,
+    /// (b) a cryptographically random session key used as symmetric shared secret for message encryption.
+    /// </summary>
+    /// <returns>Secret to be exchanged during the handshake</returns>
+    private byte[] BuildCompleteHandshakeMessage()
+    {
+        if (_server.Config.UseLegacySessionKeyDerivation)
+            return _sessionId.ToByteArray();
+
+        return _server.Serializer.Serialize(new CompleteHandshakeMessage
+        {
+            SessionId = _sessionId,
+            AuthenticationRequired = _server.Config.AuthenticationRequired,
+            MessageEncryptionRequired = _server.Config.MessageEncryption,
+            SharedSecret = _sharedSecret,
+        });
     }
 
     /// <summary>
@@ -186,6 +211,60 @@ public sealed class RemotingSession : IAsyncDisposable
         var exception = new RemotingException(errorMessage, innerEx: ex);
 
         ((RemotingServer)_server).OnError(exception);
+    }
+
+    /// <summary>
+    /// Event procedure: Called when the Disconnected event is fired on the raw message transport component.
+    /// Parks the session so a client that reconnects with the same identity can resume it.
+    /// </summary>
+    private void OnRawMessageTransportDisconnected() => ParkSession();
+
+    /// <summary>
+    /// Parks this session after an abrupt disconnect of the underlying transport (no goodbye message).
+    /// All session state (session ID, key material, delegate proxies) is preserved.
+    /// The old transport's events are unsubscribed; in-flight messages finish on their own.
+    /// </summary>
+    /// <returns>True if the session has been parked (already parked or disposed, otherwise false).</returns>
+    internal bool ParkSession()
+    {
+        if (IsDisposing ||
+            Interlocked.CompareExchange(ref _lifecycleState, _stateParked, _stateActive) != _stateActive)
+            return false;
+
+        var oldTransport = _rawMessageTransport;
+
+        oldTransport.ReceiveMessage -= OnReceiveMessage;
+        oldTransport.ErrorOccured -= OnErrorOccured;
+        oldTransport.Disconnected -= OnRawMessageTransportDisconnected;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Attaches a new transport to this parked session (session resume).
+    /// The authenticated state is reset, so the client has to authenticate again.
+    /// </summary>
+    /// <param name="newTransport">Raw message transport component of the reconnected client</param>
+    /// <exception cref="RemotingException">Thrown if the session can't be resumed (not parked or disposed)</exception>
+    internal void AttachTransport(IRawMessageTransport newTransport)
+    {
+        if (newTransport == null)
+            throw new ArgumentNullException(nameof(newTransport));
+
+        if (IsDisposing ||
+            Interlocked.CompareExchange(ref _lifecycleState, _stateActive, _stateParked) != _stateParked)
+            throw new RemotingException("The session can't be resumed because it is not in a parked state.");
+
+        _rawMessageTransport = newTransport;
+        newTransport.ReceiveMessage += OnReceiveMessage;
+        newTransport.ErrorOccured += OnErrorOccured;
+        newTransport.Disconnected += OnRawMessageTransportDisconnected;
+
+        // re-authentication is required, because state may have changed in the meantime
+        _isAuthenticated = false;
+        Identity = null;
+
+        _lastActivityTimestamp = DateTime.Now;
     }
 
     #endregion
@@ -214,6 +293,11 @@ public sealed class RemotingSession : IAsyncDisposable
     public bool MessageEncryption { get; }
 
     /// <summary>
+    /// Gets the shared secret used for symmetric message encryption of this session (null, if message encryption is not enabled).
+    /// </summary>
+    internal byte[] SharedSecret => _sharedSecret;
+
+    /// <summary>
     /// Gets the timestamp when this session was created.
     /// </summary>
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
@@ -226,9 +310,34 @@ public sealed class RemotingSession : IAsyncDisposable
     public bool IsAuthenticated => _isAuthenticated;
 
     /// <summary>
-    /// Gets the server side RSA key pair of this session.
+    /// Gets whether the session is currently parked (transport lost abruptly, can be resumed).
     /// </summary>
-    internal RsaKeyPair KeyPair => _keyPair;
+    [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
+    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
+    internal bool IsParked => Volatile.Read(ref _lifecycleState) == _stateParked;
+
+    /// <summary>
+    /// Gets whether this session is currently being disposed.
+    /// Use <c>_isDisposing.TrySet()</c> to enter the dispose path.
+    /// </summary>
+    [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
+    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
+    internal bool IsDisposing => _isDisposing.Value;
+
+    /// <summary>
+    /// Gets whether this session can be resumed by a client presenting the given public key.
+    /// The key has to match exactly the public key of the original connection (hijack protection).
+    /// </summary>
+    /// <param name="clientPublicKeyBlob">Public key blob presented by the reconnecting client</param>
+    /// <param name="sessionSignature">Client's session signature to prove its authenticity</param>
+    internal bool CanBeResumedWith(byte[] clientPublicKeyBlob, byte[] sessionSignature) =>
+        IsParked &&
+        !IsDisposing &&
+        _clientPublicKeyBlob != null &&
+        clientPublicKeyBlob != null &&
+        _clientPublicKeyBlob.SequenceEqual(clientPublicKeyBlob) &&
+        SessionKeyPairFactory.FromPublicKey(clientPublicKeyBlob)
+            .VerifySignature(_sessionId.ToByteArray(), sessionSignature);
 
     /// <summary>
     /// Gets the remote delegate invocation event aggregator.
@@ -236,6 +345,11 @@ public sealed class RemotingSession : IAsyncDisposable
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
     internal RemoteDelegateInvocationEventAggregator RemoteDelegateInvocation =>
         _remoteDelegateInvocationEventAggregator;
+
+    /// <summary>
+    /// Gets the subscription tracker of this session.
+    /// </summary>
+    internal SubscriptionTracker SubscriptionTracker => _subscriptionTracker;
 
     /// <summary>
     /// Gets component that does the raw message transport (send and receive).
@@ -251,6 +365,104 @@ public sealed class RemotingSession : IAsyncDisposable
 
     #endregion
 
+    #region Session variables
+
+    /// <summary>
+    /// Sets a session variable with the given name.
+    /// </summary>
+    /// <remarks>Session variables store application level data (elevated permissions, role flags, etc.)
+    /// for the duration of this session. Setting a value of null removes the variable.</remarks>
+    /// <param name="name">Variable name</param>
+    /// <param name="value">Variable value</param>
+    public void SetVariable(string name, object value)
+    {
+        if (name == null)
+            throw new ArgumentNullException(nameof(name));
+
+        if (value == null)
+        {
+            _sessionVariables.TryRemove(name, out var _);
+            return;
+        }
+
+        _sessionVariables[name] = value;
+    }
+
+    /// <summary>
+    /// Gets the session variable with the given name.
+    /// </summary>
+    /// <param name="name">Variable name</param>
+    /// <returns>The variable value or <typeparamref name="T"/>.Default, if the variable doesn't exist</returns>
+    /// <exception cref="InvalidCastException">Thrown, if an existing variable has a type incompatible to <typeparamref name="T"/></exception>
+    public T GetVariable<T>(string name)
+    {
+        if (name == null)
+            throw new ArgumentNullException(nameof(name));
+
+        return _sessionVariables.TryGetValue(name, out var value) && value != null
+            ? value is T typed
+                ? typed
+                : throw new InvalidCastException($"The session variable '{name}' can't be cast to {typeof(T).FullName}.")
+            : default;
+    }
+
+    /// <summary>
+    /// Gets the session variable with the given name.
+    /// </summary>
+    /// <param name="name">Variable name</param>
+    /// <param name="value">The variable value, or <typeparamref name="T"/>.Default, if the variable doesn't exist or has an incompatible type</param>
+    /// <returns>Boolean, that indicates whether the variable could be retrieved</returns>
+    public bool TryGetVariable<T>(string name, out T value)
+    {
+        if (name == null)
+            throw new ArgumentNullException(nameof(name));
+
+        if (_sessionVariables.TryGetValue(name, out var storedValue) && storedValue is T typed)
+        {
+            value = typed;
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Gets whether a session variable with the given name exists.
+    /// </summary>
+    /// <param name="name">Variable name</param>
+    public bool HasVariable(string name) =>
+        name != null && _sessionVariables.ContainsKey(name);
+
+    /// <summary>
+    /// Removes a session variable by its name.
+    /// </summary>
+    /// <param name="name">Variable name</param>
+    /// <returns>Boolean, that indicates whether the variable was found and removed</returns>
+    public bool RemoveVariable(string name)
+    {
+        if (name == null)
+            throw new ArgumentNullException(nameof(name));
+
+        return _sessionVariables.TryRemove(name, out var _);
+    }
+
+    /// <summary>
+    /// Removes all session variables of this session.
+    /// </summary>
+    public void ClearVariables() =>
+        _sessionVariables.Clear();
+
+    /// <summary>
+    /// Gets a point in time snapshot of all session variables of this session.
+    /// </summary>
+    [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
+    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
+    public IReadOnlyDictionary<string, object> Variables =>
+        new Dictionary<string, object>(_sessionVariables);
+
+    #endregion
+
     #region Handling received messages
 
     /// <summary>
@@ -261,12 +473,13 @@ public sealed class RemotingSession : IAsyncDisposable
     {
         _lastActivityTimestamp = DateTime.Now;
 
-        if (rawMessage == null || rawMessage.Length == 0 || _isDisposing)
+        if (rawMessage == null || rawMessage.Length == 0 || IsDisposing)
             return;
 
         _currentlyProcessedMessagesCounter.AddCount(1);
 
         CurrentSession.Value = this;
+        var stopped = false;
 
         try
         {
@@ -281,7 +494,7 @@ public sealed class RemotingSession : IAsyncDisposable
                     await ProcessRpcMessage(message).ConfigureAwait(false);
                     break;
                 case "goodbye":
-                    await ProcessGoodbyeMessage(message).ConfigureAwait(false);
+                    stopped = await ProcessGoodbyeMessage(message).ConfigureAwait(false);
                     break;
                 default:
                     OnErrorOccured("Invalid message type " + message.MessageType + ".", ex: null);
@@ -298,31 +511,30 @@ public sealed class RemotingSession : IAsyncDisposable
 
             CurrentSession.Value = null;
         }
+
+        if (stopped)
+            await RemoveCurrentSession()
+                .ConfigureAwait(false);
+
     }).ConfigureAwait(false);
 
     /// <summary>
     /// Processes a wire message that contains a goodbye message, which is sent from a client to close the session.
     /// </summary>
     /// <param name="request">Wire message from client</param>
-    private async Task ProcessGoodbyeMessage(WireMessage request)
+    private async Task<bool> ProcessGoodbyeMessage(WireMessage request)
     {
-        var sharedSecret =
-            MessageEncryption
-                ? SessionId.ToByteArray()
-                : null;
-
         var goodbyeMessage =
             _server.Serializer
                 .Deserialize<GoodbyeMessage>(
                     _server.MessageEncryptionManager.GetDecryptedMessageData(
                         message: request,
                         serializer: _server.Serializer,
-                        sharedSecret: sharedSecret,
-                        sendersPublicKeyBlob: _clientPublicKeyBlob,
-                        sendersPublicKeySize: _keyPair?.KeySize ?? 0));
+                        sharedSecret: _sharedSecret,
+                        sendersPublicKeyBlob: _clientPublicKeyBlob));
 
         if (goodbyeMessage.SessionId != _sessionId)
-            return;
+            return false;
 
         var resultMessage =
             _server.MessageEncryptionManager.CreateWireMessage(
@@ -330,7 +542,7 @@ public sealed class RemotingSession : IAsyncDisposable
                 serializedMessage: [],
                 serializer: _server.Serializer,
                 keyPair: _keyPair,
-                sharedSecret: sharedSecret,
+                sharedSecret: _sharedSecret,
                 uniqueCallKey: request.UniqueCallKey);
 
         await _rawMessageTransport.SendMessageAsync(
@@ -339,8 +551,7 @@ public sealed class RemotingSession : IAsyncDisposable
 
         ((RemotingServer)_server).OnLogoff();
 
-        await RemoveCurrentSession()
-            .ConfigureAwait(false);
+        return true;
     }
 
     /// <summary>
@@ -354,32 +565,41 @@ public sealed class RemotingSession : IAsyncDisposable
 
         Identity = null;
 
-        var sharedSecret =
-            MessageEncryption
-                ? SessionId.ToByteArray()
-                : null;
-
         var authRequestMessage =
             _server.Serializer
                 .Deserialize<AuthenticationRequestMessage>(
                     _server.MessageEncryptionManager.GetDecryptedMessageData(
                         message: request,
                         serializer: _server.Serializer,
-                        sharedSecret: sharedSecret,
-                        sendersPublicKeyBlob: _clientPublicKeyBlob,
-                        sendersPublicKeySize: _keyPair?.KeySize ?? 0));
+                        sharedSecret: _sharedSecret,
+                        sendersPublicKeyBlob: _clientPublicKeyBlob));
 
-        _isAuthenticated = _server.Authenticate(authRequestMessage.Credentials, out var authenticatedIdentity);
+        var authResponseMessage = await _server.Authenticate(authRequestMessage);
 
-        if (_isAuthenticated)
-            Identity = authenticatedIdentity;
+        if (_isAuthenticated = authResponseMessage.IsAuthenticated)
+            Identity = authResponseMessage.AuthenticatedIdentity;
 
-        var authResponseMessage =
-            new AuthenticationResponseMessage
-            {
-                IsAuthenticated = _isAuthenticated,
-                AuthenticatedIdentity = authenticatedIdentity
-            };
+        // In normal mode (message encryption enabled, not legacy) the server re-keys the session to the
+        // negotiated shared key, so the key has to be sent to the client inside the (already encrypted)
+        // auth response to let it derive the very same new shared secret. A server in legacy key
+        // derivation mode (or without message encryption) cannot re-key the session, so the negotiated
+        // shared key is nulled here to keep both endpoints consistent.
+        var canRekey =
+            MessageEncryption &&
+            !_server.Config.UseLegacySessionKeyDerivation;
+
+        var negotiatedSharedKey =
+            canRekey
+                ? authResponseMessage.NegotiatedSharedKey
+                : null;
+
+        // the negotiated shared key travels encrypted inside the auth response, so it does not leak
+        // over the wire in plaintext. Keep it in the response when the server re-keys the session,
+        // so the client can derive the very same new shared secret; null it otherwise.
+        authResponseMessage.NegotiatedSharedKey =
+            canRekey
+                ? negotiatedSharedKey?.GetSerializableCopy()
+                : null;
 
         var serializedAuthResponse = _server.Serializer.Serialize(authResponseMessage);
 
@@ -387,7 +607,7 @@ public sealed class RemotingSession : IAsyncDisposable
             _server.MessageEncryptionManager.CreateWireMessage(
                 serializedMessage: serializedAuthResponse,
                 serializer: _server.Serializer,
-                sharedSecret: sharedSecret,
+                sharedSecret: _sharedSecret,
                 keyPair: _keyPair,
                 messageType: "auth_response");
 
@@ -395,7 +615,20 @@ public sealed class RemotingSession : IAsyncDisposable
             _server.Serializer.Serialize(wireMessage))
                 .ConfigureAwait(false);
 
-        ((RemotingServer)_server).OnLogon();
+        // if the authentication protocol negotiated a new shared key, re-key the session.
+        // Both endpoints switch to the negotiated key right after this final response,
+        // so the next message is already encrypted with it on both sides.
+        if (_isAuthenticated && negotiatedSharedKey is { ContainsKeyMaterial: true })
+        {
+            var inputKeyMaterial = negotiatedSharedKey.InputKeyMaterial;
+            var config = _server.Config;
+            var secretLength = config.SharedKeySize / 8;
+            var derivedSharedKey = config.HkdfProvider.DeriveKey(inputKeyMaterial, secretLength, _sessionId, nameof(CoreRemoting));
+            _sharedSecret = derivedSharedKey;
+        }
+
+        if (_isAuthenticated)
+            ((RemotingServer)_server).OnLogon();
     }
 
     /// <summary>
@@ -420,24 +653,19 @@ public sealed class RemotingSession : IAsyncDisposable
                 Session = this
             };
 
-        var sharedSecret =
-            MessageEncryption
-                ? SessionId.ToByteArray()
-                : null;
-
         var decryptedRawMessage =
             _server.MessageEncryptionManager.GetDecryptedMessageData(
                 message: request,
                 serializer: _server.Serializer,
-                sharedSecret: sharedSecret,
-                sendersPublicKeyBlob: _clientPublicKeyBlob,
-                sendersPublicKeySize: _keyPair?.KeySize ?? 0);
+                sharedSecret: _sharedSecret,
+                sendersPublicKeyBlob: _clientPublicKeyBlob);
 
         using var scope = _server.ServiceRegistry.CreateScope();
         var serializedResult = Array.Empty<byte>();
         var method = default(MethodInfo);
         var oneWay = false;
         var registration = default(ServiceRegistration);
+        var eventHandlerKey = default(Guid);
 
         try
         {
@@ -453,6 +681,8 @@ public sealed class RemotingSession : IAsyncDisposable
                 out var parameterValues,
                 out var parameterTypes);
 
+            eventHandlerKey = SubscriptionTracker.ExtractHandlerKey(parameterValues);
+
             parameterValues = MapArguments(parameterValues, parameterTypes);
             serverRpcContext.MethodCallParameterValues = parameterValues;
             serverRpcContext.MethodCallParameterTypes = parameterTypes;
@@ -463,11 +693,14 @@ public sealed class RemotingSession : IAsyncDisposable
                 throw new NetworkException("Session is not authenticated.");
 
             registration = _server.ServiceRegistry.GetServiceRegistration(callMessage.ServiceName);
+            if (registration.IsHiddenSystemService)
+                throw new NotSupportedException($"Service {registration.InterfaceType.Name} cannot be called remotely.");
+
             var service = _server.ServiceRegistry.GetService(callMessage.ServiceName);
             var serviceInterfaceType = registration.InterfaceType;
 
             serverRpcContext.ServiceInstance = service;
-            serverRpcContext.EventStub = registration.EventStub;
+            serverRpcContext.EventHub = registration.EventHub;
 
             method = GetMethodInfo(callMessage, serviceInterfaceType, parameterTypes);
             if (method == null)
@@ -487,7 +720,7 @@ public sealed class RemotingSession : IAsyncDisposable
                     innerEx: ex.ToSerializable());
 
             ((RemotingServer)_server).OnRejectCall(serverRpcContext);
-            
+
             // Debug: Log exception after RejectCall
             var exceptionAfterReject = serverRpcContext.Exception;
             System.Diagnostics.Debug.WriteLine($"RejectCall: Exception type = {exceptionAfterReject?.GetType().Name}, Message = {exceptionAfterReject?.Message}");
@@ -499,19 +732,21 @@ public sealed class RemotingSession : IAsyncDisposable
                 _server.Serializer.Serialize(serverRpcContext.Exception);
         }
 
-        object result = null;
-
         if (serverRpcContext.Exception == null)
         {
+            object result = null;
+
             try
             {
                 ((RemotingServer)_server).OnBeforeCall(serverRpcContext);
 
                 if (method.IsEventAccessor(out var eventName, out var subscription))
                 {
+                    _subscriptionTracker.Track(method, eventHandlerKey);
+
                     // event accessor is called
-                    HandleEventSubscription(serverRpcContext.EventStub,
-                        eventName, subscription, serverRpcContext.MethodCallParameterValues);
+                    HandleEventSubscription(serverRpcContext.EventHub,
+                        eventName, subscription, eventHandlerKey, serverRpcContext.MethodCallParameterValues);
                     result = null;
                 }
                 else
@@ -521,43 +756,24 @@ public sealed class RemotingSession : IAsyncDisposable
                         serverRpcContext.MethodCallParameterValues);
                 }
 
-                var returnType = method.ReturnType;
+                // expose the raw (pre-transform) result to the AfterCall handler
+                serverRpcContext.ReturnValue = result;
 
-                if (result != null)
+                // transform once and pre-build the message so the handler sees both forms
+                var transformedResult =
+                    await TransformReturnValueAsync(method.ReturnType, result);
+
+                if (!oneWay)
                 {
-                    // Wait for result value if result is a Task
-                    var task = await TryAwaitReturnValue(returnType, result);
-                    if (task.isAwaited)
-                    {
-                        result = task.result;
-                    }
-
-                    // After potential await, perform post-processing based on the actual value/type.
-                    // This fixes cases when async methods return LINQ expressions (Task<Expression<...>>),
-                    // which previously weren't converted to ExpressionNode and caused serialization issues.
-                    if (result is Expression expression)
-                    {
-                        result = expression.ToExpressionNode();
-                    }
-                    else if (returnType.GetCustomAttribute<ReturnAsProxyAttribute>() != null)
-                    {
-                        var isRegisteredService =
-                            returnType.IsInterface &&
-                            _server.ServiceRegistry
-                                .GetAllRegisteredTypes().Any(s =>
-                                    returnType.AssemblyQualifiedName != null &&
-                                    returnType.AssemblyQualifiedName.Equals(s.AssemblyQualifiedName));
-
-                        if (!isRegisteredService)
-                        {
-                            throw new InvalidOperationException(
-                                $"Type '{returnType.AssemblyQualifiedName}' is not a registered service.");
-                        }
-
-                        result = new ServiceReference(
-                            serviceInterfaceTypeName: returnType.FullName + ", " + returnType.Assembly.GetName().Name,
-                            serviceName: returnType.FullName);
-                    }
+                    serverRpcContext.MethodCallResultMessage =
+                        _server
+                            .MethodCallMessageBuilder
+                            .BuildMethodCallResultMessage(
+                                serializer: _server.Serializer,
+                                uniqueCallKey: serverRpcContext.UniqueCallKey,
+                                method: method,
+                                args: serverRpcContext.MethodCallParameterValues,
+                                returnValue: transformedResult);
                 }
             }
             catch (Exception ex)
@@ -578,21 +794,39 @@ public sealed class RemotingSession : IAsyncDisposable
                     _server.Serializer.Serialize(serverRpcContext.Exception);
             }
 
-            if (!oneWay && serverRpcContext.Exception == null)
-            {
-                serverRpcContext.MethodCallResultMessage =
-                    _server
-                        .MethodCallMessageBuilder
-                        .BuildMethodCallResultMessage(
-                            serializer: _server.Serializer,
-                            uniqueCallKey: serverRpcContext.UniqueCallKey,
-                            method: method,
-                            args: serverRpcContext.MethodCallParameterValues,
-                            returnValue: result);
-            }
-
             if (serverRpcContext.Exception == null)
+            {
                 ((RemotingServer)_server).OnAfterCall(serverRpcContext);
+
+                // rebuild the message only if the handler actually changed ReturnValue
+                if (!oneWay && !Equals(serverRpcContext.ReturnValue, result))
+                {
+                    try
+                    {
+                        var retransformedResult =
+                            await TransformReturnValueAsync(method.ReturnType, serverRpcContext.ReturnValue);
+
+                        serverRpcContext.MethodCallResultMessage =
+                            _server
+                                .MethodCallMessageBuilder
+                                .BuildMethodCallResultMessage(
+                                    serializer: _server.Serializer,
+                                    uniqueCallKey: serverRpcContext.UniqueCallKey,
+                                    method: method,
+                                    args: serverRpcContext.MethodCallParameterValues,
+                                    returnValue: retransformedResult);
+                    }
+                    catch (Exception ex)
+                    {
+                        serverRpcContext.Exception =
+                            new RemoteInvocationException(
+                                message: $"Failed to rebuild result after AfterCall: {ex.GetBaseException()?.Message ?? ex.Message}",
+                                innerEx: ex.ToSerializable());
+
+                        serializedResult = _server.Serializer.Serialize(serverRpcContext.Exception);
+                    }
+                }
+            }
 
             if (oneWay)
                 return;
@@ -621,7 +855,7 @@ public sealed class RemotingSession : IAsyncDisposable
                 serializedMessage: serializedResult,
                 serializer: _server.Serializer,
                 error: serverRpcContext.Exception != null,
-                sharedSecret: sharedSecret,
+                sharedSecret: _sharedSecret,
                 keyPair: _keyPair,
                 messageType: "rpc_result",
                 uniqueCallKey: serverRpcContext.UniqueCallKey.ToByteArray());
@@ -675,24 +909,63 @@ public sealed class RemotingSession : IAsyncDisposable
         return (false, null);
     }
 
-    private void HandleEventSubscription(EventStub eventStub, string eventName, bool subscription, object[] parameters)
+    /// <summary>
+    /// Transforms a raw method return value into the form expected by
+    /// <see cref="MethodCallMessageBuilder.BuildMethodCallResultMessage"/>:
+    /// awaits Task/ValueTask, converts LINQ expressions to ExpressionNode,
+    /// and replaces ReturnAsProxy results with ServiceReference.
+    /// </summary>
+    /// <param name="returnType">Declared return type of the invoked method.</param>
+    /// <param name="returnValue">Raw return value (pre-transform).</param>
+    /// <returns>Transformed return value, or <c>null</c>.</returns>
+    private async Task<object> TransformReturnValueAsync(Type returnType, object returnValue)
+    {
+        if (returnValue == null)
+            return null;
+
+        var (isAwaited, awaited) = await TryAwaitReturnValue(returnType, returnValue);
+        if (isAwaited)
+            returnValue = awaited;
+
+        if (returnValue is Expression expression)
+            return expression.ToExpressionNode();
+
+        if (returnType.GetCustomAttribute<ReturnAsProxyAttribute>() != null)
+        {
+            var isRegisteredService =
+                returnType.IsInterface &&
+                _server.ServiceRegistry
+                    .GetAllRegisteredTypes().Any(s =>
+                        returnType.AssemblyQualifiedName != null &&
+                        returnType.AssemblyQualifiedName.Equals(s.AssemblyQualifiedName));
+
+            if (!isRegisteredService)
+            {
+                throw new InvalidOperationException(
+                    $"Type '{returnType.AssemblyQualifiedName}' is not a registered service.");
+            }
+
+            return new ServiceReference(
+                serviceInterfaceTypeName: returnType.FullName + ", " + returnType.Assembly.GetName().Name,
+                serviceName: returnType.FullName);
+        }
+
+        return returnValue;
+    }
+
+    private void HandleEventSubscription(ServiceEventHub eventHub, string eventName, bool subscription, Guid eventHandlerKey, object[] parameters)
     {
         if (parameters == null || parameters.Length != 1)
-        {
             return;
-        }
 
         var eventHandler = parameters[0] as Delegate;
         if (eventHandler == null)
-        {
             return;
-        }
 
-        Action<string, Delegate> eventAccessor = subscription ?
-            eventStub.AddHandler :
-            eventStub.RemoveHandler;
-
-        eventAccessor(eventName, eventHandler);
+        if (subscription)
+            eventHub.AddHandler(eventName, eventHandlerKey, _sessionId, eventHandler);
+        else
+            eventHub.RemoveHandler(eventName, eventHandlerKey);
     }
 
     private MethodInfo GetMethodInfo(MethodCallMessage callMessage, Type serviceInterfaceType, Type[] parameterTypes)
@@ -838,6 +1111,35 @@ public sealed class RemotingSession : IAsyncDisposable
         return true;
     }
 
+    /// <summary>
+    /// Removes and disposes delegate proxies for the given handler keys.
+    /// Invoking a stored reference to a disposed proxy becomes a no-op.
+    /// </summary>
+    /// <param name="handlerKeys">Handler keys to remove.</param>
+    /// <returns>Number of delegate proxies removed.</returns>
+    internal int RemoveDelegateProxies(Guid[] handlerKeys)
+    {
+        if (handlerKeys is null or { Length: 0 })
+            return 0;
+
+        var cache = _delegateProxyCache;
+        if (cache == null)
+            return 0;
+
+        var removed = 0;
+
+        foreach (var key in handlerKeys)
+        {
+            if (cache.TryRemove(key, out var proxy))
+            {
+                proxy.Dispose();
+                removed++;
+            }
+        }
+
+        return removed;
+    }
+
     #endregion
 
     #region Close session
@@ -847,20 +1149,25 @@ public sealed class RemotingSession : IAsyncDisposable
     /// </summary>
     public void Close()
     {
-        if (_isDisposing)
+        if (IsDisposing)
             return;
 
-        // calling RemoveSession synchronously via RPC call produces a deadlock
-        // in Session.Dispose because the session would wait for the current
-        // RPC message processing to complete
+        // fire-and-forget: Close may be called from within an rpc handler,
+        // blocking here would deadlock on the in-flight message counter
         _ = RemoveCurrentSession();
     }
 
-    private Task RemoveCurrentSession() => Task.Run(async () =>
+    private async Task RemoveCurrentSession()
     {
-        // disposes the current session
-        await _server?.SessionRepository.RemoveSession(_sessionId);
-    });
+        try
+        {
+            await _server.SessionRepository.RemoveSession(_sessionId);
+        }
+        catch (Exception ex)
+        {
+            OnErrorOccured("Error removing the current session.", ex);
+        }
+    }
 
     #endregion
 
@@ -871,10 +1178,8 @@ public sealed class RemotingSession : IAsyncDisposable
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        if (_isDisposing)
+        if (!_isDisposing.TrySet())
             return;
-
-        _isDisposing = true;
 
         _rawMessageTransport.ReceiveMessage -= OnReceiveMessage;
         _rawMessageTransport.ErrorOccured -= OnErrorOccured;
@@ -884,16 +1189,16 @@ public sealed class RemotingSession : IAsyncDisposable
             .ExpireMs(_server.Config.WaitTimeForCurrentlyProcessedMessagesOnDispose)
                 .ConfigureAwait(false);
 
-        var sharedSecret =
-            MessageEncryption
-                ? _sessionId.ToByteArray()
-                : null;
+        // clean up remote subscriptions for the current session
+        await _server.ServiceRegistry.GetService<IServerSubscriptionService>()
+            .RemoveAllForSession(_sessionId)
+                .ConfigureAwait(false);
 
         var wireMessage =
             _server.MessageEncryptionManager.CreateWireMessage(
                 serializedMessage: [],
                 serializer: _server.Serializer,
-                sharedSecret: sharedSecret,
+                sharedSecret: _sharedSecret,
                 keyPair: _keyPair,
                 messageType: "session_closed");
 
@@ -921,6 +1226,11 @@ public sealed class RemotingSession : IAsyncDisposable
 
         _keyPair?.Dispose();
         _delegateProxyFactory = null;
+
+        if (_delegateProxyCache != null)
+            foreach (var pair in _delegateProxyCache)
+                pair.Value.Dispose();
+
         _delegateProxyCache.Clear();
         _delegateProxyCache = null;
         _rawMessageTransport = null;

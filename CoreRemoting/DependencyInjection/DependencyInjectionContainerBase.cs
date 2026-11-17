@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace CoreRemoting.DependencyInjection;
 
@@ -11,6 +12,7 @@ namespace CoreRemoting.DependencyInjection;
 public abstract class DependencyInjectionContainerBase : IDependencyInjectionContainer
 {
     private readonly ConcurrentDictionary<string, ServiceRegistration> _serviceNameRegistry;
+    private int _selfRegistered;
 
     /// <summary>
     /// Creates a new instance.
@@ -18,6 +20,17 @@ public abstract class DependencyInjectionContainerBase : IDependencyInjectionCon
     protected DependencyInjectionContainerBase()
     {
         _serviceNameRegistry = new ConcurrentDictionary<string, ServiceRegistration>();
+    }
+
+    private void EnsureSelfRegistered()
+    {
+        if (Interlocked.CompareExchange(ref _selfRegistered, 1, 0) != 0)
+            return;
+
+        RegisterService<IDependencyInjectionContainer>(
+            () => this,
+            ServiceLifetime.Singleton,
+            asHiddenSystemService: true);
     }
 
     /// <summary>
@@ -40,6 +53,8 @@ public abstract class DependencyInjectionContainerBase : IDependencyInjectionCon
     /// <returns>Service registration</returns>
     public ServiceRegistration GetServiceRegistration(string serviceName)
     {
+        EnsureSelfRegistered();
+
         if (!_serviceNameRegistry.TryGetValue(serviceName, out ServiceRegistration registration))
             throw new KeyNotFoundException($"No service named '{serviceName}' is registered.");
 
@@ -141,6 +156,8 @@ public abstract class DependencyInjectionContainerBase : IDependencyInjectionCon
         where TServiceInterface : class
         where TServiceImpl : class, TServiceInterface
     {
+        EnsureSelfRegistered();
+
         var serviceInterfaceType = typeof(TServiceInterface);
 
         if (string.IsNullOrWhiteSpace(serviceName))
@@ -177,6 +194,8 @@ public abstract class DependencyInjectionContainerBase : IDependencyInjectionCon
         bool asHiddenSystemService = false)
         where TServiceInterface : class
     {
+        EnsureSelfRegistered();
+
         var serviceInterfaceType = typeof(TServiceInterface);
 
         if (string.IsNullOrWhiteSpace(serviceName))

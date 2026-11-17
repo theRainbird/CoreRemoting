@@ -1,7 +1,7 @@
 using CoreRemoting.Channels;
 using CoreRemoting.Channels.Websocket;
 
-namespace CoreRemoting.Tests;
+namespace CoreRemoting.Tests.Sessions;
 
 public class SessionTests_Websockets : SessionTests
 {
