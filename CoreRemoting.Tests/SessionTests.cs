@@ -57,7 +57,13 @@ public class SessionTests : IClassFixture<ServerFixture>
             client.Dispose();
         }
 
-        // There should be no sessions, before both clients connected
+        // There should be no sessions, before both clients connected.
+        // Session removal on the server happens asynchronously after the previous tests'
+        // clients disconnected, so give the pending cleanup a chance to complete first.
+        var drainDeadline = DateTime.UtcNow.AddSeconds(5);
+        while (_serverFixture.Server.SessionRepository.Sessions.Any() && DateTime.UtcNow < drainDeadline)
+            await Task.Delay(50).ConfigureAwait(false);
+
         var sessionRepository = _serverFixture.Server.SessionRepository as SessionRepository;
         Assert.NotNull(sessionRepository);
         Assert.Empty(sessionRepository.Sessions);
