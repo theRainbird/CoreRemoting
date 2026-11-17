@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Threading;
@@ -422,12 +423,36 @@ public class SessionTests : IClassFixture<ServerFixture>
             WaitTimeForGoodbyeOnDisconnect = 100 //We will set such a timeout so that the client is guaranteed not to wait more than 3 seconds.
         });
 
-        client.Connect();
+        try
+        {
+            client.Connect();
 
-        var proxy = client.CreateProxy<ITestService>();
+            var proxy = client.CreateProxy<ITestService>();
 
-        proxy.TestMethod(null);// server sends close_session
-        await Task.Run(client.Dispose).Timeout(3); // client calls Dispose and disconnects
+            // server sends close_session
+            proxy.TestMethod(null);
+
+            // client calls Dispose and disconnects
+            await Task.Run(client.Dispose).Timeout(3);
+        }
+        finally
+        {
+            // clean up the state for other tests
+            await CleanupSessions(_serverFixture.Server.SessionRepository as SessionRepository);
+            _serverFixture.TestService.TestMethodFake = _ => _;
+        }
+    }
+
+    private async Task CleanupSessions(SessionRepository sessionRepository)
+    {
+        Assert.NotNull(sessionRepository);
+
+        foreach (var session in sessionRepository.Sessions.ToArray())
+        {
+            await sessionRepository.RemoveSession(session.SessionId);
+        }
+
+        Assert.Empty(sessionRepository.Sessions);
     }
 }
 
