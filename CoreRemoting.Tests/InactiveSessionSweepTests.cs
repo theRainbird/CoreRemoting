@@ -50,7 +50,7 @@ public class InactiveSessionSweepTests
             NetworkPort = port,
             MessageEncryption = true,
             Serializer = new FailingOnSessionClosedSerializerAdapter(),
-            InactiveSessionSweepInterval = 1,
+            InactiveSessionSweepInterval = 3,
             MaximumSessionInactivityTime = 0,
             RegisterServicesAction = container =>
                 container.RegisterService<ITestService, TestService>(ServiceLifetime.Singleton)
@@ -73,7 +73,7 @@ public class InactiveSessionSweepTests
             })
             .ToList();
 
-        // Both sessions are inactive for more than 0 minutes, so the next sweep (every second) removes them.
+        // Both sessions are inactive for more than 0 minutes, so the next sweep (every 3 seconds) removes them.
         var timeout = DateTime.UtcNow.AddSeconds(10);
         while (server.SessionRepository.Sessions.Any() && DateTime.UtcNow < timeout)
         {

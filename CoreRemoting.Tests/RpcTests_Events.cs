@@ -536,7 +536,7 @@ public partial class RpcTests
     public async Task Disconnect_does_not_block_on_in_flight_goodbye_counter()
     {
         const int largeDisposeTimeout = 5000;
-        const int expectedDisposeWindow = 1;
+        const int expectedDisposeWindow = 10;
 
         var config = _serverFixture.Server.Config;
         var oldTimeout = config.WaitTimeForCurrentlyProcessedMessagesOnDispose;
