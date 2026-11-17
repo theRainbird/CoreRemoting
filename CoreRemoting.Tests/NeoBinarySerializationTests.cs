@@ -610,6 +610,82 @@ namespace CoreRemoting.Tests.Serialization.NeoBinary
 		}
 
 		[Fact]
+		public void NeoBinarySerializerAdapter_should_serialize_DataSet_larger_than_initial_buffer_as_DiffGram()
+		{
+			const int rowCount = 2000;
+			var serializer = new NeoBinarySerializerAdapter();
+
+			var parentTable = new DataTable("ParentTable");
+			parentTable.Columns.Add("Id", typeof(int));
+			parentTable.Columns.Add("Name", typeof(string)).DefaultValue = DBNull.Value;
+			parentTable.PrimaryKey = [parentTable.Columns["Id"]!];
+
+			var childTable = new DataTable("ChildTable");
+			childTable.Columns.Add("Id", typeof(int));
+			childTable.Columns.Add("ParentId", typeof(int));
+			childTable.Columns.Add("Amount", typeof(decimal));
+
+			var originalDataSet = new DataSet("LargeDataSet");
+			originalDataSet.Tables.Add(parentTable);
+			originalDataSet.Tables.Add(childTable);
+			originalDataSet.Relations.Add("ParentChild", parentTable.Columns["Id"]!, childTable.Columns["ParentId"]!);
+
+			for (var index = 0; index < rowCount; index++)
+			{
+				// Umlauts and the euro sign are multi-byte in UTF-8 and guard the text encoding of the XML.
+				parentTable.Rows.Add(index, index % 3 == 0 ? DBNull.Value : $"Müller € {index}");
+				childTable.Rows.Add(index, index, index * 1.5m);
+			}
+
+			originalDataSet.AcceptChanges();
+			parentTable.Rows[5]["Name"] = "Changed";
+
+			var serialized = serializer.Serialize(originalDataSet);
+			var deserializedDataSet = serializer.Deserialize<DataSet>(serialized);
+
+			var deserializedParentTable = deserializedDataSet.Tables["ParentTable"]!;
+			var deserializedChildTable = deserializedDataSet.Tables["ChildTable"]!;
+
+			Assert.Equal(rowCount, deserializedParentTable.Rows.Count);
+			Assert.Equal(rowCount, deserializedChildTable.Rows.Count);
+			Assert.Single(deserializedDataSet.Relations);
+			Assert.Equal(DataRowState.Modified, deserializedParentTable.Rows[5].RowState);
+			Assert.Equal("Changed", deserializedParentTable.Rows[5]["Name", DataRowVersion.Current]);
+			Assert.Equal("Müller € 5", deserializedParentTable.Rows[5]["Name", DataRowVersion.Original]);
+			Assert.Equal(DBNull.Value, deserializedParentTable.Rows[0]["Name"]);
+			Assert.Equal("Müller € 1999", deserializedParentTable.Rows[rowCount - 1]["Name"]);
+			Assert.Equal(1999 * 1.5m, deserializedChildTable.Rows[rowCount - 1]["Amount"]);
+		}
+
+		[Fact]
+		public void NeoBinarySerializerAdapter_should_serialize_DataTable_larger_than_initial_buffer_as_DiffGram()
+		{
+			const int rowCount = 2000;
+			var serializer = new NeoBinarySerializerAdapter();
+
+			var originalTable = new DataTable("LargeTable");
+			originalTable.Columns.Add("UserName", typeof(string));
+			originalTable.Columns.Add("Age", typeof(short));
+
+			for (var index = 0; index < rowCount; index++)
+			{
+				originalTable.Rows.Add($"Müller € {index}", (short)(index % 100));
+			}
+
+			originalTable.AcceptChanges();
+			originalTable.Rows[7]["Age"] = (short)99;
+
+			var serialized = serializer.Serialize(originalTable);
+			var deserializedTable = serializer.Deserialize<DataTable>(serialized);
+
+			Assert.Equal(rowCount, deserializedTable.Rows.Count);
+			Assert.Equal(DataRowState.Modified, deserializedTable.Rows[7].RowState);
+			Assert.Equal((short)7, deserializedTable.Rows[7]["Age", DataRowVersion.Original]);
+			Assert.Equal((short)99, deserializedTable.Rows[7]["Age", DataRowVersion.Current]);
+			Assert.Equal("Müller € 1999", deserializedTable.Rows[rowCount - 1]["UserName"]);
+		}
+
+		[Fact]
 		public void NeoBinarySerializerAdapter_should_serialize_and_deserialize_inherited_objects()
 		{
 			var serializer = new NeoBinarySerializerAdapter();
