@@ -1,5 +1,6 @@
 using System;
 using System.Net.Quic;
+using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Toolbox;
@@ -66,16 +67,8 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
     /// </summary>
     private async Task<Guid> CreateRemotingSession()
     {
-        using var receiveLock = await ReceiveLock;
-        var lengthBuffer = new byte[4];
-        await ClientStream.ReadExactlyAsync(lengthBuffer).ConfigureAwait(false);
-        var messageSize = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(lengthBuffer);
-
-        if (messageSize < 0 || messageSize > MaxMessageSize)
-            throw new InvalidOperationException($"Invalid message size: {messageSize}");
-
-        var handshakeBytes = new byte[messageSize];
-        await ClientStream.ReadExactlyAsync(handshakeBytes).ConfigureAwait(false);
+        var handshakeBytes = await ReadIncomingMessage(ClientStream, CancellationToken.None)
+            .ConfigureAwait(false);
 
         var serializer = RemotingServer.Serializer;
         var handshakeMessage = serializer.Deserialize<ClientHandshakeMessage>(handshakeBytes);

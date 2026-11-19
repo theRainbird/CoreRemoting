@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
 
@@ -106,7 +107,7 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
             await DisconnectAsync()
                 .ConfigureAwait(false);
 
-        TryDispose(ClientWebSocket);
+        ClientWebSocket.TryDispose();
         ClientWebSocket = null;
 
         await base.DisposeAsync()

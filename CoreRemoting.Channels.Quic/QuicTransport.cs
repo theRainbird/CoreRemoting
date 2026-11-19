@@ -211,10 +211,10 @@ public abstract class QuicTransport : IAsyncDisposable
         }
     }
 
-    private async Task<byte[]> ReadIncomingMessage(Stream stream, CancellationToken ct)
+    protected async Task<byte[]> ReadIncomingMessage(Stream stream, CancellationToken ct)
     {
         using var receiveLock = await ReceiveLock;
-        
+
         var lengthBuffer = new byte[4];
         await stream.ReadExactlyAsync(lengthBuffer, ct).ConfigureAwait(false);
         
@@ -225,7 +225,7 @@ public abstract class QuicTransport : IAsyncDisposable
 
         var messageBuffer = new byte[messageSize];
         await stream.ReadExactlyAsync(messageBuffer, ct).ConfigureAwait(false);
-        
+
         return messageBuffer;
     }
 

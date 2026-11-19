@@ -4,6 +4,7 @@ using CoreRemoting.IO;
 using System.Threading.Tasks;
 using System.Threading;
 using CoreRemoting.Threading;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
 
@@ -213,7 +214,7 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
         }
         finally
         {
-            TryDispose(webSocket);
+            webSocket.TryDispose();
 
             // the loop is the single fire point
             if (Volatile.Read(ref _readLoopInstance) == instance)
@@ -235,22 +236,6 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
         catch
         {
             // peer may already be gone
-        }
-    }
-
-    /// <summary>
-    /// Tries to dispose the provided object and ignores the disposal exceptions.
-    /// </summary>
-    /// <param name="webSocket">Web socket instance to dispose</param>
-    protected void TryDispose(IDisposable webSocket)
-    {
-        try
-        {
-            webSocket?.Dispose();
-        }
-        catch
-        {
-            // already disposed
         }
     }
 

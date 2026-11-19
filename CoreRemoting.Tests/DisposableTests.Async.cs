@@ -1,4 +1,5 @@
 using CoreRemoting.Toolbox;
+using System;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -60,5 +61,42 @@ partial class DisposableTests
             Assert.Equal(0, count);
 
         Assert.Equal(5, count);
+    }
+
+    [Fact]
+    public async Task TryDisposeAsync_ignores_nulls()
+    {
+        IAsyncDisposable disposable = null;
+
+        await disposable.TryDisposeAsync(); // doesn't throw
+    }
+
+    [Fact]
+    public async Task TryDisposeAsync_disposes_object()
+    {
+        var disposed = false;
+        async Task disposeTask()
+        {
+            await Task.Yield();
+            disposed = true;
+        }
+
+        var disposable = Disposable.Create(disposeTask);
+        await disposable.TryDisposeAsync();
+
+        Assert.True(disposed);
+    }
+
+    [Fact]
+    public async Task TryDisposeAsync_ignores_exceptions()
+    {
+        static async Task disposeTask()
+        {
+            await Task.Yield();
+            throw new InvalidOperationException("Test exception");
+        }
+
+        var disposable = Disposable.Create(disposeTask);
+        await disposable.TryDisposeAsync(); // doesn't throw
     }
 }
