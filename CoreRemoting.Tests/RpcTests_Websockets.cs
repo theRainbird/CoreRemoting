@@ -16,9 +16,7 @@ public class RpcTests_Websockets : RpcTests
     {
     }
 
-    [Fact(Skip = "Fails on Websocket channel")]
-    public override Task Rpc_after_reconnect_does_not_throw_server_disconnected()
-    {
-        return Task.CompletedTask;
-    }
+    [Fact]
+    public override Task Rpc_after_reconnect_does_not_throw_server_disconnected() =>
+        base.Rpc_after_reconnect_does_not_throw_server_disconnected();
 }
