@@ -11,7 +11,7 @@ namespace CoreRemoting.Channels.Websocket;
 /// </summary>
 public class WebsocketClientChannel : WebsocketTransport, IClientChannel
 {
-    private WeakReference<IRemotingClient> _weakClientRef;
+    private IRemotingClient _client;
 
     /// <summary>
     /// Gets or sets the URL this channel is connected to.
@@ -34,7 +34,7 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
     /// <inheritdoc />
     public void Init(IRemotingClient client)
     {
-        _weakClientRef = new WeakReference<IRemotingClient>(client);
+        _client = client;
 
         Url =
             "ws://" +
@@ -63,11 +63,12 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
     /// <inheritdoc />
     public async Task ConnectAsync()
     {
-        if (ClientWebSocket.State != WebSocketState.None &&
-            _weakClientRef.TryGetTarget(out var client))
+        // ClientWebSocket cannot be reused after it enters the Closed state.
+        // If it's not in the pristine None state, create a fresh instance.
+        if (ClientWebSocket.State != WebSocketState.None && _client != null)
         {
-            try { ClientWebSocket.Dispose(); } catch { }
-            Init(client);
+            TryDispose(ClientWebSocket);
+            Init(_client);
         }
 
         // reset stale error from a previous connection
@@ -96,20 +97,7 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
 
         IsConnected = false;
 
-        // send a close frame, but do not touch the receive side: the read loop
-        // is already blocked on ReceiveAsync, sending a second ReceiveAsync races
-        try
-        {
-            if (ClientWebSocket.State == WebSocketState.Open)
-                await ClientWebSocket.CloseOutputAsync(
-                    WebSocketCloseStatus.NormalClosure, "Ok", CancellationToken.None)
-                        .ConfigureAwait(false);
-        }
-        catch // (ObjectDisposedException)
-        {
-            // socket may already be closed
-        }
-
+        // send close frame to the server,
         // the read loop receives the server's close reply, sends ours back,
         // and exits on its own; await it for deterministic teardown
         await base.DisconnectAsync()

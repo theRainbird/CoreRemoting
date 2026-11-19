@@ -494,8 +494,8 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         var sharedSecret =
             MessageEncryption
-				? sessionKey ?? sessionId.ToByteArray()
-				: null;
+                ? sessionKey ?? sessionId.ToByteArray()
+                : null;
 
         if (!quiet && _channel.IsConnected)
         {

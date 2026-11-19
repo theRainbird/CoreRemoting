@@ -82,13 +82,4 @@ public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
 
         return Session.SessionId;
     }
-
-    /// <inheritdoc />
-    public override async ValueTask DisposeAsync()
-    {
-        // await the read loop; its finally closes the underlying WebSocket
-        // after the close handshake completes, so no extra WebSocket.Dispose here
-        await base.DisposeAsync()
-            .ConfigureAwait(false);
-    }
 }

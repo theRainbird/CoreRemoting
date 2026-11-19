@@ -65,8 +65,8 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     protected abstract WebSocket WebSocket { get; }
 
     private Task _readLoop;
-    private CancellationTokenSource _readCts;
-    private AtomicBool _disconnectFired;
+    private CancellationTokenSource _readLoopCts;
+    private int _readLoopInstance;
 
     private AsyncLock ReceiveLock { get; } = new();
 
@@ -78,14 +78,13 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     /// </summary>
     public virtual async Task<Guid> StartListening()
     {
-        using var oldCts = Interlocked.Exchange(ref _readCts, new CancellationTokenSource());
-        oldCts?.Cancel();
+        using var tcs = Interlocked.Exchange(ref _readLoopCts, new CancellationTokenSource());
+        tcs?.Cancel();
 
         await DetachReadLoopAsync()
             .ConfigureAwait(false);
 
-        _disconnectFired.Reset();
-        _readLoop = ReadIncomingMessages(_readCts.Token);
+        _readLoop = ReadIncomingMessages(_readLoopCts.Token);
 
         return Guid.Empty;
     }
@@ -96,18 +95,19 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     /// </summary>
     public virtual async Task DisconnectAsync()
     {
+        await TrySendCloseFrame(WebSocket, "Ok");
+
         var detachTask = DetachReadLoopAsync();
 
         // give the loop a chance to complete the close handshake with the peer
-        var completed = await Task.WhenAny(
-            detachTask,
-            Task.Delay(CloseHandshakeTimeoutMs)
-        ).ConfigureAwait(false);
+        var completed = await Task.WhenAny(detachTask,
+            Task.Delay(CloseHandshakeTimeoutMs))
+                .ConfigureAwait(false);
 
         if (completed != detachTask)
         {
             // peer did not complete the handshake in time, force cancel
-            _readCts?.Cancel();
+            _readLoopCts?.Cancel();
             await detachTask.ConfigureAwait(false);
         }
     }
@@ -118,7 +118,7 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
         await DisconnectAsync()
             .ConfigureAwait(false);
 
-        using var cts = Interlocked.Exchange(ref _readCts, null);
+        using var cts = Interlocked.Exchange(ref _readLoopCts, null);
         cts?.Cancel();
 
         ReceiveLock.Dispose();
@@ -146,6 +146,7 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
         var buffer = new byte[BufferSize];
         var segment = new ArraySegment<byte>(buffer);
         var webSocket = WebSocket;
+        var instance = Interlocked.Increment(ref _readLoopInstance);
 
         try
         {
@@ -177,19 +178,7 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
                 if (closed)
                 {
                     // peer sent a close frame, send ours back to complete the handshake
-                    try
-                    {
-                        if (webSocket.State == WebSocketState.CloseReceived)
-                            using (await SendLock)
-                                await webSocket.CloseOutputAsync(
-                                    WebSocketCloseStatus.NormalClosure, "",
-                                    CancellationToken.None).ConfigureAwait(false);
-                    }
-                    catch
-                    {
-                        // peer may already be gone
-                    }
-
+                    await TrySendCloseFrame(webSocket);
                     break;
                 }
 
@@ -220,11 +209,44 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
         }
         finally
         {
-            try { webSocket?.Dispose(); } catch { /* already disposed */ }
+            TryDispose(webSocket);
 
-            // the loop is the single fire point, the flag guards future regressions
-            if (_disconnectFired.TrySet())
+            // the loop is the single fire point
+            if (Volatile.Read(ref _readLoopInstance) == instance)
                 OnDisconnected();
+        }
+    }
+
+    private async Task TrySendCloseFrame(WebSocket webSocket, string status = "")
+    {
+        try
+        {
+            if (webSocket.State == WebSocketState.CloseReceived || webSocket.State == WebSocketState.Open)
+                using (await SendLock)
+                    await webSocket.CloseOutputAsync(
+                        WebSocketCloseStatus.NormalClosure, status,
+                            CancellationToken.None)
+                                .ConfigureAwait(false);
+        }
+        catch
+        {
+            // peer may already be gone
+        }
+    }
+
+    /// <summary>
+    /// Tries to dispose the provided object and ignores the disposal exceptions.
+    /// </summary>
+    /// <param name="webSocket">Web socket instance to dispose</param>
+    protected void TryDispose(IDisposable webSocket)
+    {
+        try
+        {
+            webSocket?.Dispose();
+        }
+        catch
+        {
+            // already disposed
         }
     }
 
@@ -243,8 +265,8 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
             using (await SendLock)
                 await ws.SendAsync(
                     new ArraySegment<byte>(rawMessage),
-                    WebSocketMessageType.Binary, true, CancellationToken.None)
-                        .ConfigureAwait(false);
+                        WebSocketMessageType.Binary, true, CancellationToken.None)
+                            .ConfigureAwait(false);
 
             return true;
         }

@@ -121,10 +121,20 @@ public class WebsocketServerChannel : IServerChannel
         StopListening();
         HttpListener = null;
 
-        foreach (var conn in Connections.Values)
-            await conn.DisposeAsync()
-                .ConfigureAwait(false);
-
+        var connections = Connections.Values;
         Connections.Clear();
+
+        foreach (var conn in connections)
+        {
+            try
+            {
+                await conn.DisposeAsync()
+                    .ConfigureAwait(false);
+            }
+            catch
+            {
+                // ignore disposal errors
+            }
+        }
     }
 }
