@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Quic;
 
@@ -89,13 +90,13 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
 
         if (Connection != null)
         {
-            await Connection.DisposeAsync().ConfigureAwait(false);
+            await Connection.TryDisposeAsync().ConfigureAwait(false);
             Connection = null;
         }
 
         if (ClientStream != null)
         {
-            await ClientStream.DisposeAsync().ConfigureAwait(false);
+            await ClientStream.TryDisposeAsync().ConfigureAwait(false);
             ClientStream = null;
         }
     }

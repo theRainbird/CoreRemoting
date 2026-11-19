@@ -138,16 +138,7 @@ public class QuicServerChannel : IServerChannel
         Connections.Clear();
 
         foreach (var conn in activeConnections)
-        {
-            try
-            {
-                await conn.DisposeAsync()
-                    .ConfigureAwait(false);
-            }
-            catch
-            {
-                // ignore disposal errors
-            }
-        }
+            await conn.TryDisposeAsync()
+                .ConfigureAwait(false);
     }
 }

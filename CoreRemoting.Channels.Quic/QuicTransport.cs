@@ -6,6 +6,7 @@ using System.Net.Quic;
 using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Threading;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Quic;
 
@@ -188,20 +189,23 @@ public abstract class QuicTransport : IAsyncDisposable
         }
         finally
         {
+            if (connection != null)
+            {
+                await connection.TryDisposeAsync().ConfigureAwait(false);
+                if (ReferenceEquals(Connection, connection))
+                    Connection = null;
+            }
+
+            if (stream != null)
+            {
+                await stream.TryDisposeAsync().ConfigureAwait(false);
+                if (ReferenceEquals(ClientStream, stream))
+                    ClientStream = null;
+            }
+
             if (Volatile.Read(ref _readLoopInstance) == instance)
             {
                 IsConnected = false;
-
-                if (connection != null)
-                {
-                    try { await connection.DisposeAsync().ConfigureAwait(false); } catch { }
-                }
-
-                if (stream != null)
-                {
-                    try { await stream.DisposeAsync().ConfigureAwait(false); } catch { }
-                }
-
                 OnDisconnected();
             }
         }
@@ -230,7 +234,7 @@ public abstract class QuicTransport : IAsyncDisposable
     {
         try
         {
-            if (Connection != null)
+            if (IsConnected && Connection != null)
                 await Connection.CloseAsync(0x0C).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -256,7 +260,7 @@ public abstract class QuicTransport : IAsyncDisposable
         using var cts = Interlocked.Exchange(ref _readLoopCts, null);
         cts?.Cancel();
 
-        ReceiveLock.Dispose();
-        SendLock.Dispose();
+        ReceiveLock.TryDispose();
+        SendLock.TryDispose();
     }
 }

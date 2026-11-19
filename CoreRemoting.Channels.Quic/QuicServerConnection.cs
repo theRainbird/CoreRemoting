@@ -38,19 +38,25 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
 
             await base.StartListening()
                 .ConfigureAwait(false);
+
             return sessionId;
         }
         catch
         {
             IsConnected = false;
+
             if (ClientStream != null)
             {
-                try { await ClientStream.DisposeAsync().ConfigureAwait(false); } catch { }
+                await ClientStream.TryDisposeAsync().ConfigureAwait(false);
+                ClientStream = null;
             }
+
             if (Connection != null)
             {
-                try { await Connection.DisposeAsync().ConfigureAwait(false); } catch { }
+                await Connection.TryDisposeAsync().ConfigureAwait(false);
+                Connection = null;
             }
+
             throw;
         }
     }
