@@ -1,6 +1,5 @@
-﻿using System;
+using System;
 using System.Net.Quic;
-using System.Text;
 using System.Threading.Tasks;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Toolbox;
@@ -20,8 +19,6 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
         Connection = connection ?? throw new ArgumentNullException(nameof(connection));
         ClientStream = stream ?? throw new ArgumentNullException(nameof(stream));
         RemotingServer = remotingServer ?? throw new ArgumentNullException(nameof(remotingServer));
-        ClientReader = new(stream, Encoding.UTF8, true);
-        ClientWriter = new(stream, Encoding.UTF8, true);
         IsConnected = true;
     }
 
@@ -34,13 +31,28 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
     /// </summary>
     public override async Task<Guid> StartListening()
     {
-        var sessionId = await CreateRemotingSession()
-            .ConfigureAwait(false);
+        try
+        {
+            var sessionId = await CreateRemotingSession()
+                .ConfigureAwait(false);
 
-        await base.StartListening()
-            .ConfigureAwait(false);
-
-        return sessionId;
+            await base.StartListening()
+                .ConfigureAwait(false);
+            return sessionId;
+        }
+        catch
+        {
+            IsConnected = false;
+            if (ClientStream != null)
+            {
+                try { await ClientStream.DisposeAsync().ConfigureAwait(false); } catch { }
+            }
+            if (Connection != null)
+            {
+                try { await Connection.DisposeAsync().ConfigureAwait(false); } catch { }
+            }
+            throw;
+        }
     }
 
     /// <summary>
@@ -48,11 +60,17 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
     /// </summary>
     private async Task<Guid> CreateRemotingSession()
     {
-        // read handshake message
-        var handshakeBytes = await ReadIncomingMessage()
-            .ConfigureAwait(false);
+        using var receiveLock = await ReceiveLock;
+        var lengthBuffer = new byte[4];
+        await ClientStream.ReadExactlyAsync(lengthBuffer).ConfigureAwait(false);
+        var messageSize = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(lengthBuffer);
 
-        // deserialize handshake and add client address
+        if (messageSize < 0 || messageSize > MaxMessageSize)
+            throw new InvalidOperationException($"Invalid message size: {messageSize}");
+
+        var handshakeBytes = new byte[messageSize];
+        await ClientStream.ReadExactlyAsync(handshakeBytes).ConfigureAwait(false);
+
         var serializer = RemotingServer.Serializer;
         var handshakeMessage = serializer.Deserialize<ClientHandshakeMessage>(handshakeBytes);
         handshakeMessage.ClientAddress = Connection.RemoteEndPoint.ToString();

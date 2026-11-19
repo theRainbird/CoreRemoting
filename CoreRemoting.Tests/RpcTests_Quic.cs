@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using Castle.MicroKernel.Registration;
 using CoreRemoting.Channels;
 using CoreRemoting.Channels.Quic;
 using Xunit;
@@ -16,14 +17,11 @@ public class RpcTests_Quic : RpcTests
     {
     }
 
-    [Fact(Skip = "Fails on Quic channel")]
-    public override void RemotingClient_can_disconnect_and_connect_again()
-    { 
-    }
+    [Fact] // (Skip = "Fails on Quic channel")]
+    public override void RemotingClient_can_disconnect_and_connect_again() =>
+        base.RemotingClient_can_disconnect_and_connect_again();
 
-    [Fact(Skip = "Fails on Quic channel")]
-    public override Task Rpc_after_reconnect_does_not_throw_server_disconnected()
-    {
-        return Task.CompletedTask;
-    }
+    [Fact] // (Skip = "Fails on Quic channel")]
+    public override Task Rpc_after_reconnect_does_not_throw_server_disconnected() =>
+        base.Rpc_after_reconnect_does_not_throw_server_disconnected();
 }

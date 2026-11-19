@@ -79,7 +79,9 @@ public class QuicServerChannel : IServerChannel
             // accept incoming connections
             IsListening = true;
             while (IsListening)
+            {
                 await ReceiveConnection();
+            }
         });
     }
 
@@ -98,15 +100,15 @@ public class QuicServerChannel : IServerChannel
                 .ConfigureAwait(false);
 
             Connections[sessionId] = session;
-            session.Disconnected += async () =>
+            session.Disconnected += () =>
             {
                 Connections.TryRemove(sessionId, out _);
-                await session.DisposeAsync();
+                // the session should have been already disposed of here
             };
         }
         catch
         {
-            IsListening = false; // TODO: not sure??
+            // a single failed connection must not stop the accept loop
         }
     }
 
@@ -132,10 +134,20 @@ public class QuicServerChannel : IServerChannel
 
         Listener = null;
 
-        foreach (var conn in Connections.Values.ToArray())
-            await conn.DisposeAsync()
-                .ConfigureAwait(false);
-
+        var activeConnections = Connections.Values.ToArray();
         Connections.Clear();
+
+        foreach (var conn in activeConnections)
+        {
+            try
+            {
+                await conn.DisposeAsync()
+                    .ConfigureAwait(false);
+            }
+            catch
+            {
+                // ignore disposal errors
+            }
+        }
     }
 }

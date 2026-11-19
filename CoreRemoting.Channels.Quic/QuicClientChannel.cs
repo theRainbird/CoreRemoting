@@ -2,7 +2,6 @@ using System;
 using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace CoreRemoting.Channels.Quic;
@@ -21,8 +20,6 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
 
     private IRemotingClient Client { get; set; }
 
-    private QuicClientConnectionOptions Options { get; set; }
-
     /// <inheritdoc />
     public IRawMessageTransport RawMessageTransport => this;
 
@@ -32,24 +29,28 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
         Client = client ?? throw new ArgumentNullException(nameof(client));
         if (!QuicConnection.IsSupported)
             throw new NotSupportedException("QUIC is not supported.");
+    }
+
+    /// <inheritdoc />
+    public async Task ConnectAsync()
+    {
+        LastException = null;
 
         Url = "quic://" +
-            client.Config.ServerHostName + ":" +
-            client.Config.ServerPort + "/rpc";
+            Client.Config.ServerHostName + ":" +
+            Client.Config.ServerPort + "/rpc";
 
         Uri = new Uri(Url);
 
-        // prepare QUIC client connection options
-        Options = new()
+        var options = new QuicClientConnectionOptions
         {
-            RemoteEndPoint = new IPEndPoint(IPAddress.Loopback, Uri.Port), //new DnsEndPoint(Uri.Host, Uri.Port),
+            RemoteEndPoint = new IPEndPoint(IPAddress.Loopback, Uri.Port),
             DefaultStreamErrorCode = 0x0A,
             DefaultCloseErrorCode = 0x0B,
             MaxInboundUnidirectionalStreams = 10,
             MaxInboundBidirectionalStreams = 100,
             ClientAuthenticationOptions = new()
             {
-                // accept self-signed certificates generated on-the-fly
                 TargetHost = Uri.Host,
                 RemoteCertificateValidationCallback = (sender, certificate, chain, errors) => true,
                 ApplicationProtocols =
@@ -58,32 +59,19 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
                 ]
             }
         };
-    }
 
-    /// <inheritdoc />
-    public async Task ConnectAsync()
-    {
-        LastException = null;
-
-        // connect and open duplex stream
-        Connection = await QuicConnection.ConnectAsync(Options).ConfigureAwait(false);
+        Connection = await QuicConnection.ConnectAsync(options).ConfigureAwait(false);
         ClientStream = await Connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional).ConfigureAwait(false);
-        ClientReader = new(ClientStream, Encoding.UTF8, leaveOpen: true);
-        ClientWriter = new(ClientStream, Encoding.UTF8, leaveOpen: true);
-
-        // prepare handshake message
-        var handshakeMessage = Client.HandshakeMessage;
-        var handshakeBytes = Client.Serializer.Serialize(handshakeMessage);
 
         try
         {
-            // start listening for incoming messages
             IsConnected = true;
-            await StartListening();
+            await StartListening().ConfigureAwait(false);
 
-            // send handshake message
-            await SendMessageAsync(handshakeBytes)
-                .ConfigureAwait(false);
+            var handshakeMessage = Client.HandshakeMessage;
+            var handshakeBytes = Client.Serializer.Serialize(handshakeMessage);
+
+            await SendMessageAsync(handshakeBytes).ConfigureAwait(false);
 
             OnConnected();
         }
@@ -97,27 +85,18 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
     /// <inheritdoc />
     public override async ValueTask DisposeAsync()
     {
-        if (Connection == null)
-            return;
+        await base.DisposeAsync().ConfigureAwait(false);
 
-        if (IsConnected)
-            await DisconnectAsync()
-                .ConfigureAwait(false);
+        if (Connection != null)
+        {
+            await Connection.DisposeAsync().ConfigureAwait(false);
+            Connection = null;
+        }
 
-        await Connection.DisposeAsync()
-            .ConfigureAwait(false);
-        Connection = null;
-
-        // clean up readers/writers
-        ClientReader.Dispose();
-        ClientReader = null;
-        ClientWriter.Dispose();
-        ClientWriter = null;
-
-        await ClientStream.DisposeAsync()
-            .ConfigureAwait(false);
-
-        await base.DisposeAsync()
-            .ConfigureAwait(false);
+        if (ClientStream != null)
+        {
+            await ClientStream.DisposeAsync().ConfigureAwait(false);
+            ClientStream = null;
+        }
     }
 }
