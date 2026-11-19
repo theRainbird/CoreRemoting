@@ -43,32 +43,24 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
             "/rpc";
 
         Uri = new Uri(Url);
-
-        // note: Nagle is disabled by default on NetCore, see
-        // https://github.com/dotnet/runtime/discussions/81175
-        ClientWebSocket = new ClientWebSocket();
-        ClientWebSocket.Options.Cookies = new CookieContainer();
-
-        // send handshake metadata items as cookies
-        foreach (var kv in client.HandshakeMessage.Metadata)
-        {
-            ClientWebSocket.Options.Cookies.Add(new Cookie(
-                name: kv.Key,
-                value: kv.Value,
-                path: Uri.LocalPath,
-                domain: Uri.Host));
-        }
     }
 
     /// <inheritdoc />
     public async Task ConnectAsync()
     {
         // ClientWebSocket cannot be reused after it enters the Closed state.
-        // If it's not in the pristine None state, create a fresh instance.
-        if (ClientWebSocket.State != WebSocketState.None && _client != null)
+        // Always create a fresh instance on connect.
+        ClientWebSocket = new ClientWebSocket();
+        ClientWebSocket.Options.Cookies = new CookieContainer();
+
+        // send handshake metadata items as cookies
+        foreach (var kv in _client.HandshakeMessage.Metadata)
         {
-            TryDispose(ClientWebSocket);
-            Init(_client);
+            ClientWebSocket.Options.Cookies.Add(new Cookie(
+                name: kv.Key,
+                value: kv.Value,
+                path: Uri.LocalPath,
+                domain: Uri.Host));
         }
 
         // reset stale error from a previous connection
@@ -114,7 +106,7 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
             await DisconnectAsync()
                 .ConfigureAwait(false);
 
-        ClientWebSocket.Dispose();
+        TryDispose(ClientWebSocket);
         ClientWebSocket = null;
 
         await base.DisposeAsync()

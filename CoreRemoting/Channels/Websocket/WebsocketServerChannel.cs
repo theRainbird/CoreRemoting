@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 
@@ -121,7 +122,7 @@ public class WebsocketServerChannel : IServerChannel
         StopListening();
         HttpListener = null;
 
-        var connections = Connections.Values;
+        var connections = Connections.Values.ToArray();
         Connections.Clear();
 
         foreach (var conn in connections)

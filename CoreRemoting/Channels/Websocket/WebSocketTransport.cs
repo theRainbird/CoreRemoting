@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net.WebSockets;
 using CoreRemoting.IO;
 using System.Threading.Tasks;
@@ -78,13 +78,16 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     /// </summary>
     public virtual async Task<Guid> StartListening()
     {
+        // Increment instance before detaching so the old loop knows it's obsolete
+        var instance = Interlocked.Increment(ref _readLoopInstance);
+
         using var tcs = Interlocked.Exchange(ref _readLoopCts, new CancellationTokenSource());
         tcs?.Cancel();
 
         await DetachReadLoopAsync()
             .ConfigureAwait(false);
 
-        _readLoop = ReadIncomingMessages(_readLoopCts.Token);
+        _readLoop = ReadIncomingMessages(instance, _readLoopCts.Token);
 
         return Guid.Empty;
     }
@@ -95,7 +98,9 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     /// </summary>
     public virtual async Task DisconnectAsync()
     {
-        await TrySendCloseFrame(WebSocket, "Ok");
+        var ws = WebSocket;
+        if (ws != null)
+            await TrySendCloseFrame(ws, "Ok");
 
         var detachTask = DetachReadLoopAsync();
 
@@ -141,12 +146,11 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     /// Reads incoming websocket messages and fires the <see cref="ReceiveMessage"/> event.
     /// Responds to close frames to complete the close handshake.
     /// </summary>
-    private async Task ReadIncomingMessages(CancellationToken ct)
+    private async Task ReadIncomingMessages(int instance, CancellationToken ct)
     {
         var buffer = new byte[BufferSize];
         var segment = new ArraySegment<byte>(buffer);
         var webSocket = WebSocket;
-        var instance = Interlocked.Increment(ref _readLoopInstance);
 
         try
         {
@@ -256,9 +260,9 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
         try
         {
             var ws = WebSocket;
-            if (ws.State != WebSocketState.Open)
+            if (ws == null || ws.State != WebSocketState.Open)
             {
-                LastException = new NetworkException($"WebSocket is {ws.State}, cannot send.");
+                LastException = new NetworkException($"WebSocket is not connected, cannot send.");
                 return false;
             }
 
