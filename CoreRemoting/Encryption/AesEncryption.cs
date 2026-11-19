@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Security.Cryptography;
 
 namespace CoreRemoting.Encryption
@@ -9,6 +8,16 @@ namespace CoreRemoting.Encryption
     /// </summary>
     public static class AesEncryption
     {
+        private const int IvSizeInBytes = 16;
+
+        private static readonly RandomNumberGenerator _ivGenerator = RandomNumberGenerator.Create();
+
+        // Creating an Aes instance is expensive on .NET Framework (it acquires a new CSP context each time) and
+        // encryption runs for every message. Aes instances are not thread-safe, so every thread keeps its own one.
+        // Key and IV are passed to CreateEncryptor/CreateDecryptor and are never stored on the instance.
+        [ThreadStatic]
+        private static Aes _threadAes;
+
         /// <summary>
         /// Creates a SHA-256 hash of a specified value.
         /// </summary>
@@ -24,19 +33,11 @@ namespace CoreRemoting.Encryption
         /// Generates an initialization vector.
         /// </summary>
         /// <returns>Initialization vector</returns>
-        /// <exception cref="NotSupportedException">Thrown if AES is not supported by the current system environment</exception>
         public static byte[] GenerateIv()
         {
-            using var aes = Aes.Create();
-            
-            if (aes == null)
-                throw new NotSupportedException();
-
-            aes.Mode = CipherMode.CBC;
-            aes.Padding = PaddingMode.PKCS7;
-            aes.GenerateIV();
-            
-            return aes.IV;
+            var iv = new byte[IvSizeInBytes];
+            _ivGenerator.GetBytes(iv);
+            return iv;
         }
 
         /// <summary>
@@ -49,30 +50,8 @@ namespace CoreRemoting.Encryption
         /// <exception cref="NotSupportedException">Thrown if AES is not supported by the current system environment</exception>
         public static byte[] Encrypt(byte[] dataToEncrypt, byte[] sharedSecret, byte[] iv)
         {
-            using var aes = Aes.Create();
-            
-            if (aes == null)
-                throw new NotSupportedException();
-            
-            aes.Key = CreateHash(sharedSecret);
-            aes.IV = iv;
-            aes.Mode = CipherMode.CBC;
-            aes.Padding = PaddingMode.PKCS7;
-  
-            var encryptor = aes.CreateEncryptor(aes.Key, aes.IV);
-
-            using var memoryStream = new MemoryStream();
-            using var cryptoStream = new CryptoStream(memoryStream, encryptor, CryptoStreamMode.Write);
-            
-            cryptoStream.Write(dataToEncrypt, 0, dataToEncrypt.Length);
-            cryptoStream.FlushFinalBlock();
-            
-            var encryptedData = memoryStream.ToArray();
-
-            cryptoStream.Close();
-            memoryStream.Close();
-            
-            return encryptedData;
+            using var encryptor = GetThreadAes().CreateEncryptor(CreateHash(sharedSecret), iv);
+            return encryptor.TransformFinalBlock(dataToEncrypt, 0, dataToEncrypt.Length);
         }
 
         /// <summary>
@@ -85,30 +64,20 @@ namespace CoreRemoting.Encryption
         /// <exception cref="NotSupportedException">Thrown if AES is not supported by the current system environment</exception>
         public static byte[] Decrypt(byte[] encryptedData, byte[] sharedSecret, byte[] iv)
         {
-            using Aes aes = Aes.Create();
-            
-            if (aes == null)
-                throw new NotSupportedException();
-            
-            aes.Key = CreateHash(sharedSecret);
-            aes.IV = iv;
+            using var decryptor = GetThreadAes().CreateDecryptor(CreateHash(sharedSecret), iv);
+            return decryptor.TransformFinalBlock(encryptedData, 0, encryptedData.Length);
+        }
+
+        private static Aes GetThreadAes()
+        {
+            if (_threadAes != null)
+                return _threadAes;
+
+            var aes = Aes.Create() ?? throw new NotSupportedException();
             aes.Mode = CipherMode.CBC;
             aes.Padding = PaddingMode.PKCS7;
-            
-            var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
-
-            using var memoryStream = new MemoryStream(encryptedData);
-            using var cryptoStream = new CryptoStream(memoryStream, decryptor, CryptoStreamMode.Read);
-            using var decryptedStream = new MemoryStream();
-            
-            cryptoStream.CopyTo(decryptedStream);
-            byte[] decryptedBytes = decryptedStream.ToArray();
-            
-            cryptoStream.Close();
-            memoryStream.Close();
-            decryptedStream.Close();
-            
-            return decryptedBytes;
+            _threadAes = aes;
+            return aes;
         }
     }
 }
