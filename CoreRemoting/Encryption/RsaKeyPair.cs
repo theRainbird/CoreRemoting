@@ -10,15 +10,13 @@ namespace CoreRemoting.Encryption;
 public class RsaKeyPair : ISessionKeyPair
 {
     private readonly RSACryptoServiceProvider _rsa;
-    private readonly int _keySize;
-
+    
     /// <summary>
     /// Creates a new instance of the RsaKeyPair.
     /// </summary>
     /// <param name="keySize">Key size</param>
     public RsaKeyPair(int keySize)
     {
-        _keySize = keySize;
         _rsa = new RSACryptoServiceProvider(dwKeySize: keySize);
     }
 
@@ -46,20 +44,34 @@ public class RsaKeyPair : ISessionKeyPair
     /// <summary>
     /// Gets the key size.
     /// </summary>
-    public int KeySize => _keySize;
+    public int KeySize => _rsa.KeySize;
 
     /// <summary>
-    /// Signs the given data by delegating to <see cref="RsaSignature.CreateSignature"/>.
+    /// Creates a PKCS#1 v1.5 signature from the SHA256 hash value of the specified raw data with the private key
+    /// of this key pair. The signature is identical to the one created by
+    /// <see cref="RsaSignature.CreateSignature"/>, but the private key is neither exported nor imported again,
+    /// which makes this method considerably faster when called for every message.
     /// </summary>
-    /// <exception cref="InvalidOperationException">If this instance has no private key.</exception>
-    public byte[] CreateSignature(byte[] data) =>
-        RsaSignature.CreateSignature(_keySize, PrivateKey, data);
+    /// <param name="rawData">Raw data to create a signature of</param>
+    /// <returns>Signature</returns>
+    public byte[] CreateSignature(byte[] rawData)
+    {
+        if (rawData == null)
+            throw new ArgumentNullException(nameof(rawData));
+
+        // RSACryptoServiceProvider instances are not guaranteed to be thread-safe,
+        // but a key pair is shared by all messages of a client or session.
+        lock (_rsa)
+        {
+            return _rsa.SignData(rawData, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        }
+    }
 
     /// <summary>
     /// Verifies a signature by delegating to <see cref="RsaSignature.VerifySignature"/>.
     /// </summary>
     public bool VerifySignature(byte[] data, byte[] signature) =>
-        RsaSignature.VerifySignature(_keySize, PublicKey, data, signature);
+        RsaSignature.VerifySignature(KeySize, PublicKey, data, signature);
 
     /// <summary>
     /// Frees managed resources.
