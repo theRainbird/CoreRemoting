@@ -105,17 +105,14 @@ public abstract class QuicTransport : IAsyncDisposable
     /// </returns>
     public virtual async Task<Guid> StartListening()
     {
+        // increment instance before detaching so the old loop knows it's obsolete
         var instance = Interlocked.Increment(ref _readLoopInstance);
 
-        using var oldCts = Interlocked.Exchange(ref _readLoopCts, new CancellationTokenSource());
-        oldCts?.Cancel();
+        using var cts = Interlocked.Exchange(ref _readLoopCts, new CancellationTokenSource());
+        cts?.Cancel();
 
-        var loop = _readLoop;
-        _readLoop = null;
-        if (loop != null)
-        {
-            try { await loop.ConfigureAwait(false); } catch { /* handled in loop */ }
-        }
+        await DetachReadLoopAsync()
+            .ConfigureAwait(false);
 
         _readLoop = ReadIncomingMessages(instance, _readLoopCts.Token);
 
@@ -168,7 +165,9 @@ public abstract class QuicTransport : IAsyncDisposable
         {
             while (!ct.IsCancellationRequested && IsConnected)
             {
-                var message = await ReadIncomingMessage(stream, ct).ConfigureAwait(false);
+                var message = await ReadIncomingMessage(stream, ct)
+                    .ConfigureAwait(false);
+
                 OnReceiveMessage(message);
             }
         }
@@ -189,19 +188,13 @@ public abstract class QuicTransport : IAsyncDisposable
         }
         finally
         {
-            if (connection != null)
-            {
-                await connection.TryDisposeAsync().ConfigureAwait(false);
-                if (ReferenceEquals(Connection, connection))
-                    Connection = null;
-            }
+            await connection.TryDisposeAsync().ConfigureAwait(false);
+            if (ReferenceEquals(Connection, connection))
+                Connection = null;
 
-            if (stream != null)
-            {
-                await stream.TryDisposeAsync().ConfigureAwait(false);
-                if (ReferenceEquals(ClientStream, stream))
-                    ClientStream = null;
-            }
+            await stream.TryDisposeAsync().ConfigureAwait(false);
+            if (ReferenceEquals(ClientStream, stream))
+                ClientStream = null;
 
             if (Volatile.Read(ref _readLoopInstance) == instance)
             {
@@ -216,15 +209,17 @@ public abstract class QuicTransport : IAsyncDisposable
         using var receiveLock = await ReceiveLock;
 
         var lengthBuffer = new byte[4];
-        await stream.ReadExactlyAsync(lengthBuffer, ct).ConfigureAwait(false);
-        
+        await stream.ReadExactlyAsync(lengthBuffer, ct)
+            .ConfigureAwait(false);
+
         var messageSize = BinaryPrimitives.ReadInt32LittleEndian(lengthBuffer);
 
         if (messageSize < 0 || messageSize > MaxMessageSize)
             throw new InvalidOperationException($"Invalid message size: {messageSize}");
 
         var messageBuffer = new byte[messageSize];
-        await stream.ReadExactlyAsync(messageBuffer, ct).ConfigureAwait(false);
+        await stream.ReadExactlyAsync(messageBuffer, ct)
+            .ConfigureAwait(false);
 
         return messageBuffer;
     }
@@ -235,7 +230,8 @@ public abstract class QuicTransport : IAsyncDisposable
         try
         {
             if (IsConnected && Connection != null)
-                await Connection.CloseAsync(0x0C).ConfigureAwait(false);
+                await Connection.CloseAsync(0x0C)
+                    .ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -245,17 +241,36 @@ public abstract class QuicTransport : IAsyncDisposable
             OnErrorOccured(ex.Message, LastException);
         }
 
+        await DetachReadLoopAsync()
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Atomically detaches the current read loop and awaits its completion.
+    /// </summary>
+    private async Task DetachReadLoopAsync()
+    {
         var loop = _readLoop;
+        _readLoop = null;
+
         if (loop != null)
         {
-            try { await loop.ConfigureAwait(false); } catch { /* handled in loop */ }
+            try
+            {
+                await loop.ConfigureAwait(false);
+            }
+            catch
+            {
+                /* handled in loop */
+            }
         }
     }
 
     /// <inheritdoc/>
     public virtual async ValueTask DisposeAsync()
     {
-        await DisconnectAsync().ConfigureAwait(false);
+        await DisconnectAsync()
+            .ConfigureAwait(false);
 
         using var cts = Interlocked.Exchange(ref _readLoopCts, null);
         cts?.Cancel();

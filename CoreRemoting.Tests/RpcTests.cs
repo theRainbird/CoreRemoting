@@ -1284,6 +1284,7 @@ public partial class RpcTests : RpcTests_Base
             var proxy = client.CreateProxy<ISessionAwareService>();
             Assert.NotNull(proxy.ClientAddress);
             client.Disconnect();
+
             client.Connect();
             proxy = client.CreateProxy<ISessionAwareService>();
             Assert.NotNull(proxy.ClientAddress);

@@ -44,19 +44,14 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
         }
         catch
         {
+            // avoid resource leak if handshake failed
             IsConnected = false;
 
-            if (ClientStream != null)
-            {
-                await ClientStream.TryDisposeAsync().ConfigureAwait(false);
-                ClientStream = null;
-            }
+            await ClientStream.TryDisposeAsync().ConfigureAwait(false);
+            ClientStream = null;
 
-            if (Connection != null)
-            {
-                await Connection.TryDisposeAsync().ConfigureAwait(false);
-                Connection = null;
-            }
+            await Connection.TryDisposeAsync().ConfigureAwait(false);
+            Connection = null;
 
             throw;
         }
@@ -67,9 +62,11 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
     /// </summary>
     private async Task<Guid> CreateRemotingSession()
     {
+        // read handshake message
         var handshakeBytes = await ReadIncomingMessage(ClientStream, CancellationToken.None)
             .ConfigureAwait(false);
 
+        // deserialize handshake and add client address
         var serializer = RemotingServer.Serializer;
         var handshakeMessage = serializer.Deserialize<ClientHandshakeMessage>(handshakeBytes);
         handshakeMessage.ClientAddress = Connection.RemoteEndPoint.ToString();

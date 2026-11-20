@@ -79,11 +79,11 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     /// </summary>
     public virtual async Task<Guid> StartListening()
     {
-        // Increment instance before detaching so the old loop knows it's obsolete
+        // increment instance before detaching so the old loop knows it's obsolete
         var instance = Interlocked.Increment(ref _readLoopInstance);
 
-        using var tcs = Interlocked.Exchange(ref _readLoopCts, new CancellationTokenSource());
-        tcs?.Cancel();
+        using var cts = Interlocked.Exchange(ref _readLoopCts, new CancellationTokenSource());
+        cts?.Cancel();
 
         await DetachReadLoopAsync()
             .ConfigureAwait(false);

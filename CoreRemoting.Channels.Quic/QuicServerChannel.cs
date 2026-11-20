@@ -16,8 +16,7 @@ public class QuicServerChannel : IServerChannel
 {
     private IRemotingServer Server { get; set; }
 
-    private ConcurrentDictionary<Guid, QuicServerConnection> Connections { get; } =
-        new ConcurrentDictionary<Guid, QuicServerConnection>();
+    private ConcurrentDictionary<Guid, QuicServerConnection> Connections { get; } = new();
 
     /// <inheritdoc/>
     public bool IsListening { get; private set; }
@@ -80,7 +79,8 @@ public class QuicServerChannel : IServerChannel
             IsListening = true;
             while (IsListening)
             {
-                await ReceiveConnection();
+                await ReceiveConnection()
+                    .ConfigureAwait(false);
             }
         });
     }
