@@ -47,11 +47,7 @@ namespace CoreRemoting.RpcMessaging
                     new SignedMessageData
                     {
                         MessageRawData = serializedMessage,
-                        Signature =
-                            RsaSignature.CreateSignature(
-                                keySize: keyPair.KeySize,
-                                sendersPrivateKeyBlob: keyPair.PrivateKey,
-                                rawData: serializedMessage)
+                        Signature = keyPair.CreateSignature(serializedMessage)
                     };
 
                 rawContent = serializer.Serialize(typeof(SignedMessageData), signedMessageData);

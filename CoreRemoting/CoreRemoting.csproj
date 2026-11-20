@@ -21,6 +21,7 @@
 - Fixed: crash on Dispose after Close (#226); client disconnection after server close; server process termination when closing an inactive session threw; null deserialized SerializedDiffGram; leaks of SHA256, PrincipalContext/UserPrincipal; Hashtable BSON deserialization issues (now Dictionary).
 - Fixed: NeoBinary deserialization of cycles running through collections (#252): list items, array elements and dictionary values that refer to an object which is still being deserialized are now restored correctly instead of silently becoming null or throwing InvalidCastException/ArgumentException.
 - Improved: NeoBinarySerializer dispatch and deserialization performance.
+- Improved: Message encryption performance: messages are signed without exporting and re-importing the private RSA key, and AES no longer creates new Aes instances per message (~30% faster encrypted calls on .NET Framework). Wire format unchanged; new RsaKeyPair.CreateSignature method.
 - Updated NuGet packages, incl. WatsonTcp 6.0.11 → 6.5.0 (~14x lower TCP round-trip latency on .NET Framework).
 - Security: Updated vulnerable transitive dependencies System.Formats.Asn1 (CVE-2024-38095) and System.Text.Json (CVE-2024-43485) to 10.0.14; removed redundant Cng/OpenSsl package references from the net8.0 target.</PackageReleaseNotes>
     </PropertyGroup>
