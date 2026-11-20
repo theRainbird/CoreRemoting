@@ -101,10 +101,8 @@ public class QuicServerChannel : IServerChannel
 
             Connections[sessionId] = session;
             session.Disconnected += () =>
-            {
-                Connections.TryRemove(sessionId, out _);
                 // the session should have been already disposed of here
-            };
+                Connections.TryRemove(sessionId, out _);
         }
         catch
         {

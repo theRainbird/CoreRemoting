@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
 
@@ -94,17 +95,9 @@ public class WebsocketServerChannel : IServerChannel
             if (Connections.TryRemove(sessionId, out var conn))
             {
                 _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await conn.DisposeAsync()
-                            .ConfigureAwait(false);
-                    }
-                    catch
-                    {
-                        // async void event handler should never throw
-                    }
-                });
+                    // async void event handler should never throw
+                    await conn.TryDisposeAsync()
+                        .ConfigureAwait(false));
             }
         };
     }
@@ -126,16 +119,7 @@ public class WebsocketServerChannel : IServerChannel
         Connections.Clear();
 
         foreach (var conn in connections)
-        {
-            try
-            {
-                await conn.DisposeAsync()
-                    .ConfigureAwait(false);
-            }
-            catch
-            {
-                // ignore disposal errors
-            }
-        }
+            await conn.TryDisposeAsync()
+                .ConfigureAwait(false);
     }
 }

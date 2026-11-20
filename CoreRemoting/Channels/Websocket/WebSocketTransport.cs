@@ -127,8 +127,8 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
         using var cts = Interlocked.Exchange(ref _readLoopCts, null);
         cts?.Cancel();
 
-        ReceiveLock.Dispose();
-        SendLock.Dispose();
+        ReceiveLock.TryDispose();
+        SendLock.TryDispose();
     }
 
     /// <summary>
