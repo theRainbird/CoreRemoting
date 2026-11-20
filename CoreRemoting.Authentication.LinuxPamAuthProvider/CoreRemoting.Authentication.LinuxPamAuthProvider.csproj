@@ -4,7 +4,7 @@
         <TargetFramework>netstandard2.0</TargetFramework>
         <RootNamespace>CoreRemoting.Authentication</RootNamespace>
         <AssemblyName>CoreRemoting.Authentication.LinuxPamAuthProvider</AssemblyName>
-        <PackageVersion>1.2.1</PackageVersion>
+        <PackageVersion>1.4.0</PackageVersion>
         <Authors>Hagen Siegel</Authors>
         <Description>Linux user authentication provider for CoreRemoting</Description>
         <Copyright>2024 Hagen Siegel</Copyright>
@@ -15,16 +15,19 @@
         <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageTags>Remoting RPC Network Authentication Linux</PackageTags>
-        <AssemblyVersion>1.2.1</AssemblyVersion>
-        <LangVersion>8</LangVersion>
+        <AssemblyVersion>1.4.0</AssemblyVersion>
+        <LangVersion>12</LangVersion>
         <NoWarn>$(NoWarn),NU1701,NU1903</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="Castle.Windsor" Version="6.0.0" />
-      <PackageReference Include="CoreRemoting" Version="1.3.6" />
       <PackageReference Include="Npam" Version="1.0.2" />
       <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.14" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\CoreRemoting\CoreRemoting.csproj" />
     </ItemGroup>
 
 </Project>
