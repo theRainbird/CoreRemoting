@@ -42,10 +42,8 @@ namespace HelloWorld.Server
             {
                 HostName = "localhost",
                 NetworkPort = 9090,
-                MessageEncryption = false,
-                Serializer = new NeoBinarySerializerAdapter(), // IMPORTANT NOTE: building with .Net Core 8 and above requires 
-                                                            // <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
-                                                            // to be added in your .csproj file for proper work of BinarySerializerAdapter
+                MessageEncryption = true,
+                Serializer = new NeoBinarySerializerAdapter(),
                 RegisterServicesAction = container =>
                 {
                     container.RegisterService<ISayHelloService, SayHelloService>(ServiceLifetime.Singleton);
