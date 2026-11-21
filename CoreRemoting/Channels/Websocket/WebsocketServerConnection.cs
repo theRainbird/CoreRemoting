@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Net;
 using System.Net.WebSockets;
@@ -40,9 +40,28 @@ public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
     /// </summary>
     public override async Task<Guid> StartListening()
     {
-        var sessionId = await CreateRemotingSession().ConfigureAwait(false);
-        await base.StartListening().ConfigureAwait(false);
-        return sessionId;
+        try
+        {
+            var sessionId = await CreateRemotingSession().ConfigureAwait(false);
+            await base.StartListening().ConfigureAwait(false);
+            return sessionId;
+        }
+        catch
+        {
+            try
+            {
+                WebSocket.Dispose();
+            }
+            catch (Exception disposeEx)
+            {
+                LastException = disposeEx as NetworkException ??
+                    new NetworkException(disposeEx.Message, disposeEx);
+
+                OnErrorOccured(disposeEx.Message, LastException);
+            }
+
+            throw;
+        }
     }
 
     /// <summary>
@@ -62,14 +81,5 @@ public class WebsocketServerConnection : WebsocketTransport, IAsyncDisposable
                 .ConfigureAwait(false);
 
         return Session.SessionId;
-    }
-
-    /// <inheritdoc />
-    public override async ValueTask DisposeAsync()
-    {
-        WebSocket.Dispose();
-
-        await base.DisposeAsync()
-            .ConfigureAwait(false);
     }
 }

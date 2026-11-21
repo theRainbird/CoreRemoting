@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Channels;
@@ -132,4 +133,12 @@ public class RpcTests_NamedPipe : RpcTests
 
         Assert.Equal(0, _serverFixture.ServerErrorCount);
     }
+
+    [Fact]
+    public override void RemotingClient_can_disconnect_and_connect_again() =>
+        base.RemotingClient_can_disconnect_and_connect_again();
+
+    [Fact]
+    public override Task Rpc_after_reconnect_does_not_throw_server_disconnected() =>
+        base.Rpc_after_reconnect_does_not_throw_server_disconnected();
 }

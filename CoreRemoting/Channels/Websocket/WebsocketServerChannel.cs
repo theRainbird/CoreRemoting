@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
 
@@ -43,7 +45,18 @@ public class WebsocketServerChannel : IServerChannel
         _ = Task.Run(async () =>
         {
             while (IsListening)
-                await ReceiveConnection();
+            {
+                try
+                {
+                    await ReceiveConnection()
+                        .ConfigureAwait(false);
+                }
+                catch
+                {
+                    // a single failed connection
+                    // must not stop the accept loop
+                }
+            }
         });
     }
 
@@ -74,10 +87,18 @@ public class WebsocketServerChannel : IServerChannel
             .ConfigureAwait(false);
 
         Connections[sessionId] = connection;
-        connection.Disconnected += async () =>
+
+        // don't await DisposeAsync from the loop's finally, that would deadlock;
+        // dispose off the loop's thread, after it has fully completed
+        connection.Disconnected += () =>
         {
-            Connections.TryRemove(sessionId, out _);
-            await connection.DisposeAsync();
+            if (Connections.TryRemove(sessionId, out var conn))
+            {
+                _ = Task.Run(async () =>
+                    // async void event handler should never throw
+                    await conn.TryDisposeAsync()
+                        .ConfigureAwait(false));
+            }
         };
     }
 
@@ -94,10 +115,11 @@ public class WebsocketServerChannel : IServerChannel
         StopListening();
         HttpListener = null;
 
-        foreach (var conn in Connections.Values)
-            await conn.DisposeAsync()
-                .ConfigureAwait(false);
-
+        var connections = Connections.Values.ToArray();
         Connections.Clear();
+
+        foreach (var conn in connections)
+            await conn.TryDisposeAsync()
+                .ConfigureAwait(false);
     }
 }

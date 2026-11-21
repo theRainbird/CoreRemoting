@@ -1262,7 +1262,38 @@ public partial class RpcTests : RpcTests_Base
     }
 
     [Fact]
-    public void RemotingClient_can_disconnect_and_connect_again()
+    public virtual void RemotingClient_can_disconnect_and_connect_again()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        var clientConfig = new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            InvocationTimeout = 0,
+            SendTimeout = 0,
+            MessageEncryption = false,
+            Channel = ClientChannel,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+            ChannelConnectionName = _serverFixture.Server
+                .Config.ChannelConnectionName ?? "CoreRemoting",
+        };
+
+        using (var client = new RemotingClient(clientConfig))
+        {
+            client.Connect();
+            var proxy = client.CreateProxy<ISessionAwareService>();
+            Assert.NotNull(proxy.ClientAddress);
+            client.Disconnect();
+
+            client.Connect();
+            proxy = client.CreateProxy<ISessionAwareService>();
+            Assert.NotNull(proxy.ClientAddress);
+        }
+    }
+
+    [Fact(Skip = "Hangs on WatsonTcp channel on Linux")]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public virtual async Task Rpc_after_reconnect_does_not_throw_server_disconnected()
     {
         using var ctx = ValidationSyncContext.Install();
 
@@ -1276,35 +1307,32 @@ public partial class RpcTests : RpcTests_Base
             ServerPort = _serverFixture.Server.Config.NetworkPort,
         };
 
-        // NamedPipe requires a connection name; provide the server's configured name
-        if (ClientChannel is NamedPipeClientChannel || ServerChannel is NamedPipeServerChannel)
+        using var client = new RemotingClient(clientConfig);
+        var proxy = client.CreateProxy<ITestService>();
+
+        void writeLine(string s)
         {
-            clientConfig.ChannelConnectionName = _serverFixture.Server.Config.ChannelConnectionName ?? "CoreRemoting";
+            _testOutputHelper.WriteLine(s);
+            Console.Error.WriteLine(s);
         }
 
-        var isNamedPipe = ClientChannel is NamedPipeClientChannel || ServerChannel is NamedPipeServerChannel;
+        writeLine($"Connecting...");
+        await client.ConnectAsync().ConfigureAwait(false);
+        Assert.Equal("test", proxy.TestMethod("test"));
 
-        if (isNamedPipe)
+        // rapid disconnect/connect cycles leave the previous read loop alive
+        // while the next connect is already in progress
+        for (var i = 0; i < 10; i++)
         {
-            // NamedPipe: run a simple connect/disconnect once due to known reconnect instability
-            using var client = new RemotingClient(clientConfig);
-            client.Connect();
-            var proxy = client.CreateProxy<ISessionAwareService>();
-            Assert.NotNull(proxy.ClientAddress);
-            client.Disconnect();
-            return;
+            writeLine($"Disconnecting #{i + 1}...");
+            await client.DisconnectAsync().ConfigureAwait(false);
+
+            writeLine($"Connecting #{i + 1}...");
+            await client.ConnectAsync().ConfigureAwait(false);
+            Assert.Equal("test", proxy.TestMethod("test"));
         }
 
-        using (var client = new RemotingClient(clientConfig))
-        {
-            client.Connect();
-            var proxy = client.CreateProxy<ISessionAwareService>();
-            Assert.NotNull(proxy.ClientAddress);
-            client.Disconnect();
-            client.Connect();
-            proxy = client.CreateProxy<ISessionAwareService>();
-            Assert.NotNull(proxy.ClientAddress);
-        }
+        writeLine($"Disconnecting & disposing the client...");
     }
 
     [Fact]

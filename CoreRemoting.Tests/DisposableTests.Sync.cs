@@ -72,4 +72,32 @@ public partial class DisposableTests
 
         Assert.Equal(3, count);
     }
+
+    [Fact]
+    public void TryDispose_ignores_nulls()
+    {
+        IDisposable disposable = null;
+
+        disposable.TryDispose(); // doesn't throw
+    }
+
+    [Fact]
+    public void TryDispose_disposes_object()
+    {
+        var disposed = false;
+        using var disposable = Disposable.Create(() => disposed = true);
+
+        disposable.TryDispose();
+        Assert.True(disposed);
+    }
+
+    [Fact]
+    public void TryDispose_ignores_exceptions()
+    {
+        static void dispose() =>
+            throw new InvalidOperationException("Test exception");
+
+        var disposable = Disposable.Create(dispose);
+        disposable.TryDispose(); // doesn't throw
+    }
 }

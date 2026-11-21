@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Channels;
 using CoreRemoting.Channels.Null;
@@ -160,4 +161,92 @@ public class RpcTests_NullChannel : RpcTests
         await client.DisconnectAsync();
         server.Stop();
     }
+
+    // NullTransport-specific unit tests
+
+    private sealed class TestTransport : NullTransport
+    {
+        public TestTransport(string thisEndpoint, string remoteEndpoint)
+        {
+            ThisEndpoint = thisEndpoint;
+            RemoteEndpoint = remoteEndpoint;
+        }
+    }
+
+    [Fact]
+    public async Task Disconnected_fires_once_on_explicit_disconnect()
+    {
+        var endpointA = Guid.NewGuid().ToString();
+        var endpointB = Guid.NewGuid().ToString();
+
+        var transport = new TestTransport(endpointA, endpointB);
+
+        var fireCount = 0;
+        transport.Disconnected += () => Interlocked.Increment(ref fireCount);
+
+        await transport.StartListening();
+        await transport.DisconnectAsync();
+
+        Assert.Equal(1, fireCount);
+
+        await transport.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Disconnected_fires_once_per_cycle_across_reconnects()
+    {
+        var endpointA = Guid.NewGuid().ToString();
+        var endpointB = Guid.NewGuid().ToString();
+
+        var transport = new TestTransport(endpointA, endpointB);
+
+        var fireCount = 0;
+        transport.Disconnected += () => Interlocked.Increment(ref fireCount);
+
+        await transport.StartListening();
+
+        const int cycles = 10;
+        for (var i = 0; i < cycles; i++)
+        {
+            await transport.DisconnectAsync();
+            await transport.StartListening();
+        }
+
+        Assert.Equal(cycles, fireCount);
+
+        await transport.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Disconnected_fires_once_when_peer_sends_stop_signal()
+    {
+        var endpointA = Guid.NewGuid().ToString();
+        var endpointB = Guid.NewGuid().ToString();
+
+        var transport = new TestTransport(endpointA, endpointB);
+
+        var fireCount = 0;
+        transport.Disconnected += () => Interlocked.Increment(ref fireCount);
+
+        await transport.StartListening();
+
+        // peer sends a stop signal directly, without going through our DisconnectAsync
+        NullMessageQueue.SendMessage(endpointB, endpointA, null, []);
+
+        for (var i = 0; i < 50 && Volatile.Read(ref fireCount) == 0; i++)
+            await Task.Delay(20);
+
+        Assert.Equal(1, fireCount);
+
+        // explicit DisconnectAsync after a spontaneous disconnect must not fire again
+        await transport.DisconnectAsync();
+
+        Assert.Equal(1, fireCount);
+
+        await transport.DisposeAsync();
+    }
+
+    [Fact]
+    public override Task Rpc_after_reconnect_does_not_throw_server_disconnected() =>
+        base.Rpc_after_reconnect_does_not_throw_server_disconnected();
 }

@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
 
@@ -11,8 +12,8 @@ namespace CoreRemoting.Channels.Websocket;
 /// </summary>
 public class WebsocketClientChannel : WebsocketTransport, IClientChannel
 {
-    private WeakReference<IRemotingClient> _weakClientRef;
-    
+    private IRemotingClient _client;
+
     /// <summary>
     /// Gets or sets the URL this channel is connected to.
     /// </summary>
@@ -34,8 +35,8 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
     /// <inheritdoc />
     public void Init(IRemotingClient client)
     {
-        _weakClientRef = new WeakReference<IRemotingClient>(client);
-        
+        _client = client;
+
         Url =
             "ws://" +
             client.Config.ServerHostName + ":" +
@@ -43,14 +44,18 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
             "/rpc";
 
         Uri = new Uri(Url);
+    }
 
-        // note: Nagle is disabled by default on NetCore, see
-        // https://github.com/dotnet/runtime/discussions/81175
+    /// <inheritdoc />
+    public async Task ConnectAsync()
+    {
+        // ClientWebSocket cannot be reused after it enters the Closed state.
+        // Always create a fresh instance on connect.
         ClientWebSocket = new ClientWebSocket();
         ClientWebSocket.Options.Cookies = new CookieContainer();
 
         // send handshake metadata items as cookies
-        foreach (var kv in client.HandshakeMessage.Metadata)
+        foreach (var kv in _client.HandshakeMessage.Metadata)
         {
             ClientWebSocket.Options.Cookies.Add(new Cookie(
                 name: kv.Key,
@@ -58,17 +63,18 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
                 path: Uri.LocalPath,
                 domain: Uri.Host));
         }
-    }
 
-    /// <inheritdoc />
-    public async Task ConnectAsync()
-    {
+        // reset stale error from a previous connection
+        LastException = null;
+
         await ClientWebSocket.ConnectAsync(
             new Uri(Url), CancellationToken.None)
                 .ConfigureAwait(false);
 
         IsConnected = true;
-        _ = StartListening();
+
+        await StartListening()
+            .ConfigureAwait(false);
 
         await SendMessageAsync([])
             .ConfigureAwait(false);
@@ -77,30 +83,18 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
     }
 
     /// <inheritdoc />
-    public async Task DisconnectAsync()
+    public override async Task DisconnectAsync()
     {
         if (!IsConnected)
             return;
 
         IsConnected = false;
-        _listening = false;
 
-        try
-        {
-            await ClientWebSocket.CloseAsync(
-                WebSocketCloseStatus.NormalClosure, "Ok", CancellationToken.None)
-                    .ConfigureAwait(false);
-        }
-        catch // (ObjectDisposedException)
-        {
-            // web socket already closed?
-        }
-
-        // Try to create a new socket instance to allow a new connection attempt
-        if (_weakClientRef.TryGetTarget(out var client))
-            Init(client);
-        
-        OnDisconnected();
+        // send close frame to the server,
+        // the read loop receives the server's close reply, sends ours back,
+        // and exits on its own; await it for deterministic teardown
+        await base.DisconnectAsync()
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -113,7 +107,7 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
             await DisconnectAsync()
                 .ConfigureAwait(false);
 
-        ClientWebSocket.Dispose();
+        ClientWebSocket.TryDispose();
         ClientWebSocket = null;
 
         await base.DisposeAsync()
