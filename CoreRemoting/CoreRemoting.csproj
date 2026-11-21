@@ -17,7 +17,16 @@
         <RepositoryUrl>https://github.com/theRainbird/CoreRemoting.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageVersion>1.4.0.0</PackageVersion>
-        <PackageReleaseNotes>- Improved: Message encryption performance: messages are signed without exporting and re-importing the private RSA key, and AES no longer creates new Aes instances per message (~30% faster encrypted calls on .NET Framework). Wire format unchanged; new RsaKeyPair.CreateSignature method.</PackageReleaseNotes>
+        <PackageReleaseNotes>- New: Overhauled authentication subsystem: asynchronous, multi-step (2FA-capable) provider architecture; legacy providers supported via source generator.
+- New: Authentication provider packages: Secure Remote Password (SRP), J-PAKE, OpenID Connect (OIDC).
+- New: Session resume after reconnect (TCP, Websocket, Named Pipes, QUIC); session variables; session key separated from SessionId (SessionSignature, UseLegacySessionKeyDerivation for compatibility).
+- New: ISessionKeyPair with ECDSA alternative to RSA; HKDF (RFC 5869) key derivation; unified ClientHandshakeMessage across all channels.
+- New: IServiceInvoker (proxyless invocation), ShutdownProxyAsync batch event unsubscription, IDelegateProxy.IsDisposed; BeforeCall can cancel calls, AfterCall can replace results.
+- Improved: Message encryption performance: RSA signing without key export/re-import and AES instance reuse (~30% faster encrypted calls on .NET Framework); new RsaKeyPair.CreateSignature; wire format unchanged.
+- Improved: Client/server event subscription tracking; dynamic method caching in delegate proxy factory; expanded tests and benchmarks.
+- Fixed: Race conditions in ConnectAsync and stale read loops on Named Pipes/Websocket/QUIC channels; deadlocks in RemotingClient.Dispose and session disposal; event handler registration (#244) and proxy shutdown unsubscription (#245); subscriptions removed on client disconnect; Named Pipe session resume; potential null reference (#247).
+- Security: OIDC hardening (iss/azp validation, per-instance JWKS cache, pending-auth TTL); updated System.Formats.Asn1 / System.Text.Json to 10.0.14 (CVE-2024-38095, CVE-2024-43485).
+- Breaking: ISessionRepository.Sessions and ClientConfig.SharedSecretSize removed from public API.</PackageReleaseNotes>
     </PropertyGroup>
 
     <ItemGroup>
