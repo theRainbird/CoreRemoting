@@ -1,9 +1,12 @@
-﻿using System;
+using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Quic;
+using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Threading;
+using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Quic;
 
@@ -86,19 +89,13 @@ public abstract class QuicTransport : IAsyncDisposable
     /// </summary>
     protected QuicStream ClientStream { get; set; }
 
-    /// <summary>
-    /// Quic reader used to read messages.
-    /// </summary>
-    protected BinaryReader ClientReader { get; set; }
-
-    /// <summary>
-    /// Quic writer used to write messages.
-    /// </summary>
-    protected BinaryWriter ClientWriter { get; set; }
-
     protected AsyncLock ReceiveLock { get; } = new();
 
     protected AsyncLock SendLock { get; } = new();
+
+    private Task _readLoop;
+    private CancellationTokenSource _readLoopCts;
+    private int _readLoopInstance;
 
     /// <summary>
     /// Starts listening for the incoming messages.
@@ -106,10 +103,20 @@ public abstract class QuicTransport : IAsyncDisposable
     /// <returns>
     /// Client session identity, if used on server.
     /// </returns>
-    public virtual Task<Guid> StartListening()
+    public virtual async Task<Guid> StartListening()
     {
-        _ = Task.Run(ReadIncomingMessages);
-        return Task.FromResult(Guid.Empty);
+        // increment instance before detaching so the old loop knows it's obsolete
+        var instance = Interlocked.Increment(ref _readLoopInstance);
+
+        using var cts = Interlocked.Exchange(ref _readLoopCts, new CancellationTokenSource());
+        cts?.Cancel();
+
+        await DetachReadLoopAsync()
+            .ConfigureAwait(false);
+
+        _readLoop = ReadIncomingMessages(instance, _readLoopCts.Token);
+
+        return Guid.Empty;
     }
 
     /// <inheritdoc />
@@ -123,8 +130,10 @@ public abstract class QuicTransport : IAsyncDisposable
 
             using var sendLock = await SendLock;
 
-            // message length + message body
-            ClientWriter.Write7BitEncodedInt(rawMessage.Length);
+            var lengthBuffer = new byte[4];
+            BinaryPrimitives.WriteInt32LittleEndian(lengthBuffer, rawMessage.Length);
+
+            await ClientStream.WriteAsync(lengthBuffer, 0, 4).ConfigureAwait(false);
             await ClientStream.WriteAsync(rawMessage, 0, rawMessage.Length).ConfigureAwait(false);
             await ClientStream.FlushAsync().ConfigureAwait(false);
 
@@ -144,29 +153,27 @@ public abstract class QuicTransport : IAsyncDisposable
         }
     }
 
-    protected async Task<byte[]> ReadIncomingMessage()
-    {
-        // TODO: check message size and skip bytes if message is too large
-        // TODO: rewind the incoming stream to the next message border if possible
-        using var receiveLock = await ReceiveLock;
-        var messageSize = ClientReader.Read7BitEncodedInt();
-        return ClientReader.ReadBytes(Math.Min(messageSize, MaxMessageSize));
-    }
-
     /// <summary>
     /// Reads the incoming network messages until disconnected.
     /// </summary>
-    protected async Task ReadIncomingMessages()
+    protected async Task ReadIncomingMessages(int instance, CancellationToken ct)
     {
+        var connection = Connection;
+        var stream = ClientStream;
+
         try
         {
-            while (IsConnected)
+            while (!ct.IsCancellationRequested && IsConnected)
             {
-                var message = await ReadIncomingMessage()
+                var message = await ReadIncomingMessage(stream, ct)
                     .ConfigureAwait(false);
 
-                OnReceiveMessage(message ?? []);
+                OnReceiveMessage(message);
             }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // expected on explicit disconnect
         }
         catch (Exception ex)
         {
@@ -181,9 +188,40 @@ public abstract class QuicTransport : IAsyncDisposable
         }
         finally
         {
-            await DisconnectAsync()
-                .ConfigureAwait(false);
+            await connection.TryDisposeAsync().ConfigureAwait(false);
+            if (ReferenceEquals(Connection, connection))
+                Connection = null;
+
+            await stream.TryDisposeAsync().ConfigureAwait(false);
+            if (ReferenceEquals(ClientStream, stream))
+                ClientStream = null;
+
+            if (Volatile.Read(ref _readLoopInstance) == instance)
+            {
+                IsConnected = false;
+                OnDisconnected();
+            }
         }
+    }
+
+    protected async Task<byte[]> ReadIncomingMessage(Stream stream, CancellationToken ct)
+    {
+        using var receiveLock = await ReceiveLock;
+
+        var lengthBuffer = new byte[4];
+        await stream.ReadExactlyAsync(lengthBuffer, ct)
+            .ConfigureAwait(false);
+
+        var messageSize = BinaryPrimitives.ReadInt32LittleEndian(lengthBuffer);
+
+        if (messageSize < 0 || messageSize > MaxMessageSize)
+            throw new InvalidOperationException($"Invalid message size: {messageSize}");
+
+        var messageBuffer = new byte[messageSize];
+        await stream.ReadExactlyAsync(messageBuffer, ct)
+            .ConfigureAwait(false);
+
+        return messageBuffer;
     }
 
     /// <inheritdoc />
@@ -191,8 +229,9 @@ public abstract class QuicTransport : IAsyncDisposable
     {
         try
         {
-            await Connection.CloseAsync(0x0C)
-                .ConfigureAwait(false);
+            if (IsConnected && Connection != null)
+                await Connection.CloseAsync(0x0C)
+                    .ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -202,15 +241,41 @@ public abstract class QuicTransport : IAsyncDisposable
             OnErrorOccured(ex.Message, LastException);
         }
 
-        IsConnected = false;
-        OnDisconnected();
+        await DetachReadLoopAsync()
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Atomically detaches the current read loop and awaits its completion.
+    /// </summary>
+    private async Task DetachReadLoopAsync()
+    {
+        var loop = _readLoop;
+        _readLoop = null;
+
+        if (loop != null)
+        {
+            try
+            {
+                await loop.ConfigureAwait(false);
+            }
+            catch
+            {
+                /* handled in loop */
+            }
+        }
     }
 
     /// <inheritdoc/>
-    public virtual ValueTask DisposeAsync()
+    public virtual async ValueTask DisposeAsync()
     {
-        ReceiveLock.Dispose();
-        SendLock.Dispose();
-        return default;
+        await DisconnectAsync()
+            .ConfigureAwait(false);
+
+        using var cts = Interlocked.Exchange(ref _readLoopCts, null);
+        cts?.Cancel();
+
+        ReceiveLock.TryDispose();
+        SendLock.TryDispose();
     }
 }

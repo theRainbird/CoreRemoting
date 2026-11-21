@@ -16,8 +16,7 @@ public class QuicServerChannel : IServerChannel
 {
     private IRemotingServer Server { get; set; }
 
-    private ConcurrentDictionary<Guid, QuicServerConnection> Connections { get; } =
-        new ConcurrentDictionary<Guid, QuicServerConnection>();
+    private ConcurrentDictionary<Guid, QuicServerConnection> Connections { get; } = new();
 
     /// <inheritdoc/>
     public bool IsListening { get; private set; }
@@ -79,7 +78,10 @@ public class QuicServerChannel : IServerChannel
             // accept incoming connections
             IsListening = true;
             while (IsListening)
-                await ReceiveConnection();
+            {
+                await ReceiveConnection()
+                    .ConfigureAwait(false);
+            }
         });
     }
 
@@ -98,15 +100,13 @@ public class QuicServerChannel : IServerChannel
                 .ConfigureAwait(false);
 
             Connections[sessionId] = session;
-            session.Disconnected += async () =>
-            {
+            session.Disconnected += () =>
+                // the session should have been already disposed of here
                 Connections.TryRemove(sessionId, out _);
-                await session.DisposeAsync();
-            };
         }
         catch
         {
-            IsListening = false; // TODO: not sure??
+            // a single failed connection must not stop the accept loop
         }
     }
 
@@ -132,10 +132,11 @@ public class QuicServerChannel : IServerChannel
 
         Listener = null;
 
-        foreach (var conn in Connections.Values.ToArray())
-            await conn.DisposeAsync()
-                .ConfigureAwait(false);
-
+        var activeConnections = Connections.Values.ToArray();
         Connections.Clear();
+
+        foreach (var conn in activeConnections)
+            await conn.TryDisposeAsync()
+                .ConfigureAwait(false);
     }
 }

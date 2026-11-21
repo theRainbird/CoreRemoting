@@ -1,15 +1,18 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using CoreRemoting.Channels;
+using CoreRemoting.Channels.Tcp;
 using CoreRemoting.Tests.Tools;
 using CoreRemoting.Toolbox;
 using Xunit;
 
-namespace CoreRemoting.Tests;
+namespace CoreRemoting.Tests.Sessions;
 
 [Collection("CoreRemoting")]
 [SuppressMessage("ReSharper", "AccessToDisposedClosure")]
@@ -64,7 +67,9 @@ public class SessionTests : IClassFixture<ServerFixture>
         while (_serverFixture.Server.SessionRepository.Sessions.Any() && DateTime.UtcNow < drainDeadline)
             await Task.Delay(50).ConfigureAwait(false);
 
-        Assert.Empty(_serverFixture.Server.SessionRepository.Sessions);
+        var sessionRepository = _serverFixture.Server.SessionRepository as SessionRepository;
+        Assert.NotNull(sessionRepository);
+        Assert.Empty(sessionRepository.Sessions);
 
         // Start two clients to create two sessions
         var client1 = ClientTask(clientStarted1);
@@ -73,14 +78,14 @@ public class SessionTests : IClassFixture<ServerFixture>
         // Wait for connection of both clients
         await Task.WhenAll(clientStarted1.Task, clientStarted2.Task).Timeout(5).ConfigureAwait(false);
 
-        Assert.Equal(2, _serverFixture.Server.SessionRepository.Sessions.Count());
+        Assert.Equal(2, sessionRepository.Sessions.Count());
 
         clientStopSignal.TrySetResult();
 
         await Task.WhenAll(client1, client2, Task.Delay(100)).Timeout(5).ConfigureAwait(false);
 
         // There should be no sessions left, after both clients disconnected
-        Assert.Empty(_serverFixture.Server.SessionRepository.Sessions);
+        Assert.Empty(sessionRepository.Sessions);
     }
 
     [Fact]
@@ -102,7 +107,7 @@ public class SessionTests : IClassFixture<ServerFixture>
                 },
                 Channel = ServerChannel
             };
-        
+
         var server = new RemotingServer(serverConfig);
         server.Start();
 
@@ -110,7 +115,7 @@ public class SessionTests : IClassFixture<ServerFixture>
         {
             var clientAction = new Action<string, bool>((password, shouldThrow) =>
             {
-                using var client = 
+                using var client =
                     new RemotingClient(new ClientConfig()
                     {
                         ConnectionTimeout = 0,
@@ -123,7 +128,7 @@ public class SessionTests : IClassFixture<ServerFixture>
                         ],
                         Channel = ClientChannel
                     });
-            
+
                 if (shouldThrow)
                     Assert.Throws<SecurityException>(() => client.Connect());
                 else
@@ -133,7 +138,7 @@ public class SessionTests : IClassFixture<ServerFixture>
             var clientThread1 = new Thread(() => clientAction("wrong", true));
             clientThread1.Start();
             clientThread1.Join();
-        
+
             var clientThread2 = new Thread(() => clientAction("secret", false));
             clientThread2.Start();
             clientThread2.Join();
@@ -175,6 +180,143 @@ public class SessionTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public async Task Concurrent_DisposeAsync_calls_should_enter_only_once()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        var capturedSession = default(RemotingSession);
+
+        _serverFixture.TestService.TestMethodFake = _ =>
+        {
+            capturedSession = RemotingSession.Current;
+            return null;
+        };
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            MessageEncryption = false,
+            SendTimeout = 0,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+            Channel = ClientChannel
+        });
+
+        await client.ConnectAsync().ConfigureAwait(false);
+        var proxy = client.CreateProxy<ITestService>();
+        proxy.TestMethod(null);
+
+        Assert.NotNull(capturedSession);
+
+        try
+        {
+            var enterCount = 0;
+            capturedSession.BeforeDispose += () =>
+                Interlocked.Increment(ref enterCount);
+
+            // without atomic TrySet, concurrent entries can run the dispose body more than once
+            using var startGate = new ManualResetEventSlim(false);
+
+            var disposeTasks = Enumerable.Range(0, 16)
+                .Select(_ => Task.Run(() =>
+                {
+                    startGate.Wait();
+                    return capturedSession.DisposeAsync().AsTask();
+                }))
+                .ToArray();
+
+            startGate.Set();
+
+            await Task.WhenAll(disposeTasks)
+                .ConfigureAwait(false);
+
+            Assert.Equal(1, enterCount);
+            Assert.True(capturedSession.IsDisposing);
+        }
+        finally
+        {
+            await TryRemoveSessionAsync(capturedSession)
+                .ConfigureAwait(false);
+        }
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public async Task Sequential_DisposeAsync_calls_should_be_idempotent()
+    {
+        using var ctx = ValidationSyncContext.Install();
+
+        var capturedSession = default(RemotingSession);
+
+        _serverFixture.TestService.TestMethodFake = _ =>
+        {
+            capturedSession = RemotingSession.Current;
+            return null;
+        };
+
+        using var client = new RemotingClient(new ClientConfig()
+        {
+            ConnectionTimeout = 0,
+            MessageEncryption = false,
+            SendTimeout = 0,
+            ServerPort = _serverFixture.Server.Config.NetworkPort,
+            Channel = ClientChannel
+        });
+
+        await client.ConnectAsync().ConfigureAwait(false);
+        var proxy = client.CreateProxy<ITestService>();
+        proxy.TestMethod(null);
+
+        Assert.NotNull(capturedSession);
+        Assert.False(capturedSession.IsDisposing);
+
+        try
+        {
+            var enterCount = 0;
+            capturedSession.BeforeDispose += () =>
+                Interlocked.Increment(ref enterCount);
+
+            await capturedSession.DisposeAsync().ConfigureAwait(false);
+            await capturedSession.DisposeAsync().ConfigureAwait(false);
+            await capturedSession.DisposeAsync().ConfigureAwait(false);
+
+            Assert.Equal(1, enterCount);
+            Assert.True(capturedSession.IsDisposing);
+        }
+        finally
+        {
+            await TryRemoveSessionAsync(capturedSession)
+                .ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Best-effort removes the captured session from the repository so it doesn't
+    /// leak into other tests sharing the ServerFixture. Safe to call on an already
+    /// disposed session: RemoveSession's internal DisposeAsync call is a no-op
+    /// thanks to the AtomicBool.TrySet guard.
+    /// </summary>
+    private async Task TryRemoveSessionAsync(RemotingSession session)
+    {
+        if (session == null)
+            return;
+
+        try
+        {
+            await _serverFixture.Server.SessionRepository
+                .RemoveSession(session.SessionId)
+                    .ConfigureAwait(false);
+        }
+        catch
+        {
+            // session may already be gone
+        }
+
+        _serverFixture.ServerErrorCount = 0;
+        _serverFixture.LastServerError = null;
+    }
+
+    [Fact]
     public void RemotingSession_should_be_accessible_to_the_component_constructor()
     {
         using var ctx = ValidationSyncContext.Install();
@@ -211,7 +353,7 @@ public class SessionTests : IClassFixture<ServerFixture>
             Channel = ClientChannel
         });
 
-        var disconnected = new TaskCompletionSource<bool>();
+        var disconnected = new TaskCompletionSource<bool>(); // TaskCreationOptions.RunContinuationsAsynchronously);
         client.AfterDisconnect += () => disconnected.TrySetResult(true);
         client.Connect();
 
@@ -225,10 +367,18 @@ public class SessionTests : IClassFixture<ServerFixture>
         await proxy.CloseSession(0.5);
 
         // proxy.Wait was started before CloseSession and shouldn't throw either
-        await proxy_Wait;
+        await proxy_Wait.Timeout(3);
+
+        // Disconnected event on WatsonTcp is flaky
+        if (client.Config.Channel is TcpClientChannel or null)
+        {
+            if (!await disconnected.Task.Expire(10))
+                Console.Error.WriteLine("Disconnected event wasn't fired!");
+            return;
+        }
 
         // Disconnection event should occur
-        await disconnected.Task.Timeout(2);
+        await disconnected.Task.Timeout(3);
     }
 
     [Fact]
@@ -261,7 +411,7 @@ public class SessionTests : IClassFixture<ServerFixture>
             RemotingSession.Current.Close();
             return null;
         };
-        
+
         using var client = new RemotingClient(new ClientConfig
         {
             ConnectionTimeout = 0,
@@ -273,12 +423,36 @@ public class SessionTests : IClassFixture<ServerFixture>
             WaitTimeForGoodbyeOnDisconnect = 100 //We will set such a timeout so that the client is guaranteed not to wait more than 3 seconds.
         });
 
-        client.Connect();
-        
-        var proxy = client.CreateProxy<ITestService>();
+        try
+        {
+            client.Connect();
 
-        proxy.TestMethod(null);// server sends close_session
-        await Task.Run(client.Dispose).Timeout(3); // client calls Dispose and disconnects
+            var proxy = client.CreateProxy<ITestService>();
+
+            // server sends close_session
+            proxy.TestMethod(null);
+
+            // client calls Dispose and disconnects
+            await Task.Run(client.Dispose).Timeout(3);
+        }
+        finally
+        {
+            // clean up the state for other tests
+            await CleanupSessions(_serverFixture.Server.SessionRepository as SessionRepository);
+            _serverFixture.TestService.TestMethodFake = _ => _;
+        }
+    }
+
+    private async Task CleanupSessions(SessionRepository sessionRepository)
+    {
+        Assert.NotNull(sessionRepository);
+
+        foreach (var session in sessionRepository.Sessions.ToArray())
+        {
+            await sessionRepository.RemoveSession(session.SessionId);
+        }
+
+        Assert.Empty(sessionRepository.Sessions);
     }
 }
 

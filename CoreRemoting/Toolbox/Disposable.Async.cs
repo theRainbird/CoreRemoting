@@ -54,4 +54,24 @@ static partial class Disposable
     /// <param name="disposables">Disposable items to dispose on disposal, both sync and async.</param>
     public static IAsyncDisposable Create(params object[] disposables) =>
         new ParamsDisposableAsync(disposables);
+
+    /// <summary>
+    /// Tries to dispose the provided object asynchronously and ignores the disposal exceptions.
+    /// </summary>
+    /// <param name="disposable">Disposable instance to dispose.</param>
+    public static async ValueTask TryDisposeAsync(this IAsyncDisposable disposable)
+    {
+        if (disposable == null)
+            return;
+
+        try
+        {
+            await disposable.DisposeAsync()
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            // already disposed
+        }
+    }
 }

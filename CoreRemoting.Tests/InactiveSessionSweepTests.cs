@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading;
+using CoreRemoting.Channels.Null;
 using CoreRemoting.DependencyInjection;
 using CoreRemoting.Encryption;
 using CoreRemoting.Serialization;
@@ -12,8 +13,6 @@ namespace CoreRemoting.Tests;
 
 public class InactiveSessionSweepTests
 {
-    private static int _nextPort = 9299;
-
     /// <summary>
     /// Serializer that fails while a session is closed: with message encryption the "session_closed" wire message
     /// wraps an empty payload in <see cref="SignedMessageData"/>, which is serialized outside of any try/catch
@@ -43,12 +42,10 @@ public class InactiveSessionSweepTests
     [Fact]
     public void Sweep_should_remove_all_inactive_sessions_and_keep_the_server_alive_if_closing_a_session_throws()
     {
-        var port = Interlocked.Increment(ref _nextPort);
-
         using var server = new RemotingServer(new ServerConfig
         {
-            NetworkPort = port,
-            MessageEncryption = true,
+            Channel = new NullServerChannel(),
+            MessageEncryption = false,
             Serializer = new FailingOnSessionClosedSerializerAdapter(),
             // The sweep timer starts with server.Start(). With message encryption the handshake (RSA key
             // generation etc.) can take several seconds under full-suite load, so a short interval can fire
@@ -68,10 +65,11 @@ public class InactiveSessionSweepTests
             {
                 var client = new RemotingClient(new ClientConfig
                 {
-                    ServerPort = port,
-                    MessageEncryption = true,
+                    Channel = new NullClientChannel(),
+                    MessageEncryption = false,
                     Serializer = new BsonSerializerAdapter(),
-                    ConnectionTimeout = 0
+                    ConnectionTimeout = 0,
+                    SendTimeout = 5,
                 });
                 client.Connect();
                 Assert.Equal("hello", client.CreateProxy<ITestService>().Echo("hello"));

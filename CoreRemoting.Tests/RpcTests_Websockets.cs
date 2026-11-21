@@ -1,5 +1,7 @@
+using System.Threading.Tasks;
 using CoreRemoting.Channels;
 using CoreRemoting.Channels.Websocket;
+using Xunit;
 using Xunit.Abstractions;
 
 namespace CoreRemoting.Tests;
@@ -13,4 +15,8 @@ public class RpcTests_Websockets : RpcTests
     public RpcTests_Websockets(ServerFixture fixture, ITestOutputHelper helper) : base(fixture, helper)
     {
     }
+
+    [Fact]
+    public override Task Rpc_after_reconnect_does_not_throw_server_disconnected() =>
+        base.Rpc_after_reconnect_does_not_throw_server_disconnected();
 }

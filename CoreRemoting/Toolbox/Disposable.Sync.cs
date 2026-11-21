@@ -3,7 +3,7 @@
 namespace CoreRemoting.Toolbox;
 
 /// <summary>
-/// Helper class to create disposable primitives.
+/// Helper class to handle disposable primitives.
 /// </summary>
 public static partial class Disposable
 {
@@ -48,4 +48,20 @@ public static partial class Disposable
     /// <param name="disposables">Disposable items to dispose on disposal.</param>
     public static IDisposable Create(params IDisposable[] disposables) =>
         new ParamsDisposable(disposables);
+
+    /// <summary>
+    /// Tries to dispose the provided object and ignores the disposal exceptions.
+    /// </summary>
+    /// <param name="disposable">Disposable instance to dispose.</param>
+    public static void TryDispose(this IDisposable disposable)
+    {
+        try
+        {
+            disposable?.Dispose();
+        }
+        catch
+        {
+            // already disposed
+        }
+    }
 }

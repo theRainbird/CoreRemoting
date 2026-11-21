@@ -1,6 +1,7 @@
 ﻿using System;
-using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.Threading;
 using static CoreRemoting.Channels.Null.NullMessageQueue;
 
 namespace CoreRemoting.Channels.Null;
@@ -37,6 +38,10 @@ public class NullTransport : IRawMessageTransport, IAsyncDisposable
     /// </summary>
     public event Action Connected;
 
+    private Task _readLoop;
+    private CancellationTokenSource _readCts;
+    private AtomicBool _disconnectFired;
+
     /// <summary>
     /// Fires the <see cref="Connected"/> event.
     /// </summary>
@@ -71,51 +76,95 @@ public class NullTransport : IRawMessageTransport, IAsyncDisposable
         ErrorOccured?.Invoke(message, ex);
 
     /// <summary>
-    /// Starts listening for the incoming messages.
+    /// Starts listening for incoming messages.
+    /// A running read loop from a previous connection is cancelled and awaited first.
     /// </summary>
-    public virtual Task<Guid> StartListening()
+    public virtual async Task<Guid> StartListening()
     {
-        IsConnected = true;
-        _ = ReadIncomingMessages();
-        return Task.FromResult(Guid.Empty);
-    }
+        using var oldCts = Interlocked.Exchange(ref _readCts, new CancellationTokenSource());
+        oldCts?.Cancel();
 
-    /// <inheritdoc/>
-    public virtual ValueTask DisposeAsync() => default;
+        await DetachReadLoopAsync()
+            .ConfigureAwait(false);
+
+        _disconnectFired.Reset();
+        IsConnected = true;
+        _readLoop = ReadIncomingMessages(_readCts.Token);
+
+        return Guid.Empty;
+    }
 
     /// <summary>
     /// Disconnects from the remote endpoint.
     /// </summary>
-    public virtual Task DisconnectAsync()
+    /// <remarks>
+    /// Not thread-safe: concurrent calls may each send a stop signal to the peer.
+    /// Serialized externally by <c>RemotingClient</c>.
+    /// </remarks>
+    public virtual async Task DisconnectAsync()
     {
-        SendMessage(ThisEndpoint, RemoteEndpoint, null, []);
+        var wasConnected = IsConnected;
         IsConnected = false;
-        OnDisconnected();
-        return Task.CompletedTask;
+
+        _readCts?.Cancel();
+        await DetachReadLoopAsync()
+            .ConfigureAwait(false);
+
+        if (wasConnected)
+            SendMessage(ThisEndpoint, RemoteEndpoint, null, []);
+    }
+
+    /// <inheritdoc/>
+    public virtual async ValueTask DisposeAsync()
+    {
+        await DisconnectAsync()
+            .ConfigureAwait(false);
+
+        using var cts = Interlocked.Exchange(ref _readCts, null);
+        cts?.Cancel();
     }
 
     /// <summary>
-    /// Reads the incoming websocket messages
-    /// and fires the <see cref="ReceiveMessage"/> event.
+    /// Atomically detaches the current read loop and awaits its completion.
     /// </summary>
-    private async Task ReadIncomingMessages()
+    private async Task DetachReadLoopAsync()
+    {
+        var loop = _readLoop;
+        _readLoop = null;
+
+        if (loop != null)
+            await loop.ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads incoming messages and fires the <see cref="ReceiveMessage"/> event.
+    /// </summary>
+    private async Task ReadIncomingMessages(CancellationToken ct)
     {
         try
         {
-            while (IsConnected)
+            while (IsConnected && !ct.IsCancellationRequested)
             {
                 await foreach (var message in
-                    ReceiveMessagesAsync(null, RemoteEndpoint, ThisEndpoint)
+                    ReceiveMessagesAsync(null, RemoteEndpoint, ThisEndpoint, ct)
                         .ConfigureAwait(false))
                 {
+                    if (ct.IsCancellationRequested)
+                        break;
+
                     OnReceiveMessage(message.Message ?? []);
 
                     if (message.IsStopSignal)
+                    {
                         IsConnected = false;
+                        break;
+                    }
                 }
             }
-
-            OnDisconnected();
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // expected on explicit disconnect
         }
         catch (Exception ex)
         {
@@ -126,8 +175,11 @@ public class NullTransport : IRawMessageTransport, IAsyncDisposable
         }
         finally
         {
-            await DisconnectAsync()
-                .ConfigureAwait(false);
+            IsConnected = false;
+
+            // the loop is the single fire point, the flag guards future regressions
+            if (_disconnectFired.TrySet())
+                OnDisconnected();
         }
     }
 
@@ -144,7 +196,7 @@ public class NullTransport : IRawMessageTransport, IAsyncDisposable
             LastException = ex as NetworkException ??
                 new NetworkException(ex.Message, ex);
 
-            ErrorOccured?.Invoke(ex.Message, LastException);
+            OnErrorOccured(ex.Message, LastException);
             return Task.FromResult(false);
         }
     }
