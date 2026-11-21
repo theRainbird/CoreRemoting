@@ -6,6 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Security;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 using Castle.DynamicProxy;
@@ -58,6 +59,14 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     private AtomicBool _sessionClosedByServer;
     private readonly Lazy<IServiceInvoker<IServerSubscriptionService>> _subscriptionInvoker;
     private readonly ConcurrentDictionary<Guid, Task> _pendingUnsubscribes = new();
+    private readonly SubscriptionReplayRegistry _subscriptionReplay = new();
+    private AtomicBool _manualDisconnect;
+    private AtomicBool _pingPending;
+    private Guid _rememberedSessionId;
+    private int _missedPongs;
+    private int _reconnectLoopActive;
+    private bool _hasConnectedBefore;
+    private CancellationTokenSource _reconnectCts = new();
 
     // ReSharper disable once InconsistentNaming
     private static readonly ConcurrentDictionary<string, IRemotingClient> _clientInstances = new();
@@ -68,6 +77,25 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// Event: Fires after client was disconnected.
     /// </summary>
     public event Action AfterDisconnect;
+
+    /// <summary>
+    /// Event: Fires after the client successfully connected to the server
+    /// (including the initial connect and every successful reconnect).
+    /// </summary>
+    public event Action AfterConnect;
+
+    /// <summary>
+    /// Event: Fires after the client reconnected following an unexpected loss of
+    /// connection (e.g. a server restart). Provides information about whether the
+    /// session was resumed and whether event subscriptions were restored.
+    /// </summary>
+    public event EventHandler<ReconnectedEventArgs> Reconnected;
+
+    /// <summary>
+    /// Event: Fires when the client detected that its event subscriptions could not
+    /// be resynchronized with the server after a reconnect.
+    /// </summary>
+    public event EventHandler<SubscriptionDesyncEventArgs> SubscriptionsDesyncDetected;
 
     #endregion
 
@@ -144,6 +172,10 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
     private void OnDisconnected()
     {
+        // the connection is down: stop the heartbeat so it doesn't keep pinging
+        // a dead transport and trigger redundant teardowns
+        StopKeepSessionAliveTimer();
+
         var activeCalls = _activeCalls;
         _activeCalls = null;
 
@@ -151,6 +183,10 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
 
         var graceful = _sessionClosedByServer.Value;
         _sessionClosedByServer.Reset();
+
+        // an unexpected loss of connection may trigger the auto-reconnect loop
+        // (suppressed for manual disconnects and during disposal)
+        EnsureAutoReconnectLoop();
 
         if (activeCalls == null)
             return;
@@ -303,9 +339,14 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                 return null;
 
             lock (_sessionLock)
-                return _sessionId == Guid.Empty
-                    ? _config.ResumableSessionId
-                    : _sessionId;
+            {
+                if (_sessionId != Guid.Empty)
+                    return _sessionId;
+
+                return _rememberedSessionId != Guid.Empty
+                    ? _rememberedSessionId
+                    : _config.ResumableSessionId;
+            }
         }
     }
 
@@ -392,6 +433,8 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         if (IsConnected && HasSession)
             return;
 
+        ReconnectedEventArgs reconnectedArgs = null;
+
         using (await _connectLock)
         {
             if (IsConnected && HasSession)
@@ -400,8 +443,15 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             if (_channel == null)
                 throw new RemotingException("No client channel configured.");
 
+            // an explicit connect ends any manual-disconnect suppression of auto-reconnect
+            _manualDisconnect.Reset();
+
             _isConnected.Set();
             _goodbyeCompletedEvent.Reset();
+
+            // reset heartbeat bookkeeping for the new connection
+            _pingPending.Reset();
+            Interlocked.Exchange(ref _missedPongs, 0);
 
             using (await _activeCallsLock)
                 _activeCalls = new();
@@ -412,6 +462,16 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             _authenticationCompletedTaskSource = new();
             _isAuthenticated.Reset();
             Identity = null;
+
+            // remember what we are trying to resume, so we can tell after the handshake
+            // whether the session was actually resumed
+            var requestedSessionId = ResumableSessionId;
+            var isReconnect = _hasConnectedBefore;
+
+            // clear any stale transport error left over from a previous connection,
+            // so a reconnect isn't failed by the old socket's disconnect error
+            if (_channel.RawMessageTransport != null)
+                _channel.RawMessageTransport.LastException = null;
 
             await _channel.ConnectAsync()
                 .ConfigureAwait(false);
@@ -437,8 +497,33 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                 throw;
             }
 
+            // re-establish event subscriptions that the new connection (or a new
+            // server instance) doesn't know about yet
+            var subscriptionsRestored =
+                await RestoreSubscriptionsAsync()
+                    .ConfigureAwait(false);
+
             StartKeepSessionAliveTimer();
+
+            _hasConnectedBefore = true;
+
+            if (isReconnect)
+            {
+                var sessionResumed =
+                    requestedSessionId.HasValue &&
+                    SessionId == requestedSessionId.Value;
+
+                reconnectedArgs = new ReconnectedEventArgs(
+                    sessionResumed: sessionResumed,
+                    sessionId: SessionId ?? Guid.Empty,
+                    subscriptionsRestored: subscriptionsRestored);
+            }
         }
+
+        AfterConnect?.Invoke();
+
+        if (reconnectedArgs != null)
+            Reconnected?.Invoke(this, reconnectedArgs);
     }
 
     /// <summary>
@@ -454,6 +539,18 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <param name="quiet">When set to true, no goodbye message is sent to the server</param>
     public async Task DisconnectAsync(bool quiet = false)
     {
+        // a manual disconnect suppresses automatic reconnection
+        _manualDisconnect.Set();
+        CancelAutoReconnect();
+
+        // A graceful disconnect (goodbye sent) ends the session on the server, so the
+        // next connect must start fresh instead of requesting a resume of a session
+        // that no longer exists. A quiet disconnect leaves the session parked and
+        // resumable, so the remembered session id is kept in that case.
+        if (!quiet)
+            lock (_sessionLock)
+                _rememberedSessionId = Guid.Empty;
+
         using (await _connectLock)
             await DisconnectCoreAsync(quiet)
                 .ConfigureAwait(false);
@@ -487,12 +584,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             _sharedSecret = null;
         }
 
-        if (_keepSessionAliveTimer != null)
-        {
-            _keepSessionAliveTimer.Stop();
-            _keepSessionAliveTimer.Dispose();
-            _keepSessionAliveTimer = null;
-        }
+        StopKeepSessionAliveTimer();
 
         var sharedSecret =
             MessageEncryption
@@ -586,7 +678,22 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     }
 
     /// <summary>
+    /// Stops and disposes the keep session alive timer, if it is running.
+    /// </summary>
+    private void StopKeepSessionAliveTimer()
+    {
+        if (_keepSessionAliveTimer == null)
+            return;
+
+        _keepSessionAliveTimer.Stop();
+        _keepSessionAliveTimer.Dispose();
+        _keepSessionAliveTimer = null;
+    }
+
+    /// <summary>
     /// Event procedure: Called when the keep session alive timer elapses.
+    /// Sends a ping message to the server and detects a dead connection
+    /// when a previously sent ping was never answered with a pong.
     /// </summary>
     /// <param name="sender">Event sender</param>
     /// <param name="e">Event arguments</param>
@@ -607,16 +714,36 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             return;
         }
 
+        // The ping sent on the previous tick was never answered: the connection
+        // is half-open (e.g. the server crashed without closing the socket).
+        // After two consecutive missed pongs, treat the connection as lost.
+        if (_pingPending.Value)
+        {
+            if (Interlocked.Increment(ref _missedPongs) >= 2)
+            {
+                HandleConnectionLost();
+                return;
+            }
+        }
+
         try
         {
-            // Send empty message to keep session alive
-            await _rawMessageTransport.SendMessageAsync([])
+            var pingMessage =
+                MessageEncryptionManager.CreateWireMessage(
+                    messageType: "ping",
+                    serializer: Serializer,
+                    serializedMessage: Array.Empty<byte>(),
+                    keyPair: _keyPair,
+                    sharedSecret: _sharedSecret);
+
+            _pingPending.Set();
+
+            await _rawMessageTransport.SendMessageAsync(Serializer.Serialize(pingMessage))
                 .ConfigureAwait(false);
         }
         catch (Exception)
         {
-            // ignored
-            // TODO: dispatch the exception
+            // ignored — missed-pong detection handles a dead connection
         }
     }
 
@@ -730,6 +857,9 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                 case "goodbye":
                     ProcessGoodbyeMessage(message);
                     break;
+                case "pong":
+                    ProcessPongMessage();
+                    break;
                 case "session_closed":
                     await ProcessSessionClosedMessage(message);
                     break;
@@ -805,6 +935,15 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                 SessionId = new Guid(handshakeSecret),
             };
 
+        // Capture the session the client requested to resume. This is the previously
+        // remembered session (or the one explicitly set in ClientConfig for a
+        // cross-process resume). It must be read before _sessionId is overwritten
+        // below, otherwise a refused resume would be masked by the new session ID.
+        var requestedSessionId =
+            _rememberedSessionId != Guid.Empty
+                ? _rememberedSessionId
+                : _config.ResumableSessionId;
+
         lock (_sessionLock)
         {
             _sessionId = handshakeMessage.SessionId;
@@ -821,23 +960,28 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             throw exception;
         }
 
-        // the client explicitly requested to resume a specific session (ClientConfig.ResumableSessionId),
-        // but the server created a new session instead -> fail the connection
-        var requestedSessionId = _config.ResumableSessionId;
-        if (requestedSessionId != null)
+        // The client explicitly requested to resume a specific session, but the server
+        // created a new session instead. Whether the client may silently fall back to
+        // this new session is decided by the SERVER (ServerConfig.AllowSessionResumeFallback),
+        // communicated here in the handshake. The default is OFF, so a refused resume
+        // keeps throwing — this preserves the previous (backward compatible) behavior.
+        if (requestedSessionId != null &&
+            _sessionId != requestedSessionId.Value &&
+            !handshakeMessage.AllowSessionResumeFallback)
         {
-            lock (_sessionLock)
-            {
-                if (_sessionId != requestedSessionId.Value)
-                {
-                    var exception = new RemotingException(
-                        $"Server refused to resume the requested session {requestedSessionId.Value}.");
+            var exception = new RemotingException(
+                $"Server refused to resume the requested session {requestedSessionId.Value}.");
 
-                    _handshakeCompletedTaskSource.TrySetException(exception);
-                    throw exception;
-                }
-            }
+            _handshakeCompletedTaskSource.TrySetException(exception);
+            throw exception;
         }
+
+        // Remember the session that is now active, so that future reconnects
+        // (after an unexpected disconnect) automatically request its resume.
+        // Stored in a private field (not the shared ClientConfig) so that a config
+        // instance shared across multiple clients cannot cross-contaminate resume identity.
+        lock (_sessionLock)
+            _rememberedSessionId = _sessionId;
 
         _handshakeCompletedTaskSource.TrySetResult(true);
     }
@@ -878,17 +1022,31 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <summary>
     /// Processes a session_closed message.
     /// </summary>
-    private Task ProcessSessionClosedMessage(WireMessage message)
+    private async Task ProcessSessionClosedMessage(WireMessage message)
     {
         // ignore a stale close notification:
         // - transport already down, or
         // - no active session (mid-disconnect or handshake in progress)
         if (!IsConnected || !_isConnected.Value || !HasSession)
-            return Task.CompletedTask;
+            return;
 
         // mark that the session was closed by server to gracefully complete in-flight calls
         _sessionClosedByServer.Set();
-        return DisconnectAsync(quiet: true);
+
+        // The server explicitly closed this session, so it is gone (not parked).
+        // Forget the resume identity so a later reconnect starts a fresh session
+        // instead of trying to resume a session the server already removed.
+        lock (_sessionLock)
+            _rememberedSessionId = Guid.Empty;
+
+        // Note: this is intentionally NOT treated as a manual disconnect, so that
+        // with AutoReconnect enabled the client re-establishes the connection
+        // after the server closed the session.
+        using (await _connectLock)
+            await DisconnectCoreAsync(quiet: true)
+                .ConfigureAwait(false);
+
+        AfterDisconnect?.Invoke();
     }
 
     /// <summary>
@@ -1071,6 +1229,229 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         }
 
         clientRpcContext.TaskSource.TrySetResult(null);
+    }
+
+    #endregion
+
+    #region Subscription recovery and auto reconnect
+
+    /// <summary>
+    /// Gets the client-side subscription replay registry.
+    /// </summary>
+    internal SubscriptionReplayRegistry SubscriptionReplay => _subscriptionReplay;
+
+    /// <summary>
+    /// Tracks an event accessor call for subscription bookkeeping and replay.
+    /// Called by service proxies and invokers on every intercepted call.
+    /// </summary>
+    /// <param name="serviceName">Name of the remote service owning the event.</param>
+    /// <param name="method">The intercepted <c>add_*</c> or <c>remove_*</c> accessor method.</param>
+    /// <param name="mappedArgs">Mapped arguments of the accessor call.</param>
+    internal void TrackSubscriptionCall(string serviceName, MethodInfo method, object[] mappedArgs)
+    {
+        var handlerKey = SubscriptionTracker.ExtractHandlerKey(mappedArgs);
+
+        _subscriptionTracker.Track(method, handlerKey);
+        _subscriptionReplay.Track(serviceName, method, mappedArgs, handlerKey);
+    }
+
+    /// <summary>
+    /// Processes a pong message from the server: the connection is alive.
+    /// </summary>
+    private void ProcessPongMessage()
+    {
+        _pingPending.Reset();
+        Interlocked.Exchange(ref _missedPongs, 0);
+    }
+
+    /// <summary>
+    /// Verifies the server's subscription state against the client's tracker and
+    /// replays all stored subscriptions if they differ.
+    /// </summary>
+    /// <returns>True if no replay was needed or the replay verified successfully; otherwise false.</returns>
+    private async Task<bool> RestoreSubscriptionsAsync()
+    {
+        if (_subscriptionReplay.Count == 0)
+            return true;
+
+        try
+        {
+            var clientChecksum = _subscriptionTracker.Checksum;
+            var serverChecksum =
+                await GetServerSubscriptionChecksumAsync()
+                    .ConfigureAwait(false);
+
+            if (serverChecksum == clientChecksum)
+                return true;
+
+            await ResubscribeAllAsync()
+                .ConfigureAwait(false);
+
+            clientChecksum = _subscriptionTracker.Checksum;
+            serverChecksum =
+                await GetServerSubscriptionChecksumAsync()
+                    .ConfigureAwait(false);
+
+            if (serverChecksum != clientChecksum)
+            {
+                SubscriptionsDesyncDetected?.Invoke(this,
+                    new SubscriptionDesyncEventArgs(clientChecksum, serverChecksum));
+
+                OnError(new RemotingException(
+                    $"Subscription resynchronization failed (client: {clientChecksum}, server: {serverChecksum})."));
+
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            OnError(ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Replays all stored event subscriptions on the current connection.
+    /// The replayed <c>add_*</c> calls are not re-tracked on the client side,
+    /// because the tracker already accounts for them.
+    /// </summary>
+    private async Task ResubscribeAllAsync()
+    {
+        foreach (var entry in _subscriptionReplay.Snapshot())
+        {
+            for (var i = 0; i < entry.Count; i++)
+            {
+                var message =
+                    MethodCallMessageBuilder.BuildMethodCallMessage(
+                        serializer: Serializer,
+                        remoteServiceName: entry.ServiceName,
+                        targetMethod: entry.AddMethod,
+                        args: entry.MappedArgs);
+
+                await InvokeRemoteMethod(message)
+                    .ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Asks the server for the subscription checksum of the current session.
+    /// </summary>
+    private async Task<string> GetServerSubscriptionChecksumAsync()
+    {
+        return await _subscriptionInvoker.Value
+            .Invoke(s => s.GetSubscriptionChecksum())
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles a connection that was detected as dead by the heartbeat:
+    /// tears the connection down quietly and starts the auto-reconnect loop.
+    /// </summary>
+    private void HandleConnectionLost()
+    {
+        if (!_isConnected.Value)
+            return;
+
+        _pingPending.Reset();
+        Interlocked.Exchange(ref _missedPongs, 0);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using (await _connectLock)
+                    await DisconnectCoreAsync(quiet: true)
+                        .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                OnError(ex);
+            }
+            finally
+            {
+                AfterDisconnect?.Invoke();
+                EnsureAutoReconnectLoop();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Starts the background auto-reconnect loop, unless auto-reconnect is disabled,
+    /// the client is disposing, a manual disconnect is in effect, or a loop is
+    /// already running.
+    /// </summary>
+    private void EnsureAutoReconnectLoop()
+    {
+        if (!_config.AutoReconnect ||
+            _isDisposing.Value ||
+            _manualDisconnect.Value)
+            return;
+
+        if (Interlocked.CompareExchange(ref _reconnectLoopActive, 1, 0) != 0)
+            return;
+
+        _ = Task.Run(RunAutoReconnectLoopAsync);
+    }
+
+    private async Task RunAutoReconnectLoopAsync()
+    {
+        var cancellationToken = _reconnectCts.Token;
+
+        try
+        {
+            var delaySeconds = Math.Max(1, _config.ReconnectMinDelay);
+            var maxDelaySeconds = Math.Max(delaySeconds, _config.ReconnectMaxDelay);
+
+            while (true)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (_isDisposing.Value || _manualDisconnect.Value)
+                    return;
+
+                if (IsConnected && HasSession)
+                    return;
+
+                try
+                {
+                    await ConnectAsync()
+                        .ConfigureAwait(false);
+
+                    return;
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    OnError(ex);
+                    delaySeconds = Math.Min(maxDelaySeconds, delaySeconds * 2);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // loop cancelled — normal shutdown path
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _reconnectLoopActive, 0);
+        }
+    }
+
+    /// <summary>
+    /// Cancels a running auto-reconnect loop (if any) and prepares a fresh
+    /// cancellation token source for future reconnects.
+    /// </summary>
+    private void CancelAutoReconnect()
+    {
+        Interlocked.Exchange(ref _reconnectCts, new CancellationTokenSource())
+            ?.Cancel();
     }
 
     #endregion
@@ -1285,6 +1666,8 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         if (!_isDisposing.TrySet())
             return;
 
+        CancelAutoReconnect();
+
         if (DefaultRemotingClient == this)
             DefaultRemotingClient = null;
 
@@ -1301,6 +1684,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             .ConfigureAwait(false);
 
         _delegateRegistry.Clear();
+        _subscriptionReplay.Clear();
 
         if (_subscriptionInvoker.IsValueCreated)
         {

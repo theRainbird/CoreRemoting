@@ -68,6 +68,14 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
 
         ApplyHandshakeMetadata(_client);
 
+        // The channel instance is reused across reconnects, so make the event wiring
+        // idempotent: detach any handlers left over from a previous connection before
+        // attaching them again. Without this, every reconnect would add another
+        // subscription and deliver each received message multiple times.
+        _tcpClient.Events.ExceptionEncountered -= OnError;
+        _tcpClient.Events.MessageReceived -= OnMessage;
+        _tcpClient.Events.ServerDisconnected -= OnDisconnected;
+
         _tcpClient.Events.ExceptionEncountered += OnError;
         _tcpClient.Events.MessageReceived += OnMessage;
         _tcpClient.Events.ServerDisconnected += OnDisconnected;

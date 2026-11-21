@@ -146,4 +146,30 @@ public class ClientConfig
     /// Gets or sets HKDF algorithm provider for negotiated shared key.
     /// </summary>
     public IHkdfProvider HkdfProvider { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the client should automatically reconnect after an
+    /// unexpected loss of connection (e.g. a server restart).
+    /// </summary>
+    /// <remarks>
+    /// When enabled, the client reconnects in the background with exponential backoff
+    /// (see <see cref="ReconnectMinDelay"/> and <see cref="ReconnectMaxDelay"/>),
+    /// resumes its session if possible and replays its event subscriptions.
+    /// Detection of a dead connection requires an active heartbeat, so
+    /// <see cref="KeepSessionAliveInterval"/> must be greater than 0.
+    /// Manual calls to <c>Disconnect</c> always suppress auto-reconnect.
+    /// Disabled by default for backward compatibility.
+    /// </remarks>
+    public bool AutoReconnect { get; set; }
+
+    /// <summary>
+    /// Gets or sets the initial delay between automatic reconnect attempts, in seconds.
+    /// The delay doubles after each failed attempt, up to <see cref="ReconnectMaxDelay"/>.
+    /// </summary>
+    public int ReconnectMinDelay { get; set; } = 1;
+
+    /// <summary>
+    /// Gets or sets the maximum delay between automatic reconnect attempts, in seconds.
+    /// </summary>
+    public int ReconnectMaxDelay { get; set; } = 30;
 }

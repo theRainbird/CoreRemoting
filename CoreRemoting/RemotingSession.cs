@@ -198,6 +198,7 @@ public sealed class RemotingSession : IAsyncDisposable
             AuthenticationRequired = _server.Config.AuthenticationRequired,
             MessageEncryptionRequired = _server.Config.MessageEncryption,
             SharedSecret = _sharedSecret,
+            AllowSessionResumeFallback = _server.Config.AllowSessionResumeFallback,
         });
     }
 
@@ -260,6 +261,14 @@ public sealed class RemotingSession : IAsyncDisposable
         if (IsDisposing ||
             Interlocked.CompareExchange(ref _lifecycleState, _stateActive, _stateParked) != _stateParked)
             throw new RemotingException("The session can't be resumed because it is not in a parked state.");
+
+        // if the session is resumed by a *different* server instance, that server's
+        // event hubs don't know this session's handlers -> the subscription state
+        // carried over from the old server is meaningless and must be reset.
+        // The client will detect the mismatch via the subscription checksum check
+        // after reconnecting and replay its subscriptions.
+        if (server != null && !ReferenceEquals(server, _server))
+            _subscriptionTracker.Reset();
 
         // rebind to the server that resumes the session
         _server = server ?? _server;
@@ -500,6 +509,9 @@ public sealed class RemotingSession : IAsyncDisposable
                 case "rpc":
                     await ProcessRpcMessage(message).ConfigureAwait(false);
                     break;
+                case "ping":
+                    await ProcessPingMessage().ConfigureAwait(false);
+                    break;
                 case "goodbye":
                     stopped = await ProcessGoodbyeMessage(message).ConfigureAwait(false);
                     break;
@@ -524,6 +536,26 @@ public sealed class RemotingSession : IAsyncDisposable
                 .ConfigureAwait(false);
 
     }).ConfigureAwait(false);
+
+    /// <summary>
+    /// Processes a ping message from the client by answering with a pong message.
+    /// The pong lets the client detect half-open connections (e.g. a crashed server
+    /// that never closed the socket).
+    /// </summary>
+    private async Task ProcessPingMessage()
+    {
+        var pongMessage =
+            _server.MessageEncryptionManager.CreateWireMessage(
+                messageType: "pong",
+                serializer: _server.Serializer,
+                serializedMessage: Array.Empty<byte>(),
+                keyPair: _keyPair,
+                sharedSecret: _sharedSecret);
+
+        await _rawMessageTransport.SendMessageAsync(
+            _server.Serializer.Serialize(pongMessage))
+            .ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Processes a wire message that contains a goodbye message, which is sent from a client to close the session.

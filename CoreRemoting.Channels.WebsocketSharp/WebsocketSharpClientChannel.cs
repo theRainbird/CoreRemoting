@@ -64,6 +64,14 @@ public class WebsocketSharpClientChannel : IClientChannel, IRawMessageTransport
 
         LastException = null;
 
+        // The WebSocket instance is reused across reconnects, so make the event wiring
+        // idempotent: detach any handlers left over from a previous connection before
+        // attaching them again. Without this, every reconnect would add another
+        // subscription and deliver each received message multiple times.
+        _webSocket.OnMessage -= OnMessage;
+        _webSocket.OnError -= OnError;
+        _webSocket.OnClose -= OnDisconnected;
+
         _webSocket.OnMessage += OnMessage;
         _webSocket.OnError += OnError;
         _webSocket.OnClose += OnDisconnected;

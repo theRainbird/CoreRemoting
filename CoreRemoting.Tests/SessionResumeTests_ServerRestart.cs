@@ -19,7 +19,7 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
     protected override bool AuthenticationRequiredForResumeTests => false;
     protected override bool AuthenticationRequiredForNegativeTests => false;
 
-    [Fact(Skip = "Hangs occasionally")]
+    [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Failed_invoke_due_to_disconnect_releases_pending_message_counter()
     {
@@ -53,7 +53,7 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
         }
     }
 
-    [Fact(Skip = "Hangs occasionally")]
+    [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Disconnected_client_should_resume_session_after_server_restart()
     {
@@ -123,7 +123,7 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
         }
     }
 
-    [Fact(Skip = "Hangs occasionally")]
+    [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Parallel_connect_calls_establish_a_single_session()
     {
@@ -238,7 +238,7 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
         Assert.False(client.IsConnected);
     }
 
-    [Fact(Skip = "Not implemented yet")]
+    [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Parallel_rpc_calls_after_server_restart_share_a_single_resumed_session()
     {
@@ -255,25 +255,21 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
             var proxy = client.CreateProxy<ITestService>();
             Assert.Equal("test", proxy.TestMethod("test"));
 
-            //await client.HardKill().ConfigureAwait(false);
+            // server A crashes; parked sessions are handed over to a new repository
             await serverA.HardKill().ConfigureAwait(false);
 
             var repoA = (SessionRepository)serverA.SessionRepository;
             var repoB = new SessionRepository(repoA, KeySize, 0, 30);
             await serverA.DisposeAsync().ConfigureAwait(false);
 
-            // at this point, client is unaware of the server shutdown
-            Assert.True(client.IsConnected);
-
-            // when a client tries RPC, it fails because of the broken transport
-            var ex = await Assert.ThrowsAsync<NetworkException>(() => proxy.EchoAsync("should fail"));
-            Assert.False(client.IsConnected);
+            // the client notices the disconnect (transport closed by the dead server)
+            await WaitUntilAsync(() => !client.IsConnected, TimeSpan.FromSeconds(5));
 
             var serverB = StartServer(networkPort, AuthenticationRequiredForNegativeTests, repository: repoB);
 
             try
             {
-                // three rpcs race to reconnect; only one resume should occur
+                // three rpcs race to lazily reconnect; only one resume should occur
                 var results = await Task.WhenAll(
                     Task.Run(() => proxy.TestMethod("a")),
                     Task.Run(() => proxy.TestMethod("b")),
@@ -300,7 +296,7 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
         }
     }
 
-    [Fact(Skip = "Not implemented")]
+    [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Client_should_survive_server_restart()
     {
@@ -313,6 +309,9 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
         try
         {
             using var client = CreateClient(networkPort, AuthenticationRequiredForNegativeTests);
+
+            // enable the heartbeat so the client proactively detects the dead server
+            client.Config.KeepSessionAliveInterval = 1;
 
             await client.ConnectAsync().ConfigureAwait(false);
 
@@ -371,6 +370,142 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
         finally
         {
             await Task.Delay(500).ConfigureAwait(false);
+        }
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public async Task Event_subscriptions_survive_server_restart()
+    {
+        using var ctx = ValidationSyncContext.Install();
+        int networkPort = Interlocked.Increment(ref _nextPort);
+
+        var serverA = StartServer(networkPort, AuthenticationRequiredForNegativeTests);
+        try
+        {
+            using var client = CreateClient(networkPort, AuthenticationRequiredForNegativeTests);
+            await client.ConnectAsync().ConfigureAwait(false);
+
+            var proxy = client.CreateProxy<ITestService>();
+
+            int clientEventCount = 0;
+            proxy.ServiceEvent += () => Interlocked.Increment(ref clientEventCount);
+
+            // the subscription works against the original server
+            proxy.FireServiceEvent();
+            await WaitUntilAsync(() => Volatile.Read(ref clientEventCount) == 1, TimeSpan.FromSeconds(5));
+
+            // server A crashes; parked sessions are handed over to a new repository
+            await serverA.HardKill().ConfigureAwait(false);
+
+            var repoA = (SessionRepository)serverA.SessionRepository;
+            var repoB = new SessionRepository(repoA, KeySize, 0, 30);
+            await serverA.DisposeAsync().ConfigureAwait(false);
+
+            await WaitUntilAsync(() => !client.IsConnected, TimeSpan.FromSeconds(5));
+
+            var serverB = StartServer(networkPort, AuthenticationRequiredForNegativeTests, repository: repoB);
+            try
+            {
+                // a lazy rpc triggers reconnect + session resume + subscription replay
+                Assert.Equal("test", proxy.TestMethod("test"));
+
+                // the client's subscription state matches the resumed session on the new server
+                await WaitUntilAsync(
+                    () => repoB.Sessions.Single().SubscriptionTracker.Checksum ==
+                         client.SubscriptionTracker.Checksum,
+                    TimeSpan.FromSeconds(5));
+
+                // events raised by the NEW server reach the replayed client handler
+                proxy.FireServiceEvent();
+                await WaitUntilAsync(() => Volatile.Read(ref clientEventCount) >= 2, TimeSpan.FromSeconds(5));
+
+                Assert.Equal(2, Volatile.Read(ref clientEventCount));
+            }
+            finally
+            {
+                await Task.Delay(500).ConfigureAwait(false);
+                CheckServerErrorCount();
+                await serverB.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            await Task.Delay(500).ConfigureAwait(false);
+        }
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public async Task Manual_disconnect_does_not_trigger_auto_reconnect()
+    {
+        using var ctx = ValidationSyncContext.Install();
+        int networkPort = Interlocked.Increment(ref _nextPort);
+
+        var server = StartServer(networkPort, AuthenticationRequiredForNegativeTests);
+        try
+        {
+            using var client = CreateClient(networkPort, AuthenticationRequiredForNegativeTests);
+            client.Config.AutoReconnect = true;
+            client.Config.ReconnectMinDelay = 1;
+            client.Config.ReconnectMaxDelay = 2;
+
+            await client.ConnectAsync().ConfigureAwait(false);
+            Assert.True(client.IsConnected);
+
+            int reconnectedCount = 0;
+            client.Reconnected += (s, e) => Interlocked.Increment(ref reconnectedCount);
+
+            // A manual disconnect must suppress the auto-reconnect loop.
+            await client.DisconnectAsync().ConfigureAwait(false);
+            Assert.False(client.IsConnected);
+
+            // Wait well beyond the reconnect backoff window. With a broken suppression
+            // (e.g. a readonly AtomicBool whose Set() is discarded) the client would
+            // reconnect to the still-running server here.
+            await Task.Delay(TimeSpan.FromSeconds(4)).ConfigureAwait(false);
+
+            Assert.False(client.IsConnected);
+            Assert.Equal(0, Volatile.Read(ref reconnectedCount));
+        }
+        finally
+        {
+            await Task.Delay(500).ConfigureAwait(false);
+            CheckServerErrorCount();
+            await server.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public async Task Server_with_fallback_enabled_lets_client_continue_with_new_session_when_resume_refused()
+    {
+        using var ctx = ValidationSyncContext.Install();
+        int networkPort = Interlocked.Increment(ref _nextPort);
+
+        var server = StartServer(networkPort, AuthenticationRequiredForNegativeTests);
+        try
+        {
+            // The server opts into letting clients fall back to a new session when a
+            // resume is refused. Without this flag (the default) the same scenario throws.
+            server.Config.AllowSessionResumeFallback = true;
+
+            var bogusSessionId = Guid.NewGuid();
+            using var client = CreateClient(networkPort, AuthenticationRequiredForNegativeTests,
+                resumableSessionId: bogusSessionId);
+
+            // The requested session does not exist on the server, so the resume is
+            // refused. Because the server allows the fallback, the connect must NOT throw.
+            await client.ConnectAsync().ConfigureAwait(false);
+
+            Assert.NotNull(client.SessionId);
+            Assert.NotEqual(bogusSessionId, client.SessionId.Value);
+        }
+        finally
+        {
+            await Task.Delay(500).ConfigureAwait(false);
+            CheckServerErrorCount();
+            await server.DisposeAsync().ConfigureAwait(false);
         }
     }
 }

@@ -47,4 +47,8 @@ internal class ServerSubscriptionService : IServerSubscriptionService
 
         return Task.FromResult(count);
     }
+
+    /// <inheritdoc/>
+    public Task<string> GetSubscriptionChecksum() =>
+        Task.FromResult(RemotingSession.Current?.SubscriptionTracker.Checksum);
 }

@@ -163,6 +163,8 @@ public partial class SessionResumeTests : SessionResumeTests_Base
                 AuthenticationRequiredForNegativeTests,
                 resumableSessionId: sessionId);
 
+            // The server's AllowSessionResumeFallback defaults to false, so a refused
+            // resume throws instead of falling back to a new session.
             var exception =
                 await Assert.ThrowsAsync<RemotingException>(secondClient.ConnectAsync)
                     .ConfigureAwait(false);
@@ -220,6 +222,8 @@ public partial class SessionResumeTests : SessionResumeTests_Base
                 AuthenticationRequiredForNegativeTests,
                 resumableSessionId: sessionId);
 
+            // The server's AllowSessionResumeFallback defaults to false, so a refused
+            // resume throws instead of falling back to a new session.
             // session no longer exists, so the server created a new one and the strict check fails
             var exception =
                 await Assert.ThrowsAsync<RemotingException>(secondClient.ConnectAsync)

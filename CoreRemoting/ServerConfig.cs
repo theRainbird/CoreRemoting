@@ -67,6 +67,17 @@ public class ServerConfig
     public bool UseLegacySessionKeyDerivation { get; set; } = false;
 
     /// <summary>
+    /// Gets or sets whether this server permits clients to silently fall back to a
+    /// newly created session when a requested session resume could not be honored
+    /// (for example, when the parked session was lost after a server restart).
+    /// When <c>false</c> (default), a refused resume causes the client to throw a
+    /// <c>RemotingException</c>, preserving the previous behavior.
+    /// When <c>true</c>, the client transparently continues with the new session and
+    /// re-subscribes its event handlers.
+    /// </summary>
+    public bool AllowSessionResumeFallback { get; set; } = false;
+
+    /// <summary>
     /// Gets or sets the serializer to be used (Bson serializer is used, if set to null).
     /// </summary>
     public ISerializerAdapter Serializer { get; set; }

@@ -22,4 +22,12 @@ internal interface IServerSubscriptionService
     /// <param name="handlerKeys">Handler keys to remove.</param>
     /// <returns>Number of removed occurrences.</returns>
     Task<int> RemoveHandlers(Guid[] handlerKeys);
+
+    /// <summary>
+    /// Gets the subscription checksum of the calling session, as tracked by the
+    /// server. The client compares it against its own checksum to detect lost
+    /// subscription operations after a reconnect.
+    /// </summary>
+    /// <returns>The server-side subscription checksum (null, if no session context).</returns>
+    Task<string> GetSubscriptionChecksum();
 }

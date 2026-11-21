@@ -57,6 +57,9 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
         {
             var keys = client.ClientDelegateRegistry
                 .UnregisterClientDelegatesOfServiceProxy(this);
+
+            client.SubscriptionReplay.RemoveRange(keys);
+
             _ = client.ScheduleServerUnsubscribe(keys);
         }
 
@@ -93,8 +96,7 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
 
         var arguments = _client.MapArguments(this, invocation.Arguments);
 
-        _client.SubscriptionTracker.Track(method,
-            SubscriptionTracker.ExtractHandlerKey(arguments));
+        _client.TrackSubscriptionCall(ServiceName, method, arguments);
 
         var remoteMethodCallMessage =
             _client.MethodCallMessageBuilder.BuildMethodCallMessage(
@@ -183,6 +185,8 @@ public class ServiceProxy<TServiceInterface> : AsyncInterceptor, IServiceProxy
             throw new NotSupportedException("OneWay methods must not have a return type.");
 
         var arguments = _client.MapArguments(this, invocation.Arguments);
+
+        _client.TrackSubscriptionCall(ServiceName, method, arguments);
 
         var remoteMethodCallMessage =
             _client.MethodCallMessageBuilder.BuildMethodCallMessage(

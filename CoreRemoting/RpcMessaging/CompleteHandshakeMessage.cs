@@ -33,4 +33,14 @@ public class CompleteHandshakeMessage
     /// </summary>
     [DataMember]
     public Guid SessionId { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the server permits the client to
+    /// silently fall back to a newly created session when a requested session
+    /// resume was refused. Controlled by <c>ServerConfig.AllowSessionResumeFallback</c>
+    /// and communicated to the client during the handshake. Defaults to <c>false</c>
+    /// (a refused resume throws) for backward compatibility.
+    /// </summary>
+    [DataMember]
+    public bool AllowSessionResumeFallback { get; set; }
 }

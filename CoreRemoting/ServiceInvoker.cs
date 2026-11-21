@@ -97,6 +97,8 @@ public sealed class ServiceInvoker<TService> : IServiceInvoker<TService> where T
             var keys = client.ClientDelegateRegistry
                 .UnregisterClientDelegatesOfServiceProxy(this);
 
+            client.SubscriptionReplay.RemoveRange(keys);
+
             _ = client.ScheduleServerUnsubscribe(keys);
         }
     }
@@ -110,6 +112,8 @@ public sealed class ServiceInvoker<TService> : IServiceInvoker<TService> where T
         {
             var keys = client.ClientDelegateRegistry
                 .UnregisterClientDelegatesOfServiceProxy(this);
+
+            client.SubscriptionReplay.RemoveRange(keys);
 
             await client.NotifyServerUnsubscribeAsync(keys)
                 .ConfigureAwait(false);
@@ -150,8 +154,7 @@ public sealed class ServiceInvoker<TService> : IServiceInvoker<TService> where T
 
         var mappedArguments = client.MapArguments(this, arguments);
 
-        client.SubscriptionTracker.Track(method,
-            SubscriptionTracker.ExtractHandlerKey(mappedArguments));
+        client.TrackSubscriptionCall(ServiceName, method, mappedArguments);
 
         var remoteMethodCallMessage =
             client.MethodCallMessageBuilder.BuildMethodCallMessage(

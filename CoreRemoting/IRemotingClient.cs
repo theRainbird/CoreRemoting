@@ -16,6 +16,25 @@ public interface IRemotingClient : IAsyncDisposable, IDisposable
     event Action AfterDisconnect;
 
     /// <summary>
+    /// Event: Fires after the client successfully connected to the server
+    /// (including the initial connect and every successful reconnect).
+    /// </summary>
+    event Action AfterConnect;
+
+    /// <summary>
+    /// Event: Fires after the client reconnected following an unexpected loss of
+    /// connection (e.g. a server restart). Provides information about whether the
+    /// session was resumed and whether event subscriptions were restored.
+    /// </summary>
+    event EventHandler<ReconnectedEventArgs> Reconnected;
+
+    /// <summary>
+    /// Event: Fires when the client detected that its event subscriptions could not
+    /// be resynchronized with the server after a reconnect.
+    /// </summary>
+    event EventHandler<SubscriptionDesyncEventArgs> SubscriptionsDesyncDetected;
+
+    /// <summary>
     /// Gets the configuration settings used by the CoreRemoting client instance.
     /// </summary>
     ClientConfig Config { get; }
