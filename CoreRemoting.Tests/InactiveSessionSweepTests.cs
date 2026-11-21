@@ -50,7 +50,13 @@ public class InactiveSessionSweepTests
             NetworkPort = port,
             MessageEncryption = true,
             Serializer = new FailingOnSessionClosedSerializerAdapter(),
-            InactiveSessionSweepInterval = 1,
+            // The sweep timer starts with server.Start(). With message encryption the handshake (RSA key
+            // generation etc.) can take several seconds under full-suite load, so a short interval can fire
+            // while a client is still connecting and remove its session before the test's Echo runs. A
+            // generous interval guarantees the first sweep happens only after all clients are connected.
+            // MaximumSessionInactivityTime stays 0 so the sessions are still eligible for sweeping
+            // immediately afterwards.
+            InactiveSessionSweepInterval = 15,
             MaximumSessionInactivityTime = 0,
             RegisterServicesAction = container =>
                 container.RegisterService<ITestService, TestService>(ServiceLifetime.Singleton)
@@ -73,8 +79,9 @@ public class InactiveSessionSweepTests
             })
             .ToList();
 
-        // Both sessions are inactive for more than 0 minutes, so the next sweep (every second) removes them.
-        var timeout = DateTime.UtcNow.AddSeconds(10);
+        // Both sessions are inactive for more than 0 minutes, so the next sweep (every 15 seconds) removes
+        // them. The wait must be longer than the sweep interval so the sweep is guaranteed to fire.
+        var timeout = DateTime.UtcNow.AddSeconds(25);
         while (server.SessionRepository.Sessions.Any() && DateTime.UtcNow < timeout)
         {
             Thread.Sleep(100);

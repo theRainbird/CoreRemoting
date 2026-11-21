@@ -297,6 +297,15 @@ public class ServiceEventHub
 
         private object DynamicInvoke(object[] arguments)
         {
+            // Resolve the invoker at call time from the live static ServiceEventHub.DelegateInvoker
+            // (mirroring the client side in RemotingClient) instead of the invoker that was captured
+            // when this holder was constructed. The hub - and thus this holder - is created once per
+            // service registration when the server starts, so a captured invoker would be frozen to
+            // whatever the static happened to be at that moment. Reading the live static lets a
+            // consumer that swaps ServiceEventHub.DelegateInvoker afterwards still control how
+            // events are marshalled. The captured invoker is kept only as a fallback.
+            var invoker = ServiceEventHub.DelegateInvoker ?? DelegateInvoker;
+
             // ConcurrentDictionary can be enumerated safely while it is modified,
             // so no snapshot is taken and no lock is required here.
             foreach (var entry in _entries)
@@ -304,7 +313,7 @@ public class ServiceEventHub
                 // an entry may represent multiple subscriptions of the same handler key,
                 // which must be fired separately to preserve multicast semantics
                 for (var i = 0; i < entry.Value.Count; i++)
-                    DelegateInvoker.Invoke(entry.Value.Handler, arguments);
+                    invoker.Invoke(entry.Value.Handler, arguments);
             }
 
             return DefaultReturnValue;

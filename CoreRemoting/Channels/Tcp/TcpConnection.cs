@@ -107,18 +107,28 @@ public class TcpConnection : IRawMessageTransport
     /// <summary>
     /// Closes the internal tcp channel session.
     /// </summary>
-    private async void BeforeDisposeSession()
+    /// <remarks>
+    /// This handler is subscribed to <see cref="RemotingSession.BeforeDispose"/> and is therefore invoked
+    /// synchronously as part of the multicast delegate. WatsonTcp's <c>DisconnectClientAsync</c> can block
+    /// for several seconds (it waits for the underlying socket to shut down). To avoid holding up the
+    /// <see cref="RemotingSession.BeforeDispose"/> event - and thus the disposing thread and any other
+    /// subscribers - the disconnect is offloaded to a fire-and-forget background task.
+    /// </remarks>
+    private void BeforeDisposeSession()
     {
         _session = null;
-        try
+        _ = Task.Run(async () =>
         {
-            await _tcpServer.DisconnectClientAsync(_clientMetadata.Guid, MessageStatus.Shutdown)
-                .ConfigureAwait(false);
-        }
-        catch (Exception)
-        {
-            // Ignored: server may already be stopped
-        }
+            try
+            {
+                await _tcpServer.DisconnectClientAsync(_clientMetadata.Guid, MessageStatus.Shutdown)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // Ignored: server may already be stopped
+            }
+        });
     }
 
     /// <summary>

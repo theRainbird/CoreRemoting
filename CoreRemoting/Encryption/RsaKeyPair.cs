@@ -54,6 +54,7 @@ public class RsaKeyPair : ISessionKeyPair
     /// </summary>
     /// <param name="rawData">Raw data to create a signature of</param>
     /// <returns>Signature</returns>
+    /// <exception cref="CryptographicException">If this key pair does not contain a private key.</exception>
     public byte[] CreateSignature(byte[] rawData)
     {
         if (rawData == null)
@@ -63,7 +64,18 @@ public class RsaKeyPair : ISessionKeyPair
         // but a key pair is shared by all messages of a client or session.
         lock (_rsa)
         {
-            return _rsa.SignData(rawData, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            try
+            {
+                return _rsa.SignData(rawData, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            }
+            catch (CryptographicException ex)
+            {
+                // Normalize platform-specific exceptions to a plain CryptographicException,
+                // because on Linux the OpenSSL backend throws OpenSslCryptographicException
+                // (a subclass) instead, e.g. when signing with a public-only key pair.
+                // This mirrors the exception handling of EcdsaSessionKeyPair.
+                throw new CryptographicException(ex.Message, ex);
+            }
         }
     }
 

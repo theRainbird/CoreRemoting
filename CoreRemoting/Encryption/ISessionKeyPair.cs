@@ -15,7 +15,7 @@ public interface ISessionKeyPair : IDisposable
     /// </summary>
     /// <param name="data">Data to sign (typically a challenge from the server).</param>
     /// <returns>Signature bytes.</returns>
-    /// <exception cref="InvalidOperationException">If no private key is available.</exception>
+    /// <exception cref="CryptographicException">If no private key is available.</exception>
     byte[] CreateSignature(byte[] data);
 
     /// <summary>

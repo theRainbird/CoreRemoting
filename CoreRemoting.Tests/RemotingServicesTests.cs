@@ -8,6 +8,11 @@ namespace CoreRemoting.Tests;
 [Collection("CoreRemoting")]
 public class RemotingServicesTests
 {
+    // Use dedicated ports instead of the default (9090), which may be occupied by a
+    // manually started sample server (e.g. HelloWorld.Server) and would then cause an
+    // "Address already in use" collision.
+    private static int _nextPort = 9399;
+
     [Fact]
     public void IsOneWay_should_return_true_if_provided_method_is_OneWay()
     {
@@ -49,9 +54,12 @@ public class RemotingServicesTests
     {
         var testService = new TestService();
 
-        using var server = new RemotingServer();
+        using var server = new RemotingServer(new ServerConfig
+        {
+            NetworkPort = System.Threading.Interlocked.Increment(ref _nextPort)
+        });
         server.Start();
-        
+
         string serviceName =
             RemotingServices.Marshal(testService, "test", typeof(ITestService), server.UniqueServerInstanceName);
 

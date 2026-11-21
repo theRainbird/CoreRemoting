@@ -183,7 +183,7 @@ public class MessageEncryptionTests
         var serializedMessage = Encoding.UTF8.GetBytes("Serialized method call");
 
         var wireMessage = manager.CreateWireMessage("rpc", serializedMessage, serializer, keyPair, sharedSecret);
-        var decryptedData = manager.GetDecryptedMessageData(wireMessage, serializer, sharedSecret, keyPair.PublicKey, KeySize);
+        var decryptedData = manager.GetDecryptedMessageData(wireMessage, serializer, sharedSecret, keyPair.PublicKey);
 
         Assert.NotEqual(serializedMessage, wireMessage.Data);
         Assert.Equal(serializedMessage, decryptedData);
@@ -202,7 +202,7 @@ public class MessageEncryptionTests
             manager.CreateWireMessage("rpc", Encoding.UTF8.GetBytes("Serialized method call"), serializer, sendersKeyPair, sharedSecret);
 
         Assert.Throws<SecurityException>(() =>
-            manager.GetDecryptedMessageData(wireMessage, serializer, sharedSecret, otherKeyPair.PublicKey, KeySize));
+            manager.GetDecryptedMessageData(wireMessage, serializer, sharedSecret, otherKeyPair.PublicKey));
     }
 
     #endregion
