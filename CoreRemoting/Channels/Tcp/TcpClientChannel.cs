@@ -78,11 +78,17 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
 
         _tcpClient.Events.ExceptionEncountered += OnError;
         _tcpClient.Events.MessageReceived += OnMessage;
-        _tcpClient.Events.ServerDisconnected += OnDisconnected;
+        // ServerDisconnected is intentionally attached only after the new
+        // connection is fully established: a late teardown event from the
+        // previous connection must not reach the client while the new
+        // connection is being set up.
+
         _tcpClient.Connect();
 
         // note: we don't rely on the Connected event anymore
         await _tcpClient.SendAsync([0], _handshakeMetadata);
+
+        _tcpClient.Events.ServerDisconnected += OnDisconnected;
     }
 
     private void OnDisconnected(object o, DisconnectionEventArgs disconnectionEventArgs)

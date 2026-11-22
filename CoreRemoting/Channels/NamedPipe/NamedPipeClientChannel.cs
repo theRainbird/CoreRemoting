@@ -3,7 +3,6 @@ using System.IO;
 using System.IO.Pipes;
 using System.Threading;
 using System.Threading.Tasks;
-using CoreRemoting.RpcMessaging;
 using CoreRemoting.Threading;
 
 namespace CoreRemoting.Channels.NamedPipe;
@@ -17,11 +16,11 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 	private IRemotingClient _remotingClient;
 	private CancellationTokenSource _cancellationTokenSource;
 	private Task _receivingTask;
+	private int _receivingTaskInstance;
 	private bool _isConnected;
 	private readonly AsyncLock _disposeLock;
 	private readonly AsyncLock _sendLock;
 	private bool _isDisposed;
-	private readonly AsyncLock _reconnectLock = new AsyncLock();
 
 	/// <summary>
 	/// Creates a new instance of the NamedPipeClientChannel class.
@@ -62,6 +61,7 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 
 	/// <summary>
 	/// Establish a connection with the server.
+	/// A running receive loop from a previous connection is cancelled and awaited first.
 	/// </summary>
 	public async Task ConnectAsync()
 	{
@@ -76,24 +76,16 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 
 		try
 		{
-			// If previous connection was canceled, ensure we start with a fresh CTS
-			if (_cancellationTokenSource.IsCancellationRequested)
-			{
-				_cancellationTokenSource.Dispose();
-				_cancellationTokenSource = new CancellationTokenSource();
-			}
+			// increment instance before detaching so the old loop knows it's obsolete
+			var instance = Interlocked.Increment(ref _receivingTaskInstance);
+
+			using var oldCts = Interlocked.Exchange(ref _cancellationTokenSource, new CancellationTokenSource());
+			oldCts?.Cancel();
+
+			await DetachReceivingTaskAsync()
+				.ConfigureAwait(false);
 
 			var pipeName = GetPipeName();
-
-			// Dispose possible previous instance
-			try
-			{
-				_pipeClient?.Dispose();
-			}
-			catch
-			{
-				/* ignore */
-			}
 
 			_pipeClient = new NamedPipeClientStream(
 				".",
@@ -113,7 +105,7 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 			_isConnected = true;
 
 			// Start receiving messages after connection is established
-			_receivingTask = Task.Run(ReceiveMessagesAsync, _cancellationTokenSource.Token);
+			_receivingTask = ReceiveMessagesAsync(instance, _cancellationTokenSource.Token);
 
 			// Send handshake message immediately after connection
 			await SendHandshakeAsync().ConfigureAwait(false);
@@ -149,41 +141,32 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 		}
 	}
 
-	private async Task ReceiveMessagesAsync()
+	/// <summary>
+	/// Receives messages from the pipe until disconnected or cancelled.
+	/// Reconnection is owned by <c>RemotingClient</c>; this loop never reconnects on its own.
+	/// </summary>
+	private async Task ReceiveMessagesAsync(int instance, CancellationToken ct)
 	{
+		var pipe = _pipeClient;
+
 		try
 		{
-			// Process messages while connected; try to auto-reconnect if stream breaks
-			while (!_cancellationTokenSource.Token.IsCancellationRequested && !_isDisposed)
+			while (!_isDisposed && _isConnected && !ct.IsCancellationRequested)
 			{
-				// Ensure there is a connected stream
-				if (!_isConnected || _pipeClient == null || !_pipeClient.IsConnected)
-				{
-					var reconnected = await TryReconnectAsync().ConfigureAwait(false);
-					if (!reconnected)
-					{
-						// Wait a bit and retry, unless cancellation requested
-						await Task.Delay(TimeSpan.FromMilliseconds(200), _cancellationTokenSource.Token)
-							.ConfigureAwait(false);
-						continue;
-					}
-				}
+				var messageData = await ReadMessageAsync(pipe, ct)
+					.ConfigureAwait(false);
 
-				var messageData = await ReadMessageAsync().ConfigureAwait(false);
 				if (messageData == null)
 				{
-					// Lost connection while reading, retry
-					continue;
+					// EOF or read error: the connection is gone.
+					// Exit the loop; the client's reconnect logic takes over.
+					break;
 				}
 
-				// Check if this is the first message (handshake response)
+				// Empty messages are the handshake completion marker and are
+				// handled internally by CoreRemoting, not delivered here.
 				if (messageData.Length > 0)
-				{
-					// This is a real message, not handshake
 					ReceiveMessage?.Invoke(messageData);
-				}
-				// If message is empty, it's the handshake completion
-				// CoreRemoting will handle this internally
 			}
 		}
 		catch (OperationCanceledException)
@@ -200,7 +183,18 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 		}
 		finally
 		{
-			if (_isConnected)
+			try
+			{
+				pipe?.Dispose();
+			}
+			catch
+			{
+				/* ignore disposal errors */
+			}
+
+			// the loop is the single fire point; a superseded loop must not
+			// touch the state of the current connection
+			if (Volatile.Read(ref _receivingTaskInstance) == instance)
 			{
 				_isConnected = false;
 				Disconnected?.Invoke();
@@ -208,64 +202,30 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 		}
 	}
 
-	private async Task<bool> TryReconnectAsync()
+	/// <summary>
+	/// Atomically detaches the current receive loop and awaits its completion.
+	/// </summary>
+	private async Task DetachReceivingTaskAsync()
 	{
-		if (_isDisposed)
-			return false;
+		var loop = _receivingTask;
+		_receivingTask = null;
 
-		using (await _reconnectLock)
+		if (loop != null)
 		{
-			if (_isDisposed)
-				return false;
-
-			// If already connected, nothing to do
-			if (_isConnected && _pipeClient?.IsConnected == true)
-				return true;
-
-			// Clean up old stream
 			try
 			{
-				_pipeClient?.Dispose();
+				await loop.ConfigureAwait(false);
 			}
 			catch
 			{
-				/* ignore */
-			}
-
-			try
-			{
-				var pipeName = GetPipeName();
-				_pipeClient = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
-
-				var connectionTimeoutMs = _remotingClient.Config?.ConnectionTimeout > 0
-					? _remotingClient.Config.ConnectionTimeout * 1000
-					: -1;
-
-				await _pipeClient.ConnectAsync(connectionTimeoutMs).ConfigureAwait(false);
-
-				if (!_pipeClient.IsConnected)
-				{
-					_isConnected = false;
-					return false;
-				}
-
-				_isConnected = true;
-				await SendHandshakeAsync().ConfigureAwait(false);
-				return true;
-			}
-			catch (Exception ex)
-			{
-				LastException = new NetworkException($"Failed to reconnect to named pipe server: {ex.Message}", ex);
-				ErrorOccured?.Invoke($"Reconnect error: {ex.Message}", ex);
-				_isConnected = false;
-				return false;
+				/* handled in loop */
 			}
 		}
 	}
 
-	private async Task<byte[]> ReadMessageAsync()
+	private static async Task<byte[]> ReadMessageAsync(NamedPipeClientStream pipe, CancellationToken ct)
 	{
-		if (_pipeClient == null || !_pipeClient.IsConnected)
+		if (pipe == null || !pipe.IsConnected)
 			return null;
 
 		try
@@ -275,8 +235,8 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 			var headerBytesRead = 0;
 			while (headerBytesRead < 4)
 			{
-				var readNow = await _pipeClient
-					.ReadAsync(lengthBuffer, headerBytesRead, 4 - headerBytesRead, _cancellationTokenSource.Token)
+				var readNow = await pipe
+					.ReadAsync(lengthBuffer, headerBytesRead, 4 - headerBytesRead, ct)
 					.ConfigureAwait(false);
 				if (readNow == 0)
 					return null;
@@ -296,12 +256,12 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 			while (totalBytesRead < messageLength)
 			{
 				// Check connection before each read
-				if (!_pipeClient.IsConnected)
+				if (!pipe.IsConnected)
 					return null;
 
 				var bytesToRead = messageLength - totalBytesRead;
-				var read = await _pipeClient
-					.ReadAsync(messageBuffer, totalBytesRead, bytesToRead, _cancellationTokenSource.Token)
+				var read = await pipe
+					.ReadAsync(messageBuffer, totalBytesRead, bytesToRead, ct)
 					.ConfigureAwait(false);
 
 				if (read == 0)
@@ -314,6 +274,11 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 		}
 		catch (OperationCanceledException)
 		{
+			return null;
+		}
+		catch (ObjectDisposedException)
+		{
+			// pipe disposed during shutdown
 			return null;
 		}
 		catch (IOException ioEx) when (ioEx.Message.Contains("Broken pipe") || ioEx.Message.Contains("Connection"))
@@ -330,36 +295,29 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 	/// <summary>
 	/// Closes the connection.
 	/// </summary>
+	/// <remarks>
+	/// The receive loop is the single fire point of the <see cref="Disconnected"/>
+	/// event: cancelling the token here makes the loop exit and fire the event
+	/// (guarded by its instance check), so this method never fires it directly.
+	/// </remarks>
 	public async Task DisconnectAsync()
 	{
 		using (await _disposeLock)
 		{
 			// Mark as disconnected in any case
-			var wasConnected = _isConnected;
 			_isConnected = false;
-			if (!_cancellationTokenSource.IsCancellationRequested)
-				_cancellationTokenSource.Cancel();
+
+			using var cts = Interlocked.Exchange(ref _cancellationTokenSource, null);
+			cts?.Cancel();
+
+			// await the loop instead of a blocking Wait with timeout:
+			// the cancellation unblocks the pending pipe read promptly
+			await DetachReceivingTaskAsync()
+				.ConfigureAwait(false);
 
 			try
 			{
-				_receivingTask?.Wait(TimeSpan.FromSeconds(5));
-			}
-			catch (AggregateException)
-			{
-				// Expected when cancelling
-			}
-
-			try
-			{
-				if (_pipeClient != null)
-				{
-					if (_pipeClient.IsConnected)
-					{
-						_pipeClient.Close();
-					}
-
-					_pipeClient.Dispose();
-				}
+				_pipeClient?.Dispose();
 			}
 			catch
 			{
@@ -368,22 +326,7 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 			finally
 			{
 				_pipeClient = null;
-				// Prepare for a future reconnect by resetting CTS
-				try
-				{
-					_cancellationTokenSource.Dispose();
-				}
-				catch
-				{
-					/* ignore */
-				}
-
-				_cancellationTokenSource = new CancellationTokenSource();
-				_receivingTask = null;
 			}
-
-			if (wasConnected)
-				Disconnected?.Invoke();
 		}
 	}
 
@@ -401,6 +344,11 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 	/// Sends a message to the server.
 	/// </summary>
 	/// <param name="rawMessage">Raw message data</param>
+	/// <remarks>
+	/// Fails fast when the pipe is not connected. Reconnection is owned by
+	/// <c>RemotingClient</c>; the send path must not trigger channel-level
+	/// reconnects, because that would bypass the client's session semantics.
+	/// </remarks>
 	public async Task<bool> SendMessageAsync(byte[] rawMessage)
 	{
 		if (_isDisposed)
@@ -409,17 +357,11 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 		if (rawMessage == null)
 			return false;
 
-		// Try to auto-repair on demand
-		if (!_isConnected || _pipeClient == null || !_pipeClient.IsConnected)
+		var pipe = _pipeClient;
+		if (pipe == null || !pipe.IsConnected)
 		{
-			try
-			{
-				await ConnectAsync().ConfigureAwait(false);
-			}
-			catch
-			{
-				return false;
-			}
+			LastException = new NetworkException("Named pipe is not connected.");
+			return false;
 		}
 
 		using (await _sendLock)
@@ -427,7 +369,7 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 			try
 			{
 				// Check if stream is still connected
-				if (!_pipeClient.IsConnected)
+				if (!pipe.IsConnected)
 				{
 					LastException = new NetworkException("Named pipe is not connected.");
 					return false;
@@ -435,7 +377,7 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 
 				// Send message length (4 bytes)
 				var lengthBuffer = BitConverter.GetBytes(rawMessage.Length);
-				await _pipeClient.WriteAsync(lengthBuffer, 0, 4, _cancellationTokenSource.Token).ConfigureAwait(false);
+				await pipe.WriteAsync(lengthBuffer, 0, 4, CancellationToken.None).ConfigureAwait(false);
 
 				// Send message content in chunks to avoid pipe write limits
 				const int MaxChunkSize = 64 * 1024; // 64 KiB
@@ -443,29 +385,21 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 				while (offset < rawMessage.Length)
 				{
 					var toWrite = Math.Min(MaxChunkSize, rawMessage.Length - offset);
-					await _pipeClient.WriteAsync(rawMessage, offset, toWrite, _cancellationTokenSource.Token)
+					await pipe.WriteAsync(rawMessage, offset, toWrite, CancellationToken.None)
 						.ConfigureAwait(false);
 					offset += toWrite;
 				}
 
-				await _pipeClient.FlushAsync(_cancellationTokenSource.Token).ConfigureAwait(false);
+				await pipe.FlushAsync(CancellationToken.None).ConfigureAwait(false);
 
 				return true;
 			}
 			catch (IOException ioEx) when (ioEx.Message.Contains("Broken pipe") || ioEx.Message.Contains("Connection"))
 			{
-				// Normal pipe disconnection scenario: try a single immediate reconnect
-				try
-				{
-					await DisconnectAsync().ConfigureAwait(false);
-					await ConnectAsync().ConfigureAwait(false);
-					// retry once
-					return await SendMessageAsync(rawMessage).ConfigureAwait(false);
-				}
-				catch
-				{
-					return false;
-				}
+				// Normal pipe disconnection scenario: the receive loop detects
+				// the EOF and fires Disconnected; the client reconnects.
+				LastException = new NetworkException($"Failed to send message: {ioEx.Message}", ioEx);
+				return false;
 			}
 			catch (Exception ex)
 			{
@@ -495,7 +429,10 @@ public class NamedPipeClientChannel : IClientChannel, IRawMessageTransport
 	{
 		_isDisposed = true;
 		await DisconnectAsync().ConfigureAwait(false);
-		_cancellationTokenSource.Dispose();
+
+		using var cts = Interlocked.Exchange(ref _cancellationTokenSource, null);
+		cts?.Cancel();
+
 		_disposeLock.Dispose();
 		_sendLock.Dispose();
 	}

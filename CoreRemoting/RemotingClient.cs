@@ -176,8 +176,16 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         // a dead transport and trigger redundant teardowns
         StopKeepSessionAliveTimer();
 
-        var activeCalls = _activeCalls;
-        _activeCalls = null;
+        Dictionary<Guid, ClientRpcContext> activeCalls;
+
+        // the swap must happen under the same lock the RPC registration path uses,
+        // otherwise a call registered right after the snapshot below would never
+        // be completed and would hang until the invocation timeout
+        using (_activeCallsLock.Lock())
+        {
+            activeCalls = _activeCalls;
+            _activeCalls = null;
+        }
 
         _goodbyeCompletedEvent.Set();
 
@@ -473,21 +481,45 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             if (_channel.RawMessageTransport != null)
                 _channel.RawMessageTransport.LastException = null;
 
-            await _channel.ConnectAsync()
-                .ConfigureAwait(false);
+            try
+            {
+                await _channel.ConnectAsync()
+                    .ConfigureAwait(false);
 
-            if (_channel.RawMessageTransport.LastException != null)
-                throw _channel.RawMessageTransport.LastException;
+                if (_channel.RawMessageTransport.LastException != null)
+                    throw _channel.RawMessageTransport.LastException;
 
-            await _handshakeCompletedTaskSource.Task.Timeout(
-                _config.ConnectionTimeout, () =>
-                    throw new NetworkException("Handshake with server failed."))
+                await _handshakeCompletedTaskSource.Task.Timeout(
+                    _config.ConnectionTimeout, () =>
+                        throw new NetworkException("Handshake with server failed."))
                 .ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // roll back the logical connection state, so a failed connect
+                // doesn't leave _isConnected set without a live channel/session
+                await DisconnectCoreAsync(quiet: true)
+                    .ConfigureAwait(false);
+
+                throw;
+            }
 
             try
             {
                 await AuthenticateAsync()
                     .ConfigureAwait(false);
+            }
+            catch (SecurityException)
+            {
+                // an explicit authentication failure is a deterministic rejection:
+                // suppress the background auto-reconnect and require an explicit
+                // Connect retry (which resets the suppression)
+                _manualDisconnect.Set();
+
+                await DisconnectCoreAsync(quiet: true)
+                    .ConfigureAwait(false);
+
+                throw;
             }
             catch (Exception)
             {
@@ -660,7 +692,11 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <summary>
     /// Simulates server disconnect race, exposed for unit tests only.
     /// </summary>
-    internal void SimulateDisconnectRace() => _activeCalls = null;
+    internal void SimulateDisconnectRace()
+    {
+        using (_activeCallsLock.Lock())
+            _activeCalls = null;
+    }
 
     /// <summary>
     /// Starts the keep session alive timer.
@@ -1479,6 +1515,12 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             throw new RemoteInvocationException("Client disconnected");
         }
 
+        ClientRpcContext clientRpcContext;
+
+        // the null check and the registration must be atomic: a disconnect that
+        // lands between two separate lock regions would either null the
+        // dictionary (NullReferenceException on Add) or register the call in a
+        // dead dictionary that nobody ever completes
         using (await _activeCallsLock)
         {
             if (_activeCalls == null)
@@ -1486,12 +1528,8 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                 _currentlyPendingMessagesCounter.Signal(signalCount);
                 throw new RemoteInvocationException("Server disconnected");
             }
-        }
 
-        var clientRpcContext = new ClientRpcContext();
-
-        using (await _activeCallsLock)
-        {
+            clientRpcContext = new ClientRpcContext();
             _activeCalls.Add(clientRpcContext.UniqueCallKey, clientRpcContext);
         }
 

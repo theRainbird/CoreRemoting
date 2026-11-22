@@ -241,6 +241,10 @@ public abstract class QuicTransport : IAsyncDisposable
             OnErrorOccured(ex.Message, LastException);
         }
 
+        // safety net: if the close above failed or was skipped, the loop would
+        // otherwise stay blocked on the stream read and never detach
+        _readLoopCts?.Cancel();
+
         await DetachReadLoopAsync()
             .ConfigureAwait(false);
     }

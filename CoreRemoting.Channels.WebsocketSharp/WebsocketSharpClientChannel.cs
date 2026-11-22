@@ -74,10 +74,14 @@ public class WebsocketSharpClientChannel : IClientChannel, IRawMessageTransport
 
         _webSocket.OnMessage += OnMessage;
         _webSocket.OnError += OnError;
-        _webSocket.OnClose += OnDisconnected;
+        // OnClose is intentionally attached only after the new connection is
+        // fully established: a late close event from the previous connection
+        // must not reach the client while the new connection is being set up.
 
         _webSocket.Connect();
         _webSocket.Send(string.Empty);
+
+        _webSocket.OnClose += OnDisconnected;
         return Task.CompletedTask;
     }
 
