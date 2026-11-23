@@ -177,10 +177,9 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             await OnDisconnectedCore()
                 .ConfigureAwait(false);
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
-            // TODO: dispatch the exception
+            OnError(ex);
         }
     }
 
@@ -679,7 +678,9 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                     .ConfigureAwait(false);
         }
 
-        OnDisconnected();
+        await OnDisconnectedCore()
+            .ConfigureAwait(false);
+
         _handshakeCompletedTaskSource = new();
         _authenticationCompletedTaskSource = new();
         Identity = null;
@@ -708,7 +709,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// </summary>
     internal async Task SimulateDisconnectRace()
     {
-        // not sure if we should even lock here
+        // _activeCalls can be reset to null only under a lock
         using (await _activeCallsLock)
             _activeCalls = null;
     }
@@ -1584,7 +1585,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         if (_rawMessageTransport.LastException != null)
         {
             using (await _activeCallsLock)
-                _activeCalls.Remove(clientRpcContext.UniqueCallKey);
+                _activeCalls?.Remove(clientRpcContext.UniqueCallKey);
 
             clientRpcContext.Dispose();
             throw _rawMessageTransport.LastException;
