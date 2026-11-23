@@ -170,7 +170,21 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         DefaultRemotingClient ??= this;
     }
 
-    private void OnDisconnected()
+    private async void OnDisconnected()
+    {
+        try
+        {
+            await OnDisconnectedCore()
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            // ignored
+            // TODO: dispatch the exception
+        }
+    }
+
+    private async Task OnDisconnectedCore()
     {
         // the connection is down: stop the heartbeat so it doesn't keep pinging
         // a dead transport and trigger redundant teardowns
@@ -181,7 +195,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         // the swap must happen under the same lock the RPC registration path uses,
         // otherwise a call registered right after the snapshot below would never
         // be completed and would hang until the invocation timeout
-        using (_activeCallsLock.Lock())
+        using (await _activeCallsLock)
         {
             activeCalls = _activeCalls;
             _activeCalls = null;
@@ -648,7 +662,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                 await _channel.RawMessageTransport.SendMessageAsync(rawData)
                     .ConfigureAwait(false);
             }
-            catch (Exception)
+            catch
             {
                 // ignored
                 // TODO: dispatch the exception
@@ -692,9 +706,10 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <summary>
     /// Simulates server disconnect race, exposed for unit tests only.
     /// </summary>
-    internal void SimulateDisconnectRace()
+    internal async Task SimulateDisconnectRace()
     {
-        using (_activeCallsLock.Lock())
+        // not sure if we should even lock here
+        using (await _activeCallsLock)
             _activeCalls = null;
     }
 

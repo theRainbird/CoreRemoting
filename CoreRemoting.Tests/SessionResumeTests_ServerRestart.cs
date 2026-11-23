@@ -37,7 +37,7 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
             var baseline = client.PendingMessageCount;
 
             // simulate a concurrent disconnect between ensure-connected and the active-calls lock
-            client.SimulateDisconnectRace();
+            await client.SimulateDisconnectRace();
 
             var ex = await Assert.ThrowsAsync<RemoteInvocationException>(() => proxy.EchoAsync("test"));
             Assert.Equal("Server disconnected", ex.Message);
