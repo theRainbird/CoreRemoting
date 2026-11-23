@@ -152,15 +152,16 @@ public class ClientConfig
     /// unexpected loss of connection (e.g. a server restart).
     /// </summary>
     /// <remarks>
-    /// When enabled, the client reconnects in the background with exponential backoff
-    /// (see <see cref="ReconnectMinDelay"/> and <see cref="ReconnectMaxDelay"/>),
+    /// Enabled by default. The client reconnects in the background with exponential
+    /// backoff (see <see cref="ReconnectMinDelay"/> and <see cref="ReconnectMaxDelay"/>),
     /// resumes its session if possible and replays its event subscriptions.
     /// Detection of a dead connection requires an active heartbeat, so
     /// <see cref="KeepSessionAliveInterval"/> must be greater than 0.
-    /// Manual calls to <c>Disconnect</c> always suppress auto-reconnect.
-    /// Disabled by default for backward compatibility.
+    /// Manual calls to <c>Disconnect</c> always suppress auto-reconnect, and an
+    /// explicit authentication failure stops the reconnect loop as well.
+    /// Set this to <c>false</c> to opt out and keep the connection loss terminal.
     /// </remarks>
-    public bool AutoReconnect { get; set; }
+    public bool AutoReconnect { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the initial delay between automatic reconnect attempts, in seconds.

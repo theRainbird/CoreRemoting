@@ -19,7 +19,6 @@ namespace HelloWorld.Client
             // Create and configure new CoreRemoting client 
             using var client = new RemotingClient(new ClientConfig()
             {
-                AutoReconnect = true,
                 ServerHostName = "localhost",
                 Serializer = new NeoBinarySerializerAdapter(), 
                 MessageEncryption = true,                  

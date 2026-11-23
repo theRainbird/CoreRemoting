@@ -21,26 +21,28 @@ A client can transparently recover from a lost connection — for example after 
 
 3. **Subscription recovery.** Event subscriptions (`+=` on a proxied service event) are remembered on the client in a replay registry. After a reconnect the client compares its subscription checksum with the one the server reports for the resumed session. If they differ — which is always the case when the session was resumed on a *different* server instance, whose event hubs start out empty — the client automatically re-subscribes all of its event handlers. This means events raised by the new server instance reach the client's handlers again, without the application re-wiring anything.
 
-#### Enabling automatic reconnect
+#### Automatic reconnect
 
-Automatic reconnection is opt-in. Configure it on the [ClientConfig](https://github.com/theRainbird/CoreRemoting/wiki/Configuration#clientconfig):
+Automatic reconnection is **enabled by default**. Configure it on the [ClientConfig](https://github.com/theRainbird/CoreRemoting/wiki/Configuration#clientconfig):
 
 | Property | Default | Meaning |
 | --- | --- | --- |
-| `AutoReconnect` | `false` | When `true`, the client automatically tries to re-establish the connection after an unexpected loss. |
+| `AutoReconnect` | `true` | When `true`, the client automatically tries to re-establish the connection after an unexpected loss. Set to `false` to keep a lost connection terminal. |
 | `ReconnectMinDelay` | `1` | Initial delay (in seconds) before the first reconnect attempt. |
 | `ReconnectMaxDelay` | `30` | Upper bound (in seconds) for the exponentially growing retry delay. |
 
-A **manual** `Disconnect()` / `DisconnectAsync()` always suppresses auto-reconnect; only an *unexpected* loss (heartbeat timeout or a dropped transport) triggers the retry loop. The loop stops as soon as a connect succeeds, or when the client is disposed.
+A **manual** `Disconnect()` / `DisconnectAsync()` always suppresses auto-reconnect; only an *unexpected* loss (heartbeat timeout or a dropped transport) triggers the retry loop. The loop stops as soon as a connect succeeds, when the client is disposed, or when the server explicitly rejects the session resume (see below). An explicit authentication failure also stops the loop and requires an explicit `Connect()` retry.
 
 #### Resume-refused fallback
 
 If the client asks to resume a specific session but the server cannot honor it (the session is gone, expired, or the signature doesn't match), the behaviour is controlled by the **server-side** `ServerConfig.AllowSessionResumeFallback`. The server decides this policy and communicates it to the client in the handshake:
 
-- `false` (default): the connect fails with a `RemotingException` ("Server refused to resume the requested session …"). This preserves the original, strict behaviour, so existing applications that relied on the exception are unaffected.
-- `true`: the client continues with a freshly created session and re-subscribes its handlers, so the connection stays usable instead of failing.
+- `true` (default): the client continues with a freshly created session and re-subscribes its handlers, so the connection stays usable instead of failing.
+- `false` (strict mode): the connect fails with a `SessionResumeRejectedException` ("Server refused to resume the requested session …").
 
 The flag lives on the server (not the client) because whether a refused resume may be silently downgraded to a new session is a server policy decision. When a new client talks to an older server that does not send the flag, the client reads it as `false` and keeps the strict behaviour.
+
+In strict mode the rejection is **terminal** for the remembered session: the automatic reconnect loop reports the error and stops instead of retrying forever (the parked session can never come back). A subsequent explicit `Connect()` starts a fresh session.
 
 #### Reconnection events
 

@@ -70,12 +70,16 @@ public class ServerConfig
     /// Gets or sets whether this server permits clients to silently fall back to a
     /// newly created session when a requested session resume could not be honored
     /// (for example, when the parked session was lost after a server restart).
-    /// When <c>false</c> (default), a refused resume causes the client to throw a
-    /// <c>RemotingException</c>, preserving the previous behavior.
-    /// When <c>true</c>, the client transparently continues with the new session and
-    /// re-subscribes its event handlers.
+    /// When <c>true</c> (default), the client transparently continues with the new
+    /// session and re-subscribes its event handlers.
+    /// When <c>false</c> (strict mode), a refused resume causes the client to throw
+    /// a <see cref="SessionResumeRejectedException"/> instead.
     /// </summary>
-    public bool AllowSessionResumeFallback { get; set; } = false;
+    /// <remarks>
+    /// Note: an older server that does not send this flag in the handshake is always
+    /// treated as strict, regardless of this default.
+    /// </remarks>
+    public bool AllowSessionResumeFallback { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the serializer to be used (Bson serializer is used, if set to null).

@@ -133,6 +133,13 @@ public partial class SessionResumeTests : SessionResumeTests_Base
     }
 
     [Fact]
+    public void Reconnection_and_resume_fallback_are_enabled_by_default()
+    {
+        Assert.True(new ClientConfig().AutoReconnect);
+        Assert.True(new ServerConfig().AllowSessionResumeFallback);
+    }
+
+    [Fact]
     [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
     public async Task Client_with_mismatching_key_material_should_not_resume_parked_session()
     {
@@ -141,6 +148,10 @@ public partial class SessionResumeTests : SessionResumeTests_Base
         int networkPort = Interlocked.Increment(ref _nextPort);
 
         var server = StartServer(networkPort, AuthenticationRequiredForNegativeTests);
+
+        // this test asserts the strict refused-resume behavior, which requires the
+        // server-side fallback to be disabled (the default is enabled)
+        server.Config.AllowSessionResumeFallback = false;
 
         try
         {
@@ -163,10 +174,9 @@ public partial class SessionResumeTests : SessionResumeTests_Base
                 AuthenticationRequiredForNegativeTests,
                 resumableSessionId: sessionId);
 
-            // The server's AllowSessionResumeFallback defaults to false, so a refused
-            // resume throws instead of falling back to a new session.
+            // strict mode: the refused resume throws instead of falling back to a new session
             var exception =
-                await Assert.ThrowsAsync<RemotingException>(secondClient.ConnectAsync)
+                await Assert.ThrowsAsync<SessionResumeRejectedException>(secondClient.ConnectAsync)
                     .ConfigureAwait(false);
 
             Assert.Contains("refused to resume", exception.Message);
@@ -196,6 +206,10 @@ public partial class SessionResumeTests : SessionResumeTests_Base
 
         var server = StartServer(networkPort, AuthenticationRequiredForNegativeTests);
 
+        // this test asserts the strict refused-resume behavior, which requires the
+        // server-side fallback to be disabled (the default is enabled)
+        server.Config.AllowSessionResumeFallback = false;
+
         try
         {
             Guid sessionId;
@@ -222,11 +236,10 @@ public partial class SessionResumeTests : SessionResumeTests_Base
                 AuthenticationRequiredForNegativeTests,
                 resumableSessionId: sessionId);
 
-            // The server's AllowSessionResumeFallback defaults to false, so a refused
-            // resume throws instead of falling back to a new session.
+            // strict mode: the refused resume throws instead of falling back to a new session.
             // session no longer exists, so the server created a new one and the strict check fails
             var exception =
-                await Assert.ThrowsAsync<RemotingException>(secondClient.ConnectAsync)
+                await Assert.ThrowsAsync<SessionResumeRejectedException>(secondClient.ConnectAsync)
                     .ConfigureAwait(false);
 
             Assert.Contains("refused to resume", exception.Message);

@@ -44,10 +44,6 @@ namespace HelloWorld.Server
                 NetworkPort = 9090,
                 MessageEncryption = true,
                 Serializer = new NeoBinarySerializerAdapter(),
-                // After a hard restart the parked session is gone; let a reconnecting
-                // client fall back to a fresh session instead of failing with
-                // "Server refused to resume the requested session".
-                AllowSessionResumeFallback = true,
                 RegisterServicesAction = container =>
                 {
                     container.RegisterService<ISayHelloService, SayHelloService>(ServiceLifetime.Singleton);

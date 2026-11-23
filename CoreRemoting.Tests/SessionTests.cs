@@ -169,7 +169,10 @@ public class SessionTests : IClassFixture<ServerFixture>
                 MessageEncryption = false,
                 SendTimeout = 0,
                 ServerPort = _serverFixture.Server.Config.NetworkPort,
-                Channel = ClientChannel
+                Channel = ClientChannel,
+                // the server closes the session in this test; auto-reconnect would
+                // race with the dispose and leak a reconnected session into the fixture
+                AutoReconnect = false
             });
 
         client.Connect();
@@ -199,7 +202,10 @@ public class SessionTests : IClassFixture<ServerFixture>
             MessageEncryption = false,
             SendTimeout = 0,
             ServerPort = _serverFixture.Server.Config.NetworkPort,
-            Channel = ClientChannel
+            Channel = ClientChannel,
+            // the server-side session dispose under test would otherwise trigger the
+            // client's auto-reconnect and leak a new session into the shared fixture
+            AutoReconnect = false
         });
 
         await client.ConnectAsync().ConfigureAwait(false);
@@ -260,7 +266,10 @@ public class SessionTests : IClassFixture<ServerFixture>
             MessageEncryption = false,
             SendTimeout = 0,
             ServerPort = _serverFixture.Server.Config.NetworkPort,
-            Channel = ClientChannel
+            Channel = ClientChannel,
+            // the server-side session dispose under test would otherwise trigger the
+            // client's auto-reconnect and leak a new session into the shared fixture
+            AutoReconnect = false
         });
 
         await client.ConnectAsync().ConfigureAwait(false);
@@ -350,7 +359,10 @@ public class SessionTests : IClassFixture<ServerFixture>
             SendTimeout = 0,
             MessageEncryption = false,
             ServerPort = _serverFixture.Server.Config.NetworkPort,
-            Channel = ClientChannel
+            Channel = ClientChannel,
+            // the server closes the session in this test; auto-reconnect would
+            // race with the test's disconnect expectations
+            AutoReconnect = false
         });
 
         var disconnected = new TaskCompletionSource<bool>(); // TaskCreationOptions.RunContinuationsAsynchronously);
@@ -392,7 +404,10 @@ public class SessionTests : IClassFixture<ServerFixture>
             MessageEncryption = false,
             ServerPort = _serverFixture.Server.Config.NetworkPort,
             Channel = ClientChannel,
-            WaitTimeForCurrentlyProcessedMessagesOnDispose = 10000 // 20 seconds for really long wait
+            WaitTimeForCurrentlyProcessedMessagesOnDispose = 10000, // 20 seconds for really long wait
+            // this test verifies dispose-after-close_session semantics;
+            // auto-reconnect would race with the dispose and the tight 2s timeout
+            AutoReconnect = false
         });
 
         client.Connect();
@@ -420,7 +435,10 @@ public class SessionTests : IClassFixture<ServerFixture>
             MessageEncryption = false,
             ServerPort = _serverFixture.Server.Config.NetworkPort,
             Channel = ClientChannel,
-            WaitTimeForGoodbyeOnDisconnect = 100 //We will set such a timeout so that the client is guaranteed not to wait more than 3 seconds.
+            WaitTimeForGoodbyeOnDisconnect = 100, //We will set such a timeout so that the client is guaranteed not to wait more than 3 seconds.
+            // the server closes the session in this test; auto-reconnect would
+            // race with the dispose and the cleanup in the finally block
+            AutoReconnect = false
         });
 
         try

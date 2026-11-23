@@ -487,7 +487,8 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
         try
         {
             // The server opts into letting clients fall back to a new session when a
-            // resume is refused. Without this flag (the default) the same scenario throws.
+            // resume is refused (this is also the default; strict mode requires
+            // AllowSessionResumeFallback = false).
             server.Config.AllowSessionResumeFallback = true;
 
             var bogusSessionId = Guid.NewGuid();
@@ -506,6 +507,66 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
             await Task.Delay(500).ConfigureAwait(false);
             CheckServerErrorCount();
             await server.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public async Task Default_config_recovers_after_server_restart_without_session_handover()
+    {
+        using var ctx = ValidationSyncContext.Install();
+        int networkPort = Interlocked.Increment(ref _nextPort);
+
+        var serverA = StartServer(networkPort, AuthenticationRequiredForNegativeTests);
+        try
+        {
+            // no flags set anywhere: AutoReconnect and AllowSessionResumeFallback
+            // are both enabled by default
+            using var client = CreateClient(networkPort, AuthenticationRequiredForNegativeTests);
+            await client.ConnectAsync().ConfigureAwait(false);
+
+            var originalSessionId = client.SessionId;
+            var proxy = client.CreateProxy<ITestService>();
+
+            int clientEventCount = 0;
+            proxy.ServiceEvent += () => Interlocked.Increment(ref clientEventCount);
+
+            proxy.FireServiceEvent();
+            await WaitUntilAsync(() => Volatile.Read(ref clientEventCount) == 1, TimeSpan.FromSeconds(5));
+
+            // server A crashes and its parked sessions are NOT handed over:
+            // the remembered session is gone for good
+            await serverA.HardKill().ConfigureAwait(false);
+            await serverA.DisposeAsync().ConfigureAwait(false);
+
+            await WaitUntilAsync(() => !client.IsConnected, TimeSpan.FromSeconds(5));
+
+            var serverB = StartServer(networkPort, AuthenticationRequiredForNegativeTests);
+            try
+            {
+                // the background auto-reconnect requests the resume of the lost
+                // session; the server cannot honor it and — because the fallback is
+                // enabled by default — the client silently continues with a NEW
+                // session instead of throwing
+                await WaitUntilAsync(() => client.IsConnected, TimeSpan.FromSeconds(10));
+
+                Assert.NotNull(client.SessionId);
+                Assert.NotEqual(originalSessionId, client.SessionId);
+
+                // the replayed subscription receives events raised by the new server
+                proxy.FireServiceEvent();
+                await WaitUntilAsync(() => Volatile.Read(ref clientEventCount) >= 2, TimeSpan.FromSeconds(5));
+            }
+            finally
+            {
+                await Task.Delay(500).ConfigureAwait(false);
+                CheckServerErrorCount();
+                await serverB.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            await Task.Delay(500).ConfigureAwait(false);
         }
     }
 }

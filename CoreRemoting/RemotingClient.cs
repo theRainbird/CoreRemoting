@@ -999,13 +999,20 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         // The client explicitly requested to resume a specific session, but the server
         // created a new session instead. Whether the client may silently fall back to
         // this new session is decided by the SERVER (ServerConfig.AllowSessionResumeFallback),
-        // communicated here in the handshake. The default is OFF, so a refused resume
-        // keeps throwing — this preserves the previous (backward compatible) behavior.
+        // communicated here in the handshake. If the server forbids the fallback,
+        // the resume is rejected.
         if (requestedSessionId != null &&
             _sessionId != requestedSessionId.Value &&
             !handshakeMessage.AllowSessionResumeFallback)
         {
-            var exception = new RemotingException(
+            // The rejection is terminal for the requested session identity: the
+            // parked session is gone and can never be resumed. Forget the remembered
+            // session ID so a later explicit Connect() starts a fresh session
+            // instead of being rejected again by the same stale ID.
+            lock (_sessionLock)
+                _rememberedSessionId = Guid.Empty;
+
+            var exception = new SessionResumeRejectedException(
                 $"Server refused to resume the requested session {requestedSessionId.Value}.");
 
             _handshakeCompletedTaskSource.TrySetException(exception);
@@ -1461,6 +1468,16 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                 }
                 catch (OperationCanceledException)
                 {
+                    return;
+                }
+                catch (SessionResumeRejectedException ex)
+                {
+                    // A strict server refused the resume. Retrying can never succeed,
+                    // because the parked session is gone forever. Report the error
+                    // and stop the loop instead of hammering the server indefinitely.
+                    // An explicit Connect() by the application can still establish
+                    // a fresh session.
+                    OnError(ex);
                     return;
                 }
                 catch (Exception ex)
