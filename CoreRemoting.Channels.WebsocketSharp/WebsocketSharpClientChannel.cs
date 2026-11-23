@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using CoreRemoting.Channels.Common;
 using WebSocketSharp;
 using WebSocketSharp.Net;
 
@@ -8,22 +9,9 @@ namespace CoreRemoting.Channels.WebsocketSharp;
 /// <summary>
 /// Client side websocket channel implementation based on websocket-sharp.
 /// </summary>
-public class WebsocketSharpClientChannel : IClientChannel, IRawMessageTransport
+public class WebsocketSharpClientChannel : MessageTransportBase, IClientChannel
 {
     private WebSocket _webSocket;
-
-    /// <summary>
-    /// Event: Fires when a message is received from server.
-    /// </summary>
-    public event Action<byte[]> ReceiveMessage;
-
-    /// <summary>
-    /// Event: Fires when an error is occurred.
-    /// </summary>
-    public event Action<string, Exception> ErrorOccured;
-
-    /// <inheritdoc />
-    public event Action Disconnected;
 
     /// <summary>
     /// Initializes the channel.
@@ -70,7 +58,7 @@ public class WebsocketSharpClientChannel : IClientChannel, IRawMessageTransport
         // subscription and deliver each received message multiple times.
         _webSocket.OnMessage -= OnMessage;
         _webSocket.OnError -= OnError;
-        _webSocket.OnClose -= OnDisconnected;
+        _webSocket.OnClose -= OnServerDisconnected;
 
         _webSocket.OnMessage += OnMessage;
         _webSocket.OnError += OnError;
@@ -81,13 +69,13 @@ public class WebsocketSharpClientChannel : IClientChannel, IRawMessageTransport
         _webSocket.Connect();
         _webSocket.Send(string.Empty);
 
-        _webSocket.OnClose += OnDisconnected;
+        _webSocket.OnClose += OnServerDisconnected;
         return Task.CompletedTask;
     }
 
-    private void OnDisconnected(object o, CloseEventArgs closeEventArgs)
+    private void OnServerDisconnected(object o, CloseEventArgs closeEventArgs)
     {
-        Disconnected?.Invoke();
+        OnDisconnected();
     }
 
     /// <summary>
@@ -99,7 +87,7 @@ public class WebsocketSharpClientChannel : IClientChannel, IRawMessageTransport
     {
         LastException = new NetworkException(e.Message, e.Exception);
 
-        ErrorOccured?.Invoke(e.Message, e.Exception);
+        OnErrorOccured(e.Message, e.Exception);
     }
 
     /// <summary>
@@ -152,21 +140,13 @@ public class WebsocketSharpClientChannel : IClientChannel, IRawMessageTransport
     /// <param name="e">Event arguments containing the message content</param>
     private void OnMessage(object sender, MessageEventArgs e)
     {
-        ReceiveMessage?.Invoke(e.RawData);
+        OnReceiveMessage(e.RawData);
     }
 
-    /// <summary>
-    /// Sends a message to the server.
-    /// </summary>
-    /// <param name="rawMessage">Raw message data</param>
-    public Task<bool> SendMessageAsync(byte[] rawMessage)
+    /// <inheritdoc />
+    protected override Task<bool> SendCoreAsync(byte[] rawMessage)
     {
         _webSocket.Send(rawMessage);
         return Task.FromResult(true);
     }
-
-    /// <summary>
-    /// Gets or sets the last exception.
-    /// </summary>
-    public NetworkException LastException { get; set; }
 }

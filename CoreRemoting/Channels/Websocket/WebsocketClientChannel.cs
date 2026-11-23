@@ -22,9 +22,6 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
     private Uri Uri { get; set; }
 
     /// <inheritdoc />
-    public bool IsConnected { get; private set; }
-
-    /// <inheritdoc />
     public IRawMessageTransport RawMessageTransport => this;
 
     private ClientWebSocket ClientWebSocket { get; set; }
@@ -71,7 +68,7 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
             new Uri(Url), CancellationToken.None)
                 .ConfigureAwait(false);
 
-        IsConnected = true;
+        IsConnectedFlag = true;
 
         await StartListening()
             .ConfigureAwait(false);
@@ -88,7 +85,7 @@ public class WebsocketClientChannel : WebsocketTransport, IClientChannel
         if (!IsConnected)
             return;
 
-        IsConnected = false;
+        IsConnectedFlag = false;
 
         // send close frame to the server,
         // the read loop receives the server's close reply, sends ours back,

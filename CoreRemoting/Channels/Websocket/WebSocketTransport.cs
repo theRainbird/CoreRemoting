@@ -1,9 +1,9 @@
 using System;
 using System.Net.WebSockets;
-using CoreRemoting.IO;
-using System.Threading.Tasks;
 using System.Threading;
-using CoreRemoting.Threading;
+using System.Threading.Tasks;
+using CoreRemoting.Channels.Common;
+using CoreRemoting.IO;
 using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
@@ -11,93 +11,29 @@ namespace CoreRemoting.Channels.Websocket;
 /// <summary>
 /// Abstract web socket transport for reading and writing messages.
 /// </summary>
-public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposable
+public abstract class WebsocketTransport : ReadLoopTransportBase
 {
-    /// <summary>
-    /// Buffer size to read incoming messages.
-    /// Note: LOH threshold is ~85 kilobytes
-    /// </summary>
-    protected const int BufferSize = 16 * 1024;
-
     /// <summary>
     /// Max time to wait for the peer to complete the close handshake on disconnect.
     /// After this timeout the read loop is cancelled, which may cause an RST.
     /// </summary>
     protected virtual int CloseHandshakeTimeoutMs => 1000;
 
-    /// <inheritdoc />
-    public NetworkException LastException { get; set; }
-
-    /// <summary>
-    /// Event: fires when the channel is connected.
-    /// </summary>
-    public event Action Connected;
-
-    /// <summary>
-    /// Fires the <see cref="Connected"/> event.
-    /// </summary>
-    protected void OnConnected() =>
-        Connected?.Invoke();
-
-    /// <inheritdoc />
-    public event Action Disconnected;
-
-    /// <summary>
-    /// Fires the <see cref="Disconnected"/> event.
-    /// </summary>
-    protected void OnDisconnected() =>
-        Disconnected?.Invoke();
-
-    /// <inheritdoc />
-    public event Action<byte[]> ReceiveMessage;
-
-    /// <summary>
-    /// Fires the <see cref="ErrorOccured"/> event.
-    /// </summary>
-    protected void OnErrorOccured(string error, Exception ex) =>
-        ErrorOccured?.Invoke(error, ex);
-
-    /// <inheritdoc />
-    public event Action<string, Exception> ErrorOccured;
-
     /// <summary>
     /// Web socket used to read and write messages.
     /// </summary>
     protected abstract WebSocket WebSocket { get; }
 
-    private Task _readLoop;
-    private CancellationTokenSource _readLoopCts;
-    private int _readLoopInstance;
-
-    private AsyncLock ReceiveLock { get; } = new();
-
-    private AsyncLock SendLock { get; } = new();
-
-    /// <summary>
-    /// Starts listening for incoming messages.
-    /// A running read loop from a previous connection is cancelled and awaited first.
-    /// </summary>
-    public virtual async Task<Guid> StartListening()
-    {
-        // increment instance before detaching so the old loop knows it's obsolete
-        var instance = Interlocked.Increment(ref _readLoopInstance);
-
-        using var cts = Interlocked.Exchange(ref _readLoopCts, new CancellationTokenSource());
-        cts?.Cancel();
-
-        await DetachReadLoopAsync()
-            .ConfigureAwait(false);
-
-        _readLoop = ReadIncomingMessages(instance, _readLoopCts.Token);
-
-        return Guid.Empty;
-    }
+    // the socket captured by the running read loop, so that the loop's finally
+    // block disposes the very socket it was started for, even if the property
+    // has already been replaced by a reconnect
+    private WebSocket _loopWebSocket;
 
     /// <summary>
     /// Completes the close handshake with the peer, then awaits the read loop.
     /// The loop itself closes the underlying socket in its finally block.
     /// </summary>
-    public virtual async Task DisconnectAsync()
+    public override async Task DisconnectAsync()
     {
         var ws = WebSocket;
         if (ws != null)
@@ -113,114 +49,97 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
         if (completed != detachTask)
         {
             // peer did not complete the handshake in time, force cancel
-            _readLoopCts?.Cancel();
+            CancelReadLoop();
             await detachTask.ConfigureAwait(false);
         }
     }
 
-    /// <inheritdoc/>
-    public virtual async ValueTask DisposeAsync()
-    {
-        await DisconnectAsync()
-            .ConfigureAwait(false);
-
-        using var cts = Interlocked.Exchange(ref _readLoopCts, null);
-        cts?.Cancel();
-
-        ReceiveLock.TryDispose();
-        SendLock.TryDispose();
-    }
-
     /// <summary>
-    /// Atomically detaches the current read loop and awaits its completion.
-    /// </summary>
-    private async Task DetachReadLoopAsync()
-    {
-        var loop = _readLoop;
-        _readLoop = null;
-
-        if (loop != null)
-            await loop.ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Reads incoming websocket messages and fires the <see cref="ReceiveMessage"/> event.
+    /// Reads incoming websocket messages and fires the
+    /// <see cref="MessageTransportBase.ReceiveMessage"/> event.
     /// Responds to close frames to complete the close handshake.
     /// </summary>
-    private async Task ReadIncomingMessages(int instance, CancellationToken ct)
+    /// <param name="ct">Cancellation token of the read loop</param>
+    protected override async Task ReceiveLoopBodyAsync(CancellationToken ct)
     {
         var buffer = new byte[BufferSize];
         var segment = new ArraySegment<byte>(buffer);
         var webSocket = WebSocket;
 
-        try
+        _loopWebSocket = webSocket;
+
+        while (webSocket.State == WebSocketState.Open && !ct.IsCancellationRequested)
         {
-            while (webSocket.State == WebSocketState.Open && !ct.IsCancellationRequested)
+            using var ms = new SmallBlockMemoryStream();
+            var closed = false;
+
+            while (true)
             {
-                using var ms = new SmallBlockMemoryStream();
-                var closed = false;
+                var result = default(WebSocketReceiveResult);
 
-                while (true)
+                using (await ReceiveLock)
+                    result = await webSocket.ReceiveAsync(segment, ct)
+                        .ConfigureAwait(false);
+
+                if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    var result = default(WebSocketReceiveResult);
-
-                    using (await ReceiveLock)
-                        result = await webSocket.ReceiveAsync(segment, ct)
-                            .ConfigureAwait(false);
-
-                    if (result.MessageType == WebSocketMessageType.Close)
-                    {
-                        closed = true;
-                        break;
-                    }
-
-                    ms.Write(buffer, 0, result.Count);
-
-                    if (result.EndOfMessage)
-                        break;
-                }
-
-                if (closed)
-                {
-                    // peer sent a close frame, send ours back to complete the handshake
-                    await TrySendCloseFrame(webSocket);
+                    closed = true;
                     break;
                 }
 
-                if (ct.IsCancellationRequested)
+                ms.Write(buffer, 0, result.Count);
+
+                if (result.EndOfMessage)
                     break;
-
-                var message = Array.Empty<byte>();
-                if (ms.Length > 0)
-                {
-                    message = new byte[(int)ms.Length];
-                    ms.Position = 0;
-                    ms.Read(message, 0, message.Length);
-                }
-
-                ReceiveMessage?.Invoke(message);
             }
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            // expected on explicit disconnect
-        }
-        catch (Exception ex)
-        {
-            LastException = ex as NetworkException ??
-                new NetworkException(ex.Message, ex);
 
-            ErrorOccured?.Invoke(ex.Message, LastException);
-        }
-        finally
-        {
-            webSocket.TryDispose();
+            if (closed)
+            {
+                // peer sent a close frame, send ours back to complete the handshake
+                await TrySendCloseFrame(webSocket);
+                break;
+            }
 
-            // the loop is the single fire point
-            if (Volatile.Read(ref _readLoopInstance) == instance)
-                OnDisconnected();
+            if (ct.IsCancellationRequested)
+                break;
+
+            var message = Array.Empty<byte>();
+            if (ms.Length > 0)
+            {
+                message = new byte[(int)ms.Length];
+                ms.Position = 0;
+                ms.Read(message, 0, message.Length);
+            }
+
+            OnReceiveMessage(message);
         }
     }
+
+    /// <summary>
+    /// Disposes the socket of the ended loop. The connection state is managed
+    /// by the client channel, so the base connected flag is intentionally
+    /// not touched here.
+    /// </summary>
+    /// <param name="instance">Loop instance identity</param>
+    protected override Task OnReadLoopEndedAsync(int instance)
+    {
+        _loopWebSocket?.TryDispose();
+        _loopWebSocket = null;
+
+        // the loop is the single fire point
+        if (IsCurrentReadLoop(instance))
+            OnDisconnected();
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Not used: a websocket message spans multiple frames and is assembled
+    /// in the <see cref="ReceiveLoopBodyAsync"/> override.
+    /// </summary>
+    /// <param name="ct">Cancellation token of the read loop</param>
+    protected override Task<byte[]> ReadNextAsync(CancellationToken ct) =>
+        Task.FromResult<byte[]>(null);
 
     private async Task TrySendCloseFrame(WebSocket webSocket, string status = "")
     {
@@ -240,32 +159,21 @@ public abstract class WebsocketTransport : IRawMessageTransport, IAsyncDisposabl
     }
 
     /// <inheritdoc />
-    public async Task<bool> SendMessageAsync(byte[] rawMessage)
+    protected override async Task<bool> SendCoreAsync(byte[] rawMessage)
     {
-        try
+        var ws = WebSocket;
+        if (ws == null || ws.State != WebSocketState.Open)
         {
-            var ws = WebSocket;
-            if (ws == null || ws.State != WebSocketState.Open)
-            {
-                LastException = new NetworkException($"WebSocket is not connected, cannot send.");
-                return false;
-            }
-
-            using (await SendLock)
-                await ws.SendAsync(
-                    new ArraySegment<byte>(rawMessage),
-                        WebSocketMessageType.Binary, true, CancellationToken.None)
-                            .ConfigureAwait(false);
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LastException = ex as NetworkException ??
-                new NetworkException(ex.Message, ex);
-
-            ErrorOccured?.Invoke(ex.Message, LastException);
+            LastException = new NetworkException("WebSocket is not connected, cannot send.");
             return false;
         }
+
+        using (await SendLock)
+            await ws.SendAsync(
+                new ArraySegment<byte>(rawMessage),
+                    WebSocketMessageType.Binary, true, CancellationToken.None)
+                        .ConfigureAwait(false);
+
+        return true;
     }
 }

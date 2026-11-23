@@ -2,7 +2,7 @@
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
-using CoreRemoting.Channels.Websocket;
+using CoreRemoting.Channels.Common;
 using static CoreRemoting.Channels.Null.NullMessageQueue;
 
 namespace CoreRemoting.Channels.Null;
@@ -10,12 +10,12 @@ namespace CoreRemoting.Channels.Null;
 /// <summary>
 /// Simple in-process channel, server-side.
 /// </summary>
-public class NullServerChannel : IServerChannel
+public class NullServerChannel : ServerChannelBase
 {
     /// <inheritdoc/>
-    public void Init(IRemotingServer server)
+    public override void Init(IRemotingServer server)
     {
-        Server = server;
+        base.Init(server);
         SetUrl(Server.Config.HostName, Server.Config.NetworkPort);
     }
 
@@ -27,11 +27,6 @@ public class NullServerChannel : IServerChannel
     internal void SetUrl(string host, int port) =>
         Url = $"null://{host}:{port}/rpc";
 
-    /// <summary>
-    /// Gets the associated remoting server.
-    /// </summary>
-    public IRemotingServer Server { get; private set; }
-
     internal ConcurrentDictionary<Guid, NullServerConnection> Connections { get; } = new();
 
     private CancellationTokenSource _acceptCts;
@@ -39,11 +34,13 @@ public class NullServerChannel : IServerChannel
     /// <inheritdoc/>
     public string Url { get; private set; }
 
-    /// <inheritdoc/>
-    public bool IsListening { get; private set; }
+    private bool _isListening;
 
     /// <inheritdoc/>
-    public async ValueTask DisposeAsync()
+    public override bool IsListening => _isListening;
+
+    /// <inheritdoc/>
+    public override async ValueTask DisposeAsync()
     {
         StopListening();
 
@@ -54,9 +51,9 @@ public class NullServerChannel : IServerChannel
     }
 
     /// <inheritdoc/>
-    public void StartListening()
+    public override void StartListening()
     {
-        IsListening = true;
+        _isListening = true;
         StartListener(Url);
 
         _acceptCts = new CancellationTokenSource();
@@ -71,11 +68,11 @@ public class NullServerChannel : IServerChannel
     }
 
     /// <inheritdoc/>
-    public void StopListening()
+    public override void StopListening()
     {
         if (IsListening)
         {
-            IsListening = false;
+            _isListening = false;
             StopListener(Url);
         }
 

@@ -2,15 +2,15 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.Channels.Common;
 
 namespace CoreRemoting.Channels.NamedPipe;
 
 /// <summary>
 /// Simple synchronous Named Pipe server.
 /// </summary>
-public class NamedPipeServerChannel : IServerChannel
+public class NamedPipeServerChannel : ServerChannelBase
 {
-	private IRemotingServer _remotingServer;
 	private readonly ConcurrentDictionary<string, SimpleNamedPipeConnection> _connections;
 	private SimpleNamedPipeServer _pipeServer;
 	private readonly CancellationTokenSource _cancellationTokenSource;
@@ -30,17 +30,17 @@ public class NamedPipeServerChannel : IServerChannel
 	/// Initializes the channel.
 	/// </summary>
 	/// <param name="server">CoreRemoting server</param>
-	public void Init(IRemotingServer server)
+	public override void Init(IRemotingServer server)
 	{
-		_remotingServer = server ?? throw new ArgumentNullException(nameof(server));
+		base.Init(server);
 	}
 
 	/// <summary>
 	/// Start listening for client requests.
 	/// </summary>
-	public void StartListening()
+	public override void StartListening()
 	{
-		if (_remotingServer == null)
+		if (Server == null)
 			throw new InvalidOperationException("Channel is not initialized.");
 
 		if (_isListening)
@@ -58,7 +58,7 @@ public class NamedPipeServerChannel : IServerChannel
 	/// <summary>
 	/// Stop listening for client requests.
 	/// </summary>
-	public void StopListening()
+	public override void StopListening()
 	{
 		if (!_isListening)
 			return;
@@ -91,7 +91,7 @@ public class NamedPipeServerChannel : IServerChannel
 	/// <summary>
 	/// Gets whether the channel is listening or not.
 	/// </summary>
-	public bool IsListening => _isListening;
+	public override bool IsListening => _isListening;
 
 	/// <summary>
 	/// Tracing handler.
@@ -108,7 +108,7 @@ public class NamedPipeServerChannel : IServerChannel
 				if (serverStream != null)
 				{
 					var connectionId = Guid.NewGuid().ToString();
-					var connection = new SimpleNamedPipeConnection(connectionId, serverStream, _remotingServer);
+					var connection = new SimpleNamedPipeConnection(connectionId, serverStream, Server);
 					_connections.TryAdd(connectionId, connection);
 
 					// Subscribe to connection disconnection to remove from collection
@@ -142,13 +142,13 @@ public class NamedPipeServerChannel : IServerChannel
 	private string GetPipeName()
 	{
 		// Use configured pipe name or default
-		return _remotingServer.Config?.ChannelConnectionName ?? "CoreRemoting";
+		return Server.Config?.ChannelConnectionName ?? "CoreRemoting";
 	}
 
 	/// <summary>
 	/// Stops listening and frees managed resources.
 	/// </summary>
-	public async ValueTask DisposeAsync()
+	public override async ValueTask DisposeAsync()
 	{
 		StopListening();
 		await Task.CompletedTask;

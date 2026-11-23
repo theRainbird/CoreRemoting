@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
+using CoreRemoting.Channels.Common;
 using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Websocket;
@@ -10,24 +11,23 @@ namespace CoreRemoting.Channels.Websocket;
 /// <summary>
 /// Server side websocket channel implementation based on System.Net.Websockets and HttpListener.
 /// </summary>
-public class WebsocketServerChannel : IServerChannel
+public class WebsocketServerChannel : ServerChannelBase
 {
     private HttpListener HttpListener { get; set; }
-
-    private IRemotingServer Server { get; set; }
 
     private ConcurrentDictionary<Guid, WebsocketServerConnection> Connections { get; } = new();
 
     /// <inheritdoc/>
-    public bool IsListening => HttpListener.IsListening;
+    public override bool IsListening => HttpListener.IsListening;
 
     /// <inheritdoc/>
-    public void Init(IRemotingServer server)
+    public override void Init(IRemotingServer server)
     {
         if (!HttpListener.IsSupported)
             throw new NotSupportedException("HttpListener not supported by this platform.");
 
-        Server = server ?? throw new ArgumentNullException(nameof(server));
+        base.Init(server);
+
         HttpListener = new();
 
         var prefix = "http://" +
@@ -38,7 +38,7 @@ public class WebsocketServerChannel : IServerChannel
     }
 
     /// <inheritdoc/>
-    public void StartListening()
+    public override void StartListening()
     {
         HttpListener.Start();
 
@@ -86,31 +86,18 @@ public class WebsocketServerChannel : IServerChannel
         var sessionId = await connection.StartListening()
             .ConfigureAwait(false);
 
-        Connections[sessionId] = connection;
-
-        // don't await DisposeAsync from the loop's finally, that would deadlock;
-        // dispose off the loop's thread, after it has fully completed
-        connection.Disconnected += () =>
-        {
-            if (Connections.TryRemove(sessionId, out var conn))
-            {
-                _ = Task.Run(async () =>
-                    // async void event handler should never throw
-                    await conn.TryDisposeAsync()
-                        .ConfigureAwait(false));
-            }
-        };
+        RegisterConnection(Connections, sessionId, connection);
     }
 
     /// <inheritdoc/>
-    public void StopListening()
+    public override void StopListening()
     {
         if (HttpListener != null && IsListening)
             HttpListener.Stop();
     }
 
     /// <inheritdoc/>
-    public async ValueTask DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         StopListening();
         HttpListener = null;
@@ -118,8 +105,7 @@ public class WebsocketServerChannel : IServerChannel
         var connections = Connections.Values.ToArray();
         Connections.Clear();
 
-        foreach (var conn in connections)
-            await conn.TryDisposeAsync()
-                .ConfigureAwait(false);
+        await DisposeConnectionsAsync(connections)
+            .ConfigureAwait(false);
     }
 }

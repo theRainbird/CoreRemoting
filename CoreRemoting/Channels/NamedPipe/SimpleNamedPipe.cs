@@ -1,12 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipes;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.Channels.Common;
 using CoreRemoting.RpcMessaging;
-using CoreRemoting.Threading;
-using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.NamedPipe;
 
@@ -83,30 +81,12 @@ public class SimpleNamedPipeServer : IDisposable
 /// <summary>
 /// Simple synchronous Named Pipe connection.
 /// </summary>
-public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
+public class SimpleNamedPipeConnection : ServerConnectionBase, IDisposable
 {
 	private readonly string _connectionId;
 	private readonly NamedPipeServerStream _serverStream;
-	private readonly IRemotingServer _server;
-	private RemotingSession _session;
 	private readonly CancellationTokenSource _cancellationTokenSource;
 	private bool _isDisposed;
-	private readonly AsyncLock _sendLock;
-
-	/// <summary>
-	/// Event: Fires when a message is received from client.
-	/// </summary>
-	public event Action<byte[]> ReceiveMessage;
-
-	/// <summary>
-	/// Event: Fires when an error occurred.
-	/// </summary>
-	public event Action<string, Exception> ErrorOccured;
-
-	/// <summary>
-	/// Event: Fires when the connection is disconnected.
-	/// </summary>
-	public event Action Disconnected;
 
 	/// <summary>
 	/// Event: Fires when the connection is disposed.
@@ -119,11 +99,6 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 	public Action<string> TraceWriteLine { get; set; }
 
 	/// <summary>
-	/// Gets or sets the last exception.
-	/// </summary>
-	public NetworkException LastException { get; set; }
-
-	/// <summary>
 	/// Initializes a new instance of the <see cref="SimpleNamedPipeConnection"/> class.
 	/// </summary>
 	/// <param name="connectionId">The unique identifier for the connection.</param>
@@ -133,9 +108,8 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 	{
 		_connectionId = connectionId ?? throw new ArgumentNullException(nameof(connectionId));
 		_serverStream = serverStream ?? throw new ArgumentNullException(nameof(serverStream));
-		_server = server ?? throw new ArgumentNullException(nameof(server));
+		RemotingServer = server ?? throw new ArgumentNullException(nameof(server));
 		_cancellationTokenSource = new CancellationTokenSource();
-		_sendLock = new AsyncLock();
 	}
 
 	/// <summary>
@@ -152,7 +126,7 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 		finally
 		{
 			// Fire disconnected event before disposing
-			Disconnected?.Invoke();
+			OnDisconnected();
 			await DisposeAsync().ConfigureAwait(false);
 		}
 	}
@@ -162,9 +136,9 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 		try
 		{
 			// The first message is the handshake
-			var handshakeBytes = await ReadMessageAsync();
+			var handshakeBytes = await ReadMessageAsync().ConfigureAwait(false);
 			var handshake = handshakeBytes is { Length: > 0 }
-				? _server.Serializer.Deserialize<ClientHandshakeMessage>(handshakeBytes)
+				? RemotingServer.Serializer.Deserialize<ClientHandshakeMessage>(handshakeBytes)
 				: new ClientHandshakeMessage();
 
 			handshake.ClientAddress = $"NamedPipe:{_connectionId}";
@@ -191,7 +165,7 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 					// Debug logging for NamedPipe message handling
 					TraceWriteLine?.Invoke(
 						$"[NamedPipe] Received message of {messageData.Length} bytes for session {_connectionId}");
-					ReceiveMessage?.Invoke(messageData);
+					OnReceiveMessage(messageData);
 				}
 			}
 		}
@@ -200,10 +174,19 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 			if (!_isDisposed)
 			{
 				LastException = new NetworkException($"Connection error: {ex.Message}", ex);
-				ErrorOccured?.Invoke($"Connection {_connectionId} error: {ex.Message}", ex);
+				OnErrorOccured($"Connection {_connectionId} error: {ex.Message}", ex);
 			}
 		}
 	}
+
+	/// <inheritdoc />
+	/// <remarks>
+	/// This connection pumps its messages through the awaited <see cref="HandleClientAsync"/>
+	/// loop and does not use the base read loop; the implementation is provided for
+	/// interface completeness.
+	/// </remarks>
+	protected override Task<byte[]> ReadNextAsync(CancellationToken ct) =>
+		ReadMessageAsync();
 
 	private async Task<byte[]> ReadMessageAsync()
 	{
@@ -212,49 +195,10 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 			if (_serverStream == null || !_serverStream.IsConnected)
 				return null;
 
-			// Read message length (4 bytes) - ensure exactly 4 bytes are read
-			var lengthBuffer = new byte[4];
-			var headerBytesRead = 0;
-			while (headerBytesRead < 4)
-			{
-				var readNow = await _serverStream
-					.ReadAsync(lengthBuffer, headerBytesRead, 4 - headerBytesRead, _cancellationTokenSource.Token)
-					.ConfigureAwait(false);
-				if (readNow == 0)
-					return null;
-				headerBytesRead += readNow;
-			}
-
-			var messageLength = BitConverter.ToInt32(lengthBuffer, 0);
-
 			// Allow large messages with a sanity cap at 1GB to avoid OOM
-			if (messageLength < 0 || messageLength > 1_073_741_824)
-				throw new InvalidOperationException($"Invalid message length: {messageLength}");
-
-			// Read message content
-			var messageBuffer = new byte[messageLength];
-			var totalBytesRead = 0;
-
-			while (totalBytesRead < messageLength)
-			{
-				if (!_serverStream.IsConnected)
-				{
-					// Connection lost during read
-					return null;
-				}
-
-				var bytesToRead = messageLength - totalBytesRead;
-				var read = await _serverStream
-					.ReadAsync(messageBuffer, totalBytesRead, bytesToRead, _cancellationTokenSource.Token)
-					.ConfigureAwait(false);
-
-				if (read == 0)
-					return null;
-
-				totalBytesRead += read;
-			}
-
-			return messageBuffer;
+			return await LengthPrefixedFrame
+				.ReadFrameAsync(_serverStream, 1_073_741_824, _cancellationTokenSource.Token)
+				.ConfigureAwait(false);
 		}
 		catch (OperationCanceledException)
 		{
@@ -264,6 +208,11 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 		{
 			return null;
 		}
+		catch (InvalidOperationException)
+		{
+			// invalid message length from the framing helper
+			throw;
+		}
 		catch (Exception ex)
 		{
 			throw new NetworkException($"Failed to read message: {ex.Message}", ex);
@@ -272,58 +221,39 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 
 	private async Task<bool> CreateSessionAsNeeded(ClientHandshakeMessage handshake)
 	{
-		if (_session != null)
+		if (Session != null)
 			return false;
 
-		_session = await _server.SessionRepository
-			.ResumeOrCreateSession(handshake, _server, this);
-
-		_session.BeforeDispose += BeforeDisposeSession;
+		await CreateRemotingSessionAsync(handshake).ConfigureAwait(false);
 
 		return true;
 	}
 
-	private void BeforeDisposeSession()
+	/// <inheritdoc />
+	protected override void BeforeDisposeSession()
 	{
-		_session = null;
+		Session = null;
 		// Don't dispose the connection here - just like in WebSocket implementation
 		// The connection should only be disposed when the client actually disconnects
 		// or when the server stops. This prevents premature disconnection.
 	}
 
-	/// <summary>
-	/// Sends a message asynchronously to the connected client.
-	/// </summary>
-	/// <param name="rawMessage">The raw message data to send.</param>
-	/// <returns>A task that represents the asynchronous operation. The task result indicates whether the message was sent successfully.</returns>
-	public async Task<bool> SendMessageAsync(byte[] rawMessage)
+	/// <inheritdoc />
+	protected override async Task<bool> SendCoreAsync(byte[] rawMessage)
 	{
 		if (_isDisposed || rawMessage == null || _serverStream == null)
 			return false;
 
-		using (await _sendLock)
+		using (await SendLock)
 		{
+			if (!_serverStream.IsConnected)
+				return false;
+
 			try
 			{
-				if (!_serverStream.IsConnected)
-					return false;
-
-				var lengthBuffer = BitConverter.GetBytes(rawMessage.Length);
-				await _serverStream.WriteAsync(lengthBuffer, 0, 4, _cancellationTokenSource.Token)
+				await LengthPrefixedFrame
+					.WriteFrameAsync(_serverStream, rawMessage, _cancellationTokenSource.Token)
 					.ConfigureAwait(false);
-
-				// Send content in chunks to bypass OS pipe write size limits
-				const int MaxChunkSize = 64 * 1024; // 64 KiB
-				var offset = 0;
-				while (offset < rawMessage.Length)
-				{
-					var toWrite = Math.Min(MaxChunkSize, rawMessage.Length - offset);
-					await _serverStream.WriteAsync(rawMessage, offset, toWrite, _cancellationTokenSource.Token)
-						.ConfigureAwait(false);
-					offset += toWrite;
-				}
-
-				await _serverStream.FlushAsync(_cancellationTokenSource.Token).ConfigureAwait(false);
 
 				return true;
 			}
@@ -331,20 +261,21 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 			{
 				return false;
 			}
-			catch (Exception ex)
-			{
-				LastException = new NetworkException($"Failed to send message: {ex.Message}", ex);
-				ErrorOccured?.Invoke($"Connection {_connectionId} send error: {ex.Message}", ex);
-				return false;
-			}
 		}
+	}
+
+	/// <inheritdoc />
+	protected override void ReportSendError(Exception ex)
+	{
+		LastException = new NetworkException($"Failed to send message: {ex.Message}", ex);
+		OnErrorOccured($"Connection {_connectionId} send error: {ex.Message}", ex);
 	}
 
 	/// <summary>
 	/// Disposes the connection asynchronously.
 	/// </summary>
 	/// <returns>A <see cref="ValueTask"/> that represents the asynchronous dispose operation.</returns>
-	public async ValueTask DisposeAsync()
+	public override async ValueTask DisposeAsync()
 	{
 		if (_isDisposed)
 			return;
@@ -366,13 +297,13 @@ public class SimpleNamedPipeConnection : IRawMessageTransport, IDisposable
 		}
 
 		_cancellationTokenSource.Dispose();
-		_sendLock.Dispose();
+
+		// dispose the base send/receive locks
+		await base.DisposeAsync().ConfigureAwait(false);
 
 		// Notify subscribers that this connection is disposed
 		// Include information about whether this was due to session end
 		Disposed?.Invoke(this, EventArgs.Empty);
-
-		await Task.CompletedTask.ConfigureAwait(false);
 	}
 
 	/// <summary>

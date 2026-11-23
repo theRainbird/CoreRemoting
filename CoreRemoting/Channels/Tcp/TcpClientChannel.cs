@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using CoreRemoting.Channels.Common;
 using CoreRemoting.Threading;
 using WatsonTcp;
 
@@ -10,25 +11,12 @@ namespace CoreRemoting.Channels.Tcp;
 /// <summary>
 /// Client side TCP channel implementation.
 /// </summary>
-public class TcpClientChannel : IClientChannel, IRawMessageTransport
+public class TcpClientChannel : MessageTransportBase, IClientChannel
 {
     private IRemotingClient _client;
     private WatsonTcpClient _tcpClient;
     private Dictionary<string, object> _handshakeMetadata;
 
-    /// <summary>
-    /// Event: Fires when a message is received from server.
-    /// </summary>
-    public event Action<byte[]> ReceiveMessage;
-
-    /// <summary>
-    /// Event: Fires when an error is occurred.
-    /// </summary>
-    public event Action<string, Exception> ErrorOccured;
-
-    /// <inheritdoc />
-    public event Action Disconnected;
-    
     private AsyncLock DisposeLock { get; } = new();
 
     /// <summary>
@@ -74,7 +62,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
         // subscription and deliver each received message multiple times.
         _tcpClient.Events.ExceptionEncountered -= OnError;
         _tcpClient.Events.MessageReceived -= OnMessage;
-        _tcpClient.Events.ServerDisconnected -= OnDisconnected;
+        _tcpClient.Events.ServerDisconnected -= OnServerDisconnected;
 
         _tcpClient.Events.ExceptionEncountered += OnError;
         _tcpClient.Events.MessageReceived += OnMessage;
@@ -88,12 +76,12 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
         // note: we don't rely on the Connected event anymore
         await _tcpClient.SendAsync([0], _handshakeMetadata);
 
-        _tcpClient.Events.ServerDisconnected += OnDisconnected;
+        _tcpClient.Events.ServerDisconnected += OnServerDisconnected;
     }
 
-    private void OnDisconnected(object o, DisconnectionEventArgs disconnectionEventArgs)
+    private void OnServerDisconnected(object o, DisconnectionEventArgs disconnectionEventArgs)
     {
-        Disconnected?.Invoke();
+        OnDisconnected();
     }
 
     /// <summary>
@@ -105,7 +93,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     {
         LastException = new NetworkException(e.Exception.Message, e.Exception);
 
-        ErrorOccured?.Invoke(e.Exception.Message, e.Exception);
+        OnErrorOccured(e.Exception.Message, e.Exception);
     }
 
     /// <summary>
@@ -115,7 +103,7 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// <param name="e">Event arguments containing the message content</param>
     private void OnMessage(object sender, MessageReceivedEventArgs e)
     {
-        ReceiveMessage?.Invoke(e.Data);
+        OnReceiveMessage(e.Data);
     }
 
     /// <summary>
@@ -160,32 +148,14 @@ public class TcpClientChannel : IClientChannel, IRawMessageTransport
     /// </summary>
     public IRawMessageTransport RawMessageTransport => this;
 
-    /// <summary>
-    /// Sends a message to the server.
-    /// </summary>
-    /// <param name="rawMessage">Raw message data</param>
-    public async Task<bool> SendMessageAsync(byte[] rawMessage)
+    /// <inheritdoc />
+    protected override async Task<bool> SendCoreAsync(byte[] rawMessage)
     {
-        try
-        {
-            if (await _tcpClient.SendAsync(rawMessage).ConfigureAwait(false))
-                return true;
-            throw new NetworkException("Channel disconnected");
-        }
-        catch (Exception ex)
-        {
-            LastException = ex as NetworkException ??
-                            new NetworkException(ex.Message, ex);
+        if (await _tcpClient.SendAsync(rawMessage).ConfigureAwait(false))
+            return true;
 
-            ErrorOccured?.Invoke(ex.Message, LastException);
-            return false;
-        }
+        throw new NetworkException("Channel disconnected");
     }
-
-    /// <summary>
-    /// Gets or sets the last exception.
-    /// </summary>
-    public NetworkException LastException { get; set; }
 
     /// <summary>
     /// Disconnect and free manages resources.

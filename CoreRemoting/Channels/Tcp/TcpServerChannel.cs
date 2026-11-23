@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
+using CoreRemoting.Channels.Common;
 using WatsonTcp;
 
 namespace CoreRemoting.Channels.Tcp;
@@ -8,9 +9,8 @@ namespace CoreRemoting.Channels.Tcp;
 /// <summary>
 /// Server side TCP channel implementation.
 /// </summary>
-public class TcpServerChannel : IServerChannel
+public class TcpServerChannel : ServerChannelBase
 {
-    private IRemotingServer _remotingServer;
     private WatsonTcpServer _tcpServer;
     private readonly ConcurrentDictionary<Guid, TcpConnection> _connections;
     private readonly string _listenerIpAddress;
@@ -43,11 +43,11 @@ public class TcpServerChannel : IServerChannel
     /// Initializes the channel.
     /// </summary>
     /// <param name="server">CoreRemoting sever</param>
-    public void Init(IRemotingServer server)
+    public override void Init(IRemotingServer server)
     {
-        _remotingServer = server ?? throw new ArgumentNullException(nameof(server));
+        base.Init(server);
 
-        _tcpServer = new WatsonTcpServer(_listenerIpAddress, _remotingServer.Config.NetworkPort);
+        _tcpServer = new WatsonTcpServer(_listenerIpAddress, Server.Config.NetworkPort);
         _tcpServer.Settings.NoDelay = true;
         _tcpServer.Events.ClientConnected += OnClientConnected;
         _tcpServer.Events.ClientDisconnected += OnClientDisconnected;
@@ -56,7 +56,7 @@ public class TcpServerChannel : IServerChannel
 
     private TcpConnection GetOrCreateConnection(ClientMetadata client) =>
         _connections.GetOrAdd(client.Guid, guid =>
-            new TcpConnection(client, _tcpServer, _remotingServer));
+            new TcpConnection(client, _tcpServer, Server));
 
     private void OnClientConnected(object sender, ConnectionEventArgs e) =>
         GetOrCreateConnection(e.Client);
@@ -74,7 +74,7 @@ public class TcpServerChannel : IServerChannel
     /// <summary>
     /// Start listening for client requests.
     /// </summary>
-    public void StartListening()
+    public override void StartListening()
     {
         if (_tcpServer == null)
             throw new InvalidOperationException("Channel is not initialized.");
@@ -85,19 +85,19 @@ public class TcpServerChannel : IServerChannel
     /// <summary>
     /// Stop listening for client requests.
     /// </summary>
-    public void StopListening() =>
+    public override void StopListening() =>
         _tcpServer?.Stop();
 
     /// <summary>
     /// Gets whether the channel is listening or not.
     /// </summary>
-    public bool IsListening =>
+    public override bool IsListening =>
         _tcpServer?.IsListening ?? false;
 
     /// <summary>
     /// Stops listening and frees managed resources.
     /// </summary>
-    public async ValueTask DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         if (_tcpServer != null)
         {

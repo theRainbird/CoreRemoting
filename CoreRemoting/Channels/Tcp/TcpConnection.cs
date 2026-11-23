@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using CoreRemoting.Channels.Common;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Toolbox;
 using WatsonTcp;
@@ -11,7 +12,7 @@ namespace CoreRemoting.Channels.Tcp;
 /// <summary>
 /// TCP-Connection.
 /// </summary>
-public class TcpConnection : IRawMessageTransport
+public class TcpConnection : MessageTransportBase
 {
     private readonly ClientMetadata _clientMetadata;
     private readonly WatsonTcpServer _tcpServer;
@@ -30,44 +31,20 @@ public class TcpConnection : IRawMessageTransport
         _tcpServer = tcpServer ?? throw new ArgumentNullException(nameof(tcpServer));
         _server = server ?? throw new ArgumentException(nameof(server));
     }
-    
-    /// <summary>
-    /// Event: Fires when a message is received from server.
-    /// </summary>
-    public event Action<byte[]> ReceiveMessage;
 
     /// <summary>
-    /// Event: Fires when an error is occurred.
+    /// Fires the ErrorOccured event.
     /// </summary>
-    public event Action<string, Exception> ErrorOccured;
-
-    /// <summary>
-    /// Event: Signals that the underlying TCP connection has been disconnected.
-    /// </summary>
-    public event Action Disconnected;
-
-    /// <summary>
-    /// Fires the ReceiveMessage event.
-    /// </summary>
-    /// <param name="message">Fehlermeldung</param>
-    /// <param name="ex">Ausnahme</param>
-    internal void FireErrorOccured(string message, Exception ex)
-    {
-        ErrorOccured?.Invoke(message, ex);
-    }
+    /// <param name="message">Error message</param>
+    /// <param name="ex">Exception</param>
+    internal void FireErrorOccured(string message, Exception ex) =>
+        OnErrorOccured(message, ex);
 
     /// <summary>
     /// Fires the Disconnected event.
     /// </summary>
-    internal void FireDisconnected()
-    {
-        Disconnected?.Invoke();
-    }
-
-    /// <summary>
-    /// Gets or sets the last exception.
-    /// </summary>
-    public NetworkException LastException { get; set; }
+    internal void FireDisconnected() =>
+        OnDisconnected();
 
     /// <summary>
     /// Fires the ReceiveMessage event.
@@ -78,7 +55,7 @@ public class TcpConnection : IRawMessageTransport
     {
         if (!CreateSessionAsNeeded(metadata))
         {
-            ReceiveMessage?.Invoke(rawMessage);
+            OnReceiveMessage(rawMessage);
         }
     }
 
@@ -135,7 +112,17 @@ public class TcpConnection : IRawMessageTransport
     /// Sends a message to the server.
     /// </summary>
     /// <param name="rawMessage">Raw message data</param>
-    public async Task<bool> SendMessageAsync(byte[] rawMessage) =>
+    /// <remarks>
+    /// Sends directly through the WatsonTcp server and returns its result unchanged.
+    /// The base send template is intentionally bypassed to preserve the original
+    /// behavior of propagating transport exceptions to the caller.
+    /// </remarks>
+    public override async Task<bool> SendMessageAsync(byte[] rawMessage) =>
         await _tcpServer.SendAsync(_clientMetadata.Guid, rawMessage)
             .ConfigureAwait(false);
+
+    /// <inheritdoc />
+    protected override Task<bool> SendCoreAsync(byte[] rawMessage) =>
+        throw new NotSupportedException(
+            "TcpConnection sends directly via SendMessageAsync; the send template is not used.");
 }

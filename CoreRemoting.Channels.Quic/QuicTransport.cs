@@ -5,6 +5,7 @@ using System.IO;
 using System.Net.Quic;
 using System.Threading;
 using System.Threading.Tasks;
+using CoreRemoting.Channels.Common;
 using CoreRemoting.Threading;
 using CoreRemoting.Toolbox;
 
@@ -13,7 +14,7 @@ namespace CoreRemoting.Channels.Quic;
 /// <summary>
 /// Abstract QUIC transport for reading and writing messages, based on System.Net.Quic.
 /// </summary>
-public abstract class QuicTransport : IAsyncDisposable
+public abstract class QuicTransport : ReadLoopTransportBase
 {
     internal const string ProtocolName = nameof(CoreRemoting);
 
@@ -33,52 +34,6 @@ public abstract class QuicTransport : IAsyncDisposable
         QuicError.ConnectionRefused
     };
 
-    /// <inheritdoc />
-    public NetworkException LastException { get; set; }
-
-    /// <summary>
-    /// Gets a value indicating whether the channel is connected.
-    /// </summary>
-    public bool IsConnected { get; protected set; }
-
-    /// <summary>
-    /// Event: fires when the channel is connected.
-    /// </summary>
-    public event Action Connected;
-
-    /// <summary>
-    /// Fires the <see cref="Connected"/> event.
-    /// </summary>
-    protected void OnConnected() =>
-        Connected?.Invoke();
-
-    /// <inheritdoc />
-    public event Action Disconnected;
-
-    /// <summary>
-    /// Fires the <see cref="Disconnected"/> event.
-    /// </summary>
-    protected void OnDisconnected() =>
-        Disconnected?.Invoke();
-
-    /// <inheritdoc />
-    public event Action<byte[]> ReceiveMessage;
-
-    /// <summary>
-    /// Fires the <see cref="ReceiveMessage"/> event.
-    /// </summary>
-    protected void OnReceiveMessage(byte[] message) =>
-        ReceiveMessage?.Invoke(message);
-
-    /// <inheritdoc />
-    public event Action<string, Exception> ErrorOccured;
-
-    /// <summary>
-    /// Fires the <see cref="ErrorOccured"/> event.
-    /// </summary>
-    protected void OnErrorOccured(string message, Exception ex) =>
-        ErrorOccured?.Invoke(message, ex);
-
     /// <summary>
     /// Quic connection used to read and write messages.
     /// </summary>
@@ -89,121 +44,68 @@ public abstract class QuicTransport : IAsyncDisposable
     /// </summary>
     protected QuicStream ClientStream { get; set; }
 
-    protected AsyncLock ReceiveLock { get; } = new();
-
-    protected AsyncLock SendLock { get; } = new();
-
-    private Task _readLoop;
-    private CancellationTokenSource _readLoopCts;
-    private int _readLoopInstance;
+    // captured at loop start so the teardown disposes the objects this loop was
+    // created for, even if the properties were already replaced by a reconnect
+    private QuicConnection _loopConnection;
+    private QuicStream _loopStream;
 
     /// <summary>
-    /// Starts listening for the incoming messages.
+    /// Captures the current connection and stream for this read loop.
     /// </summary>
-    /// <returns>
-    /// Client session identity, if used on server.
-    /// </returns>
-    public virtual async Task<Guid> StartListening()
+    protected override void OnLoopStarting()
     {
-        // increment instance before detaching so the old loop knows it's obsolete
-        var instance = Interlocked.Increment(ref _readLoopInstance);
-
-        using var cts = Interlocked.Exchange(ref _readLoopCts, new CancellationTokenSource());
-        cts?.Cancel();
-
-        await DetachReadLoopAsync()
-            .ConfigureAwait(false);
-
-        _readLoop = ReadIncomingMessages(instance, _readLoopCts.Token);
-
-        return Guid.Empty;
+        _loopConnection = Connection;
+        _loopStream = ClientStream;
     }
 
     /// <inheritdoc />
-    public async Task<bool> SendMessageAsync(byte[] rawMessage)
+    /// <remarks>
+    /// QUIC abort-related errors are treated as normal shutdown and don't fire
+    /// the <see cref="MessageTransportBase.ErrorOccured"/> event.
+    /// </remarks>
+    protected override bool IsNormalShutdown(Exception ex) =>
+        ex is QuicException qx && ShutdownSignals.Contains(qx.QuicError);
+
+    /// <inheritdoc />
+    protected override async Task<bool> SendCoreAsync(byte[] rawMessage)
     {
-        try
-        {
-            if (rawMessage.Length > MaxMessageSize)
-                throw new InvalidOperationException("Message is too large. Max size: " +
-                    MaxMessageSize + ", actual size: " + rawMessage.Length);
+        if (rawMessage.Length > MaxMessageSize)
+            throw new InvalidOperationException("Message is too large. Max size: " +
+                MaxMessageSize + ", actual size: " + rawMessage.Length);
 
-            using var sendLock = await SendLock;
+        using var sendLock = await SendLock;
 
-            var lengthBuffer = new byte[4];
-            BinaryPrimitives.WriteInt32LittleEndian(lengthBuffer, rawMessage.Length);
+        await LengthPrefixedFrame
+            .WriteFrameAsync(ClientStream, rawMessage, CancellationToken.None)
+            .ConfigureAwait(false);
 
-            await ClientStream.WriteAsync(lengthBuffer, 0, 4).ConfigureAwait(false);
-            await ClientStream.WriteAsync(rawMessage, 0, rawMessage.Length).ConfigureAwait(false);
-            await ClientStream.FlushAsync().ConfigureAwait(false);
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            // treat ConnectionAborted and other abort-related error signal as normal shutdown
-            if (ex is QuicException qx && ShutdownSignals.Contains(qx.QuicError))
-                return false;
-
-            LastException = ex as NetworkException ??
-                new NetworkException(ex.Message, ex);
-
-            OnErrorOccured(ex.Message, ex);
-            return false;
-        }
+        return true;
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Preserves the original behavior of reporting the raw exception
+    /// (not the wrapped <see cref="MessageTransportBase.LastException"/>)
+    /// for failed send operations.
+    /// </remarks>
+    protected override void ReportSendError(Exception ex)
+    {
+        LastException = ex as NetworkException ??
+            new NetworkException(ex.Message, ex);
+
+        OnErrorOccured(ex.Message, ex);
+    }
+
+    /// <inheritdoc />
+    protected override async Task<byte[]> ReadNextAsync(CancellationToken ct) =>
+        await ReadIncomingMessage(_loopStream, ct)
+            .ConfigureAwait(false);
 
     /// <summary>
-    /// Reads the incoming network messages until disconnected.
+    /// Reads one length prefixed message from the given stream.
     /// </summary>
-    protected async Task ReadIncomingMessages(int instance, CancellationToken ct)
-    {
-        var connection = Connection;
-        var stream = ClientStream;
-
-        try
-        {
-            while (!ct.IsCancellationRequested && IsConnected)
-            {
-                var message = await ReadIncomingMessage(stream, ct)
-                    .ConfigureAwait(false);
-
-                OnReceiveMessage(message);
-            }
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            // expected on explicit disconnect
-        }
-        catch (Exception ex)
-        {
-            // treat ConnectionAborted and other abort-related error signal as normal shutdown
-            if (ex is QuicException qx && ShutdownSignals.Contains(qx.QuicError))
-                return;
-
-            LastException = ex as NetworkException ??
-                new NetworkException(ex.Message, ex);
-
-            OnErrorOccured(ex.Message, LastException);
-        }
-        finally
-        {
-            await connection.TryDisposeAsync().ConfigureAwait(false);
-            if (ReferenceEquals(Connection, connection))
-                Connection = null;
-
-            await stream.TryDisposeAsync().ConfigureAwait(false);
-            if (ReferenceEquals(ClientStream, stream))
-                ClientStream = null;
-
-            if (Volatile.Read(ref _readLoopInstance) == instance)
-            {
-                IsConnected = false;
-                OnDisconnected();
-            }
-        }
-    }
-
+    /// <param name="stream">Stream to read from</param>
+    /// <param name="ct">Cancellation token</param>
     protected async Task<byte[]> ReadIncomingMessage(Stream stream, CancellationToken ct)
     {
         using var receiveLock = await ReceiveLock;
@@ -225,7 +127,32 @@ public abstract class QuicTransport : IAsyncDisposable
     }
 
     /// <inheritdoc />
-    public virtual async Task DisconnectAsync()
+    /// <remarks>
+    /// Disposes the connection and stream captured by this read loop and then
+    /// applies the base disconnect semantics.
+    /// </remarks>
+    protected override async Task OnReadLoopEndedAsync(int instance)
+    {
+        if (_loopConnection != null)
+        {
+            await _loopConnection.TryDisposeAsync().ConfigureAwait(false);
+            if (ReferenceEquals(Connection, _loopConnection))
+                Connection = null;
+        }
+
+        if (_loopStream != null)
+        {
+            await _loopStream.TryDisposeAsync().ConfigureAwait(false);
+            if (ReferenceEquals(ClientStream, _loopStream))
+                ClientStream = null;
+        }
+
+        await base.OnReadLoopEndedAsync(instance)
+            .ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public override async Task DisconnectAsync()
     {
         try
         {
@@ -243,43 +170,9 @@ public abstract class QuicTransport : IAsyncDisposable
 
         // safety net: if the close above failed or was skipped, the loop would
         // otherwise stay blocked on the stream read and never detach
-        _readLoopCts?.Cancel();
+        CancelReadLoop();
 
         await DetachReadLoopAsync()
             .ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Atomically detaches the current read loop and awaits its completion.
-    /// </summary>
-    private async Task DetachReadLoopAsync()
-    {
-        var loop = _readLoop;
-        _readLoop = null;
-
-        if (loop != null)
-        {
-            try
-            {
-                await loop.ConfigureAwait(false);
-            }
-            catch
-            {
-                /* handled in loop */
-            }
-        }
-    }
-
-    /// <inheritdoc/>
-    public virtual async ValueTask DisposeAsync()
-    {
-        await DisconnectAsync()
-            .ConfigureAwait(false);
-
-        using var cts = Interlocked.Exchange(ref _readLoopCts, null);
-        cts?.Cancel();
-
-        ReceiveLock.TryDispose();
-        SendLock.TryDispose();
     }
 }

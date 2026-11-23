@@ -66,7 +66,7 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
 
         try
         {
-            IsConnected = true;
+            IsConnectedFlag = true;
 
             await StartListening()
                 .ConfigureAwait(false);
@@ -81,7 +81,7 @@ public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTrans
         }
         catch
         {
-            IsConnected = false;
+            IsConnectedFlag = false;
             throw;
         }
     }

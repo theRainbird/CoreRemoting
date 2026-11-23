@@ -20,7 +20,7 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
         Connection = connection ?? throw new ArgumentNullException(nameof(connection));
         ClientStream = stream ?? throw new ArgumentNullException(nameof(stream));
         RemotingServer = remotingServer ?? throw new ArgumentNullException(nameof(remotingServer));
-        IsConnected = true;
+        IsConnectedFlag = true;
     }
 
     private IRemotingServer RemotingServer { get; set; }
@@ -45,7 +45,7 @@ public class QuicServerConnection : QuicTransport, IRawMessageTransport
         catch
         {
             // avoid resource leak if handshake failed
-            IsConnected = false;
+            IsConnectedFlag = false;
 
             await ClientStream.TryDisposeAsync().ConfigureAwait(false);
             ClientStream = null;

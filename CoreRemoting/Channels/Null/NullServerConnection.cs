@@ -1,17 +1,15 @@
 ﻿using System;
-using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
-using CoreRemoting.Channels.Null;
 using CoreRemoting.RpcMessaging;
 using CoreRemoting.Toolbox;
 
-namespace CoreRemoting.Channels.Websocket;
+namespace CoreRemoting.Channels.Null;
 
 /// <summary>
-/// Websocket connection.
+/// Null channel connection.
 /// </summary>
-public class NullServerConnection : NullTransport, IAsyncDisposable
+public class NullServerConnection : NullTransport
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="NullServerConnection"/> class.

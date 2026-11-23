@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
 using System.Threading.Tasks;
+using CoreRemoting.Channels.Common;
 using CoreRemoting.Toolbox;
 
 namespace CoreRemoting.Channels.Quic;
@@ -12,14 +13,14 @@ namespace CoreRemoting.Channels.Quic;
 /// <summary>
 /// Server side QUIC channel implementation, based on System.Net.Quic.
 /// </summary>
-public class QuicServerChannel : IServerChannel
+public class QuicServerChannel : ServerChannelBase
 {
-    private IRemotingServer Server { get; set; }
-
     private ConcurrentDictionary<Guid, QuicServerConnection> Connections { get; } = new();
 
+    private bool _isListening;
+
     /// <inheritdoc/>
-    public bool IsListening { get; private set; }
+    public override bool IsListening => _isListening;
 
     private QuicServerConnectionOptions Options { get; set; }
 
@@ -28,9 +29,10 @@ public class QuicServerChannel : IServerChannel
     private IPEndPoint ListenEndPoint { get; set; }
 
     /// <inheritdoc/>
-    public void Init(IRemotingServer server)
+    public override void Init(IRemotingServer server)
     {
-        Server = server ?? throw new ArgumentNullException(nameof(server));
+        base.Init(server);
+
         if (!QuicListener.IsSupported)
             throw new NotSupportedException("QUIC is not supported.");
 
@@ -59,7 +61,7 @@ public class QuicServerChannel : IServerChannel
     }
 
     /// <inheritdoc/>
-    public void StartListening()
+    public override void StartListening()
     {
         _ = Task.Run(async () =>
         {
@@ -76,7 +78,7 @@ public class QuicServerChannel : IServerChannel
             .ConfigureAwait(false);
 
             // accept incoming connections
-            IsListening = true;
+            _isListening = true;
             while (IsListening)
             {
                 await ReceiveConnection()
@@ -111,21 +113,21 @@ public class QuicServerChannel : IServerChannel
     }
 
     /// <inheritdoc/>
-    public void StopListening() =>
+    public override void StopListening() =>
         StopListeningAsync().JustWait();
 
     private async Task StopListeningAsync()
     {
         if (Listener != null && IsListening)
         {
-            IsListening = false;
+            _isListening = false;
             await Listener.DisposeAsync()
                 .ConfigureAwait(false);
         }
     }
 
     /// <inheritdoc/>
-    public async ValueTask DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         await StopListeningAsync()
             .ConfigureAwait(false);
@@ -135,8 +137,7 @@ public class QuicServerChannel : IServerChannel
         var activeConnections = Connections.Values.ToArray();
         Connections.Clear();
 
-        foreach (var conn in activeConnections)
-            await conn.TryDisposeAsync()
-                .ConfigureAwait(false);
+        await DisposeConnectionsAsync(activeConnections)
+            .ConfigureAwait(false);
     }
 }
