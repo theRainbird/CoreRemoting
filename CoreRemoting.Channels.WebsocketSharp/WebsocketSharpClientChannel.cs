@@ -1,152 +1,56 @@
 using System;
 using System.Threading.Tasks;
 using CoreRemoting.Channels.Common;
-using WebSocketSharp;
-using WebSocketSharp.Net;
 
 namespace CoreRemoting.Channels.WebsocketSharp;
 
 /// <summary>
 /// Client side websocket channel implementation based on websocket-sharp.
 /// </summary>
-public class WebsocketSharpClientChannel : MessageTransportBase, IClientChannel
+public class WebsocketSharpClientChannel : ClientChannelBase<WebsocketSharpClientTransport>
 {
-    private WebSocket _webSocket;
+    /// <inheritdoc />
+    /// <remarks>
+    /// Throws when the channel is not initialized, like the original implementation.
+    /// </remarks>
+    public override bool IsConnected =>
+        Transport?.IsConnected ?? throw new InvalidOperationException("Channel is not initialized.");
 
-    /// <summary>
-    /// Initializes the channel.
-    /// </summary>
-    /// <param name="client">CoreRemoting client</param>
-    public void Init(IRemotingClient client)
+    /// <inheritdoc />
+    protected override WebsocketSharpClientTransport CreateTransport(IRemotingClient client) =>
+        new(client);
+
+    /// <inheritdoc />
+    protected override Task OpenTransportAsync()
     {
-        string url =
-            "ws://" +
-            client.Config.ServerHostName + ":" +
-            Convert.ToString(client.Config.ServerPort) +
-            "/rpc";
-
-        _webSocket = new WebSocket(url) { NoDelay = true };
-
-        // send handshake metadata items as cookies
-        foreach (var kv in client.HandshakeMessage.Metadata)
-        {
-            _webSocket.SetCookie(new Cookie(
-                name: kv.Key,
-                value: kv.Value));
-        }
-
-        _webSocket.Log.Output = (timestamp, text) => Console.WriteLine("{0}: {1}", timestamp, text);
-        _webSocket.Log.Level = LogLevel.Debug;
-    }
-
-    /// <summary>
-    /// Establish a websocket connection with the server.
-    /// </summary>
-    public Task ConnectAsync()
-    {
-        if (_webSocket == null)
+        if (Transport == null)
             throw new InvalidOperationException("Channel is not initialized.");
 
-        if (_webSocket.IsAlive)
-            return Task.CompletedTask;
+        Transport.Open();
 
-        LastException = null;
-
-        // The WebSocket instance is reused across reconnects, so make the event wiring
-        // idempotent: detach any handlers left over from a previous connection before
-        // attaching them again. Without this, every reconnect would add another
-        // subscription and deliver each received message multiple times.
-        _webSocket.OnMessage -= OnMessage;
-        _webSocket.OnError -= OnError;
-        _webSocket.OnClose -= OnServerDisconnected;
-
-        _webSocket.OnMessage += OnMessage;
-        _webSocket.OnError += OnError;
-        // OnClose is intentionally attached only after the new connection is
-        // fully established: a late close event from the previous connection
-        // must not reach the client while the new connection is being set up.
-
-        _webSocket.Connect();
-        _webSocket.Send(string.Empty);
-
-        _webSocket.OnClose += OnServerDisconnected;
         return Task.CompletedTask;
-    }
-
-    private void OnServerDisconnected(object o, CloseEventArgs closeEventArgs)
-    {
-        OnDisconnected();
-    }
-
-    /// <summary>
-    /// Event procedure: Called when a error occurs on the websocket layer.
-    /// </summary>
-    /// <param name="sender">Event sender</param>
-    /// <param name="e">Event arguments</param>
-    private void OnError(object sender, ErrorEventArgs e)
-    {
-        LastException = new NetworkException(e.Message, e.Exception);
-
-        OnErrorOccured(e.Message, e.Exception);
-    }
-
-    /// <summary>
-    /// Closes the websocket connection.
-    /// </summary>
-    public Task DisconnectAsync()
-    {
-        if (_webSocket == null)
-            return Task.CompletedTask;
-
-        _webSocket.OnMessage -= OnMessage;
-        _webSocket.OnError -= OnError;
-
-        _webSocket.Close(CloseStatusCode.Normal);
-        return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Gets whether the websocket connection is established or not.
-    /// </summary>
-    public bool IsConnected
-    {
-        get
-        {
-            if (_webSocket == null)
-                throw new InvalidOperationException("Channel is not initialized.");
-
-            return _webSocket.IsAlive;
-        }
-    }
-
-    /// <summary>
-    /// Gets the raw message transport component for this connection.
-    /// </summary>
-    public IRawMessageTransport RawMessageTransport => this;
-
-    /// <summary>
-    /// Disconnect and free manages resources.
-    /// </summary>
-    public async ValueTask DisposeAsync()
-    {
-        await DisconnectAsync();
-        _webSocket = null;
-    }
-
-    /// <summary>
-    /// Event procedure: Called when a message from server is received.
-    /// </summary>
-    /// <param name="sender">Sender of the event</param>
-    /// <param name="e">Event arguments containing the message content</param>
-    private void OnMessage(object sender, MessageEventArgs e)
-    {
-        OnReceiveMessage(e.RawData);
     }
 
     /// <inheritdoc />
-    protected override Task<bool> SendCoreAsync(byte[] rawMessage)
+    /// <remarks>
+    /// The websocket-sharp handshake is an empty string message; the handshake
+    /// metadata is carried as cookies established during transport creation.
+    /// The disconnect handler is attached only after the handshake was sent,
+    /// so a late close event of a previous connection cannot reach the client
+    /// while the new connection is being set up.
+    /// </remarks>
+    protected override Task SendHandshakeAsync()
     {
-        _webSocket.Send(rawMessage);
-        return Task.FromResult(true);
+        Transport.SendHandshake();
+
+        return Task.CompletedTask;
     }
+
+    /// <inheritdoc />
+    public override Task DisconnectAsync() =>
+        Transport?.DisconnectAsync() ?? Task.CompletedTask;
+
+    /// <inheritdoc />
+    public override ValueTask DisposeAsync() =>
+        Transport?.DisposeAsync() ?? default;
 }

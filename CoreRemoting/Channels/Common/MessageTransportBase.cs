@@ -23,6 +23,14 @@ public abstract class MessageTransportBase : IRawMessageTransport
     protected void OnConnected() =>
         Connected?.Invoke();
 
+    /// <summary>
+    /// Public entry point to fire the <see cref="Connected"/> event.
+    /// Intended for composed channel bases that own a transport instance
+    /// and need to signal connection completion from outside the transport.
+    /// </summary>
+    public void RaiseConnected() =>
+        OnConnected();
+
     /// <inheritdoc />
     public event Action Disconnected;
 

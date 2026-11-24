@@ -1,55 +1,41 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
+using CoreRemoting.Channels.Common;
 
 namespace CoreRemoting.Channels.Null;
 
 /// <summary>
 /// Simple in-process channel, client-side.
 /// </summary>
-public class NullClientChannel : NullTransport, IClientChannel
+public class NullClientChannel : ClientChannelBase<NullClientTransport>
 {
     /// <inheritdoc />
-    public void Init(IRemotingClient client)
-    {
-        RemotingClient = client ?? throw new ArgumentNullException(nameof(client));
-        SetUrl(client.Config.ServerHostName, client.Config.ServerPort);
-    }
-
-    /// <summary>
-    /// Sets the server URL.
-    /// </summary>
-    /// <param name="host">Server host</param>
-    /// <param name="port">Server port</param>
-    internal void SetUrl(string host, int port) =>
-        Url = $"null://{host}:{port}/rpc";
+    public override bool IsConnected => Transport.IsConnected;
 
     /// <inheritdoc />
-    public string Url { get; private set; }
-
-    private IRemotingClient RemotingClient { get; set; }
-
-    /// <inheritdoc />
-    public IRawMessageTransport RawMessageTransport => this;
+    protected override NullClientTransport CreateTransport(IRemotingClient client) =>
+        new(client);
 
     /// <inheritdoc />
-    public Task ConnectAsync()
-    {
-        var metadata = RemotingClient?.HandshakeMessage?.Metadata;
-
-        ThisEndpoint = NullMessageQueue.Connect(Url, metadata);
-        RemoteEndpoint = Url;
-
-        _ = StartListening();
-        OnConnected();
-
-        return Task.CompletedTask;
-    }
+    protected override Task OpenTransportAsync() =>
+        Transport.OpenAsync();
 
     /// <inheritdoc />
-    public override async ValueTask DisposeAsync()
-    {
-        await DisconnectAsync().ConfigureAwait(false);
-        await base.DisposeAsync().ConfigureAwait(false);
-    }
+    protected override Task StartListeningAsync() =>
+        Transport.StartListening();
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The Null channel carries the handshake metadata already with the
+    /// queue connection, so no explicit handshake message is sent.
+    /// </remarks>
+    protected override Task SendHandshakeAsync() =>
+        Task.CompletedTask;
+
+    /// <inheritdoc />
+    public override Task DisconnectAsync() =>
+        Transport.DisconnectAsync();
+
+    /// <inheritdoc />
+    public override ValueTask DisposeAsync() =>
+        Transport.DisposeAsync();
 }

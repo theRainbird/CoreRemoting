@@ -104,7 +104,7 @@ public class RpcTests_NullChannel : RpcTests
     [Fact]
     public async Task NullClientChannel_can_connect_to_NullServerChannel()
     {
-        await using var client = new NullClientChannel();
+        await using var client = new NullClientTransport();
         await using var server = new NullServerChannel();
 
         server.SetUrl("localhost", 1234);
@@ -119,7 +119,8 @@ public class RpcTests_NullChannel : RpcTests
                 string.Concat(serverMessage = message)}");
 
         server.StartListening();
-        await client.ConnectAsync();
+        await client.OpenAsync();
+        await client.StartListening();
 
         await Task.Delay(TimeSpan.FromSeconds(0.5));
         Assert.False(server.Connections.IsEmpty);

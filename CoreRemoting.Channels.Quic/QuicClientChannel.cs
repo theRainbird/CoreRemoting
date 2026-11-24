@@ -1,100 +1,66 @@
-using System;
-using System.Net;
-using System.Net.Quic;
-using System.Net.Security;
 using System.Threading.Tasks;
-using CoreRemoting.Toolbox;
+using CoreRemoting.Channels.Common;
 
 namespace CoreRemoting.Channels.Quic;
 
 /// <summary>
-/// Client side QUIC channel implementation, based on System.Net.Quic.
+/// QUIC client channel, based on System.Net.Quic.
 /// </summary>
-public class QuicClientChannel : QuicTransport, IClientChannel, IRawMessageTransport
+public class QuicClientChannel : ClientChannelBase<QuicClientTransport>
 {
-    /// <summary>
-    /// Gets or sets the URL this channel is connected to.
-    /// </summary>
-    public string Url { get; private set; }
-
-    private Uri Uri { get; set; }
-
-    private IRemotingClient Client { get; set; }
+    /// <inheritdoc />
+    public override bool IsConnected => Transport.IsConnected;
 
     /// <inheritdoc />
-    public IRawMessageTransport RawMessageTransport => this;
+    protected override QuicClientTransport CreateTransport(IRemotingClient client) =>
+        new(client);
 
     /// <inheritdoc />
-    public void Init(IRemotingClient client)
+    protected override Task OpenTransportAsync() =>
+        Transport.OpenAsync();
+
+    /// <inheritdoc />
+    protected override Task StartListeningAsync() =>
+        Transport.StartListening();
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The QUIC handshake is the serialized client handshake message,
+    /// sent as the first length prefixed frame on the client stream.
+    /// </remarks>
+    protected override async Task SendHandshakeAsync()
     {
-        Client = client ?? throw new ArgumentNullException(nameof(client));
-        if (!QuicConnection.IsSupported)
-            throw new NotSupportedException("QUIC is not supported.");
+        var handshakeMessage = Client.HandshakeMessage;
+        var handshakeBytes = Client.Serializer.Serialize(handshakeMessage);
+
+        await Transport.SendMessageAsync(handshakeBytes)
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public async Task ConnectAsync()
+    /// <remarks>
+    /// Resets the transport's connection state if a step after the connection
+    /// was established failed, so the channel is not reported as connected.
+    /// </remarks>
+    public override async Task ConnectAsync()
     {
-        LastException = null;
-
-        Url = "quic://" +
-            Client.Config.ServerHostName + ":" +
-            Client.Config.ServerPort + "/rpc";
-
-        Uri = new Uri(Url);
-
-        var options = new QuicClientConnectionOptions
-        {
-            RemoteEndPoint = new IPEndPoint(IPAddress.Loopback, Uri.Port),
-            DefaultStreamErrorCode = 0x0A,
-            DefaultCloseErrorCode = 0x0B,
-            MaxInboundUnidirectionalStreams = 10,
-            MaxInboundBidirectionalStreams = 100,
-            ClientAuthenticationOptions = new()
-            {
-                TargetHost = Uri.Host,
-                RemoteCertificateValidationCallback = (sender, certificate, chain, errors) => true,
-                ApplicationProtocols =
-                [
-                    new SslApplicationProtocol(ProtocolName)
-                ]
-            }
-        };
-
-        Connection = await QuicConnection.ConnectAsync(options).ConfigureAwait(false);
-        ClientStream = await Connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional).ConfigureAwait(false);
-
         try
         {
-            IsConnectedFlag = true;
-
-            await StartListening()
+            await base.ConnectAsync()
                 .ConfigureAwait(false);
-
-            var handshakeMessage = Client.HandshakeMessage;
-            var handshakeBytes = Client.Serializer.Serialize(handshakeMessage);
-
-            await SendMessageAsync(handshakeBytes)
-                .ConfigureAwait(false);
-
-            OnConnected();
         }
         catch
         {
-            IsConnectedFlag = false;
+            Transport.MarkFailed();
             throw;
         }
     }
 
     /// <inheritdoc />
-    public override async ValueTask DisposeAsync()
-    {
-        await base.DisposeAsync().ConfigureAwait(false);
+    public override Task DisconnectAsync() =>
+        Transport.DisconnectAsync();
 
-        await Connection.TryDisposeAsync().ConfigureAwait(false);
-        Connection = null;
-
-        await ClientStream.TryDisposeAsync().ConfigureAwait(false);
-        ClientStream = null;
-    }
+    /// <inheritdoc />
+    public override ValueTask DisposeAsync() =>
+        Transport.DisposeAsync();
 }
