@@ -1111,7 +1111,17 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <summary>
     /// Reports a background-operation failure through <see cref="ErrorHandler"/>.
     /// </summary>
-    private void OnError(Exception ex) => ErrorHandler?.Invoke(ex);
+    private void OnError(Exception ex)
+    {
+        try
+        {
+            ErrorHandler?.Invoke(ex);
+        }
+        catch
+        {
+            // ignore exceptions in user error handler
+        }
+    }
 
     /// <summary>
     /// Notifies the server that the given handlers should be removed.

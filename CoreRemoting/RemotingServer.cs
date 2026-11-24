@@ -197,7 +197,14 @@ public sealed class RemotingServer : IRemotingServer
     /// <param name="ex">Exception that describes the occurred error</param>
     internal void OnError(Exception ex)
     {
-        Error?.Invoke(this, ex);
+        try
+        {
+            Error?.Invoke(this, ex);
+        }
+        catch
+        {
+            // ignore exceptions in user error handler
+        }
     }
 
     /// <summary>
