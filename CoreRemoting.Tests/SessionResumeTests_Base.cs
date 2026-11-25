@@ -194,13 +194,26 @@ public abstract class SessionResumeTests_Base
         }
     }
 
-    protected static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    /// <summary>
+    /// Polls the given condition until it becomes true or the timeout elapses.
+    /// The failing condition's source expression is included in the <see cref="TimeoutException" />
+    /// message, so a timeout identifies which wait actually failed instead of just the helper.
+    /// </summary>
+    /// <param name="condition">Condition to poll</param>
+    /// <param name="timeout">Maximum time to wait for the condition</param>
+    /// <param name="conditionExpression">Automatically supplied source expression of <paramref name="condition" /></param>
+    /// <exception cref="TimeoutException">Thrown if the condition stays false until the deadline</exception>
+    protected static async Task WaitUntilAsync(
+        Func<bool> condition,
+        TimeSpan timeout,
+        [CallerArgumentExpression(nameof(condition))] string conditionExpression = null)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (!condition())
         {
             if (DateTime.UtcNow > deadline)
-                throw new TimeoutException("Condition was not met within the timeout.");
+                throw new TimeoutException(
+                    $"Condition was not met within {timeout.TotalSeconds:0.##}s: {conditionExpression}");
 
             await Task.Delay(50).ConfigureAwait(false);
         }

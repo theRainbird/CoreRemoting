@@ -534,6 +534,15 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
             proxy.FireServiceEvent();
             await WaitUntilAsync(() => Volatile.Read(ref clientEventCount) == 1, TimeSpan.FromSeconds(5));
 
+            // Capture the end of the reconnect pipeline. The Reconnected event fires
+            // only once the handshake, the authentication and the subscription replay
+            // are all complete. IsConnected must NOT be used for that: it is plain
+            // transport state and turns true the moment the socket opens, while the
+            // new session does not exist yet and the replayed subscriptions are not
+            // registered on the server — an event fired in that window is lost.
+            ReconnectedEventArgs reconnectedArgs = null;
+            client.Reconnected += (_, e) => Interlocked.CompareExchange(ref reconnectedArgs, e, null);
+
             // server A crashes and its parked sessions are NOT handed over:
             // the remembered session is gone for good
             await serverA.HardKill().ConfigureAwait(false);
@@ -548,10 +557,20 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
                 // session; the server cannot honor it and — because the fallback is
                 // enabled by default — the client silently continues with a NEW
                 // session instead of throwing
-                await WaitUntilAsync(() => client.IsConnected, TimeSpan.FromSeconds(10));
+                await WaitUntilAsync(() => Volatile.Read(ref reconnectedArgs) != null, TimeSpan.FromSeconds(20));
 
-                Assert.NotNull(client.SessionId);
-                Assert.NotEqual(originalSessionId, client.SessionId);
+                var reconnect = reconnectedArgs;
+
+                // the old session was gone, so nothing could be resumed
+                Assert.False(reconnect.SessionResumed);
+
+                // the client moved to a brand-new session instead of throwing
+                Assert.NotEqual(originalSessionId, reconnect.SessionId);
+                Assert.Equal(reconnect.SessionId, client.SessionId);
+
+                // the event subscriptions were replayed and verified against the
+                // new server before the reconnect was reported as finished
+                Assert.True(reconnect.SubscriptionsRestored);
 
                 // the replayed subscription receives events raised by the new server
                 proxy.FireServiceEvent();

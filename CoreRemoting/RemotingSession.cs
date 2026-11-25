@@ -650,13 +650,12 @@ public sealed class RemotingSession : IAsyncDisposable
                 keyPair: _keyPair,
                 messageType: "auth_response");
 
-        await _rawMessageTransport.SendMessageAsync(
-            _server.Serializer.Serialize(wireMessage))
-                .ConfigureAwait(false);
-
-        // if the authentication protocol negotiated a new shared key, re-key the session.
-        // Both endpoints switch to the negotiated key right after this final response,
-        // so the next message is already encrypted with it on both sides.
+        // If the authentication protocol negotiated a new shared key, re-key the session BEFORE the
+        // auth response leaves the server. The client switches to the negotiated key the very moment
+        // it receives this response and may immediately send its next message with it (e.g. the RPCs
+        // of a subscription restore), so this endpoint must already use the new key when that message
+        // arrives. Re-keying after the send would leave a window in which the client's first message
+        // encrypted with the new key is decrypted with the old one, which fails with a padding error.
         if (_isAuthenticated && negotiatedSharedKey is { ContainsKeyMaterial: true })
         {
             var inputKeyMaterial = negotiatedSharedKey.InputKeyMaterial;
@@ -665,6 +664,10 @@ public sealed class RemotingSession : IAsyncDisposable
             var derivedSharedKey = config.HkdfProvider.DeriveKey(inputKeyMaterial, secretLength, _sessionId, nameof(CoreRemoting));
             _sharedSecret = derivedSharedKey;
         }
+
+        await _rawMessageTransport.SendMessageAsync(
+            _server.Serializer.Serialize(wireMessage))
+                .ConfigureAwait(false);
 
         if (_isAuthenticated)
             ((RemotingServer)_server).OnLogon();
