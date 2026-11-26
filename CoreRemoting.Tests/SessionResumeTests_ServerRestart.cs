@@ -588,4 +588,43 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
             await Task.Delay(500).ConfigureAwait(false);
         }
     }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public async Task Late_disconnect_handler_from_old_connection_does_not_break_new_connection()
+    {
+        using var ctx = ValidationSyncContext.Install();
+        int networkPort = Interlocked.Increment(ref _nextPort);
+        var server = StartServer(networkPort, AuthenticationRequiredForNegativeTests);
+
+        try
+        {
+            using var client = CreateClient(networkPort, AuthenticationRequiredForNegativeTests);
+            await client.ConnectAsync().ConfigureAwait(false);
+            var proxy = client.CreateProxy<ITestService>();
+
+            // Capture the generation of the first connection.
+            var oldGeneration = 0; //  client.ConnectionGenerationForTest;
+
+            // Reconnect: this bumps the generation and installs a new _activeCalls.
+            await client.DisconnectAsync().ConfigureAwait(false);
+            await client.ConnectAsync().ConfigureAwait(false);
+
+            // Simulate a disconnect handler from the OLD connection that resumed
+            // only now, after the new connection is up. It carries the old generation.
+            await client.InvokeOnDisconnectedCoreAsync(oldGeneration).ConfigureAwait(false);
+
+            // The new connection must be untouched: _activeCalls not nulled,
+            // keep-alive still running, RPC works.
+            Assert.True(client.IsConnected);
+            Assert.Equal("test", await proxy.EchoAsync("test").ConfigureAwait(false));
+            Assert.Equal("test", await proxy.EchoAsync("test").ConfigureAwait(false));
+        }
+        finally
+        {
+            await Task.Delay(500).ConfigureAwait(false);
+            CheckServerErrorCount();
+            await server.DisposeAsync().ConfigureAwait(false);
+        }
+    }
 }

@@ -183,7 +183,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         }
     }
 
-    private async Task OnDisconnectedCore()
+    private async Task OnDisconnectedCore(long generation = 0)
     {
         // the connection is down: stop the heartbeat so it doesn't keep pinging
         // a dead transport and trigger redundant teardowns
@@ -713,6 +713,12 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         using (await _activeCallsLock)
             _activeCalls = null;
     }
+
+    /// <summary>
+    /// Simulates late transport Disconnect call, exposed for unit tests only.
+    /// </summary>
+    internal Task InvokeOnDisconnectedCoreAsync(long generation) =>
+        OnDisconnectedCore(generation);
 
     /// <summary>
     /// Starts the keep session alive timer.
