@@ -603,18 +603,18 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
             await client.ConnectAsync().ConfigureAwait(false);
             var proxy = client.CreateProxy<ITestService>();
 
-            // Capture the generation of the first connection.
-            var oldGeneration = 0; //  client.ConnectionGenerationForTest;
+            // 1. Capture the generation of the initial connection
+            var oldGeneration = client.ConnectionGenerationForTest;
 
-            // Reconnect: this bumps the generation and installs a new _activeCalls.
+            // 2. Reconnect: this bumps the generation and creates a new _activeCalls dictionary
             await client.DisconnectAsync().ConfigureAwait(false);
             await client.ConnectAsync().ConfigureAwait(false);
 
-            // Simulate a disconnect handler from the OLD connection that resumed
-            // only now, after the new connection is up. It carries the old generation.
+            // 3. Simulate a late handler from the OLD connection that just woke up.
+            // Without the generation check, this would null out the new _activeCalls.
             await client.InvokeOnDisconnectedCoreAsync(oldGeneration).ConfigureAwait(false);
 
-            // The new connection must be untouched: _activeCalls not nulled,
+            // 4. The new connection must be completely unaffected,
             // keep-alive still running, RPC works.
             Assert.True(client.IsConnected);
             Assert.Equal("test", await proxy.EchoAsync("test").ConfigureAwait(false));
