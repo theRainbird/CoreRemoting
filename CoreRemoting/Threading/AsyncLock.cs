@@ -35,15 +35,4 @@ public class AsyncLock : IDisposable
             .ConfigureAwait(false)
                 .GetAwaiter();
     }
-
-    /// <summary>
-    /// Locks synchronously. Only use from code that cannot await, such as
-    /// synchronous event handlers. The caller must be able to block briefly;
-    /// never hold this lock across I/O.
-    /// </summary>
-    public IDisposable Lock()
-    {
-        Semaphore.Wait();
-        return Disposable.Create(Semaphore.Release);
-    }
 }

@@ -37,7 +37,7 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
             var baseline = client.PendingMessageCount;
 
             // simulate a concurrent disconnect between ensure-connected and the active-calls lock
-            client.SimulateDisconnectRace();
+            await client.SimulateDisconnectRace();
 
             var ex = await Assert.ThrowsAsync<RemoteInvocationException>(() => proxy.EchoAsync("test"));
             Assert.Equal("Server disconnected", ex.Message);
@@ -586,6 +586,45 @@ public class SessionResumeTests_ServerRestart : SessionResumeTests_Base
         finally
         {
             await Task.Delay(500).ConfigureAwait(false);
+        }
+    }
+
+    [Fact]
+    [SuppressMessage("Usage", "xUnit1030:Do not call ConfigureAwait(false) in test method", Justification = "<Pending>")]
+    public async Task Late_disconnect_handler_from_old_connection_does_not_break_new_connection()
+    {
+        using var ctx = ValidationSyncContext.Install();
+        int networkPort = Interlocked.Increment(ref _nextPort);
+        var server = StartServer(networkPort, AuthenticationRequiredForNegativeTests);
+
+        try
+        {
+            using var client = CreateClient(networkPort, AuthenticationRequiredForNegativeTests);
+            await client.ConnectAsync().ConfigureAwait(false);
+            var proxy = client.CreateProxy<ITestService>();
+
+            // 1. Capture the generation of the initial connection
+            var oldGeneration = client.ConnectionGenerationForTest;
+
+            // 2. Reconnect: this bumps the generation and creates a new _activeCalls dictionary
+            await client.DisconnectAsync().ConfigureAwait(false);
+            await client.ConnectAsync().ConfigureAwait(false);
+
+            // 3. Simulate a late handler from the OLD connection that just woke up.
+            // Without the generation check, this would null out the new _activeCalls.
+            await client.InvokeOnDisconnectedCoreAsync(oldGeneration).ConfigureAwait(false);
+
+            // 4. The new connection must be completely unaffected,
+            // keep-alive still running, RPC works.
+            Assert.True(client.IsConnected);
+            Assert.Equal("test", await proxy.EchoAsync("test").ConfigureAwait(false));
+            Assert.Equal("test", await proxy.EchoAsync("test").ConfigureAwait(false));
+        }
+        finally
+        {
+            await Task.Delay(500).ConfigureAwait(false);
+            CheckServerErrorCount();
+            await server.DisposeAsync().ConfigureAwait(false);
         }
     }
 }

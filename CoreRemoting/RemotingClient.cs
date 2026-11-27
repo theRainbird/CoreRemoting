@@ -67,6 +67,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     private int _reconnectLoopActive;
     private bool _hasConnectedBefore;
     private CancellationTokenSource _reconnectCts = new();
+    private long _connectionGeneration;
 
     // ReSharper disable once InconsistentNaming
     private static readonly ConcurrentDictionary<string, IRemotingClient> _clientInstances = new();
@@ -170,48 +171,59 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         DefaultRemotingClient ??= this;
     }
 
-    private void OnDisconnected()
+    private async void OnDisconnected()
     {
-        // the connection is down: stop the heartbeat so it doesn't keep pinging
-        // a dead transport and trigger redundant teardowns
-        StopKeepSessionAliveTimer();
+        // capture the generation synchronously, before any await, so that a
+        // late-resuming handler from an old connection is recognized as stale
+        var generation = Interlocked.Read(ref _connectionGeneration);
+        try
+        {
+            using (await _connectLock)
+                await OnDisconnectedCore(generation)
+                    .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            OnError(ex);
+        }
+    }
+
+    private async Task OnDisconnectedCore(long generation)
+    {
+        // Caller holds _connectLock. Reject stale generations here so that
+        // ConnectAsync (which needs the same lock) cannot race with this cleanup.
+        if (generation != Interlocked.Read(ref _connectionGeneration))
+            return;
 
         Dictionary<Guid, ClientRpcContext> activeCalls;
 
-        // the swap must happen under the same lock the RPC registration path uses,
-        // otherwise a call registered right after the snapshot below would never
-        // be completed and would hang until the invocation timeout
-        using (_activeCallsLock.Lock())
+        using (await _activeCallsLock)
         {
             activeCalls = _activeCalls;
             _activeCalls = null;
         }
 
+        if (activeCalls == null)
+            return; // already handled for this generation
+
+        StopKeepSessionAliveTimer();
         _goodbyeCompletedEvent.Set();
 
         var graceful = _sessionClosedByServer.Value;
         _sessionClosedByServer.Reset();
 
-        // an unexpected loss of connection may trigger the auto-reconnect loop
-        // (suppressed for manual disconnects and during disposal)
         EnsureAutoReconnectLoop();
-
-        if (activeCalls == null)
-            return;
 
         foreach (var activeCall in activeCalls)
         {
             if (graceful)
             {
-                // Session was closed gracefully by server.
-                // Complete all pending calls without error to allow graceful shutdown of in-flight calls
                 activeCall.Value.Error = false;
                 activeCall.Value.RemoteException = null;
                 activeCall.Value.TaskSource.TrySetResult(null);
             }
             else
             {
-                // Unexpected disconnect: mark calls as failed
                 activeCall.Value.Error = true;
                 activeCall.Value.RemoteException = new RemoteInvocationException("Server Disconnected");
                 activeCall.Value.TaskSource.TrySetResult(null);
@@ -455,14 +467,23 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
             _manualDisconnect.Reset();
 
             _isConnected.Set();
-            _goodbyeCompletedEvent.Reset();
 
             // reset heartbeat bookkeeping for the new connection
             _pingPending.Reset();
             Interlocked.Exchange(ref _missedPongs, 0);
 
             using (await _activeCallsLock)
+            {
                 _activeCalls = new();
+
+                // The new connection has its own generation; a late disconnect handler
+                // from the previous connection will see the mismatch and bail out.
+                Interlocked.Increment(ref _connectionGeneration);
+
+                // Reset the goodbye event while still holding the lock, so a handler
+                // that raced us past the generation check cannot flip it for the new one.
+                _goodbyeCompletedEvent.Reset();
+            }
 
             // prepare a fresh handshake/authentication cycle. This is also required for session resume,
             // where the previous cycle's task sources are already completed and authentication must run again
@@ -648,7 +669,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                 await _channel.RawMessageTransport.SendMessageAsync(rawData)
                     .ConfigureAwait(false);
             }
-            catch (Exception)
+            catch
             {
                 // ignored
                 // TODO: dispatch the exception
@@ -665,7 +686,9 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
                     .ConfigureAwait(false);
         }
 
-        OnDisconnected();
+        await OnDisconnectedCore(Interlocked.Read(ref _connectionGeneration))
+            .ConfigureAwait(false);
+
         _handshakeCompletedTaskSource = new();
         _authenticationCompletedTaskSource = new();
         Identity = null;
@@ -692,11 +715,24 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <summary>
     /// Simulates server disconnect race, exposed for unit tests only.
     /// </summary>
-    internal void SimulateDisconnectRace()
+    internal async Task SimulateDisconnectRace()
     {
-        using (_activeCallsLock.Lock())
+        // _activeCalls can be reset to null only under a lock
+        using (await _activeCallsLock)
             _activeCalls = null;
     }
+
+    /// <summary>
+    /// Gets the current connection generation, exposed for unit tests only.
+    /// </summary>
+    internal long ConnectionGenerationForTest =>
+        Interlocked.Read(ref _connectionGeneration);
+
+    /// <summary>
+    /// Simulates late transport Disconnect call, exposed for unit tests only.
+    /// </summary>
+    internal Task InvokeOnDisconnectedCoreAsync(long generation) =>
+        OnDisconnectedCore(generation);
 
     /// <summary>
     /// Starts the keep session alive timer.
@@ -1095,7 +1131,17 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
     /// <summary>
     /// Reports a background-operation failure through <see cref="ErrorHandler"/>.
     /// </summary>
-    private void OnError(Exception ex) => ErrorHandler?.Invoke(ex);
+    private void OnError(Exception ex)
+    {
+        try
+        {
+            ErrorHandler?.Invoke(ex);
+        }
+        catch
+        {
+            // ignore exceptions in user error handler
+        }
+    }
 
     /// <summary>
     /// Notifies the server that the given handlers should be removed.
@@ -1569,7 +1615,7 @@ public sealed class RemotingClient : IRemotingClient, IAuthenticationProvider
         if (_rawMessageTransport.LastException != null)
         {
             using (await _activeCallsLock)
-                _activeCalls.Remove(clientRpcContext.UniqueCallKey);
+                _activeCalls?.Remove(clientRpcContext.UniqueCallKey);
 
             clientRpcContext.Dispose();
             throw _rawMessageTransport.LastException;
